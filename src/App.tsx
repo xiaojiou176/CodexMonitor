@@ -158,6 +158,17 @@ function App() {
     }
   }
 
+  function selectWorkspace(workspaceId: string) {
+    const target = workspaces.find((entry) => entry.id === workspaceId);
+    if (target?.settings.sidebarCollapsed) {
+      void updateWorkspaceSettings(workspaceId, {
+        ...target.settings,
+        sidebarCollapsed: false,
+      });
+    }
+    setActiveWorkspaceId(workspaceId);
+  }
+
   function exitDiffView() {
     setCenterMode("chat");
     setSelectedDiffPath(null);
@@ -165,7 +176,7 @@ function App() {
 
   async function handleAddAgent(workspace: (typeof workspaces)[number]) {
     exitDiffView();
-    setActiveWorkspaceId(workspace.id);
+    selectWorkspace(workspace.id);
     if (!workspace.connected) {
       await connectWorkspace(workspace);
     }
@@ -263,7 +274,7 @@ function App() {
         onAddWorkspace={handleAddWorkspace}
         onSelectWorkspace={(workspaceId) => {
           exitDiffView();
-          setActiveWorkspaceId(workspaceId);
+          selectWorkspace(workspaceId);
         }}
         onConnectWorkspace={connectWorkspace}
         onAddAgent={handleAddAgent}
@@ -279,7 +290,7 @@ function App() {
         }}
         onSelectThread={(workspaceId, threadId) => {
           exitDiffView();
-          setActiveWorkspaceId(workspaceId);
+          selectWorkspace(workspaceId);
           setActiveThreadId(threadId, workspaceId);
         }}
         onDeleteThread={(workspaceId, threadId) => {
