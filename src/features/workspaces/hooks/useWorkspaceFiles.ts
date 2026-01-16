@@ -12,6 +12,7 @@ export function useWorkspaceFiles({
   onDebug,
 }: UseWorkspaceFilesOptions) {
   const [files, setFiles] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const lastFetchedWorkspaceId = useRef<string | null>(null);
   const inFlight = useRef<string | null>(null);
 
@@ -28,6 +29,7 @@ export function useWorkspaceFiles({
     }
     inFlight.current = workspaceId;
     const requestWorkspaceId = workspaceId;
+    setIsLoading(true);
     onDebug?.({
       id: `${Date.now()}-client-files-list`,
       timestamp: Date.now(),
@@ -59,6 +61,7 @@ export function useWorkspaceFiles({
     } finally {
       if (inFlight.current === requestWorkspaceId) {
         inFlight.current = null;
+        setIsLoading(false);
       }
     }
   }, [isConnected, onDebug, workspaceId]);
@@ -67,7 +70,8 @@ export function useWorkspaceFiles({
     setFiles([]);
     lastFetchedWorkspaceId.current = null;
     inFlight.current = null;
-  }, [workspaceId]);
+    setIsLoading(Boolean(workspaceId && isConnected));
+  }, [isConnected, workspaceId]);
 
   useEffect(() => {
     if (!workspaceId || !isConnected) {
@@ -97,6 +101,7 @@ export function useWorkspaceFiles({
 
   return {
     files: fileOptions,
+    isLoading,
     refreshFiles,
   };
 }

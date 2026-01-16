@@ -28,6 +28,7 @@ type FileTreeNode = {
 type FileTreePanelProps = {
   workspacePath: string;
   files: string[];
+  isLoading: boolean;
   onToggleFilePanel: () => void;
 };
 
@@ -173,10 +174,12 @@ function getFileIcon(name: string) {
 export function FileTreePanel({
   workspacePath,
   files,
+  isLoading,
   onToggleFilePanel,
 }: FileTreePanelProps) {
   const { nodes, folderPaths } = useMemo(() => buildTree(files), [files]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const showLoading = isLoading && files.length === 0;
 
   useEffect(() => {
     setExpandedFolders((prev) => {
@@ -294,11 +297,25 @@ export function FileTreePanel({
           <ArrowLeftRight className="git-panel-switch-icon" aria-hidden />
         </button>
         <div className="file-tree-count">
-          {files.length ? `${files.length} file${files.length === 1 ? "" : "s"}` : "No files"}
+          {files.length
+            ? `${files.length} file${files.length === 1 ? "" : "s"}`
+            : showLoading
+              ? "Loading files"
+              : "No files"}
         </div>
       </div>
       <div className="file-tree-list">
-        {nodes.length === 0 ? (
+        {showLoading ? (
+          <div className="file-tree-skeleton">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div
+                className="file-tree-skeleton-row"
+                key={`file-tree-skeleton-${index}`}
+                style={{ width: `${68 + index * 3}%` }}
+              />
+            ))}
+          </div>
+        ) : nodes.length === 0 ? (
           <div className="file-tree-empty">No files available.</div>
         ) : (
           nodes.map((node) => renderNode(node, 0))

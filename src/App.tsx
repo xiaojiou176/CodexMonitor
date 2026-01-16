@@ -234,7 +234,10 @@ function MainApp() {
   } = useModels({ activeWorkspace, onDebug: addDebugEntry });
   const { skills } = useSkills({ activeWorkspace, onDebug: addDebugEntry });
   const { prompts } = useCustomPrompts({ activeWorkspace, onDebug: addDebugEntry });
-  const { files } = useWorkspaceFiles({ activeWorkspace, onDebug: addDebugEntry });
+  const { files, isLoading: isFilesLoading } = useWorkspaceFiles({
+    activeWorkspace,
+    onDebug: addDebugEntry,
+  });
   const { branches, checkoutBranch, createBranch } = useGitBranches({
     activeWorkspace,
     onDebug: addDebugEntry
@@ -759,6 +762,7 @@ function MainApp() {
     onToggleFilePanel: () => {
       setFilePanelMode((prev) => (prev === "git" ? "files" : "git"));
     },
+    fileTreeLoading: isFilesLoading,
     centerMode,
     onExitDiff: () => {
       setCenterMode("chat");

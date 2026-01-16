@@ -118,6 +118,7 @@ type LayoutNodesOptions = {
   onGitPanelModeChange: (mode: "diff" | "log" | "issues") => void;
   filePanelMode: "git" | "files";
   onToggleFilePanel: () => void;
+  fileTreeLoading: boolean;
   gitStatus: {
     branchName: string;
     files: GitFileStatus[];
@@ -382,6 +383,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       <FileTreePanel
         workspacePath={options.activeWorkspace.path}
         files={options.files}
+        isLoading={options.fileTreeLoading}
         onToggleFilePanel={options.onToggleFilePanel}
       />
     ) : (
