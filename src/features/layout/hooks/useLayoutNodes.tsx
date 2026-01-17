@@ -153,7 +153,7 @@ type LayoutNodesOptions = {
   gitDiffLoading: boolean;
   gitDiffError: string | null;
   onDiffLineReference: (reference: DiffLineReference) => void;
-  onDiffActivePathChange: (path: string) => void;
+  onDiffActivePathChange?: (path: string) => void;
   onSend: (text: string, images: string[]) => void | Promise<void>;
   onQueue: (text: string, images: string[]) => void | Promise<void>;
   onStop: () => void;

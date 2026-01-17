@@ -627,12 +627,6 @@ function MainApp() {
     }
   }
 
-  function handleActiveDiffPath(path: string) {
-    if (path !== selectedDiffPath) {
-      setSelectedDiffPath(path);
-    }
-  }
-
   function handleDiffLineReference(reference: DiffLineReference) {
     const startLine = reference.newLine ?? reference.oldLine;
     const endLine =
@@ -741,13 +735,14 @@ function MainApp() {
     terminalOpen,
     onDebug: addDebugEntry,
   });
+  const isDefaultScale = Math.abs(uiScale - 1) < 0.001;
   const appClassName = `app ${isCompact ? "layout-compact" : "layout-desktop"}${
     isPhone ? " layout-phone" : ""
   }${isTablet ? " layout-tablet" : ""}${
     reduceTransparency ? " reduced-transparency" : ""
   }${!isCompact && sidebarCollapsed ? " sidebar-collapsed" : ""}${
     !isCompact && rightPanelCollapsed ? " right-panel-collapsed" : ""
-  }`;
+  }${isDefaultScale ? " ui-scale-default" : ""}`;
   const {
     sidebarNode,
     messagesNode,
@@ -910,7 +905,6 @@ function MainApp() {
     gitDiffLoading: isDiffLoading,
     gitDiffError: diffError,
     onDiffLineReference: handleDiffLineReference,
-    onDiffActivePathChange: handleActiveDiffPath,
     onSend: handleSend,
     onQueue: queueMessage,
     onStop: interruptTurn,
