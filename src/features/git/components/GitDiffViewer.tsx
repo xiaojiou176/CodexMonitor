@@ -109,9 +109,11 @@ export function GitDiffViewer({
   selectedPath,
   isLoading,
   error,
+  onActivePathChange,
 }: GitDiffViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const lastScrolledPathRef = useRef<string | null>(null);
+  const activePathRef = useRef<string | null>(null);
   const poolOptions = useMemo(() => ({ workerFactory }), []);
   const highlighterOptions = useMemo(
     () => ({ theme: { dark: "pierre-dark", light: "pierre-light" } }),
@@ -146,6 +148,59 @@ export function GitDiffViewer({
     rowVirtualizer.scrollToIndex(index, { align: "start" });
     lastScrolledPathRef.current = selectedPath;
   }, [selectedPath, indexByPath, rowVirtualizer]);
+
+  useEffect(() => {
+    activePathRef.current = selectedPath;
+  }, [selectedPath]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !onActivePathChange) {
+      return;
+    }
+    let frameId: number | null = null;
+
+    const updateActivePath = () => {
+      frameId = null;
+      const items = rowVirtualizer.getVirtualItems();
+      if (!items.length) {
+        return;
+      }
+      const scrollTop = container.scrollTop;
+      const targetOffset = scrollTop + 8;
+      let activeItem = items[0];
+      for (const item of items) {
+        if (item.start <= targetOffset) {
+          activeItem = item;
+        } else {
+          break;
+        }
+      }
+      const nextPath = diffs[activeItem.index]?.path;
+      if (!nextPath || nextPath === activePathRef.current) {
+        return;
+      }
+      activePathRef.current = nextPath;
+      lastScrolledPathRef.current = nextPath;
+      onActivePathChange(nextPath);
+    };
+
+    const handleScroll = () => {
+      if (frameId !== null) {
+        return;
+      }
+      frameId = requestAnimationFrame(updateActivePath);
+    };
+
+    handleScroll();
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, [diffs, onActivePathChange, rowVirtualizer]);
 
   return (
     <WorkerPoolContextProvider
