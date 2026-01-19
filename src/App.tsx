@@ -579,6 +579,7 @@ function MainApp() {
     lastAgentMessageByThread,
     interruptTurn,
     removeThread,
+    renameThread,
     startThreadForWorkspace,
     listThreadsForWorkspace,
     loadOlderThreadsForWorkspace,
@@ -601,6 +602,20 @@ function MainApp() {
     activeItems,
     onDebug: addDebugEntry,
   });
+
+  const handleRenameThread = useCallback(
+    (workspaceId: string, threadId: string) => {
+      const threads = threadsByWorkspace[workspaceId] ?? [];
+      const thread = threads.find((entry) => entry.id === threadId);
+      const currentName = thread?.name || "Thread";
+      const newName = window.prompt("Enter new name:", currentName);
+      if (!newName || !newName.trim() || newName === currentName) {
+        return;
+      }
+      renameThread(workspaceId, threadId, newName.trim());
+    },
+    [renameThread, threadsByWorkspace],
+  );
 
   const {
     activeImages,
@@ -1043,6 +1058,9 @@ function MainApp() {
         return rest;
       });
       removeImagesForThread(threadId);
+    },
+    onRenameThread: (workspaceId, threadId) => {
+      handleRenameThread(workspaceId, threadId);
     },
     onDeleteWorkspace: (workspaceId) => {
       void removeWorkspace(workspaceId);
