@@ -59,15 +59,25 @@ export function useCollaborationModes({
       const rawData = response.result?.data ?? response.data ?? [];
       const data: CollaborationModeOption[] = rawData
         .map((item: any) => {
+          if (!item || typeof item !== "object") {
+            return null;
+          }
           const mode = String(item.mode ?? "");
           if (!mode) {
             return null;
           }
-          const model = String(item.model ?? "");
-          const reasoningEffort =
-            item.reasoningEffort ?? item.reasoning_effort ?? null;
-          const developerInstructions =
-            item.developerInstructions ?? item.developer_instructions ?? null;
+          const settings =
+            item.settings && typeof item.settings === "object"
+              ? item.settings
+              : null;
+          if (!settings) {
+            return null;
+          }
+
+          const model = String(settings.model ?? "");
+          const reasoningEffort = settings.reasoning_effort ?? null;
+          const developerInstructions = settings.developer_instructions ?? null;
+
           return {
             id: mode,
             label: formatCollaborationModeLabel(mode),

@@ -43,6 +43,7 @@ import { useGitActions } from "./features/git/hooks/useGitActions";
 import { useAutoExitEmptyDiff } from "./features/git/hooks/useAutoExitEmptyDiff";
 import { useModels } from "./features/models/hooks/useModels";
 import { useCollaborationModes } from "./features/collaboration/hooks/useCollaborationModes";
+import { useCollaborationComposerOverrides } from "./features/collaboration/hooks/useCollaborationComposerOverrides";
 import { useSkills } from "./features/skills/hooks/useSkills";
 import { useCustomPrompts } from "./features/prompts/hooks/useCustomPrompts";
 import { useWorkspaceFiles } from "./features/workspaces/hooks/useWorkspaceFiles";
@@ -405,6 +406,18 @@ function MainApp() {
     activeWorkspace,
     enabled: appSettings.experimentalCollaborationModesEnabled,
     onDebug: addDebugEntry,
+  });
+  const {
+    composerReasoningOptions,
+    composerSelectedEffort,
+    composerSelectedModelId,
+  } = useCollaborationComposerOverrides({
+    selectedCollaborationMode,
+    selectedCollaborationModeId,
+    models,
+    selectedModelId,
+    selectedEffort,
+    reasoningOptions,
   });
   const { skills } = useSkills({ activeWorkspace, onDebug: addDebugEntry });
   const {
@@ -1633,10 +1646,10 @@ function MainApp() {
     selectedCollaborationModeId,
     onSelectCollaborationMode: setSelectedCollaborationModeId,
     models,
-    selectedModelId,
+    selectedModelId: composerSelectedModelId,
     onSelectModel: setSelectedModelId,
-    reasoningOptions,
-    selectedEffort,
+    reasoningOptions: composerReasoningOptions,
+    selectedEffort: composerSelectedEffort,
     onSelectEffort: setSelectedEffort,
     accessMode,
     onSelectAccessMode: setAccessMode,
