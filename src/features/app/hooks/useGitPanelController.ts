@@ -103,7 +103,8 @@ export function useGitPanelController({
   const shouldLoadLocalDiffs =
     Boolean(activeWorkspace) &&
     (shouldPreloadDiffs ||
-      (diffUiVisible && (gitDiffPreloadEnabled || Boolean(selectedDiffPath))));
+      diffUiVisible ||
+      Boolean(selectedDiffPath));
   const shouldLoadDiffs =
     Boolean(activeWorkspace) &&
     (diffSource === "local" ? shouldLoadLocalDiffs : diffUiVisible);
