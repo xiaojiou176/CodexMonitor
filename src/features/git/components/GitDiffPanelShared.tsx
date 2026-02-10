@@ -62,12 +62,12 @@ export function CommitButton({
         disabled={!canCommit}
         title={
           !hasMessage
-            ? "Enter a commit message"
+            ? "请输入提交信息"
             : !hasChanges
-              ? "No changes to commit"
+              ? "没有可提交的改动"
               : hasStagedFiles
-                ? "Commit staged changes"
-                : "Commit all unstaged changes"
+                ? "提交已暂存的改动"
+                : "提交所有未暂存的改动"
         }
       >
         {commitLoading ? (
@@ -87,7 +87,7 @@ export function CommitButton({
             <path d="M20 6 9 17l-5-5" />
           </svg>
         )}
-        <span>{commitLoading ? "Committing..." : "Commit"}</span>
+        <span>{commitLoading ? "提交中..." : "提交"}</span>
       </button>
     </div>
   );
@@ -128,8 +128,8 @@ export function SidebarError({
         type="button"
         className="ghost icon-button sidebar-error-dismiss"
         onClick={onDismiss}
-        aria-label="Dismiss error"
-        title="Dismiss error"
+        aria-label="关闭错误提示"
+        title="关闭错误提示"
       >
         <X size={12} aria-hidden />
       </button>
@@ -202,7 +202,7 @@ function DiffFileRow({
           <span className="diff-sep">/</span>
           <span className="diff-del">-{file.deletions}</span>
         </span>
-        <div className="diff-row-actions" role="group" aria-label="File actions">
+        <div className="diff-row-actions" role="group" aria-label="文件操作">
           {showStage && (
             <button
               type="button"
@@ -211,8 +211,8 @@ function DiffFileRow({
                 event.stopPropagation();
                 void onStageFile?.(file.path);
               }}
-              data-tooltip="Stage Changes"
-              aria-label="Stage file"
+              data-tooltip="暂存改动"
+              aria-label="暂存文件"
             >
               <Plus size={12} aria-hidden />
             </button>
@@ -225,8 +225,8 @@ function DiffFileRow({
                 event.stopPropagation();
                 void onUnstageFile?.(file.path);
               }}
-              data-tooltip="Unstage Changes"
-              aria-label="Unstage file"
+              data-tooltip="取消暂存改动"
+              aria-label="取消暂存文件"
             >
               <Minus size={12} aria-hidden />
             </button>
@@ -239,8 +239,8 @@ function DiffFileRow({
                 event.stopPropagation();
                 void onDiscardFile?.(file.path);
               }}
-              data-tooltip="Discard Changes"
-              aria-label="Discard changes"
+              data-tooltip="丢弃改动"
+              aria-label="丢弃改动"
             >
               <RotateCcw size={12} aria-hidden />
             </button>
@@ -306,7 +306,7 @@ export function DiffSection({
           {title} ({files.length})
         </span>
         {showSectionActions && (
-          <div className="diff-section-actions" role="group" aria-label={`${title} actions`}>
+          <div className="diff-section-actions" role="group" aria-label={`${title} 操作`}>
             {canStageAll && (
               <button
                 type="button"
@@ -322,8 +322,8 @@ export function DiffSection({
                     }
                   })();
                 }}
-                data-tooltip="Stage All Changes"
-                aria-label="Stage all changes"
+                data-tooltip="暂存全部改动"
+                aria-label="暂存全部改动"
               >
                 <Plus size={12} aria-hidden />
               </button>
@@ -339,8 +339,8 @@ export function DiffSection({
                     }
                   })();
                 }}
-                data-tooltip="Unstage All Changes"
-                aria-label="Unstage all changes"
+                data-tooltip="取消暂存全部改动"
+                aria-label="取消暂存全部改动"
               >
                 <Minus size={12} aria-hidden />
               </button>
@@ -352,8 +352,8 @@ export function DiffSection({
                 onClick={() => {
                   void onDiscardFiles?.(filePaths);
                 }}
-                data-tooltip="Discard All Changes"
-                aria-label="Discard all changes"
+                data-tooltip="丢弃全部改动"
+                aria-label="丢弃全部改动"
               >
                 <RotateCcw size={12} aria-hidden />
               </button>
@@ -415,11 +415,11 @@ export function GitLogEntryRow({
         }
       }}
     >
-      <div className="git-log-summary">{entry.summary || "No message"}</div>
+      <div className="git-log-summary">{entry.summary || "无提交信息"}</div>
       <div className="git-log-meta">
         <span className="git-log-sha">{entry.sha.slice(0, 7)}</span>
         <span className="git-log-sep">·</span>
-        <span className="git-log-author">{entry.author || "Unknown"}</span>
+        <span className="git-log-author">{entry.author || "未知作者"}</span>
         <span className="git-log-sep">·</span>
         <span className="git-log-date">{formatRelativeTime(entry.timestamp * 1000)}</span>
       </div>

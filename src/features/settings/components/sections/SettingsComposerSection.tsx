@@ -19,17 +19,17 @@ export function SettingsComposerSection({
 }: SettingsComposerSectionProps) {
   return (
     <section className="settings-section">
-      <div className="settings-section-title">Composer</div>
+      <div className="settings-section-title">编辑器</div>
       <div className="settings-section-subtitle">
-        Control helpers and formatting behavior inside the message editor.
+        控制消息编辑器中的辅助与格式化行为。
       </div>
-      <div className="settings-subsection-title">Presets</div>
+      <div className="settings-subsection-title">预设</div>
       <div className="settings-subsection-subtitle">
-        Choose a starting point and fine-tune the toggles below.
+        选择一个起点，再按需微调下方开关。
       </div>
       <div className="settings-field">
         <label className="settings-field-label" htmlFor="composer-preset">
-          Preset
+          预设
         </label>
         <select
           id="composer-preset"
@@ -46,16 +46,16 @@ export function SettingsComposerSection({
           ))}
         </select>
         <div className="settings-help">
-          Presets update the toggles below. Customize any setting after selecting.
+          预设会更新下方开关，选择后仍可单独调整。
         </div>
       </div>
       <div className="settings-divider" />
-      <div className="settings-subsection-title">Code fences</div>
+      <div className="settings-subsection-title">代码围栏</div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Expand fences on Space</div>
+          <div className="settings-toggle-title">空格展开代码围栏</div>
           <div className="settings-toggle-subtitle">
-            Typing ``` then Space inserts a fenced block.
+            输入 ``` 后按空格会插入代码围栏。
           </div>
         </div>
         <button
@@ -74,9 +74,9 @@ export function SettingsComposerSection({
       </div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Expand fences on Enter</div>
+          <div className="settings-toggle-title">回车展开代码围栏</div>
           <div className="settings-toggle-subtitle">
-            Use Enter to expand ``` lines when enabled.
+            启用后按回车可展开 ``` 行。
           </div>
         </div>
         <button
@@ -95,9 +95,9 @@ export function SettingsComposerSection({
       </div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Support language tags</div>
+          <div className="settings-toggle-title">支持语言标签</div>
           <div className="settings-toggle-subtitle">
-            Allows ```lang + Space to include a language.
+            支持通过 ```lang + 空格附带语言标记。
           </div>
         </div>
         <button
@@ -116,9 +116,9 @@ export function SettingsComposerSection({
       </div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Wrap selection in fences</div>
+          <div className="settings-toggle-title">选中文本包裹为代码围栏</div>
           <div className="settings-toggle-subtitle">
-            Wraps selected text when creating a fence.
+            创建代码围栏时自动包裹选中文本。
           </div>
         </div>
         <button
@@ -137,9 +137,9 @@ export function SettingsComposerSection({
       </div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Copy blocks without fences</div>
+          <div className="settings-toggle-title">复制代码块时不带围栏</div>
           <div className="settings-toggle-subtitle">
-            When enabled, Copy is plain text. Hold {optionKeyLabel} to include ``` fences.
+            启用后复制为纯文本。按住 {optionKeyLabel} 可包含 ``` 围栏。
           </div>
         </div>
         <button
@@ -158,12 +158,12 @@ export function SettingsComposerSection({
         </button>
       </div>
       <div className="settings-divider" />
-      <div className="settings-subsection-title">Pasting</div>
+      <div className="settings-subsection-title">粘贴</div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Auto-wrap multi-line paste</div>
+          <div className="settings-toggle-title">自动包裹多行粘贴</div>
           <div className="settings-toggle-subtitle">
-            Wraps multi-line paste inside a fenced block.
+            将多行粘贴内容自动包裹进代码围栏。
           </div>
         </div>
         <button
@@ -183,9 +183,9 @@ export function SettingsComposerSection({
       </div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Auto-wrap code-like single lines</div>
+          <div className="settings-toggle-title">自动包裹代码风格单行</div>
           <div className="settings-toggle-subtitle">
-            Wraps long single-line code snippets on paste.
+            粘贴长单行代码片段时自动包裹。
           </div>
         </div>
         <button
@@ -204,12 +204,12 @@ export function SettingsComposerSection({
         </button>
       </div>
       <div className="settings-divider" />
-      <div className="settings-subsection-title">Lists</div>
+      <div className="settings-subsection-title">列表</div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Continue lists on Shift+Enter</div>
+          <div className="settings-toggle-title">Shift+Enter 续写列表</div>
           <div className="settings-toggle-subtitle">
-            Continues numbered and bulleted lists when the line has content.
+            当前行有内容时继续编号/项目符号列表。
           </div>
         </div>
         <button

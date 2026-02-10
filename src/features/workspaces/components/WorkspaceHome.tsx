@@ -329,16 +329,16 @@ export function WorkspaceHome({
       ? "Saving…"
       : agentMdExists
         ? ""
-        : "Not found";
+        : "未找到";
   const agentMdMetaParts: string[] = [];
   if (agentMdStatus) {
     agentMdMetaParts.push(agentMdStatus);
   }
   if (agentMdTruncated) {
-    agentMdMetaParts.push("Truncated");
+    agentMdMetaParts.push("已截断");
   }
   const agentMdMeta = agentMdMetaParts.join(" · ");
-  const agentMdSaveLabel = agentMdExists ? "Save" : "Create";
+  const agentMdSaveLabel = agentMdExists ? "保存" : "创建";
   const agentMdSaveDisabled = agentMdLoading || agentMdSaving || !agentMdDirty;
   const agentMdRefreshDisabled = agentMdLoading || agentMdSaving;
 
@@ -435,7 +435,7 @@ export function WorkspaceHome({
           meta={agentMdMeta}
           error={agentMdError}
           value={agentMdContent}
-          placeholder="Add workspace instructions for the agent…"
+          placeholder="为代理添加工作区指令…"
           disabled={agentMdLoading}
           refreshDisabled={agentMdRefreshDisabled}
           saveDisabled={agentMdSaveDisabled}

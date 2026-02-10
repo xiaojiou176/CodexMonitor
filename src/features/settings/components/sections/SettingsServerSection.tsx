@@ -124,28 +124,28 @@ export function SettingsServerSection({
     }
     if (tcpDaemonStatus.state === "running") {
       return tcpDaemonStatus.pid
-        ? `Mobile daemon is running (pid ${tcpDaemonStatus.pid}) on ${tcpDaemonStatus.listenAddr ?? "configured listen address"}.`
-        : `Mobile daemon is running on ${tcpDaemonStatus.listenAddr ?? "configured listen address"}.`;
+        ? `移动端守护进程正在运行（pid ${tcpDaemonStatus.pid}），监听地址：${tcpDaemonStatus.listenAddr ?? "已配置监听地址"}。`
+        : `移动端守护进程正在运行，监听地址：${tcpDaemonStatus.listenAddr ?? "已配置监听地址"}。`;
     }
     if (tcpDaemonStatus.state === "error") {
-      return tcpDaemonStatus.lastError ?? "Mobile daemon is in an error state.";
+      return tcpDaemonStatus.lastError ?? "移动端守护进程处于错误状态。";
     }
-    return `Mobile daemon is stopped${tcpDaemonStatus.listenAddr ? ` (${tcpDaemonStatus.listenAddr})` : ""}.`;
+    return `移动端守护进程已停止${tcpDaemonStatus.listenAddr ? `（${tcpDaemonStatus.listenAddr}）` : ""}。`;
   })();
 
   return (
     <section className="settings-section">
-      <div className="settings-section-title">Server</div>
+      <div className="settings-section-title">服务器</div>
       <div className="settings-section-subtitle">
         {isMobileSimplified
-          ? "Choose TCP or Orbit, fill in the connection endpoint and token from your desktop setup, then run a connection test."
-          : "Configure how CodexMonitor exposes backend access for mobile and remote clients. Desktop usage remains local unless you explicitly connect through remote mode."}
+          ? "请选择 TCP 或 Orbit，填写桌面端配置的连接地址与令牌，然后执行连接测试。"
+          : "配置 CodexMonitor 如何为移动端与远程客户端提供后端访问。除非你显式启用远程模式，桌面端默认仍使用本地模式。"}
       </div>
 
       {!isMobileSimplified && (
         <div className="settings-field">
           <label className="settings-field-label" htmlFor="backend-mode">
-            Backend mode
+            后端模式
           </label>
           <select
             id="backend-mode"
@@ -158,12 +158,11 @@ export function SettingsServerSection({
               })
             }
           >
-            <option value="local">Local (default)</option>
-            <option value="remote">Remote (daemon)</option>
+            <option value="local">本地（默认）</option>
+            <option value="remote">远程（守护进程）</option>
           </select>
           <div className="settings-help">
-            Local keeps desktop requests in-process. Remote routes desktop requests through the same
-            network transport path used by mobile clients.
+            本地模式会在应用进程内处理桌面请求。远程模式会让桌面请求走与移动端一致的网络传输链路。
           </div>
         </div>
       )}
@@ -171,7 +170,7 @@ export function SettingsServerSection({
       <>
         <div className="settings-field">
           <label className="settings-field-label" htmlFor="remote-provider">
-            {isMobileSimplified ? "Connection type" : "Remote provider"}
+            {isMobileSimplified ? "连接类型" : "远程提供方"}
           </label>
           <select
             id="remote-provider"
@@ -182,24 +181,24 @@ export function SettingsServerSection({
                 event.target.value as AppSettings["remoteBackendProvider"],
               );
             }}
-            aria-label={isMobileSimplified ? "Connection type" : "Remote provider"}
+            aria-label={isMobileSimplified ? "连接类型" : "远程提供方"}
           >
-            <option value="tcp">{isMobileSimplified ? "TCP" : "TCP (wip)"}</option>
-            <option value="orbit">{isMobileSimplified ? "Orbit" : "Orbit (wip)"}</option>
+            <option value="tcp">{isMobileSimplified ? "TCP" : "TCP（开发中）"}</option>
+            <option value="orbit">{isMobileSimplified ? "Orbit" : "Orbit（开发中）"}</option>
           </select>
           <div className="settings-help">
             {isMobileSimplified
-              ? "TCP uses your desktop daemon Tailscale address. Orbit uses your Orbit websocket endpoint."
-              : "Select which remote transport configuration to maintain for mobile access and optional desktop remote-mode testing."}
+              ? "TCP 使用桌面端守护进程的 Tailscale 地址。Orbit 使用 Orbit WebSocket 地址。"
+              : "选择用于移动端访问与桌面远程模式测试的远程传输配置。"}
           </div>
         </div>
 
         {!isMobileSimplified && (
           <div className="settings-toggle-row">
             <div>
-              <div className="settings-toggle-title">Keep daemon running after app closes</div>
+              <div className="settings-toggle-title">关闭应用后保持守护进程运行</div>
               <div className="settings-toggle-subtitle">
-                If disabled, CodexMonitor stops managed TCP and Orbit daemon processes before exit.
+                关闭后，CodexMonitor 会在退出前停止其管理的 TCP 与 Orbit 守护进程。
               </div>
             </div>
             <button
@@ -221,7 +220,7 @@ export function SettingsServerSection({
         {appSettings.remoteBackendProvider === "tcp" && (
           <>
             <div className="settings-field">
-              <div className="settings-field-label">Remote backend</div>
+              <div className="settings-field-label">远程后端</div>
               <div className="settings-field-row">
                 <input
                   className="settings-input settings-input--compact"
@@ -237,13 +236,13 @@ export function SettingsServerSection({
                       void onCommitRemoteHost();
                     }
                   }}
-                  aria-label="Remote backend host"
+                  aria-label="远程后端 host"
                 />
                 <input
                   type="password"
                   className="settings-input settings-input--compact"
                   value={remoteTokenDraft}
-                  placeholder="Token (required)"
+                  placeholder="令牌（必填）"
                   onChange={(event) => onSetRemoteTokenDraft(event.target.value)}
                   onBlur={() => {
                     void onCommitRemoteToken();
@@ -254,19 +253,19 @@ export function SettingsServerSection({
                       void onCommitRemoteToken();
                     }
                   }}
-                  aria-label="Remote backend token"
+                  aria-label="远程后端 token"
                 />
               </div>
               <div className="settings-help">
                 {isMobileSimplified
-                  ? "Use the Tailscale host from your desktop CodexMonitor app (Server section), for example `macbook.your-tailnet.ts.net:4732`."
-                  : "This host/token is used by mobile clients and desktop remote-mode testing."}
+                  ? "使用桌面端 CodexMonitor（服务器设置）中的 Tailscale 地址，例如 `macbook.your-tailnet.ts.net:4732`。"
+                  : "该地址/令牌用于移动端连接和桌面远程模式测试。"}
               </div>
             </div>
 
             {isMobileSimplified && (
               <div className="settings-field">
-                <div className="settings-field-label">Connection test</div>
+                <div className="settings-field-label">连接测试</div>
                 <div className="settings-field-row">
                   <button
                     type="button"
@@ -274,7 +273,7 @@ export function SettingsServerSection({
                     onClick={onMobileConnectTest}
                     disabled={mobileConnectBusy}
                   >
-                    {mobileConnectBusy ? "Connecting..." : "Connect & test"}
+                    {mobileConnectBusy ? "连接中..." : "连接并测试"}
                   </button>
                 </div>
                 {mobileConnectStatusText && (
@@ -285,15 +284,14 @@ export function SettingsServerSection({
                   </div>
                 )}
                 <div className="settings-help">
-                  Make sure your desktop app daemon is running and reachable on Tailscale, then
-                  retry this test.
+                  请确保桌面端守护进程已运行，且可通过 Tailscale 访问后再重试。
                 </div>
               </div>
             )}
 
             {!isMobileSimplified && (
               <div className="settings-field">
-                <div className="settings-field-label">Mobile access daemon</div>
+                <div className="settings-field-label">移动端访问守护进程</div>
                 <div className="settings-field-row">
                   <button
                     type="button"
@@ -303,7 +301,7 @@ export function SettingsServerSection({
                     }}
                     disabled={tcpDaemonBusyAction !== null}
                   >
-                    {tcpDaemonBusyAction === "start" ? "Starting..." : "Start daemon"}
+                    {tcpDaemonBusyAction === "start" ? "启动中..." : "启动守护进程"}
                   </button>
                   <button
                     type="button"
@@ -313,7 +311,7 @@ export function SettingsServerSection({
                     }}
                     disabled={tcpDaemonBusyAction !== null}
                   >
-                    {tcpDaemonBusyAction === "stop" ? "Stopping..." : "Stop daemon"}
+                    {tcpDaemonBusyAction === "stop" ? "停止中..." : "停止守护进程"}
                   </button>
                   <button
                     type="button"
@@ -323,25 +321,24 @@ export function SettingsServerSection({
                     }}
                     disabled={tcpDaemonBusyAction !== null}
                   >
-                    {tcpDaemonBusyAction === "status" ? "Refreshing..." : "Refresh status"}
+                    {tcpDaemonBusyAction === "status" ? "刷新中..." : "刷新状态"}
                   </button>
                 </div>
                 {tcpRunnerStatusText && <div className="settings-help">{tcpRunnerStatusText}</div>}
                 {tcpDaemonStatus?.startedAtMs && (
                   <div className="settings-help">
-                    Started at: {new Date(tcpDaemonStatus.startedAtMs).toLocaleString()}
+                    启动时间： {new Date(tcpDaemonStatus.startedAtMs).toLocaleString()}
                   </div>
                 )}
                 <div className="settings-help">
-                  Start this daemon before connecting from iOS. It uses your current token and
-                  listens on <code>0.0.0.0:&lt;port&gt;</code>, matching your configured host port.
+                  请先启动该守护进程再从 iOS 连接。它会使用当前令牌，并监听 <code>0.0.0.0:&lt;port&gt;</code>，与配置中的主机端口保持一致。
                 </div>
               </div>
             )}
 
             {!isMobileSimplified && (
               <div className="settings-field">
-                <div className="settings-field-label">Tailscale helper</div>
+                <div className="settings-field-label">Tailscale 助手</div>
                 <div className="settings-field-row">
                   <button
                     type="button"
@@ -349,7 +346,7 @@ export function SettingsServerSection({
                     onClick={onRefreshTailscaleStatus}
                     disabled={tailscaleStatusBusy}
                   >
-                    {tailscaleStatusBusy ? "Checking..." : "Detect Tailscale"}
+                    {tailscaleStatusBusy ? "检查中..." : "检测 Tailscale"}
                   </button>
                   <button
                     type="button"
@@ -357,7 +354,7 @@ export function SettingsServerSection({
                     onClick={onRefreshTailscaleCommandPreview}
                     disabled={tailscaleCommandBusy}
                   >
-                    {tailscaleCommandBusy ? "Refreshing..." : "Refresh daemon command"}
+                    {tailscaleCommandBusy ? "刷新中..." : "刷新守护进程命令"}
                   </button>
                   <button
                     type="button"
@@ -367,7 +364,7 @@ export function SettingsServerSection({
                       void onUseSuggestedTailscaleHost();
                     }}
                   >
-                    Use suggested host
+                    使用建议地址
                   </button>
                 </div>
                 {tailscaleStatusError && (
@@ -378,12 +375,12 @@ export function SettingsServerSection({
                     <div className="settings-help">{tailscaleStatus.message}</div>
                     <div className="settings-help">
                       {tailscaleStatus.installed
-                        ? `Version: ${tailscaleStatus.version ?? "unknown"}`
-                        : "Install Tailscale on both desktop and iOS to continue."}
+                        ? `版本：${tailscaleStatus.version ?? "未知"}`
+                        : "请先在桌面端和 iOS 安装 Tailscale。"}
                     </div>
                     {tailscaleStatus.suggestedRemoteHost && (
                       <div className="settings-help">
-                        Suggested remote host: <code>{tailscaleStatus.suggestedRemoteHost}</code>
+                        建议的远程地址： <code>{tailscaleStatus.suggestedRemoteHost}</code>
                       </div>
                     )}
                     {tailscaleStatus.tailnetName && (
@@ -399,14 +396,14 @@ export function SettingsServerSection({
                 {tailscaleCommandPreview && (
                   <>
                     <div className="settings-help">
-                      Command template (manual fallback) for starting the daemon:
+                      启动守护进程的命令模板（手动兜底）：
                     </div>
                     <pre className="settings-command-preview">
                       <code>{tailscaleCommandPreview.command}</code>
                     </pre>
                     {!tailscaleCommandPreview.tokenConfigured && (
                       <div className="settings-help settings-help-error">
-                        Remote backend token is empty. Set one before exposing daemon access.
+                        远程后端令牌为空。请在开放守护进程访问前设置一个。
                       </div>
                     )}
                   </>
@@ -420,7 +417,7 @@ export function SettingsServerSection({
           <>
             <div className="settings-field">
               <label className="settings-field-label" htmlFor="orbit-ws-url">
-                Orbit websocket URL
+                Orbit WebSocket 地址
               </label>
               <input
                 id="orbit-ws-url"
@@ -437,7 +434,7 @@ export function SettingsServerSection({
                     void onCommitOrbitWsUrl();
                   }
                 }}
-                aria-label="Orbit websocket URL"
+                aria-label="Orbit WebSocket 地址"
               />
             </div>
 
@@ -445,14 +442,14 @@ export function SettingsServerSection({
               <>
                 <div className="settings-field">
                   <label className="settings-field-label" htmlFor="orbit-token-mobile">
-                    Remote backend token
+                    远程后端 token
                   </label>
                   <input
                     id="orbit-token-mobile"
                     type="password"
                     className="settings-input settings-input--compact"
                     value={remoteTokenDraft}
-                    placeholder="Token (required)"
+                    placeholder="令牌（必填）"
                     onChange={(event) => onSetRemoteTokenDraft(event.target.value)}
                     onBlur={() => {
                       void onCommitRemoteToken();
@@ -463,14 +460,14 @@ export function SettingsServerSection({
                         void onCommitRemoteToken();
                       }
                     }}
-                    aria-label="Remote backend token"
+                    aria-label="远程后端 token"
                   />
                   <div className="settings-help">
-                    Use the same token configured on your desktop Orbit daemon setup.
+                    请使用与桌面端 Orbit 守护进程一致的令牌。
                   </div>
                 </div>
                 <div className="settings-field">
-                  <div className="settings-field-label">Connection test</div>
+                  <div className="settings-field-label">连接测试</div>
                   <div className="settings-field-row">
                     <button
                       type="button"
@@ -478,7 +475,7 @@ export function SettingsServerSection({
                       onClick={onMobileConnectTest}
                       disabled={mobileConnectBusy}
                     >
-                      {mobileConnectBusy ? "Connecting..." : "Connect & test"}
+                      {mobileConnectBusy ? "连接中..." : "连接并测试"}
                     </button>
                   </div>
                   {mobileConnectStatusText && (
@@ -489,7 +486,7 @@ export function SettingsServerSection({
                     </div>
                   )}
                   <div className="settings-help">
-                    Make sure the Orbit endpoint and token match your desktop setup, then retry.
+                    请确保 Orbit 地址和令牌与桌面端配置一致后再重试。
                   </div>
                 </div>
               </>
@@ -499,7 +496,7 @@ export function SettingsServerSection({
               <>
                 <div className="settings-field">
                   <label className="settings-field-label" htmlFor="orbit-auth-url">
-                    Orbit auth URL
+                    Orbit 认证 URL
                   </label>
                   <input
                     id="orbit-auth-url"
@@ -516,13 +513,13 @@ export function SettingsServerSection({
                         void onCommitOrbitAuthUrl();
                       }
                     }}
-                    aria-label="Orbit auth URL"
+                    aria-label="Orbit 认证 URL"
                   />
                 </div>
 
                 <div className="settings-field">
                   <label className="settings-field-label" htmlFor="orbit-runner-name">
-                    Orbit runner name
+                    Orbit Runner 名称
                   </label>
                   <input
                     id="orbit-runner-name"
@@ -539,15 +536,15 @@ export function SettingsServerSection({
                         void onCommitOrbitRunnerName();
                       }
                     }}
-                    aria-label="Orbit runner name"
+                    aria-label="Orbit Runner 名称"
                   />
                 </div>
 
                 <div className="settings-toggle-row">
                   <div>
-                    <div className="settings-toggle-title">Auto start runner</div>
+                    <div className="settings-toggle-title">自动启动 Runner</div>
                     <div className="settings-toggle-subtitle">
-                      Start the Orbit runner automatically when remote mode activates.
+                      启用远程模式时自动启动 Orbit Runner。
                     </div>
                   </div>
                   <button
@@ -567,9 +564,9 @@ export function SettingsServerSection({
 
                 <div className="settings-toggle-row">
                   <div>
-                    <div className="settings-toggle-title">Use Orbit Access</div>
+                    <div className="settings-toggle-title">使用 Orbit Access</div>
                     <div className="settings-toggle-subtitle">
-                      Enable OAuth client credentials for Orbit Access.
+                      为 Orbit Access 启用 OAuth 客户端凭据。
                     </div>
                   </div>
                   <button
@@ -589,7 +586,7 @@ export function SettingsServerSection({
 
                 <div className="settings-field">
                   <label className="settings-field-label" htmlFor="orbit-access-client-id">
-                    Orbit access client ID
+                    Orbit Access 客户端 ID
                   </label>
                   <input
                     id="orbit-access-client-id"
@@ -607,13 +604,13 @@ export function SettingsServerSection({
                         void onCommitOrbitAccessClientId();
                       }
                     }}
-                    aria-label="Orbit access client ID"
+                    aria-label="Orbit Access 客户端 ID"
                   />
                 </div>
 
                 <div className="settings-field">
                   <label className="settings-field-label" htmlFor="orbit-access-client-secret-ref">
-                    Orbit access client secret ref
+                    Orbit Access 客户端密钥引用
                   </label>
                   <input
                     id="orbit-access-client-secret-ref"
@@ -631,12 +628,12 @@ export function SettingsServerSection({
                         void onCommitOrbitAccessClientSecretRef();
                       }
                     }}
-                    aria-label="Orbit access client secret ref"
+                    aria-label="Orbit Access 客户端密钥引用"
                   />
                 </div>
 
                 <div className="settings-field">
-                  <div className="settings-field-label">Orbit actions</div>
+                  <div className="settings-field-label">Orbit 操作</div>
                   <div className="settings-field-row">
                     <button
                       type="button"
@@ -644,7 +641,7 @@ export function SettingsServerSection({
                       onClick={onOrbitConnectTest}
                       disabled={orbitBusyAction !== null}
                     >
-                      {orbitBusyAction === "connect-test" ? "Testing..." : "Connect test"}
+                      {orbitBusyAction === "connect-test" ? "测试中..." : "连接测试"}
                     </button>
                     <button
                       type="button"
@@ -652,7 +649,7 @@ export function SettingsServerSection({
                       onClick={onOrbitSignIn}
                       disabled={orbitBusyAction !== null}
                     >
-                      {orbitBusyAction === "sign-in" ? "Signing In..." : "Sign In"}
+                      {orbitBusyAction === "sign-in" ? "登录中..." : "登录"}
                     </button>
                     <button
                       type="button"
@@ -660,7 +657,7 @@ export function SettingsServerSection({
                       onClick={onOrbitSignOut}
                       disabled={orbitBusyAction !== null}
                     >
-                      {orbitBusyAction === "sign-out" ? "Signing Out..." : "Sign Out"}
+                      {orbitBusyAction === "sign-out" ? "登出中..." : "登出"}
                     </button>
                   </div>
                   <div className="settings-field-row">
@@ -670,7 +667,7 @@ export function SettingsServerSection({
                       onClick={onOrbitRunnerStart}
                       disabled={orbitBusyAction !== null}
                     >
-                      {orbitBusyAction === "runner-start" ? "Starting..." : "Start Runner"}
+                      {orbitBusyAction === "runner-start" ? "启动中..." : "启动 Runner"}
                     </button>
                     <button
                       type="button"
@@ -678,7 +675,7 @@ export function SettingsServerSection({
                       onClick={onOrbitRunnerStop}
                       disabled={orbitBusyAction !== null}
                     >
-                      {orbitBusyAction === "runner-stop" ? "Stopping..." : "Stop Runner"}
+                      {orbitBusyAction === "runner-stop" ? "停止中..." : "停止 Runner"}
                     </button>
                     <button
                       type="button"
@@ -686,18 +683,18 @@ export function SettingsServerSection({
                       onClick={onOrbitRunnerStatus}
                       disabled={orbitBusyAction !== null}
                     >
-                      {orbitBusyAction === "runner-status" ? "Refreshing..." : "Refresh Status"}
+                      {orbitBusyAction === "runner-status" ? "刷新中..." : "刷新状态"}
                     </button>
                   </div>
                   {orbitStatusText && <div className="settings-help">{orbitStatusText}</div>}
                   {orbitAuthCode && (
                     <div className="settings-help">
-                      Auth code: <code>{orbitAuthCode}</code>
+                      授权码： <code>{orbitAuthCode}</code>
                     </div>
                   )}
                   {orbitVerificationUrl && (
                     <div className="settings-help">
-                      Verification URL:{" "}
+                      验证链接：{" "}
                       <a href={orbitVerificationUrl} target="_blank" rel="noreferrer">
                         {orbitVerificationUrl}
                       </a>
@@ -713,9 +710,9 @@ export function SettingsServerSection({
       <div className="settings-help">
         {isMobileSimplified
           ? appSettings.remoteBackendProvider === "tcp"
-            ? "Use your own infrastructure only. On iOS, get the Tailscale hostname and token from your desktop CodexMonitor setup."
-            : "Use your own infrastructure only. On iOS, use the Orbit websocket URL and token configured on your desktop CodexMonitor setup."
-          : "Mobile access should stay scoped to your own infrastructure (tailnet or self-hosted Orbit). CodexMonitor does not provide hosted backend services."}
+            ? "请仅使用你自己的基础设施。在 iOS 上，请使用桌面端 CodexMonitor 配置中的 Tailscale 主机名和令牌。"
+            : "请仅使用你自己的基础设施。在 iOS 上，请使用桌面端 CodexMonitor 配置中的 Orbit WebSocket 地址和令牌。"
+          : "移动端访问应始终限定在你自己的基础设施（Tailnet 或自托管 Orbit）内。CodexMonitor 不提供托管后端服务。"}
       </div>
     </section>
   );

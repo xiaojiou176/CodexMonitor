@@ -108,7 +108,7 @@ describe("GitDiffPanel", () => {
     await waitFor(() => expect(menuNew).toHaveBeenCalled());
     const menuArgs = menuNew.mock.calls[0]?.[0];
     const revealItem = menuArgs.items.find(
-      (item: { text: string }) => item.text === `Show in ${fileManagerName()}`,
+      (item: { text: string }) => item.text === `在 ${fileManagerName()} 中显示`,
     );
 
     expect(revealItem).toBeDefined();
@@ -136,10 +136,10 @@ describe("GitDiffPanel", () => {
     await waitFor(() => expect(menuNew).toHaveBeenCalled());
     const menuArgs = menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
     const copyNameItem = menuArgs.items.find(
-      (item: { text: string }) => item.text === "Copy file name",
+      (item: { text: string }) => item.text === "复制文件名",
     );
     const copyPathItem = menuArgs.items.find(
-      (item: { text: string }) => item.text === "Copy file path",
+      (item: { text: string }) => item.text === "复制文件路径",
     );
 
     expect(copyNameItem).toBeDefined();
@@ -173,7 +173,7 @@ describe("GitDiffPanel", () => {
     await waitFor(() => expect(menuNew).toHaveBeenCalled());
     const menuArgs = menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
     const revealItem = menuArgs.items.find(
-      (item: { text: string }) => item.text === `Show in ${fileManagerName()}`,
+      (item: { text: string }) => item.text === `在 ${fileManagerName()} 中显示`,
     );
 
     expect(revealItem).toBeDefined();
@@ -201,7 +201,7 @@ describe("GitDiffPanel", () => {
     await waitFor(() => expect(menuNew).toHaveBeenCalled());
     const menuArgs = menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
     const copyPathItem = menuArgs.items.find(
-      (item: { text: string }) => item.text === "Copy file path",
+      (item: { text: string }) => item.text === "复制文件路径",
     );
 
     expect(copyPathItem).toBeDefined();
@@ -230,7 +230,7 @@ describe("GitDiffPanel", () => {
     await waitFor(() => expect(menuNew).toHaveBeenCalled());
     const menuArgs = menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
     const copyPathItem = menuArgs.items.find(
-      (item: { text: string }) => item.text === "Copy file path",
+      (item: { text: string }) => item.text === "复制文件路径",
     );
 
     expect(copyPathItem).toBeDefined();

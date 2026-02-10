@@ -49,10 +49,10 @@ describe("WorktreeSection", () => {
     );
 
     expect(
-      screen.queryByRole("button", { name: "Search older..." }),
+      screen.queryByRole("button", { name: "搜索更早的..." }),
     ).toBeNull();
     expect(
-      screen.queryByRole("button", { name: "Load older..." }),
+      screen.queryByRole("button", { name: "加载更早的..." }),
     ).toBeNull();
   });
 });

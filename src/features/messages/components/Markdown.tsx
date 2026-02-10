@@ -393,10 +393,10 @@ function CodeBlock({ className, value, copyUseModifier }: CodeBlockProps) {
           type="button"
           className={`ghost markdown-codeblock-copy${copied ? " is-copied" : ""}`}
           onClick={handleCopy}
-          aria-label="Copy code block"
-          title={copied ? "Copied" : "Copy"}
-        >
-          {copied ? "Copied" : "Copy"}
+          aria-label="复制代码块"
+          title={copied ? "已复制" : "复制"}
+          >
+          {copied ? "已复制" : "复制"}
         </button>
       </div>
       <pre>

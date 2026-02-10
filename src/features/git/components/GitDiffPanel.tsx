@@ -261,7 +261,7 @@ export function GitDiffPanel({
     if (!pushNeedsSync) {
       return pushError;
     }
-    return `Remote has new commits. Sync (pull then push) before retrying.\n\n${pushError}`;
+    return `远端有新提交。请先同步（先拉取再推送）后重试。\n\n${pushError}`;
   }, [pushError, pushNeedsSync]);
 
   const handleSyncFromError = useCallback(() => {
@@ -273,7 +273,7 @@ export function GitDiffPanel({
       return null;
     }
     return {
-      label: _syncLoading ? "Syncing..." : "Sync (pull then push)",
+      label: _syncLoading ? "同步中..." : "同步（先拉取再推送）",
       onAction: handleSyncFromError,
       disabled: _syncLoading,
       loading: _syncLoading,
@@ -288,7 +288,7 @@ export function GitDiffPanel({
       event.stopPropagation();
 
       const copyItem = await MenuItem.new({
-        text: "Copy SHA",
+        text: "复制 SHA",
         action: async () => {
           await navigator.clipboard.writeText(entry.sha);
         },
@@ -297,7 +297,7 @@ export function GitDiffPanel({
       const items = [copyItem];
       if (githubBaseUrl) {
         const openItem = await MenuItem.new({
-          text: "Open on GitHub",
+          text: "在 GitHub 打开",
           action: async () => {
             await openUrl(`${githubBaseUrl}/commit/${entry.sha}`);
           },
@@ -319,7 +319,7 @@ export function GitDiffPanel({
       event.stopPropagation();
 
       const openItem = await MenuItem.new({
-        text: "Open on GitHub",
+        text: "在 GitHub 打开",
         action: async () => {
           await openUrl(pullRequest.url);
         },
@@ -342,12 +342,12 @@ export function GitDiffPanel({
       const isSingle = paths.length === 1;
       const previewLimit = 6;
       const preview = paths.slice(0, previewLimit).join("\n");
-      const more = paths.length > previewLimit ? `\n… and ${paths.length - previewLimit} more` : "";
+      const more = paths.length > previewLimit ? `\n……以及另外 ${paths.length - previewLimit} 个文件` : "";
       const message = isSingle
-        ? `Discard changes in:\n\n${paths[0]}\n\nThis cannot be undone.`
-        : `Discard changes in these files?\n\n${preview}${more}\n\nThis cannot be undone.`;
+        ? `确认丢弃以下文件的更改吗？\n\n${paths[0]}\n\n此操作无法撤销。`
+        : `确认丢弃以下文件的更改吗？\n\n${preview}${more}\n\n此操作无法撤销。`;
       const confirmed = await ask(message, {
-        title: "Discard changes",
+        title: "丢弃更改",
         kind: "warning",
       });
       if (!confirmed) {
@@ -385,8 +385,7 @@ export function GitDiffPanel({
       }
 
       const fileCount = targetPaths.length;
-      const plural = fileCount > 1 ? "s" : "";
-      const countSuffix = fileCount > 1 ? ` (${fileCount})` : "";
+      const countSuffix = fileCount > 1 ? `（${fileCount} 个）` : "";
       const normalizedRoot = resolveRootPath(gitRoot, workspacePath);
       const inferredRoot =
         !normalizedRoot && gitRootCandidates.length === 1
@@ -407,7 +406,7 @@ export function GitDiffPanel({
       if (stagedPaths.length > 0 && onUnstageFile) {
         items.push(
           await MenuItem.new({
-            text: `Unstage file${stagedPaths.length > 1 ? `s (${stagedPaths.length})` : ""}`,
+            text: `取消暂存${stagedPaths.length > 1 ? `（${stagedPaths.length} 个）` : ""}`,
             action: async () => {
               for (const stagedPath of stagedPaths) {
                 await onUnstageFile(stagedPath);
@@ -420,7 +419,7 @@ export function GitDiffPanel({
       if (unstagedPaths.length > 0 && onStageFile) {
         items.push(
           await MenuItem.new({
-            text: `Stage file${unstagedPaths.length > 1 ? `s (${unstagedPaths.length})` : ""}`,
+            text: `暂存文件${unstagedPaths.length > 1 ? `（${unstagedPaths.length} 个）` : ""}`,
             action: async () => {
               for (const unstagedPath of unstagedPaths) {
                 await onStageFile(unstagedPath);
@@ -442,13 +441,13 @@ export function GitDiffPanel({
 
         items.push(
           await MenuItem.new({
-            text: `Show in ${fileManagerLabel}`,
+            text: `在 ${fileManagerLabel} 中显示`,
             action: async () => {
               try {
                 if (!resolvedRoot && !isAbsolutePathForPlatform(absolutePath)) {
                   pushErrorToast({
-                    title: `Couldn't show file in ${fileManagerLabel}`,
-                    message: "Select a git root first.",
+                    title: `无法在 ${fileManagerLabel} 中显示文件`,
+                    message: "请先选择 Git 根目录。",
                   });
                   return;
                 }
@@ -457,10 +456,10 @@ export function GitDiffPanel({
               } catch (menuError) {
                 const message = menuError instanceof Error ? menuError.message : String(menuError);
                 pushErrorToast({
-                  title: `Couldn't show file in ${fileManagerLabel}`,
+                  title: `无法在 ${fileManagerLabel} 中显示文件`,
                   message,
                 });
-                console.warn("Failed to reveal file", {
+                console.warn("显示文件失败", {
                   message,
                   path: absolutePath,
                 });
@@ -471,13 +470,13 @@ export function GitDiffPanel({
 
         items.push(
           await MenuItem.new({
-            text: "Copy file name",
+            text: "复制文件名",
             action: async () => {
               await navigator.clipboard.writeText(fileName);
             },
           }),
           await MenuItem.new({
-            text: "Copy file path",
+            text: "复制文件路径",
             action: async () => {
               await navigator.clipboard.writeText(projectRelativePath);
             },
@@ -488,7 +487,7 @@ export function GitDiffPanel({
       if (onRevertFile) {
         items.push(
           await MenuItem.new({
-            text: `Discard change${plural}${countSuffix}`,
+            text: `丢弃更改${countSuffix}`,
             action: async () => {
               await discardFiles(targetPaths);
             },
@@ -521,12 +520,12 @@ export function GitDiffPanel({
   );
 
   const logCountLabel = logTotal
-    ? `${logTotal} commit${logTotal === 1 ? "" : "s"}`
+    ? `${logTotal} 个提交`
     : logEntries.length
-      ? `${logEntries.length} commit${logEntries.length === 1 ? "" : "s"}`
-      : "No commits";
-  const logSyncLabel = logUpstream ? `↑${logAhead} ↓${logBehind}` : "No upstream configured";
-  const logUpstreamLabel = logUpstream ? `Upstream ${logUpstream}` : "";
+      ? `${logEntries.length} 个提交`
+      : "暂无提交";
+  const logSyncLabel = logUpstream ? `↑${logAhead} ↓${logBehind}` : "未配置上游分支";
+  const logUpstreamLabel = logUpstream ? `上游 ${logUpstream}` : "";
   const showAheadSection = Boolean(logUpstream && logAhead > 0);
   const showBehindSection = Boolean(logUpstream && logBehind > 0);
   const hasDiffTotals = totalAdditions > 0 || totalDeletions > 0;
@@ -629,7 +628,7 @@ export function GitDiffPanel({
     <PanelFrame>
       <PanelHeader className="git-panel-header">
         <PanelTabs active={filePanelMode} onSelect={onFilePanelModeChange} />
-        <div className="git-panel-actions" role="group" aria-label="Git panel">
+        <div className="git-panel-actions" role="group" aria-label="Git 面板">
           <div className="git-panel-select">
             <span className="git-panel-select-icon" aria-hidden>
               <ModeIcon />
@@ -638,12 +637,12 @@ export function GitDiffPanel({
               className="git-panel-select-input"
               value={mode}
               onChange={(event) => onModeChange(event.target.value as GitDiffPanelProps["mode"])}
-              aria-label="Git panel view"
+              aria-label="Git 面板视图"
             >
-              <option value="diff">Diff</option>
-              <option value="log">Log</option>
-              <option value="issues">Issues</option>
-              <option value="prs">PRs</option>
+              <option value="diff">差异</option>
+              <option value="log">日志</option>
+              <option value="issues">Issue</option>
+              <option value="prs">PR</option>
             </select>
           </div>
           {showApplyWorktree && (
@@ -654,8 +653,8 @@ export function GitDiffPanel({
                 void onApplyWorktreeChanges?.();
               }}
               disabled={worktreeApplyLoading || worktreeApplySuccess}
-              data-tooltip={worktreeApplyTitle ?? "Apply changes to parent workspace"}
-              aria-label="Apply worktree changes"
+              data-tooltip={worktreeApplyTitle ?? "将更改应用到父工作区"}
+              aria-label="应用工作树更改"
             >
               <WorktreeApplyIcon success={worktreeApplySuccess} />
             </button>

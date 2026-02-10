@@ -164,7 +164,7 @@ const ImageLightbox = memo(function ImageLightbox({
           type="button"
           className="message-image-lightbox-close"
           onClick={onClose}
-          aria-label="Close image preview"
+          aria-label="关闭图片预览"
         >
           <X size={16} aria-hidden />
         </button>
@@ -300,7 +300,7 @@ export const WorkingIndicator = memo(function WorkingIndicator({
           <div className="working-timer">
             <span className="working-timer-clock">{formatDurationMs(elapsedMs)}</span>
           </div>
-          <span className="working-text">{reasoningLabel || "Working…"}</span>
+          <span className="working-text">{reasoningLabel || "处理中…"}</span>
         </div>
       )}
       {!isThinking && lastDurationMs !== null && hasItems && (
@@ -378,8 +378,8 @@ export const MessageRow = memo(function MessageRow({
           type="button"
           className={`ghost message-copy-button${isCopied ? " is-copied" : ""}`}
           onClick={() => onCopy(item)}
-          aria-label="Copy message"
-          title="Copy message"
+          aria-label="复制消息"
+          title="复制消息"
         >
           <span className="message-copy-icon" aria-hidden>
             <Copy className="message-copy-icon-copy" size={14} />
@@ -411,7 +411,7 @@ export const ReasoningRow = memo(function ReasoningRow({
         className="tool-inline-bar-toggle"
         onClick={() => onToggle(item.id)}
         aria-expanded={isExpanded}
-        aria-label="Toggle reasoning details"
+        aria-label="切换推理详情"
       />
       <div className="tool-inline-content">
         <button
@@ -453,7 +453,7 @@ export const ReviewRow = memo(function ReviewRow({
   onOpenFileLinkMenu,
   onOpenThreadLink,
 }: ReviewRowProps) {
-  const title = item.state === "started" ? "Review started" : "Review completed";
+  const title = item.state === "started" ? "审查已开始" : "审查已完成";
   return (
     <div className="item-card review">
       <div className="review-header">
@@ -569,7 +569,7 @@ export const ToolRow = memo(function ToolRow({
         className="tool-inline-bar-toggle"
         onClick={() => onToggle(item.id)}
         aria-expanded={isExpanded}
-        aria-label="Toggle tool details"
+        aria-label="切换工具详情"
       />
       <div className="tool-inline-content">
         <button
@@ -669,7 +669,7 @@ export const ToolRow = memo(function ToolRow({
 });
 
 export const ExploreRow = memo(function ExploreRow({ item }: ExploreRowProps) {
-  const title = item.status === "exploring" ? "Exploring" : "Explored";
+  const title = item.status === "exploring" ? "探索中" : "已探索";
   return (
     <div className="tool-inline explore-inline">
       <div className="tool-inline-bar-toggle" aria-hidden />

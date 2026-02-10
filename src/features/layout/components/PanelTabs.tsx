@@ -66,7 +66,7 @@ export function PanelTabs({ active, onSelect, tabs = defaultTabs }: PanelTabsPro
   };
 
   return (
-    <div className="panel-tabs" role="tablist" aria-label="Panel" aria-orientation="horizontal">
+    <div className="panel-tabs" role="tablist" aria-label="面板" aria-orientation="horizontal">
       {tabs.map((tab, index) => {
         const isActive = active === tab.id;
         return (

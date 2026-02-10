@@ -18,22 +18,22 @@ export function SettingsFeaturesSection({
 }: SettingsFeaturesSectionProps) {
   return (
     <section className="settings-section">
-      <div className="settings-section-title">Features</div>
+      <div className="settings-section-title">功能</div>
       <div className="settings-section-subtitle">
-        Manage stable and experimental Codex features.
+        管理稳定版和实验版 Codex 功能。
       </div>
       {hasCodexHomeOverrides && (
         <div className="settings-help">
-          Feature settings are stored in the default CODEX_HOME config.toml.
+          功能设置保存在默认 CODEX_HOME 的 config.toml。
           <br />
-          Workspace overrides are not updated.
+          不会更新工作区覆盖项。
         </div>
       )}
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Config file</div>
+          <div className="settings-toggle-title">配置文件</div>
           <div className="settings-toggle-subtitle">
-            Open the Codex config in {fileManagerName()}.
+            在 {fileManagerName()} 中打开 Codex 配置。
           </div>
         </div>
         <button type="button" className="ghost" onClick={onOpenConfig}>
@@ -41,15 +41,15 @@ export function SettingsFeaturesSection({
         </button>
       </div>
       {openConfigError && <div className="settings-help">{openConfigError}</div>}
-      <div className="settings-subsection-title">Stable Features</div>
+      <div className="settings-subsection-title">稳定功能</div>
       <div className="settings-subsection-subtitle">
-        Production-ready features enabled by default.
+        默认启用且可用于生产环境的功能。
       </div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Collaboration modes</div>
+          <div className="settings-toggle-title">协作模式</div>
           <div className="settings-toggle-subtitle">
-            Enable collaboration mode presets (Code, Plan).
+            启用协作模式预设（Code、Plan）。
           </div>
         </div>
         <button
@@ -68,10 +68,9 @@ export function SettingsFeaturesSection({
       </div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Personality</div>
+          <div className="settings-toggle-title">个性风格</div>
           <div className="settings-toggle-subtitle">
-            Choose Codex communication style (writes top-level <code>personality</code> in
-            config.toml).
+            选择 Codex 的沟通风格（会写入 config.toml 顶层 <code>personality</code>）。
           </div>
         </div>
         <select
@@ -84,17 +83,17 @@ export function SettingsFeaturesSection({
               personality: event.target.value as AppSettings["personality"],
             })
           }
-          aria-label="Personality"
+          aria-label="个性风格"
         >
-          <option value="friendly">Friendly</option>
-          <option value="pragmatic">Pragmatic</option>
+          <option value="friendly">友好</option>
+          <option value="pragmatic">务实</option>
         </select>
       </div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Steer mode</div>
+          <div className="settings-toggle-title">引导模式</div>
           <div className="settings-toggle-subtitle">
-            Send messages immediately. Use Tab to queue while a run is active.
+            立即发送消息；运行中可按 Tab 排队。
           </div>
         </div>
         <button
@@ -113,9 +112,9 @@ export function SettingsFeaturesSection({
       </div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Background terminal</div>
+          <div className="settings-toggle-title">后台终端</div>
           <div className="settings-toggle-subtitle">
-            Run long-running terminal commands in the background.
+            在后台运行长时终端命令。
           </div>
         </div>
         <button
@@ -132,15 +131,15 @@ export function SettingsFeaturesSection({
           <span className="settings-toggle-knob" />
         </button>
       </div>
-      <div className="settings-subsection-title">Experimental Features</div>
+      <div className="settings-subsection-title">实验功能</div>
       <div className="settings-subsection-subtitle">
-        Preview features that may change or be removed.
+        预览可能变更或下线的功能。
       </div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Multi-agent</div>
+          <div className="settings-toggle-title">多智能体</div>
           <div className="settings-toggle-subtitle">
-            Enable multi-agent collaboration tools in Codex.
+            启用 Codex 多智能体协作工具。
           </div>
         </div>
         <button
@@ -161,7 +160,7 @@ export function SettingsFeaturesSection({
         <div>
           <div className="settings-toggle-title">Apps</div>
           <div className="settings-toggle-subtitle">
-            Enable ChatGPT apps/connectors and the <code>/apps</code> command.
+            启用 ChatGPT 应用/连接器与 <code>/apps</code> 命令。
           </div>
         </div>
         <button

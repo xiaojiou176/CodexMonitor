@@ -35,7 +35,7 @@ describe("threadItems", () => {
       id: "tool-1",
       kind: "tool",
       toolType: "fileChange",
-      title: "File changes",
+      title: "文件更改",
       detail: "",
       output,
     };
@@ -425,7 +425,7 @@ describe("threadItems", () => {
     });
     expect(item).not.toBeNull();
     if (item && item.kind === "tool") {
-      expect(item.title).toBe("File changes");
+      expect(item.title).toBe("文件更改");
       expect(item.detail).toBe("A foo.txt");
       expect(item.output).toContain("diff --git a/foo.txt b/foo.txt");
       expect(item.changes?.[0]?.path).toBe("foo.txt");
@@ -437,7 +437,7 @@ describe("threadItems", () => {
       id: "tool-2",
       kind: "tool",
       toolType: "webSearch",
-      title: "Web search",
+      title: "网页搜索",
       detail: "query",
       status: "ok",
       output: "short",
@@ -446,7 +446,7 @@ describe("threadItems", () => {
       id: "tool-2",
       kind: "tool",
       toolType: "webSearch",
-      title: "Web search",
+      title: "网页搜索",
       detail: "query",
       output: "much longer output",
     };
@@ -464,7 +464,7 @@ describe("threadItems", () => {
       id: "tool-3",
       kind: "tool",
       toolType: "webSearch",
-      title: "Web search",
+      title: "网页搜索",
       detail: "query",
       status: "completed",
       output: " ",
@@ -473,7 +473,7 @@ describe("threadItems", () => {
       id: "tool-3",
       kind: "tool",
       toolType: "webSearch",
-      title: "Web search",
+      title: "网页搜索",
       detail: "query",
       output: "streamed output",
     };
@@ -491,7 +491,7 @@ describe("threadItems", () => {
       id: "plan-1",
       kind: "tool",
       toolType: "plan",
-      title: "Plan",
+      title: "方案",
       detail: "Generating plan...",
       status: "in_progress",
       output: "## Plan\n- Step 1\n- Step 2",
@@ -500,7 +500,7 @@ describe("threadItems", () => {
       id: "plan-1",
       kind: "tool",
       toolType: "plan",
-      title: "Plan",
+      title: "方案",
       detail: "",
       status: "completed",
       output: "",
@@ -520,7 +520,7 @@ describe("threadItems", () => {
       id: "tool-4",
       kind: "tool",
       toolType: "webSearch",
-      title: "Web search",
+      title: "网页搜索",
       detail: "query",
       status: "in_progress",
       output: "verbose streamed output that will be replaced",
@@ -529,7 +529,7 @@ describe("threadItems", () => {
       id: "tool-4",
       kind: "tool",
       toolType: "webSearch",
-      title: "Web search",
+      title: "网页搜索",
       detail: "query",
       status: "completed",
       output: "final",
@@ -629,7 +629,7 @@ describe("threadItems", () => {
     expect(item).not.toBeNull();
     if (item && item.kind === "tool") {
       expect(item.toolType).toBe("contextCompaction");
-      expect(item.title).toBe("Context compaction");
+      expect(item.title).toBe("上下文压缩");
       expect(item.status).toBe("inProgress");
     }
   });
@@ -642,7 +642,7 @@ describe("threadItems", () => {
     expect(item).not.toBeNull();
     if (item && item.kind === "tool") {
       expect(item.toolType).toBe("contextCompaction");
-      expect(item.title).toBe("Context compaction");
+      expect(item.title).toBe("上下文压缩");
       expect(item.status).toBe("completed");
     }
   });

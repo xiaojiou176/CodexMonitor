@@ -25,7 +25,7 @@ import {
 } from "../../../services/tauri";
 
 const GROUP_ID_RANDOM_MODULUS = 1_000_000;
-const RESERVED_GROUP_NAME = "Ungrouped";
+const RESERVED_GROUP_NAME = "未分组";
 const RESERVED_GROUP_NAME_NORMALIZED = RESERVED_GROUP_NAME.toLowerCase();
 const SORT_ORDER_FALLBACK = Number.MAX_SAFE_INTEGER;
 
@@ -672,18 +672,16 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     );
     const detail =
       worktreeCount > 0
-        ? `\n\nThis will also delete ${worktreeCount} worktree${
-            worktreeCount === 1 ? "" : "s"
-          } on disk.`
+        ? `\n\n这也将删除磁盘上的 ${worktreeCount} 个工作树。`
         : "";
 
     const confirmed = await ask(
-      `Are you sure you want to delete "${workspaceName}"?\n\nThis will remove the workspace from CodexMonitor.${detail}`,
+      `确定要删除 "${workspaceName}" 吗？\n\n这将从 CodexMonitor 中移除该工作区。${detail}`,
       {
-        title: "Delete Workspace",
+        title: "删除工作区",
         kind: "warning",
-        okLabel: "Delete",
-        cancelLabel: "Cancel",
+        okLabel: "删除",
+        cancelLabel: "取消",
       },
     );
 
@@ -719,7 +717,7 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
         payload: errorMessage,
       });
       void message(errorMessage, {
-        title: "Delete workspace failed",
+        title: "删除工作区失败",
         kind: "error",
       });
     }
@@ -727,15 +725,15 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
 
   async function removeWorktree(workspaceId: string) {
     const workspace = workspaces.find((entry) => entry.id === workspaceId);
-    const workspaceName = workspace?.name || "this worktree";
+    const workspaceName = workspace?.name || "此工作树";
 
     const confirmed = await ask(
-      `Are you sure you want to delete "${workspaceName}"?\n\nThis will close the agent, remove its worktree, and delete it from CodexMonitor.`,
+      `确定要删除 "${workspaceName}" 吗？\n\n这将关闭代理、移除工作树，并从 CodexMonitor 中删除。`,
       {
-        title: "Delete Worktree",
+        title: "删除工作树",
         kind: "warning",
-        okLabel: "Delete",
-        cancelLabel: "Cancel",
+        okLabel: "删除",
+        cancelLabel: "取消",
       },
     );
 
@@ -769,7 +767,7 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
         payload: errorMessage,
       });
       void message(errorMessage, {
-        title: "Delete worktree failed",
+        title: "删除工作树失败",
         kind: "error",
       });
     } finally {

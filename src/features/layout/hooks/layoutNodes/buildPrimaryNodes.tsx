@@ -282,7 +282,7 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
         <button
           className="icon-button back-button"
           onClick={options.onExitDiff}
-          aria-label="Back to chat"
+          aria-label="返回聊天"
         >
           <ArrowLeft aria-hidden />
         </button>

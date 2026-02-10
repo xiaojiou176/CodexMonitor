@@ -41,7 +41,7 @@ describe("Home", () => {
       />,
     );
 
-    expect(screen.getByText("Latest agents")).toBeTruthy();
+    expect(screen.getByText("最新智能体")).toBeTruthy();
     expect(screen.getByText("CodexMonitor")).toBeTruthy();
     expect(screen.getByText("Frontend")).toBeTruthy();
     const message = screen.getByText("Ship the dashboard refresh");
@@ -52,15 +52,15 @@ describe("Home", () => {
     }
     fireEvent.click(card);
     expect(onSelectThread).toHaveBeenCalledWith("workspace-1", "thread-1");
-    expect(screen.getByText("Running")).toBeTruthy();
+    expect(screen.getByText("运行中")).toBeTruthy();
   });
 
   it("shows the empty state when there are no latest runs", () => {
     render(<Home {...baseProps} />);
 
-    expect(screen.getByText("No agent activity yet")).toBeTruthy();
+    expect(screen.getByText("暂无智能体活动")).toBeTruthy();
     expect(
-      screen.getByText("Start a thread to see the latest responses here."),
+      screen.getByText("发起一个线程后，这里会显示最新回复。"),
     ).toBeTruthy();
   });
 
@@ -95,8 +95,8 @@ describe("Home", () => {
       />,
     );
 
-    expect(screen.getAllByText("agent time").length).toBeGreaterThan(0);
-    expect(screen.getByText("Runs")).toBeTruthy();
-    expect(screen.getByText("Peak day")).toBeTruthy();
+    expect(screen.getAllByText("智能体时长").length).toBeGreaterThan(0);
+    expect(screen.getByText("运行次数")).toBeTruthy();
+    expect(screen.getByText("峰值日期")).toBeTruthy();
   });
 });

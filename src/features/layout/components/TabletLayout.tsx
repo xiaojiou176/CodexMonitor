@@ -46,7 +46,7 @@ export function TabletLayout({
         className="projects-resizer"
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize projects"
+        aria-label="调整项目面板大小"
         onMouseDown={onSidebarResizeStart}
       />
       <section className="tablet-main">

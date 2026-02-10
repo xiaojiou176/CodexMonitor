@@ -833,9 +833,9 @@ describe("Messages", () => {
       />,
     );
 
-    expect(screen.getByText("Plan ready")).toBeTruthy();
+    expect(screen.getByText("方案就绪")).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Implement this plan" }),
+      screen.getByRole("button", { name: "执行此方案" }),
     ).toBeTruthy();
   });
 
@@ -873,7 +873,7 @@ describe("Messages", () => {
       />,
     );
 
-    expect(screen.queryByText("Plan ready")).toBeNull();
+    expect(screen.queryByText("方案就绪")).toBeNull();
   });
 
   it("hides the plan-ready follow-up when the plan tool item is still running", () => {
@@ -904,7 +904,7 @@ describe("Messages", () => {
       />,
     );
 
-    expect(screen.queryByText("Plan ready")).toBeNull();
+    expect(screen.queryByText("方案就绪")).toBeNull();
   });
 
   it("shows the plan-ready follow-up once the turn stops thinking even if the plan status stays in_progress", () => {
@@ -935,7 +935,7 @@ describe("Messages", () => {
       />,
     );
 
-    expect(screen.getByText("Plan ready")).toBeTruthy();
+    expect(screen.getByText("方案就绪")).toBeTruthy();
   });
 
   it("calls the plan follow-up callbacks", () => {
@@ -966,18 +966,18 @@ describe("Messages", () => {
       />,
     );
 
-    const sendChangesButton = screen.getByRole("button", { name: "Send changes" });
+    const sendChangesButton = screen.getByRole("button", { name: "发送修改" });
     expect((sendChangesButton as HTMLButtonElement).disabled).toBe(true);
 
     const textarea = screen.getByPlaceholderText(
-      "Describe what you want to change in the plan...",
+      "描述你想修改的内容...",
     );
     fireEvent.change(textarea, { target: { value: "Add error handling" } });
 
     expect((sendChangesButton as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(sendChangesButton);
     expect(onPlanSubmitChanges).toHaveBeenCalledWith("Add error handling");
-    expect(screen.queryByText("Plan ready")).toBeNull();
+    expect(screen.queryByText("方案就绪")).toBeNull();
   });
 
   it("dismisses the plan-ready follow-up when the plan is accepted", () => {
@@ -1009,10 +1009,10 @@ describe("Messages", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Implement this plan" }),
+      screen.getByRole("button", { name: "执行此方案" }),
     );
     expect(onPlanAccept).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText("Plan ready")).toBeNull();
+    expect(screen.queryByText("方案就绪")).toBeNull();
   });
 
   it("does not render plan-ready tagged internal user messages", () => {
@@ -1050,7 +1050,7 @@ describe("Messages", () => {
     );
 
     expect(screen.queryByText(/cm_plan_ready/)).toBeNull();
-    expect(screen.queryByText("Plan ready")).toBeNull();
+    expect(screen.queryByText("方案就绪")).toBeNull();
   });
 
   it("hides the plan follow-up when an input-requested bubble is active", () => {
@@ -1094,7 +1094,7 @@ describe("Messages", () => {
       />,
     );
 
-    expect(screen.getByText("Input requested")).toBeTruthy();
-    expect(screen.queryByText("Plan ready")).toBeNull();
+    expect(screen.getByText("需要你的输入")).toBeTruthy();
+    expect(screen.queryByText("方案就绪")).toBeNull();
   });
 });

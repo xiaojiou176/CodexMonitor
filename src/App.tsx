@@ -574,12 +574,10 @@ function MainApp() {
   });
   const fileStatus =
     gitStatus.error
-      ? "Git status unavailable"
+      ? "Git 状态不可用"
       : gitStatus.files.length > 0
-        ? `${gitStatus.files.length} file${
-            gitStatus.files.length === 1 ? "" : "s"
-          } changed`
-        : "Working tree clean";
+        ? `${gitStatus.files.length} 个文件已更改`
+        : "工作树无更改";
 
   usePersistComposerSettings({
     appSettingsLoading,
@@ -862,7 +860,7 @@ function MainApp() {
   });
 
   const ensureLaunchTerminal = useCallback(
-    (workspaceId: string) => ensureTerminalWithTitle(workspaceId, "launch", "Launch"),
+    (workspaceId: string) => ensureTerminalWithTitle(workspaceId, "launch", "启动"),
     [ensureTerminalWithTitle],
   );
 
@@ -885,7 +883,7 @@ function MainApp() {
       return ensureTerminalWithTitle(
         workspaceId,
         `launch:${entry.id}`,
-        title || `Launch ${label}`,
+        title || `启动 ${label}`,
       );
     },
     restartLaunchSession: restartTerminalSession,
@@ -1238,7 +1236,7 @@ function MainApp() {
       workspaceId: activeWorkspaceId,
       threadId: thread.id,
       modelId: null,
-      modelLabel: thread.name?.trim() || "Untitled thread",
+      modelLabel: thread.name?.trim() || "未命名线程",
       sequence: index + 1,
     }));
     return {
@@ -1733,7 +1731,7 @@ function MainApp() {
 
   useMenuAcceleratorController({ appSettings, onDebug: addDebugEntry });
   const dropOverlayActive = isWorkspaceDropActive;
-  const dropOverlayText = "Drop Project Here";
+  const dropOverlayText = "将项目拖放到此处";
   const appClassName = `app ${isCompact ? "layout-compact" : "layout-desktop"}${
     isPhone ? " layout-phone" : ""
   }${isTablet ? " layout-tablet" : ""}${
@@ -1965,10 +1963,10 @@ function MainApp() {
     gitDiffViewStyle,
     gitDiffIgnoreWhitespaceChanges:
       appSettings.gitDiffIgnoreWhitespaceChanges && diffSource !== "pr",
-    worktreeApplyLabel: "apply",
+    worktreeApplyLabel: "应用",
     worktreeApplyTitle: activeParentWorkspace?.name
-      ? `Apply changes to ${activeParentWorkspace.name}`
-      : "Apply changes to parent workspace",
+      ? `将更改应用到 ${activeParentWorkspace.name}`
+      : "将更改应用到父工作区",
     worktreeApplyLoading: isWorktreeWorkspace ? worktreeApplyLoading : false,
     worktreeApplyError: isWorktreeWorkspace ? worktreeApplyError : null,
     worktreeApplySuccess: isWorktreeWorkspace ? worktreeApplySuccess : false,

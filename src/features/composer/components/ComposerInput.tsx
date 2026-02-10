@@ -338,19 +338,19 @@ export function ComposerInput({
   const micDisabled =
     disabled || dictationState === "processing" || !dictationEnabled || !onToggleDictation;
   const micAriaLabel = allowOpenDictationSettings
-    ? "Open dictation settings"
+    ? "打开听写设置"
     : dictationState === "processing"
-      ? "Dictation processing"
+      ? "听写处理中"
       : isDictating
-        ? "Stop dictation"
-        : "Start dictation";
+        ? "停止听写"
+        : "开始听写";
   const micTitle = allowOpenDictationSettings
-    ? "Dictation disabled. Open settings"
+    ? "听写已禁用，打开设置"
     : dictationState === "processing"
-      ? "Processing dictation"
+      ? "听写处理中"
       : isDictating
-        ? "Stop dictation"
-        : "Start dictation";
+        ? "停止听写"
+        : "开始听写";
   const handleMicClick = useCallback(() => {
     if (allowOpenDictationSettings) {
       onOpenDictationSettings?.();
@@ -433,8 +433,8 @@ export function ComposerInput({
             className="composer-attach"
             onClick={onAddAttachment}
             disabled={disabled || !onAddAttachment}
-            aria-label="Add image"
-            title="Add image"
+            aria-label="添加图片"
+            title="添加图片"
           >
             <ImagePlus size={14} aria-hidden />
           </button>
@@ -449,8 +449,8 @@ export function ComposerInput({
               disabled={disabled}
               aria-expanded={mobileActionsOpen}
               aria-haspopup="menu"
-              aria-label="More actions"
-              title="More actions"
+              aria-label="更多操作"
+              title="更多操作"
             >
               <Plus size={14} aria-hidden />
             </button>
@@ -475,7 +475,7 @@ export function ComposerInput({
                       )
                     }
                   >
-                    {isExpanded ? "Collapse input" : "Expand input"}
+                    {isExpanded ? "收起输入框" : "展开输入框"}
                   </PopoverMenuItem>
                 )}
                 {(onToggleDictation || onOpenDictationSettings) && (
@@ -498,8 +498,8 @@ export function ComposerInput({
             ref={textareaRef}
             placeholder={
               disabled
-                ? "Review in progress. Chat will re-enable when it completes."
-                : "Ask Codex to do something..."
+                ? "审查进行中，完成后聊天将重新启用。"
+                : "让 Codex 做点什么..."
             }
             value={text}
             onChange={handleTextareaChange}
@@ -676,8 +676,8 @@ export function ComposerInput({
           }`}
           onClick={onToggleExpand}
           disabled={disabled}
-          aria-label={isExpanded ? "Collapse input" : "Expand input"}
-          title={isExpanded ? "Collapse input" : "Expand input"}
+          aria-label={isExpanded ? "收起输入框" : "展开输入框"}
+          title={isExpanded ? "收起输入框" : "展开输入框"}
         >
           {isExpanded ? <ChevronDown aria-hidden /> : <ChevronUp aria-hidden />}
         </button>
@@ -705,7 +705,7 @@ export function ComposerInput({
         }`}
         onClick={handleActionClick}
         disabled={disabled || isDictationBusy || (!canStop && !canSend)}
-        aria-label={canStop ? "Stop" : sendLabel}
+        aria-label={canStop ? "停止" : sendLabel}
       >
         {canStop ? (
           <>

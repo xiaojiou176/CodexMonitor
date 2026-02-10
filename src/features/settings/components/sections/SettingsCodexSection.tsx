@@ -117,11 +117,11 @@ export function SettingsCodexSection({
     <section className="settings-section">
       <div className="settings-section-title">Codex</div>
       <div className="settings-section-subtitle">
-        Configure the Codex CLI used by CodexMonitor and validate the install.
+        配置 CodexMonitor 使用的 Codex CLI，并验证安装状态。
       </div>
       <div className="settings-field">
         <label className="settings-field-label" htmlFor="codex-path">
-          Default Codex path
+          默认 Codex 路径
         </label>
         <div className="settings-field-row">
           <input
@@ -138,19 +138,19 @@ export function SettingsCodexSection({
               void onBrowseCodex();
             }}
           >
-            Browse
+            浏览
           </button>
           <button
             type="button"
             className="ghost"
             onClick={() => onSetCodexPathDraft("")}
           >
-            Use PATH
+            使用系统 PATH
           </button>
         </div>
-        <div className="settings-help">Leave empty to use the system PATH resolution.</div>
+        <div className="settings-help">留空则使用系统 PATH 自动解析。</div>
         <label className="settings-field-label" htmlFor="codex-args">
-          Default Codex args
+          默认 Codex 参数
         </label>
         <div className="settings-field-row">
           <input
@@ -165,11 +165,11 @@ export function SettingsCodexSection({
             className="ghost"
             onClick={() => onSetCodexArgsDraft("")}
           >
-            Clear
+            清空
           </button>
         </div>
         <div className="settings-help">
-          Extra flags passed before <code>app-server</code>. Use quotes for values with spaces.
+          在 <code>app-server</code> 之前附加的参数。包含空格的值请使用引号。
         </div>
         <div className="settings-field-actions">
           {codexDirty && (
@@ -181,7 +181,7 @@ export function SettingsCodexSection({
               }}
               disabled={isSavingSettings}
             >
-              {isSavingSettings ? "Saving..." : "Save"}
+              {isSavingSettings ? "保存中..." : "保存"}
             </button>
           )}
           <button
@@ -193,7 +193,7 @@ export function SettingsCodexSection({
             disabled={doctorState.status === "running"}
           >
             <Stethoscope aria-hidden />
-            {doctorState.status === "running" ? "Running..." : "Run doctor"}
+            {doctorState.status === "running" ? "检查中..." : "运行诊断"}
           </button>
           <button
             type="button"
@@ -202,31 +202,31 @@ export function SettingsCodexSection({
               void onRunCodexUpdate();
             }}
             disabled={codexUpdateState.status === "running"}
-            title="Update Codex"
+            title="更新 Codex"
           >
             <Stethoscope aria-hidden />
-            {codexUpdateState.status === "running" ? "Updating..." : "Update"}
+            {codexUpdateState.status === "running" ? "更新中..." : "更新"}
           </button>
         </div>
 
         {doctorState.result && (
           <div className={`settings-doctor ${doctorState.result.ok ? "ok" : "error"}`}>
             <div className="settings-doctor-title">
-              {doctorState.result.ok ? "Codex looks good" : "Codex issue detected"}
+              {doctorState.result.ok ? "Codex 状态正常" : "检测到 Codex 问题"}
             </div>
             <div className="settings-doctor-body">
-              <div>Version: {doctorState.result.version ?? "unknown"}</div>
-              <div>App-server: {doctorState.result.appServerOk ? "ok" : "failed"}</div>
+              <div>版本：{doctorState.result.version ?? "未知"}</div>
+              <div>app-server：{doctorState.result.appServerOk ? "正常" : "失败"}</div>
               <div>
                 Node:{" "}
                 {doctorState.result.nodeOk
-                  ? `ok (${doctorState.result.nodeVersion ?? "unknown"})`
-                  : "missing"}
+                  ? `正常 (${doctorState.result.nodeVersion ?? "未知"})`
+                  : "缺失"}
               </div>
               {doctorState.result.details && <div>{doctorState.result.details}</div>}
               {doctorState.result.nodeDetails && <div>{doctorState.result.nodeDetails}</div>}
               {doctorState.result.path && (
-                <div className="settings-doctor-path">PATH: {doctorState.result.path}</div>
+                <div className="settings-doctor-path">PATH：{doctorState.result.path}</div>
               )}
             </div>
           </div>
@@ -239,25 +239,25 @@ export function SettingsCodexSection({
             <div className="settings-doctor-title">
               {codexUpdateState.result.ok
                 ? codexUpdateState.result.upgraded
-                  ? "Codex updated"
-                  : "Codex already up-to-date"
-                : "Codex update failed"}
+                  ? "Codex 已更新"
+                  : "Codex 已是最新版本"
+                : "Codex 更新失败"}
             </div>
             <div className="settings-doctor-body">
-              <div>Method: {codexUpdateState.result.method}</div>
+              <div>更新方式：{codexUpdateState.result.method}</div>
               {codexUpdateState.result.package && (
-                <div>Package: {codexUpdateState.result.package}</div>
+                <div>包名：{codexUpdateState.result.package}</div>
               )}
               <div>
-                Version:{" "}
+                版本：{" "}
                 {codexUpdateState.result.afterVersion ??
                   codexUpdateState.result.beforeVersion ??
-                  "unknown"}
+                  "未知"}
               </div>
               {codexUpdateState.result.details && <div>{codexUpdateState.result.details}</div>}
               {codexUpdateState.result.output && (
                 <details>
-                  <summary>output</summary>
+                  <summary>输出</summary>
                   <pre>{codexUpdateState.result.output}</pre>
                 </details>
               )}
@@ -268,7 +268,7 @@ export function SettingsCodexSection({
 
       <div className="settings-field">
         <label className="settings-field-label" htmlFor="default-access">
-          Default access mode
+          默认访问模式
         </label>
         <select
           id="default-access"
@@ -281,14 +281,14 @@ export function SettingsCodexSection({
             })
           }
         >
-          <option value="read-only">Read only</option>
-          <option value="current">On-request</option>
-          <option value="full-access">Full access</option>
+          <option value="read-only">只读</option>
+          <option value="current">按需申请</option>
+          <option value="full-access">完全访问</option>
         </select>
       </div>
       <div className="settings-field">
         <label className="settings-field-label" htmlFor="review-delivery">
-          Review mode
+          审查模式
         </label>
         <select
           id="review-delivery"
@@ -301,21 +301,20 @@ export function SettingsCodexSection({
             })
           }
         >
-          <option value="inline">Inline (same thread)</option>
-          <option value="detached">Detached (new review thread)</option>
+          <option value="inline">内联（当前线程）</option>
+          <option value="detached">分离（新审查线程）</option>
         </select>
         <div className="settings-help">
-          Choose whether <code>/review</code> runs in the current thread or a detached review
-          thread.
+          选择 <code>/review</code> 在当前线程执行，还是在独立审查线程中执行。
         </div>
       </div>
 
       <FileEditorCard
-        title="Global AGENTS.md"
+        title="全局 AGENTS.md"
         meta={globalAgentsMeta}
         error={globalAgentsError}
         value={globalAgentsContent}
-        placeholder="Add global instructions for Codex agents…"
+        placeholder="为 Codex Agent 添加全局指令…"
         disabled={globalAgentsLoading}
         refreshDisabled={globalAgentsRefreshDisabled}
         saveDisabled={globalAgentsSaveDisabled}
@@ -325,7 +324,7 @@ export function SettingsCodexSection({
         onSave={onSaveGlobalAgents}
         helpText={
           <>
-            Stored at <code>~/.codex/AGENTS.md</code>.
+            存储位置：<code>~/.codex/AGENTS.md</code>。
           </>
         }
         classNames={{
@@ -342,11 +341,11 @@ export function SettingsCodexSection({
       />
 
       <FileEditorCard
-        title="Global config.toml"
+        title="全局 config.toml"
         meta={globalConfigMeta}
         error={globalConfigError}
         value={globalConfigContent}
-        placeholder="Edit the global Codex config.toml…"
+        placeholder="编辑全局 Codex config.toml…"
         disabled={globalConfigLoading}
         refreshDisabled={globalConfigRefreshDisabled}
         saveDisabled={globalConfigSaveDisabled}
@@ -356,7 +355,7 @@ export function SettingsCodexSection({
         onSave={onSaveGlobalConfig}
         helpText={
           <>
-            Stored at <code>~/.codex/config.toml</code>.
+            存储位置：<code>~/.codex/config.toml</code>。
           </>
         }
         classNames={{
@@ -373,7 +372,7 @@ export function SettingsCodexSection({
       />
 
       <div className="settings-field">
-        <div className="settings-field-label">Workspace overrides</div>
+        <div className="settings-field-label">工作区覆盖设置</div>
         <div className="settings-overrides">
           {projects.map((workspace) => (
             <div key={workspace.id} className="settings-override-row">
@@ -386,7 +385,7 @@ export function SettingsCodexSection({
                   <input
                     className="settings-input settings-input--compact"
                     value={codexBinOverrideDrafts[workspace.id] ?? ""}
-                    placeholder="Codex binary override"
+                    placeholder="Codex 可执行文件覆盖"
                     onChange={(event) =>
                       onSetCodexBinOverrideDrafts((prev) => ({
                         ...prev,
@@ -401,7 +400,7 @@ export function SettingsCodexSection({
                       }
                       await onUpdateWorkspaceCodexBin(workspace.id, nextValue);
                     }}
-                    aria-label={`Codex binary override for ${workspace.name}`}
+                    aria-label={`${workspace.name} 的 Codex 可执行文件覆盖`}
                   />
                   <button
                     type="button"
@@ -414,14 +413,14 @@ export function SettingsCodexSection({
                       await onUpdateWorkspaceCodexBin(workspace.id, null);
                     }}
                   >
-                    Clear
+                    清空
                   </button>
                 </div>
                 <div className="settings-override-field">
                   <input
                     className="settings-input settings-input--compact"
                     value={codexHomeOverrideDrafts[workspace.id] ?? ""}
-                    placeholder="CODEX_HOME override"
+                    placeholder="CODEX_HOME 覆盖"
                     onChange={(event) =>
                       onSetCodexHomeOverrideDrafts((prev) => ({
                         ...prev,
@@ -438,7 +437,7 @@ export function SettingsCodexSection({
                         codexHome: nextValue,
                       });
                     }}
-                    aria-label={`CODEX_HOME override for ${workspace.name}`}
+                    aria-label={`${workspace.name} 的 CODEX_HOME 覆盖`}
                   />
                   <button
                     type="button"
@@ -453,14 +452,14 @@ export function SettingsCodexSection({
                       });
                     }}
                   >
-                    Clear
+                    清空
                   </button>
                 </div>
                 <div className="settings-override-field">
                   <input
                     className="settings-input settings-input--compact"
                     value={codexArgsOverrideDrafts[workspace.id] ?? ""}
-                    placeholder="Codex args override"
+                    placeholder="Codex 参数覆盖"
                     onChange={(event) =>
                       onSetCodexArgsOverrideDrafts((prev) => ({
                         ...prev,
@@ -477,7 +476,7 @@ export function SettingsCodexSection({
                         codexArgs: nextValue,
                       });
                     }}
-                    aria-label={`Codex args override for ${workspace.name}`}
+                    aria-label={`${workspace.name} 的 Codex 参数覆盖`}
                   />
                   <button
                     type="button"
@@ -492,13 +491,13 @@ export function SettingsCodexSection({
                       });
                     }}
                   >
-                    Clear
+                    清空
                   </button>
                 </div>
               </div>
             </div>
           ))}
-          {projects.length === 0 && <div className="settings-empty">No projects yet.</div>}
+          {projects.length === 0 && <div className="settings-empty">暂无项目。</div>}
         </div>
       </div>
     </section>

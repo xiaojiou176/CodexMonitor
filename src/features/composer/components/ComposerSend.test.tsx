@@ -89,7 +89,7 @@ describe("Composer send triggers", () => {
 
     const textarea = screen.getByRole("textbox");
     fireEvent.change(textarea, { target: { value: "from button" } });
-    fireEvent.click(screen.getByLabelText("Send"));
+    fireEvent.click(screen.getByLabelText("发送"));
 
     expect(onSend).toHaveBeenCalledTimes(1);
     expect(onSend).toHaveBeenCalledWith("from button", []);

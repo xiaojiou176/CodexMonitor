@@ -10,7 +10,7 @@ type ComposerAttachmentsProps = {
 
 function fileTitle(path: string) {
   if (path.startsWith("data:")) {
-    return "Pasted image";
+    return "粘贴的图片";
   }
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return "Image";
@@ -47,7 +47,7 @@ export function ComposerAttachments({
     <div className="composer-attachments">
       {attachments.map((path) => {
         const title = fileTitle(path);
-        const titleAttr = path.startsWith("data:") ? "Pasted image" : path;
+        const titleAttr = path.startsWith("data:") ? "粘贴的图片" : path;
         const previewSrc = attachmentPreviewSrc(path);
         return (
           <div

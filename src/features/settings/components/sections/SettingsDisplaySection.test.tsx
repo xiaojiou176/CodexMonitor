@@ -47,7 +47,7 @@ describe("SettingsDisplaySection", () => {
     );
 
     const row = screen
-      .getByText("Auto-generate new thread titles")
+      .getByText("自动生成新会话标题")
       .closest(".settings-toggle-row");
     expect(row).toBeTruthy();
     const button = within(row as HTMLElement).getByRole("button");

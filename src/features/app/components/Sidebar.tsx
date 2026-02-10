@@ -244,9 +244,9 @@ export const Sidebar = memo(function Sidebar({
   const accountButtonLabel = accountEmail
     ? accountEmail
     : accountInfo?.type === "apikey"
-      ? "API key"
-      : "Sign in to Codex";
-  const accountActionLabel = accountEmail ? "Switch account" : "Sign in";
+      ? "API 密钥"
+      : "登录 Codex";
+  const accountActionLabel = accountEmail ? "切换账户" : "登录";
   const showAccountSwitcher = Boolean(activeWorkspaceId);
   const accountSwitchDisabled = accountSwitching || !activeWorkspaceId;
   const accountCancelDisabled = !accountSwitching || !activeWorkspaceId;
@@ -431,8 +431,8 @@ export const Sidebar = memo(function Sidebar({
             className="sidebar-search-input"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search projects"
-            aria-label="Search projects"
+            placeholder="搜索项目"
+            aria-label="搜索项目"
             data-tauri-drag-region="false"
             autoFocus
           />
@@ -442,7 +442,7 @@ export const Sidebar = memo(function Sidebar({
             type="button"
             className="sidebar-search-clear"
             onClick={() => setSearchQuery("")}
-            aria-label="Clear search"
+            aria-label="清除搜索"
             data-tauri-drag-region="false"
           >
             <X size={12} aria-hidden />
@@ -457,10 +457,10 @@ export const Sidebar = memo(function Sidebar({
       >
         <div
           className={`workspace-drop-overlay-text${
-            workspaceDropText === "Adding Project..." ? " is-busy" : ""
+            workspaceDropText === "正在添加项目..." ? " is-busy" : ""
           }`}
         >
-          {workspaceDropText === "Drop Project Here" && (
+          {workspaceDropText === "将项目拖放到此处" && (
             <FolderOpen className="workspace-drop-overlay-icon" aria-hidden />
           )}
           {workspaceDropText}
@@ -477,7 +477,7 @@ export const Sidebar = memo(function Sidebar({
           {pinnedThreadRows.length > 0 && (
             <div className="pinned-section">
               <div className="workspace-group-header">
-                <div className="workspace-group-label">Pinned</div>
+                <div className="workspace-group-label">已置顶</div>
               </div>
               <PinnedThreadList
                 rows={pinnedThreadRows}
@@ -577,7 +577,7 @@ export const Sidebar = memo(function Sidebar({
                               }}
                               icon={<Plus aria-hidden />}
                             >
-                              New agent
+                              新建代理
                             </PopoverMenuItem>
                             <PopoverMenuItem
                               className="workspace-add-option"
@@ -588,7 +588,7 @@ export const Sidebar = memo(function Sidebar({
                               }}
                               icon={<GitBranch aria-hidden />}
                             >
-                              New worktree agent
+                              新建工作树代理
                             </PopoverMenuItem>
                             <PopoverMenuItem
                               className="workspace-add-option"
@@ -599,7 +599,7 @@ export const Sidebar = memo(function Sidebar({
                               }}
                               icon={<Copy aria-hidden />}
                             >
-                              New clone agent
+                              新建克隆代理
                             </PopoverMenuItem>
                           </PopoverSurface>,
                           document.body,
@@ -620,7 +620,7 @@ export const Sidebar = memo(function Sidebar({
                           }}
                         >
                           <span className={`thread-status ${draftStatusClass}`} aria-hidden />
-                          <span className="thread-name">New Agent</span>
+                          <span className="thread-name">新建代理</span>
                         </div>
                       )}
                       {worktrees.length > 0 && (
@@ -679,8 +679,8 @@ export const Sidebar = memo(function Sidebar({
           {!filteredGroupedWorkspaces.length && (
             <div className="empty">
               {isSearchActive
-                ? "No projects match your search."
-                : "Add a workspace to start."}
+                ? "没有匹配的项目。"
+                : "添加工作区以开始。"}
             </div>
           )}
         </div>

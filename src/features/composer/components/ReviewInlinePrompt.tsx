@@ -51,7 +51,7 @@ const PresetStep = memo(function PresetStep({
         onMouseEnter={() => onHighlightPreset(0)}
         disabled={isSubmitting}
       >
-        <span className="review-inline-option-title">Review against a base branch</span>
+        <span className="review-inline-option-title">基于基础分支审查</span>
         <span className="review-inline-option-subtitle">(PR Style)</span>
       </button>
       <button
@@ -61,7 +61,7 @@ const PresetStep = memo(function PresetStep({
         onMouseEnter={() => onHighlightPreset(1)}
         disabled={isSubmitting}
       >
-        <span className="review-inline-option-title">Review uncommitted changes</span>
+        <span className="review-inline-option-title">审查未提交的更改</span>
       </button>
       <button
         type="button"
@@ -70,7 +70,7 @@ const PresetStep = memo(function PresetStep({
         onMouseEnter={() => onHighlightPreset(2)}
         disabled={isSubmitting}
       >
-        <span className="review-inline-option-title">Review a commit</span>
+        <span className="review-inline-option-title">审查提交</span>
       </button>
       <button
         type="button"
@@ -79,7 +79,7 @@ const PresetStep = memo(function PresetStep({
         onMouseEnter={() => onHighlightPreset(3)}
         disabled={isSubmitting}
       >
-        <span className="review-inline-option-title">Custom review instructions</span>
+        <span className="review-inline-option-title">自定义审查指令</span>
       </button>
     </div>
   );
@@ -123,12 +123,12 @@ const BaseBranchStep = memo(function BaseBranchStep({
           Start review
         </button>
       </div>
-      <div className="review-inline-hint">Pick a recent local branch:</div>
-      <div className="review-inline-list" role="listbox" aria-label="Base branches">
+      <div className="review-inline-hint">选择一个最近的本地分支：</div>
+      <div className="review-inline-list" role="listbox" aria-label="基础分支">
         {reviewPrompt.isLoadingBranches ? (
-          <div className="review-inline-empty">Loading branches…</div>
+          <div className="review-inline-empty">加载分支中…</div>
         ) : branches.length === 0 ? (
-          <div className="review-inline-empty">No branches found.</div>
+          <div className="review-inline-empty">未找到分支。</div>
         ) : (
           branches.map((branch, index) => {
             const selected = index === highlightedBranchIndex;
@@ -194,12 +194,12 @@ const CommitStep = memo(function CommitStep({
           Start review
         </button>
       </div>
-      <div className="review-inline-hint">Select a recent commit:</div>
-      <div className="review-inline-list" role="listbox" aria-label="Commits">
+      <div className="review-inline-hint">选择一个最近的提交：</div>
+      <div className="review-inline-list" role="listbox" aria-label="提交记录">
         {reviewPrompt.isLoadingCommits ? (
-          <div className="review-inline-empty">Loading commits…</div>
+          <div className="review-inline-empty">加载提交记录中…</div>
         ) : commits.length === 0 ? (
-          <div className="review-inline-empty">No commits found.</div>
+          <div className="review-inline-empty">未找到提交记录。</div>
         ) : (
           commits.map((commit, index) => {
             const title = commit.summary || commit.sha;
@@ -271,7 +271,7 @@ const CustomStep = memo(function CustomStep({
         className="review-inline-textarea"
         value={reviewPrompt.customInstructions}
         onChange={(event) => onUpdateCustomInstructions(event.target.value)}
-        placeholder="Focus on correctness, edge cases, and missing tests."
+        placeholder="关注正确性、边界情况和缺失的测试。"
         autoFocus
         rows={6}
       />
@@ -304,14 +304,14 @@ export const ReviewInlinePrompt = memo(function ReviewInlinePrompt({
   const title = useMemo(() => {
     switch (step) {
       case "baseBranch":
-        return "Select a base branch";
+        return "选择基础分支";
       case "commit":
-        return "Select a commit to review";
+        return "选择要审查的提交";
       case "custom":
-        return "Custom review instructions";
+        return "自定义审查指令";
       case "preset":
       default:
-        return "Select a review preset";
+        return "选择审查预设";
     }
   }, [step]);
 

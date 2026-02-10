@@ -25,12 +25,12 @@ export function SettingsGitSection({
     <section className="settings-section">
       <div className="settings-section-title">Git</div>
       <div className="settings-section-subtitle">
-        Manage how diffs are loaded in the Git sidebar.
+        管理 Git 侧边栏中 diff 的加载方式。
       </div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Preload git diffs</div>
-          <div className="settings-toggle-subtitle">Make viewing git diff faster.</div>
+          <div className="settings-toggle-title">预加载 Git diff</div>
+          <div className="settings-toggle-subtitle">提升查看 Git diff 的速度。</div>
         </div>
         <button
           type="button"
@@ -48,9 +48,9 @@ export function SettingsGitSection({
       </div>
       <div className="settings-toggle-row">
         <div>
-          <div className="settings-toggle-title">Ignore whitespace changes</div>
+          <div className="settings-toggle-title">忽略空白字符变化</div>
           <div className="settings-toggle-subtitle">
-            Hides whitespace-only changes in local and commit diffs.
+            在本地和提交 diff 中隐藏仅空白字符变化。
           </div>
         </div>
         <button
@@ -68,10 +68,9 @@ export function SettingsGitSection({
         </button>
       </div>
       <div className="settings-field">
-        <div className="settings-field-label">Commit message prompt</div>
+        <div className="settings-field-label">提交信息提示词</div>
         <div className="settings-help">
-          Used when generating commit messages. Include <code>{"{diff}"}</code> to insert the
-          git diff.
+          用于生成提交信息。包含 <code>{"{diff}"}</code> 以插入 git diff。
         </div>
         <textarea
           className="settings-agents-textarea"
@@ -89,7 +88,7 @@ export function SettingsGitSection({
             }}
             disabled={commitMessagePromptSaving || !commitMessagePromptDirty}
           >
-            Reset
+            重置
           </button>
           <button
             type="button"
@@ -99,7 +98,7 @@ export function SettingsGitSection({
             }}
             disabled={commitMessagePromptSaving || !commitMessagePromptDirty}
           >
-            {commitMessagePromptSaving ? "Saving..." : "Save"}
+            {commitMessagePromptSaving ? "保存中..." : "保存"}
           </button>
         </div>
       </div>

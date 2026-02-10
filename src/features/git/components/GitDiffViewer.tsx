@@ -109,12 +109,12 @@ const DiffCard = memo(function DiffCard({
 
   const placeholder = useMemo(() => {
     if (isLoading) {
-      return "Loading diff...";
+      return "正在加载 diff...";
     }
     if (ignoreWhitespaceChanges && !entry.diff.trim()) {
-      return "No non-whitespace changes.";
+      return "无非空白字符改动。";
     }
-    return "Diff unavailable.";
+    return "Diff 不可用。";
   }, [entry.diff, ignoreWhitespaceChanges, isLoading]);
 
   return (
@@ -134,8 +134,8 @@ const DiffCard = memo(function DiffCard({
           <button
             type="button"
             className="diff-viewer-header-action diff-viewer-header-action--discard"
-            title="Discard changes in this file"
-            aria-label="Discard changes in this file"
+            title="丢弃该文件更改"
+            aria-label="丢弃该文件更改"
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -183,7 +183,7 @@ const PullRequestSummary = memo(function PullRequestSummary({
   const prUpdatedLabel = pullRequest.updatedAt
     ? formatRelativeTime(new Date(pullRequest.updatedAt).getTime())
     : null;
-  const prAuthor = pullRequest.author?.login ?? "unknown";
+  const prAuthor = pullRequest.author?.login ?? "未知";
   const prBody = pullRequest.body?.trim() ?? "";
   const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
   const sortedComments = useMemo(() => {
@@ -210,7 +210,7 @@ const PullRequestSummary = memo(function PullRequestSummary({
   }, [pullRequest.number]);
 
   return (
-    <section className="diff-viewer-pr" aria-label="Pull request summary">
+    <section className="diff-viewer-pr" aria-label="拉取请求摘要">
       <div className="diff-viewer-pr-header">
         <div className="diff-viewer-pr-header-row">
           <div className="diff-viewer-pr-title">
@@ -224,7 +224,7 @@ const PullRequestSummary = memo(function PullRequestSummary({
               type="button"
               className="ghost diff-viewer-pr-jump"
               onClick={onJumpToFirstFile}
-              aria-label="Jump to first file"
+              aria-label="跳转到首个文件"
             >
               <span className="diff-viewer-pr-jump-add">
                 +{diffStats.additions}
@@ -249,7 +249,7 @@ const PullRequestSummary = memo(function PullRequestSummary({
             {pullRequest.baseRefName} ← {pullRequest.headRefName}
           </span>
           {pullRequest.isDraft && (
-            <span className="diff-viewer-pr-pill">Draft</span>
+            <span className="diff-viewer-pr-pill">草稿</span>
           )}
         </div>
       </div>
@@ -260,15 +260,14 @@ const PullRequestSummary = memo(function PullRequestSummary({
             className="diff-viewer-pr-markdown markdown"
           />
         ) : (
-          <div className="diff-viewer-pr-empty">No description provided.</div>
+          <div className="diff-viewer-pr-empty">暂无描述。</div>
         )}
       </div>
       <div className="diff-viewer-pr-timeline">
         <div className="diff-viewer-pr-timeline-header">
-          <span className="diff-viewer-pr-timeline-title">Activity</span>
+          <span className="diff-viewer-pr-timeline-title">活动</span>
           <span className="diff-viewer-pr-timeline-count">
-            {sortedComments.length} comment
-            {sortedComments.length === 1 ? "" : "s"}
+            {sortedComments.length} 条评论
           </span>
           {hiddenCommentCount > 0 && (
             <button
@@ -276,7 +275,7 @@ const PullRequestSummary = memo(function PullRequestSummary({
               className="ghost diff-viewer-pr-timeline-button"
               onClick={() => setIsTimelineExpanded(true)}
             >
-              Show all
+              显示全部
             </button>
           )}
           {isTimelineExpanded &&
@@ -286,14 +285,14 @@ const PullRequestSummary = memo(function PullRequestSummary({
                 className="ghost diff-viewer-pr-timeline-button"
                 onClick={() => setIsTimelineExpanded(false)}
               >
-                Collapse
+                收起
               </button>
             )}
         </div>
         <div className="diff-viewer-pr-timeline-list">
           {pullRequestCommentsLoading && (
             <div className="diff-viewer-pr-timeline-state">
-              Loading comments…
+              正在加载评论…
             </div>
           )}
           {pullRequestCommentsError && (
@@ -305,17 +304,16 @@ const PullRequestSummary = memo(function PullRequestSummary({
             !pullRequestCommentsError &&
             !sortedComments.length && (
               <div className="diff-viewer-pr-timeline-state">
-                No comments yet.
+                暂无评论。
               </div>
             )}
           {hiddenCommentCount > 0 && !isTimelineExpanded && (
             <div className="diff-viewer-pr-timeline-divider">
-              {hiddenCommentCount} earlier comment
-              {hiddenCommentCount === 1 ? "" : "s"}
+              {hiddenCommentCount} 条更早评论
             </div>
           )}
           {visibleComments.map((comment) => {
-            const commentAuthor = comment.author?.login ?? "unknown";
+            const commentAuthor = comment.author?.login ?? "未知";
             const commentTime = formatRelativeTime(
               new Date(comment.createdAt).getTime(),
             );
@@ -337,7 +335,7 @@ const PullRequestSummary = memo(function PullRequestSummary({
                     />
                   ) : (
                     <div className="diff-viewer-pr-timeline-text">
-                      No comment body.
+                      评论内容为空。
                     </div>
                   )}
                 </div>
@@ -448,8 +446,8 @@ export function GitDiffViewer({
         return;
       }
       const confirmed = await ask(
-        `Discard changes in:\n\n${path}\n\nThis cannot be undone.`,
-        { title: "Discard changes", kind: "warning" },
+        `确认丢弃以下文件的更改吗？\n\n${path}\n\n此操作无法撤销。`,
+        { title: "丢弃更改", kind: "warning" },
       );
       if (!confirmed) {
         return;
@@ -633,8 +631,8 @@ export function GitDiffViewer({
                 <button
                   type="button"
                   className="diff-viewer-header-action diff-viewer-header-action--discard"
-                  title="Discard changes in this file"
-                  aria-label="Discard changes in this file"
+                  title="丢弃该文件更改"
+                  aria-label="丢弃该文件更改"
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -650,11 +648,11 @@ export function GitDiffViewer({
         {error && <div className="diff-viewer-empty">{error}</div>}
         {!error && isLoading && diffs.length > 0 && (
           <div className="diff-viewer-loading diff-viewer-loading-overlay">
-            Refreshing diff...
+            正在刷新 diff...
           </div>
         )}
         {!error && !isLoading && !diffs.length && (
-          <div className="diff-viewer-empty">No changes detected.</div>
+          <div className="diff-viewer-empty">未检测到改动。</div>
         )}
         {!error && diffs.length > 0 && (
           <div

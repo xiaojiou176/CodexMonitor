@@ -57,7 +57,7 @@ export function useWorkspaceActions({
         label: "workspace/add error",
         payload: message,
       });
-      alert(`Failed to add workspace.\n\n${message}`);
+      alert(`添加工作区失败。\n\n${message}`);
     }
   }, [addWorkspace, handleWorkspaceAdded, onDebug]);
 
@@ -77,7 +77,7 @@ export function useWorkspaceActions({
           label: "workspace/add error",
           payload: message,
         });
-        alert(`Failed to add workspace.\n\n${message}`);
+        alert(`添加工作区失败。\n\n${message}`);
       }
     },
     [addWorkspaceFromPath, handleWorkspaceAdded, onDebug],

@@ -55,20 +55,20 @@ export function SettingsProjectsSection({
 }: SettingsProjectsSectionProps) {
   return (
     <section className="settings-section">
-      <div className="settings-section-title">Projects</div>
+      <div className="settings-section-title">项目</div>
       <div className="settings-section-subtitle">
-        Group related workspaces and reorder projects within each group.
+        对相关工作区分组，并调整每个分组中的项目顺序。
       </div>
-      <div className="settings-subsection-title">Groups</div>
+      <div className="settings-subsection-title">分组</div>
       <div className="settings-subsection-subtitle">
-        Create group labels for related repositories.
+        为相关仓库创建分组标签。
       </div>
       <div className="settings-groups">
         <div className="settings-group-create">
           <input
             className="settings-input settings-input--compact"
             value={newGroupName}
-            placeholder="New group name"
+            placeholder="新分组名称"
             onChange={(event) => onSetNewGroupName(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && canCreateGroup) {
@@ -85,7 +85,7 @@ export function SettingsProjectsSection({
             }}
             disabled={!canCreateGroup}
           >
-            Add group
+            添加分组
           </button>
         </div>
         {groupError && <div className="settings-group-error">{groupError}</div>}
@@ -114,13 +114,13 @@ export function SettingsProjectsSection({
                     }}
                   />
                   <div className="settings-group-copies">
-                    <div className="settings-group-copies-label">Copies folder</div>
+                    <div className="settings-group-copies-label">副本目录</div>
                     <div className="settings-group-copies-row">
                       <div
                         className={`settings-group-copies-path${group.copiesFolder ? "" : " empty"}`}
                         title={group.copiesFolder ?? ""}
                       >
-                        {group.copiesFolder ?? "Not set"}
+                        {group.copiesFolder ?? "未设置"}
                       </div>
                       <button
                         type="button"
@@ -129,7 +129,7 @@ export function SettingsProjectsSection({
                           void onChooseGroupCopiesFolder(group);
                         }}
                       >
-                        Choose…
+                        选择…
                       </button>
                       <button
                         type="button"
@@ -139,7 +139,7 @@ export function SettingsProjectsSection({
                         }}
                         disabled={!group.copiesFolder}
                       >
-                        Clear
+                        清除
                       </button>
                     </div>
                   </div>
@@ -152,7 +152,7 @@ export function SettingsProjectsSection({
                       void onMoveWorkspaceGroup(group.id, "up");
                     }}
                     disabled={index === 0}
-                    aria-label="Move group up"
+                    aria-label="上移分组"
                   >
                     <ChevronUp aria-hidden />
                   </button>
@@ -163,7 +163,7 @@ export function SettingsProjectsSection({
                       void onMoveWorkspaceGroup(group.id, "down");
                     }}
                     disabled={index === workspaceGroups.length - 1}
-                    aria-label="Move group down"
+                    aria-label="下移分组"
                   >
                     <ChevronDown aria-hidden />
                   </button>
@@ -173,7 +173,7 @@ export function SettingsProjectsSection({
                     onClick={() => {
                       void onDeleteGroup(group);
                     }}
-                    aria-label="Delete group"
+                    aria-label="删除分组"
                   >
                     <Trash2 aria-hidden />
                   </button>
@@ -182,12 +182,12 @@ export function SettingsProjectsSection({
             ))}
           </div>
         ) : (
-          <div className="settings-empty">No groups yet.</div>
+          <div className="settings-empty">暂无分组。</div>
         )}
       </div>
-      <div className="settings-subsection-title">Projects</div>
+      <div className="settings-subsection-title">项目</div>
       <div className="settings-subsection-subtitle">
-        Assign projects to groups and adjust their order.
+        将项目分配到分组并调整顺序。
       </div>
       <div className="settings-projects">
         {groupedWorkspaces.map((group) => (
@@ -226,7 +226,7 @@ export function SettingsProjectsSection({
                       className="ghost icon-button"
                       onClick={() => onMoveWorkspace(workspace.id, "up")}
                       disabled={index === 0}
-                      aria-label="Move project up"
+                      aria-label="上移项目"
                     >
                       <ChevronUp aria-hidden />
                     </button>
@@ -235,7 +235,7 @@ export function SettingsProjectsSection({
                       className="ghost icon-button"
                       onClick={() => onMoveWorkspace(workspace.id, "down")}
                       disabled={index === group.workspaces.length - 1}
-                      aria-label="Move project down"
+                      aria-label="下移项目"
                     >
                       <ChevronDown aria-hidden />
                     </button>
@@ -243,7 +243,7 @@ export function SettingsProjectsSection({
                       type="button"
                       className="ghost icon-button"
                       onClick={() => onDeleteWorkspace(workspace.id)}
-                      aria-label="Delete project"
+                      aria-label="删除项目"
                     >
                       <Trash2 aria-hidden />
                     </button>
@@ -253,7 +253,7 @@ export function SettingsProjectsSection({
             })}
           </div>
         ))}
-        {projects.length === 0 && <div className="settings-empty">No projects yet.</div>}
+        {projects.length === 0 && <div className="settings-empty">暂无项目。</div>}
       </div>
     </section>
   );

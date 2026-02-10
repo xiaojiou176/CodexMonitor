@@ -44,6 +44,7 @@ function hasCommand(command) {
 
 const missing = [];
 if (!hasCommand("cmake")) missing.push("cmake");
+if (!hasCommand("cargo")) missing.push("cargo");
 if (process.platform === "win32" && !hasCommand("clang")) missing.push("llvm");
 
 if (missing.length === 0) {
@@ -55,20 +56,42 @@ console.log(`Doctor: missing dependencies: ${missing.join(" ")}`);
 
 switch (process.platform) {
   case "darwin":
-    console.log("Install: brew install cmake");
+    if (missing.includes("cmake")) {
+      console.log("Install CMake: brew install cmake");
+    }
+    if (missing.includes("cargo")) {
+      console.log("Install Rust/Cargo: curl https://sh.rustup.rs -sSf | sh");
+      console.log('Then load PATH in current shell: source "$HOME/.cargo/env"');
+    }
     break;
   case "linux":
-    console.log("Ubuntu/Debian: sudo apt-get install cmake");
-    console.log("Fedora: sudo dnf install cmake");
-    console.log("Arch: sudo pacman -S cmake");
+    if (missing.includes("cmake")) {
+      console.log("Ubuntu/Debian: sudo apt-get install cmake");
+      console.log("Fedora: sudo dnf install cmake");
+      console.log("Arch: sudo pacman -S cmake");
+    }
+    if (missing.includes("cargo")) {
+      console.log("Install Rust/Cargo via rustup: curl https://sh.rustup.rs -sSf | sh");
+      console.log('Then load PATH in current shell: source "$HOME/.cargo/env"');
+    }
     break;
   case "win32":
-    console.log("Install: choco install cmake llvm");
-    console.log("Or download from: https://cmake.org/download/");
+    if (missing.includes("cmake") || missing.includes("llvm")) {
+      console.log("Install: choco install cmake llvm");
+      console.log("Or download from: https://cmake.org/download/");
+    }
+    if (missing.includes("cargo")) {
+      console.log("Install Rust/Cargo from: https://www.rust-lang.org/tools/install");
+    }
     console.log("If bindgen fails, set LIBCLANG_PATH to your LLVM bin directory.");
     break;
   default:
-    console.log("Install CMake from: https://cmake.org/download/");
+    if (missing.includes("cmake")) {
+      console.log("Install CMake from: https://cmake.org/download/");
+    }
+    if (missing.includes("cargo")) {
+      console.log("Install Rust/Cargo from: https://www.rust-lang.org/tools/install");
+    }
     break;
 }
 

@@ -473,7 +473,7 @@ export const Messages = memo(function Messages({
                   onClick={() => toggleToolGroup(group.id)}
                   aria-expanded={!isCollapsed}
                   aria-controls={groupBodyId}
-                  aria-label={isCollapsed ? "Expand tool calls" : "Collapse tool calls"}
+                  aria-label={isCollapsed ? "展开工具调用" : "折叠工具调用"}
                 >
                   <span className="tool-group-chevron" aria-hidden>
                     <ChevronIcon size={14} />

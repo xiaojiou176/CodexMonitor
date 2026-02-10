@@ -42,10 +42,10 @@ function WorkspaceHomeInstanceList({
       {instances.map((instance) => {
         const status = threadStatusById[instance.threadId];
         const statusLabel = status?.isProcessing
-          ? "Running"
+          ? "运行中"
           : status?.isReviewing
-            ? "Reviewing"
-            : "Idle";
+            ? "审查中"
+            : "空闲";
         const stateClass = status?.isProcessing
           ? "is-running"
           : status?.isReviewing
@@ -95,7 +95,7 @@ export function WorkspaceHomeHistory({
     <>
       <div className="workspace-home-runs">
         <div className="workspace-home-section-header">
-          <div className="workspace-home-section-title">Recent runs</div>
+          <div className="workspace-home-section-title">最近的运行</div>
         </div>
         {runs.length === 0 ? (
           <div className="workspace-home-empty">
@@ -112,10 +112,9 @@ export function WorkspaceHomeHistory({
                     <div>
                       <div className="workspace-home-run-title">{run.title}</div>
                       <div className="workspace-home-run-meta">
-                        {run.mode === "local" ? "Local" : "Worktree"} · {run.instances.length} instance
-                        {run.instances.length === 1 ? "" : "s"}
-                        {run.status === "failed" && " · Failed"}
-                        {run.status === "partial" && " · Partial"}
+                        {run.mode === "local" ? "本地" : "工作树"} · {run.instances.length} 个实例
+                        {run.status === "failed" && " · 失败"}
+                        {run.status === "partial" && " · 部分完成"}
                       </div>
                     </div>
                     <div className="workspace-home-run-time">
@@ -166,7 +165,7 @@ export function WorkspaceHomeHistory({
 
       <div className="workspace-home-runs">
         <div className="workspace-home-section-header">
-          <div className="workspace-home-section-title">Recent threads</div>
+          <div className="workspace-home-section-title">最近的线程</div>
         </div>
         {recentThreadInstances.length === 0 ? (
           <div className="workspace-home-empty">
@@ -177,7 +176,7 @@ export function WorkspaceHomeHistory({
             <div className="workspace-home-run-card">
               <div className="workspace-home-run-header">
                 <div>
-                  <div className="workspace-home-run-title">Agents activity</div>
+                  <div className="workspace-home-run-title">代理活动</div>
                   <div className="workspace-home-run-meta">
                     {recentThreadInstances.length} thread
                     {recentThreadInstances.length === 1 ? "" : "s"}

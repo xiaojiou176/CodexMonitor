@@ -37,11 +37,11 @@ export function MobileServerSetupWizard({
     <ModalShell
       className="mobile-setup-wizard-overlay"
       cardClassName="mobile-setup-wizard-card"
-      ariaLabel="Mobile server setup"
+      ariaLabel="移动端服务器设置"
     >
       <div className="mobile-setup-wizard-header">
         <div className="mobile-setup-wizard-kicker">Mobile Setup Required</div>
-        <h2 className="mobile-setup-wizard-title">Connect to your desktop backend</h2>
+        <h2 className="mobile-setup-wizard-title">连接到桌面后端</h2>
         <p className="mobile-setup-wizard-subtitle">
           Complete this setup before using the app. Use the same connection details configured on
           your desktop CodexMonitor server settings.
@@ -105,7 +105,7 @@ export function MobileServerSetupWizard({
           type="password"
           className="mobile-setup-wizard-input"
           value={remoteTokenDraft}
-          placeholder="Token"
+          placeholder="令牌"
           onChange={(event) => onRemoteTokenChange(event.target.value)}
           disabled={busy || checking}
         />
@@ -116,7 +116,7 @@ export function MobileServerSetupWizard({
           onClick={onConnectTest}
           disabled={busy || checking}
         >
-          {checking ? "Checking..." : busy ? "Connecting..." : "Connect & test"}
+          {checking ? "检查中..." : busy ? "连接中..." : "连接并测试"}
         </button>
 
         {statusMessage ? (

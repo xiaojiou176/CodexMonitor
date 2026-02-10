@@ -94,7 +94,7 @@ export function WorkspaceHomeRunControls({
                 setRunModeOpen((prev) => !prev);
                 setModelsOpen(false);
               }}
-              aria-label="Select run mode"
+              aria-label="选择运行模式"
               data-tauri-drag-region="false"
             >
               <span className="open-app-label">
@@ -111,7 +111,7 @@ export function WorkspaceHomeRunControls({
               }}
               aria-haspopup="menu"
               aria-expanded={runModeOpen}
-              aria-label="Toggle run mode menu"
+              aria-label="切换运行模式菜单"
               data-tauri-drag-region="false"
             >
               <ChevronDown size={14} aria-hidden />
@@ -157,7 +157,7 @@ export function WorkspaceHomeRunControls({
               setModelsOpen((prev) => !prev);
               setRunModeOpen(false);
             }}
-            aria-label="Select models"
+            aria-label="选择模型"
             data-tauri-drag-region="false"
           >
             <span className="open-app-label">
@@ -173,7 +173,7 @@ export function WorkspaceHomeRunControls({
             }}
             aria-haspopup="menu"
             aria-expanded={modelsOpen}
-            aria-label="Toggle models menu"
+            aria-label="切换模型菜单"
             data-tauri-drag-region="false"
           >
             <ChevronDown size={14} aria-hidden />
@@ -261,7 +261,7 @@ export function WorkspaceHomeRunControls({
             </span>
             <select
               className="composer-select composer-select--model"
-              aria-label="Collaboration mode"
+              aria-label="协作模式"
               value={selectedCollaborationModeId ?? ""}
               onChange={(event) => onSelectCollaborationMode(event.target.value || null)}
               disabled={isSubmitting}
@@ -307,7 +307,7 @@ export function WorkspaceHomeRunControls({
           </span>
           <select
             className="composer-select composer-select--effort"
-            aria-label="Thinking mode"
+            aria-label="思考模式"
             value={selectedEffort ?? ""}
             onChange={(event) => onSelectEffort(event.target.value)}
             disabled={isSubmitting || !reasoningSupported}

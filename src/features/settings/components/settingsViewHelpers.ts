@@ -65,7 +65,7 @@ export const getOrbitStatusText = (
       return value.message;
     }
     if (typeof value.latencyMs === "number") {
-      return `Connected to Orbit relay in ${value.latencyMs}ms.`;
+      return `已连接到 Orbit 中继，延迟 ${value.latencyMs}ms。`;
     }
     return fallback;
   }
@@ -76,15 +76,15 @@ export const getOrbitStatusText = (
     }
     switch (value.status) {
       case "pending":
-        return "Waiting for Orbit sign-in authorization.";
+        return "等待 Orbit 登录授权。";
       case "authorized":
-        return "Orbit sign in complete.";
+        return "Orbit 登录完成。";
       case "denied":
-        return "Orbit sign in denied.";
+        return "Orbit 登录被拒绝。";
       case "expired":
-        return "Orbit sign in code expired.";
+        return "Orbit 登录验证码已过期。";
       case "error":
-        return "Orbit sign in failed.";
+        return "Orbit 登录失败。";
       default:
         return fallback;
     }
@@ -94,18 +94,18 @@ export const getOrbitStatusText = (
     if (!value.success && value.message && value.message.trim()) {
       return value.message;
     }
-    return value.success ? "Signed out from Orbit." : fallback;
+    return value.success ? "已从 Orbit 退出。" : fallback;
   }
 
   if (value.state === "running") {
     return value.pid
-      ? `Orbit runner is running (pid ${value.pid}).`
-      : "Orbit runner is running.";
+      ? `Orbit 运行器正在运行（pid ${value.pid}）。`
+      : "Orbit 运行器正在运行。";
   }
   if (value.state === "error") {
-    return value.lastError?.trim() || "Orbit runner is in error state.";
+    return value.lastError?.trim() || "Orbit 运行器处于错误状态。";
   }
-  return "Orbit runner is stopped.";
+  return "Orbit 运行器已停止。";
 };
 
 export const buildOpenAppDrafts = (targets: OpenAppTarget[]): OpenAppDraft[] =>
@@ -196,18 +196,18 @@ export const buildEditorContentMeta = ({
   truncated,
   isDirty,
 }: EditorContentMetaInput) => {
-  const status = isLoading ? "Loading…" : isSaving ? "Saving…" : exists ? "" : "Not found";
+  const status = isLoading ? "加载中…" : isSaving ? "保存中…" : exists ? "" : "未找到";
   const metaParts: string[] = [];
   if (status) {
     metaParts.push(status);
   }
   if (truncated) {
-    metaParts.push("Truncated");
+    metaParts.push("已截断");
   }
 
   return {
     meta: metaParts.join(" · "),
-    saveLabel: exists ? "Save" : "Create",
+    saveLabel: exists ? "保存" : "创建",
     saveDisabled: isLoading || isSaving || !isDirty,
     refreshDisabled: isLoading || isSaving,
   };

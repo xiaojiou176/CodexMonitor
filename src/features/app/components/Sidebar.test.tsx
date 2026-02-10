@@ -60,7 +60,7 @@ const baseProps = {
   onReloadWorkspaceThreads: vi.fn(),
   workspaceDropTargetRef: createRef<HTMLElement>(),
   isWorkspaceDropActive: false,
-  workspaceDropText: "Drop Project Here",
+  workspaceDropText: "将项目拖放到此处",
   onWorkspaceDragOver: vi.fn(),
   onWorkspaceDragEnter: vi.fn(),
   onWorkspaceDragLeave: vi.fn(),
@@ -72,13 +72,13 @@ describe("Sidebar", () => {
     vi.useFakeTimers();
     render(<Sidebar {...baseProps} />);
 
-    const toggleButton = screen.getByRole("button", { name: "Toggle search" });
-    expect(screen.queryByLabelText("Search projects")).toBeNull();
+    const toggleButton = screen.getByRole("button", { name: "切换搜索" });
+    expect(screen.queryByLabelText("搜索项目")).toBeNull();
 
     act(() => {
       fireEvent.click(toggleButton);
     });
-    const input = screen.getByLabelText("Search projects") as HTMLInputElement;
+    const input = screen.getByLabelText("搜索项目") as HTMLInputElement;
     expect(input).toBeTruthy();
 
     act(() => {
@@ -91,13 +91,13 @@ describe("Sidebar", () => {
       fireEvent.click(toggleButton);
       vi.runOnlyPendingTimers();
     });
-    expect(screen.queryByLabelText("Search projects")).toBeNull();
+    expect(screen.queryByLabelText("搜索项目")).toBeNull();
 
     act(() => {
       fireEvent.click(toggleButton);
       vi.runOnlyPendingTimers();
     });
-    const reopened = screen.getByLabelText("Search projects") as HTMLInputElement;
+    const reopened = screen.getByLabelText("搜索项目") as HTMLInputElement;
     expect(reopened.value).toBe("");
   });
 
@@ -111,11 +111,11 @@ describe("Sidebar", () => {
       />,
     );
 
-    const button = screen.getByRole("button", { name: "Sort threads" });
+    const button = screen.getByRole("button", { name: "排序线程" });
     expect(screen.queryByRole("menu")).toBeNull();
 
     fireEvent.click(button);
-    const option = screen.getByRole("menuitemradio", { name: "Most recent" });
+    const option = screen.getByRole("menuitemradio", { name: "最新创建" });
     fireEvent.click(option);
 
     expect(onSetThreadListSortKey).toHaveBeenCalledWith("created_at");
@@ -155,7 +155,7 @@ describe("Sidebar", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh all workspace threads" }));
+    fireEvent.click(screen.getByRole("button", { name: "刷新全部工作区线程" }));
     expect(onRefreshAllThreads).toHaveBeenCalledTimes(1);
   });
 
@@ -191,7 +191,7 @@ describe("Sidebar", () => {
       />,
     );
 
-    const refreshButton = screen.getByRole("button", { name: "Refresh all workspace threads" });
+    const refreshButton = screen.getByRole("button", { name: "刷新全部工作区线程" });
     expect(refreshButton.getAttribute("aria-busy")).toBe("true");
     const icon = refreshButton.querySelector("svg");
     expect(icon?.getAttribute("class") ?? "").toContain("spinning");
@@ -233,7 +233,7 @@ describe("Sidebar", () => {
 
     render(<Sidebar {...props} />);
 
-    const draftRow = screen.getByRole("button", { name: /new agent/i });
+    const draftRow = screen.getByRole("button", { name: /新建代理/i });
     expect(draftRow).toBeTruthy();
     expect(draftRow.className).toContain("thread-row-draft");
     expect(draftRow.className).toContain("active");

@@ -33,7 +33,7 @@ export function SettingsNav({
           showDisclosure={showDisclosure}
           onClick={() => onSelectSection("projects")}
         >
-          Projects
+          项目
         </PanelNavItem>
         <PanelNavItem
           className="settings-nav"
@@ -42,7 +42,7 @@ export function SettingsNav({
           showDisclosure={showDisclosure}
           onClick={() => onSelectSection("environments")}
         >
-          Environments
+          环境
         </PanelNavItem>
         <PanelNavItem
           className="settings-nav"
@@ -51,7 +51,7 @@ export function SettingsNav({
           showDisclosure={showDisclosure}
           onClick={() => onSelectSection("display")}
         >
-          Display &amp; Sound
+          显示与声音
         </PanelNavItem>
         <PanelNavItem
           className="settings-nav"
@@ -60,7 +60,7 @@ export function SettingsNav({
           showDisclosure={showDisclosure}
           onClick={() => onSelectSection("composer")}
         >
-          Composer
+          编辑器
         </PanelNavItem>
         <PanelNavItem
           className="settings-nav"
@@ -69,7 +69,7 @@ export function SettingsNav({
           showDisclosure={showDisclosure}
           onClick={() => onSelectSection("dictation")}
         >
-          Dictation
+          听写
         </PanelNavItem>
         <PanelNavItem
           className="settings-nav"
@@ -78,7 +78,7 @@ export function SettingsNav({
           showDisclosure={showDisclosure}
           onClick={() => onSelectSection("shortcuts")}
         >
-          Shortcuts
+          快捷键
         </PanelNavItem>
         <PanelNavItem
           className="settings-nav"
@@ -87,7 +87,7 @@ export function SettingsNav({
           showDisclosure={showDisclosure}
           onClick={() => onSelectSection("open-apps")}
         >
-          Open in
+          打开方式
         </PanelNavItem>
         <PanelNavItem
           className="settings-nav"
@@ -105,7 +105,7 @@ export function SettingsNav({
           showDisclosure={showDisclosure}
           onClick={() => onSelectSection("server")}
         >
-          Server
+          服务
         </PanelNavItem>
         <PanelNavItem
           className="settings-nav"
@@ -123,7 +123,7 @@ export function SettingsNav({
           showDisclosure={showDisclosure}
           onClick={() => onSelectSection("features")}
         >
-          Features
+          功能
         </PanelNavItem>
       </PanelNavList>
     </aside>

@@ -170,7 +170,7 @@ const renderDisplaySection = (
   };
 
   render(<SettingsView {...props} />);
-  fireEvent.click(screen.getByRole("button", { name: "Display & Sound" }));
+  fireEvent.click(screen.getByRole("button", { name: "显示与声音" }));
 
   return { onUpdateAppSettings, onToggleTransparency };
 };
@@ -314,7 +314,7 @@ describe("SettingsView Display", () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderDisplaySection({ onUpdateAppSettings });
 
-    const select = screen.getByLabelText("Theme");
+    const select = screen.getByLabelText("主题");
     fireEvent.change(select, { target: { value: "dark" } });
 
     await waitFor(() => {
@@ -329,7 +329,7 @@ describe("SettingsView Display", () => {
     renderDisplaySection({ onUpdateAppSettings });
 
     const row = screen
-      .getByText("Show remaining Codex limits")
+      .getByText("显示 Codex 剩余额度")
       .closest(".settings-toggle-row") as HTMLElement | null;
     if (!row) {
       throw new Error("Expected remaining limits row");
@@ -354,7 +354,7 @@ describe("SettingsView Display", () => {
     renderDisplaySection({ onUpdateAppSettings });
 
     const row = screen
-      .getByText("Show file path in messages")
+      .getByText("在消息中显示文件路径")
       .closest(".settings-toggle-row") as HTMLElement | null;
     if (!row) {
       throw new Error("Expected file path visibility row");
@@ -379,7 +379,7 @@ describe("SettingsView Display", () => {
     renderDisplaySection({ onToggleTransparency, reduceTransparency: false });
 
     const row = screen
-      .getByText("Reduce transparency")
+      .getByText("降低透明效果")
       .closest(".settings-toggle-row") as HTMLElement | null;
     if (!row) {
       throw new Error("Expected reduce transparency row");
@@ -401,7 +401,7 @@ describe("SettingsView Display", () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderDisplaySection({ onUpdateAppSettings });
 
-    const scaleInput = screen.getByLabelText("Interface scale");
+    const scaleInput = screen.getByLabelText("界面缩放");
 
     fireEvent.change(scaleInput, { target: { value: "500%" } });
     fireEvent.blur(scaleInput);
@@ -426,7 +426,7 @@ describe("SettingsView Display", () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderDisplaySection({ onUpdateAppSettings });
 
-    const uiFontInput = screen.getByLabelText("UI font family");
+    const uiFontInput = screen.getByLabelText("界面字体");
     fireEvent.change(uiFontInput, { target: { value: "Avenir, sans-serif" } });
     fireEvent.blur(uiFontInput);
 
@@ -436,7 +436,7 @@ describe("SettingsView Display", () => {
       );
     });
 
-    const codeFontInput = screen.getByLabelText("Code font family");
+    const codeFontInput = screen.getByLabelText("代码字体");
     fireEvent.change(codeFontInput, {
       target: { value: "JetBrains Mono, monospace" },
     });
@@ -453,7 +453,7 @@ describe("SettingsView Display", () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderDisplaySection({ onUpdateAppSettings });
 
-    const resetButtons = screen.getAllByRole("button", { name: "Reset" });
+    const resetButtons = screen.getAllByRole("button", { name: "重置" });
     fireEvent.click(resetButtons[1]);
     fireEvent.click(resetButtons[2]);
 
@@ -475,7 +475,7 @@ describe("SettingsView Display", () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderDisplaySection({ onUpdateAppSettings });
 
-    const slider = screen.getByLabelText("Code font size");
+    const slider = screen.getByLabelText("代码字号");
     fireEvent.change(slider, { target: { value: "14" } });
 
     await waitFor(() => {
@@ -493,7 +493,7 @@ describe("SettingsView Display", () => {
     });
 
     const row = screen
-      .getByText("Notification sounds")
+      .getByText("通知声音")
       .closest(".settings-toggle-row") as HTMLElement | null;
     if (!row) {
       throw new Error("Expected notification sounds row");
@@ -514,13 +514,13 @@ describe("SettingsView Environments", () => {
     renderEnvironmentsSection({ onUpdateWorkspaceSettings });
 
     expect(
-      screen.getByText("Environments", { selector: ".settings-section-title" }),
+      screen.getByText("环境", { selector: ".settings-section-title" }),
     ).toBeTruthy();
     const textarea = screen.getByPlaceholderText("pnpm install");
     expect((textarea as HTMLTextAreaElement).value).toBe("echo one");
 
     fireEvent.change(textarea, { target: { value: "echo updated" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
       expect(onUpdateWorkspaceSettings).toHaveBeenCalledWith("w1", {
@@ -535,7 +535,7 @@ describe("SettingsView Environments", () => {
 
     const textarea = screen.getByPlaceholderText("pnpm install");
     fireEvent.change(textarea, { target: { value: "   \n\t" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
       expect(onUpdateWorkspaceSettings).toHaveBeenCalledWith("w1", {
@@ -555,7 +555,7 @@ describe("SettingsView Environments", () => {
     try {
       renderEnvironmentsSection();
 
-      fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+      fireEvent.click(screen.getByRole("button", { name: "复制" }));
 
       await waitFor(() => {
         expect(writeText).toHaveBeenCalledWith("echo one");
@@ -670,7 +670,7 @@ describe("SettingsView Codex overrides", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Review mode"), {
+    fireEvent.change(screen.getByLabelText("审查模式"), {
       target: { value: "detached" },
     });
 
@@ -721,17 +721,17 @@ describe("SettingsView Codex overrides", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Orbit websocket URL")).toBeTruthy();
-      expect(screen.getByLabelText("Orbit auth URL")).toBeTruthy();
-      expect(screen.getByLabelText("Orbit runner name")).toBeTruthy();
-      expect(screen.getByLabelText("Orbit access client ID")).toBeTruthy();
-      expect(screen.getByLabelText("Orbit access client secret ref")).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Connect test" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Sign In" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Sign Out" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Start Runner" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Stop Runner" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Refresh Status" })).toBeTruthy();
+      expect(screen.getByLabelText("Orbit WebSocket 地址")).toBeTruthy();
+      expect(screen.getByLabelText("Orbit 认证 URL")).toBeTruthy();
+      expect(screen.getByLabelText("Orbit Runner 名称")).toBeTruthy();
+      expect(screen.getByLabelText("Orbit Access 客户端 ID")).toBeTruthy();
+      expect(screen.getByLabelText("Orbit Access 客户端密钥引用")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "连接测试" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "登录" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "登出" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "启动 Runner" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "停止 Runner" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "刷新状态" })).toBeTruthy();
     });
   });
 
@@ -775,11 +775,11 @@ describe("SettingsView Codex overrides", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Start daemon" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Stop daemon" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Refresh status" })).toBeTruthy();
-      expect(screen.getByLabelText("Remote backend host")).toBeTruthy();
-      expect(screen.getByLabelText("Remote backend token")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "启动守护进程" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "停止守护进程" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "刷新状态" })).toBeTruthy();
+      expect(screen.getByLabelText("远程后端 host")).toBeTruthy();
+      expect(screen.getByLabelText("远程后端 token")).toBeTruthy();
     });
   });
 
@@ -851,18 +851,18 @@ describe("SettingsView Codex overrides", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByLabelText("Connection type")).toBeTruthy();
-        expect(screen.getByLabelText("Orbit websocket URL")).toBeTruthy();
-        expect(screen.getByLabelText("Remote backend token")).toBeTruthy();
+        expect(screen.getByLabelText("连接类型")).toBeTruthy();
+        expect(screen.getByLabelText("Orbit WebSocket 地址")).toBeTruthy();
+        expect(screen.getByLabelText("远程后端 token")).toBeTruthy();
         expect(screen.getByRole("button", { name: "Connect & test" })).toBeTruthy();
       });
 
-      expect(screen.queryByLabelText("Backend mode")).toBeNull();
-      expect(screen.queryByRole("button", { name: "Start daemon" })).toBeNull();
+      expect(screen.queryByLabelText("后端模式")).toBeNull();
+      expect(screen.queryByRole("button", { name: "启动守护进程" })).toBeNull();
       expect(screen.queryByRole("button", { name: "Detect Tailscale" })).toBeNull();
-      expect(screen.queryByRole("button", { name: "Connect test" })).toBeNull();
-      expect(screen.queryByLabelText("Remote backend host")).toBeNull();
-      expect(screen.queryByRole("button", { name: "Sign In" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "连接测试" })).toBeNull();
+      expect(screen.queryByLabelText("远程后端 host")).toBeNull();
+      expect(screen.queryByRole("button", { name: "登录" })).toBeNull();
       expect(
         screen.getByText(/use the orbit websocket url and token configured/i),
       ).toBeTruthy();
@@ -911,7 +911,7 @@ describe("SettingsView Codex overrides", () => {
       .mockResolvedValueOnce({
         status: "authorized",
         token: "orbit-token-1",
-        message: "Orbit sign in complete.",
+        message: "Orbit 登录完成。",
         intervalSeconds: null,
       });
     const orbitServiceClient: NonNullable<
@@ -986,7 +986,7 @@ describe("SettingsView Codex overrides", () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+      fireEvent.click(screen.getByRole("button", { name: "登录" }));
     });
     await waitFor(() => {
       expect(pollSpy).toHaveBeenCalledTimes(1);
@@ -1039,7 +1039,7 @@ describe("SettingsView Codex overrides", () => {
         expect.objectContaining({ remoteBackendToken: "orbit-token-1", theme: "dark" }),
       );
       expect(screen.getByText(/Auth code:/).textContent ?? "").toContain("ABCD-1234");
-      expect(screen.getByText("Orbit sign in complete.")).toBeTruthy();
+      expect(screen.getByText("Orbit 登录完成。")).toBeTruthy();
     }, { timeout: 3500 });
   });
 
@@ -1120,7 +1120,7 @@ describe("SettingsView Codex overrides", () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Sign Out" }));
+      fireEvent.click(screen.getByRole("button", { name: "登出" }));
     });
 
     await waitFor(() => {
@@ -1210,16 +1210,16 @@ describe("SettingsView Codex overrides", () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Sign Out" }));
+      fireEvent.click(screen.getByRole("button", { name: "登出" }));
     });
 
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledTimes(1);
-      expect(screen.getByText("Sign Out failed: settings write failed")).toBeTruthy();
+      expect(screen.getByText("退出登录失败：settings write failed")).toBeTruthy();
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Sign Out" }));
+      fireEvent.click(screen.getByRole("button", { name: "登出" }));
     });
 
     await waitFor(() => {
@@ -1236,7 +1236,7 @@ describe("SettingsView Features", () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderFeaturesSection({ onUpdateAppSettings });
 
-    fireEvent.change(screen.getByLabelText("Personality"), {
+    fireEvent.change(screen.getByLabelText("个性风格"), {
       target: { value: "pragmatic" },
     });
 
@@ -1254,7 +1254,7 @@ describe("SettingsView Features", () => {
       appSettings: { steerEnabled: true },
     });
 
-    const steerTitle = screen.getByText("Steer mode");
+    const steerTitle = screen.getByText("引导模式");
     const steerRow = steerTitle.closest(".settings-toggle-row");
     expect(steerRow).not.toBeNull();
 
@@ -1275,7 +1275,7 @@ describe("SettingsView Features", () => {
       appSettings: { unifiedExecEnabled: true },
     });
 
-    const terminalTitle = screen.getByText("Background terminal");
+    const terminalTitle = screen.getByText("后台终端");
     const terminalRow = terminalTitle.closest(".settings-toggle-row");
     expect(terminalRow).not.toBeNull();
 
@@ -1378,18 +1378,18 @@ describe("SettingsView mobile layout", () => {
 
       fireEvent.click(
         within(rendered.container).getByRole("button", {
-          name: "Display & Sound",
+          name: "显示与声音",
         }),
       );
 
       await waitFor(() => {
         expect(
           within(rendered.container).getByRole("button", {
-            name: "Back to settings sections",
+            name: "返回设置分区",
           }),
         ).toBeTruthy();
         expect(
-          within(rendered.container).getByText("Display & Sound", {
+          within(rendered.container).getByText("显示与声音", {
             selector: ".settings-mobile-detail-title",
           }),
         ).toBeTruthy();
@@ -1397,7 +1397,7 @@ describe("SettingsView mobile layout", () => {
 
       fireEvent.click(
         within(rendered.container).getByRole("button", {
-          name: "Back to settings sections",
+          name: "返回设置分区",
         }),
       );
 

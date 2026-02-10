@@ -102,14 +102,14 @@ export function GitBranchRow({ mode, branchName, onFetch, fetchLoading }: GitBra
 
   return (
     <div className="diff-branch-row">
-      <div className="diff-branch">{branchName || "unknown"}</div>
+      <div className="diff-branch">{branchName || "未知"}</div>
       <button
         type="button"
         className="diff-branch-refresh"
         onClick={() => void onFetch?.()}
         disabled={!onFetch || fetchLoading}
-        title={fetchLoading ? "Fetching remote..." : "Fetch remote"}
-        aria-label={fetchLoading ? "Fetching remote" : "Fetch remote"}
+        title={fetchLoading ? "正在获取远端..." : "获取远端"}
+        aria-label={fetchLoading ? "正在获取远端" : "获取远端"}
       >
         {fetchLoading ? (
           <span className="git-panel-spinner" aria-hidden />
@@ -142,7 +142,7 @@ export function GitRootCurrentPath({
 
   return (
     <div className="git-root-current">
-      <span className="git-root-label">Path:</span>
+      <span className="git-root-label">路径：</span>
       <span className="git-root-path" title={gitRoot ?? ""}>
         {gitRoot}
       </span>
@@ -154,7 +154,7 @@ export function GitRootCurrentPath({
           disabled={gitRootScanLoading}
         >
           <ArrowLeftRight className="git-root-button-icon" aria-hidden />
-          Change
+          更改
         </button>
       )}
     </div>
@@ -266,7 +266,7 @@ export function GitDiffModeContent({
     <div className="diff-list" onClick={onDiffListClick}>
       {showGitRootPanel && (
         <div className="git-root-panel">
-          <div className="git-root-title">Choose a repo for this workspace.</div>
+          <div className="git-root-title">为当前工作区选择仓库。</div>
           <div className="git-root-actions">
             <button
               type="button"
@@ -274,10 +274,10 @@ export function GitDiffModeContent({
               onClick={onScanGitRoots}
               disabled={!onScanGitRoots || gitRootScanLoading}
             >
-              Scan workspace
+              扫描工作区
             </button>
             <label className="git-root-depth">
-              <span>Depth</span>
+              <span>深度</span>
               <select
                 className="git-root-select"
                 value={gitRootScanDepth}
@@ -305,7 +305,7 @@ export function GitDiffModeContent({
                 }}
                 disabled={gitRootScanLoading}
               >
-                Pick folder
+                选择文件夹
               </button>
             )}
             {hasGitRoot && onClearGitRoot && (
@@ -315,15 +315,15 @@ export function GitDiffModeContent({
                 onClick={onClearGitRoot}
                 disabled={gitRootScanLoading}
               >
-                Use workspace root
+                使用工作区根目录
               </button>
             )}
           </div>
-          {gitRootScanLoading && <div className="diff-empty">Scanning for repositories...</div>}
+          {gitRootScanLoading && <div className="diff-empty">正在扫描仓库...</div>}
           {!gitRootScanLoading &&
             !gitRootScanError &&
             gitRootScanHasScanned &&
-            gitRootCandidates.length === 0 && <div className="diff-empty">No repositories found.</div>}
+            gitRootCandidates.length === 0 && <div className="diff-empty">未找到仓库。</div>}
           {gitRootCandidates.length > 0 && (
             <div className="git-root-list">
               {gitRootCandidates.map((path) => {
@@ -337,7 +337,7 @@ export function GitDiffModeContent({
                     onClick={() => onSelectGitRoot?.(path)}
                   >
                     <span className="git-root-path">{path}</span>
-                    {isActive && <span className="git-root-tag">Active</span>}
+                    {isActive && <span className="git-root-tag">当前</span>}
                   </button>
                 );
               })}
@@ -350,7 +350,7 @@ export function GitDiffModeContent({
           <div className="commit-message-input-wrapper">
             <textarea
               className="commit-message-input"
-              placeholder="Commit message..."
+              placeholder="提交信息..."
               value={commitMessage}
               onChange={(event) => onCommitMessageChange?.(event.target.value)}
               disabled={commitMessageLoading}
@@ -368,10 +368,10 @@ export function GitDiffModeContent({
               disabled={commitMessageLoading || !canGenerateCommitMessage}
               title={
                 stagedFiles.length > 0
-                  ? "Generate commit message from staged changes"
-                  : "Generate commit message from unstaged changes"
+                  ? "根据已暂存更改生成提交信息"
+                  : "根据未暂存更改生成提交信息"
               }
-              aria-label="Generate commit message"
+              aria-label="生成提交信息"
             >
               {commitMessageLoading ? (
                 <svg
@@ -443,7 +443,7 @@ export function GitDiffModeContent({
                 ) : (
                   <Download size={14} aria-hidden />
                 )}
-                <span>{pullLoading ? "Pulling..." : "Pull"}</span>
+                <span>{pullLoading ? "拉取中..." : "拉取"}</span>
                 <span className="push-count">{commitsBehind}</span>
               </button>
             )}
@@ -455,8 +455,8 @@ export function GitDiffModeContent({
                 disabled={!onPush || pushLoading || commitsBehind > 0}
                 title={
                   commitsBehind > 0
-                    ? "Remote is ahead. Pull first, or use Sync."
-                    : `Push ${commitsAhead} commit${commitsAhead > 1 ? "s" : ""}`
+                    ? "远端领先。请先拉取，或使用同步。"
+                    : `推送 ${commitsAhead} 个提交`
                 }
               >
                 {pushLoading ? (
@@ -464,7 +464,7 @@ export function GitDiffModeContent({
                 ) : (
                   <Upload size={14} aria-hidden />
                 )}
-                <span>Push</span>
+                <span>推送</span>
                 <span className="push-count">{commitsAhead}</span>
               </button>
             )}
@@ -475,14 +475,14 @@ export function GitDiffModeContent({
               className="push-button-secondary"
               onClick={() => void onSync?.()}
               disabled={!onSync || syncLoading || pullLoading}
-              title="Pull latest changes and push your local commits"
+              title="拉取最新更改并推送本地提交"
             >
               {syncLoading ? (
                 <span className="commit-button-spinner" aria-hidden />
               ) : (
                 <RotateCcw size={14} aria-hidden />
               )}
-              <span>{syncLoading ? "Syncing..." : "Sync (pull then push)"}</span>
+              <span>{syncLoading ? "同步中..." : "同步（先拉取再推送）"}</span>
             </button>
           )}
         </div>
@@ -491,12 +491,12 @@ export function GitDiffModeContent({
         !stagedFiles.length &&
         !unstagedFiles.length &&
         commitsAhead === 0 &&
-        commitsBehind === 0 && <div className="diff-empty">No changes detected.</div>}
+        commitsBehind === 0 && <div className="diff-empty">未检测到更改。</div>}
       {(stagedFiles.length > 0 || unstagedFiles.length > 0) && (
         <>
           {stagedFiles.length > 0 && (
             <DiffSection
-              title="Staged"
+              title="已暂存"
               files={stagedFiles}
               section="staged"
               selectedFiles={selectedFiles}
@@ -511,7 +511,7 @@ export function GitDiffModeContent({
           )}
           {unstagedFiles.length > 0 && (
             <DiffSection
-              title="Unstaged"
+              title="未暂存"
               files={unstagedFiles}
               section="unstaged"
               selectedFiles={selectedFiles}
@@ -558,15 +558,15 @@ export function GitLogModeContent({
 }: GitLogModeContentProps) {
   return (
     <div className="git-log-list">
-      {!logError && logLoading && <div className="diff-viewer-loading">Loading commits...</div>}
+      {!logError && logLoading && <div className="diff-viewer-loading">正在加载提交...</div>}
       {!logError &&
         !logLoading &&
         !logEntries.length &&
         !showAheadSection &&
-        !showBehindSection && <div className="diff-empty">No commits yet.</div>}
+        !showBehindSection && <div className="diff-empty">暂无提交。</div>}
       {showAheadSection && (
         <div className="git-log-section">
-          <div className="git-log-section-title">To push</div>
+          <div className="git-log-section-title">待推送</div>
           <div className="git-log-section-list">
             {logAheadEntries.map((entry) => {
               const isSelected = selectedCommitSha === entry.sha;
@@ -586,7 +586,7 @@ export function GitLogModeContent({
       )}
       {showBehindSection && (
         <div className="git-log-section">
-          <div className="git-log-section-title">To pull</div>
+          <div className="git-log-section-title">待拉取</div>
           <div className="git-log-section-list">
             {logBehindEntries.map((entry) => {
               const isSelected = selectedCommitSha === entry.sha;
@@ -606,7 +606,7 @@ export function GitLogModeContent({
       )}
       {(logEntries.length > 0 || logLoading) && (
         <div className="git-log-section">
-          <div className="git-log-section-title">Recent commits</div>
+          <div className="git-log-section-title">最近提交</div>
           <div className="git-log-section-list">
             {logEntries.map((entry) => {
               const isSelected = selectedCommitSha === entry.sha;
@@ -641,7 +641,7 @@ export function GitIssuesModeContent({
   return (
     <div className="git-issues-list">
       {!issuesError && !issuesLoading && !issues.length && (
-        <div className="diff-empty">No open issues.</div>
+        <div className="diff-empty">暂无未关闭 Issue。</div>
       )}
       {issues.map((issue) => {
         const relativeTime = formatRelativeTime(new Date(issue.updatedAt).getTime());
@@ -691,11 +691,11 @@ export function GitPullRequestsModeContent({
   return (
     <div className="git-pr-list">
       {!pullRequestsError && !pullRequestsLoading && !pullRequests.length && (
-        <div className="diff-empty">No open pull requests.</div>
+        <div className="diff-empty">暂无未关闭 PR。</div>
       )}
       {pullRequests.map((pullRequest) => {
         const relativeTime = formatRelativeTime(new Date(pullRequest.updatedAt).getTime());
-        const author = pullRequest.author?.login ?? "unknown";
+        const author = pullRequest.author?.login ?? "未知";
         const isSelected = selectedPullRequest === pullRequest.number;
 
         return (
@@ -723,7 +723,7 @@ export function GitPullRequestsModeContent({
               <span className="git-pr-time">{relativeTime}</span>
             </div>
             <div className="git-pr-meta">
-              {pullRequest.isDraft && <span className="git-pr-pill git-pr-draft">Draft</span>}
+              {pullRequest.isDraft && <span className="git-pr-pill git-pr-draft">草稿</span>}
             </div>
           </div>
         );

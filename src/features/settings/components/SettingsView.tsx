@@ -882,8 +882,8 @@ export function SettingsView({
       setOrbitStatusText(getOrbitStatusText(result, successFallback));
       return result;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown Orbit error";
-      setOrbitStatusText(`${actionLabel} failed: ${message}`);
+      const message = error instanceof Error ? error.message : "未知 Orbit 错误";
+      setOrbitStatusText(`${actionLabel}失败：${message}`);
       return null;
     } finally {
       setOrbitBusyAction(null);
@@ -910,16 +910,16 @@ export function SettingsView({
   const handleOrbitConnectTest = () => {
     void runOrbitAction(
       "connect-test",
-      "Connect test",
+      "连接测试",
       orbitServiceClient.orbitConnectTest,
-      "Orbit connection test succeeded.",
+      "Orbit 连接测试成功。",
     );
   };
 
   const handleOrbitSignIn = () => {
     void (async () => {
       setOrbitBusyAction("sign-in");
-      setOrbitStatusText("Starting Orbit sign in...");
+      setOrbitStatusText("正在启动 Orbit 登录...");
       setOrbitAuthCode(null);
       setOrbitVerificationUrl(null);
       try {
@@ -929,7 +929,7 @@ export function SettingsView({
           startResult.verificationUriComplete ?? startResult.verificationUri,
         );
         setOrbitStatusText(
-          "Orbit sign in started. Finish authorization in the browser window, then keep this dialog open while we poll for completion.",
+          "Orbit 登录已启动。请在浏览器窗口中完成授权，然后保持此对话框打开，等待轮询完成。",
         );
 
         const maxPollWindowSeconds = Math.max(
@@ -948,7 +948,7 @@ export function SettingsView({
             startResult.deviceCode,
           );
           setOrbitStatusText(
-            getOrbitStatusText(pollResult, "Orbit sign in status refreshed."),
+            getOrbitStatusText(pollResult, "Orbit 登录状态已刷新。"),
           );
 
           if (pollResult.status === "pending") {
@@ -967,11 +967,11 @@ export function SettingsView({
         }
 
         setOrbitStatusText(
-          "Orbit sign in is still pending. Leave this window open and try Sign In again if authorization just completed.",
+          "Orbit 登录仍在等待中。请保持此窗口打开，如果刚刚完成授权，请再次尝试登录。",
         );
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown Orbit error";
-        setOrbitStatusText(`Sign In failed: ${message}`);
+        const message = error instanceof Error ? error.message : "未知 Orbit 错误";
+        setOrbitStatusText(`登录失败：${message}`);
       } finally {
         setOrbitBusyAction(null);
       }
@@ -982,9 +982,9 @@ export function SettingsView({
     void (async () => {
       const result = await runOrbitAction(
         "sign-out",
-        "Sign Out",
+        "退出登录",
         orbitServiceClient.orbitSignOut,
-        "Signed out from Orbit.",
+        "已从 Orbit 退出。",
       );
       if (result !== null) {
         try {
@@ -992,8 +992,8 @@ export function SettingsView({
           setOrbitAuthCode(null);
           setOrbitVerificationUrl(null);
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Unknown Orbit error";
-          setOrbitStatusText(`Sign Out failed: ${message}`);
+          const message = error instanceof Error ? error.message : "未知 Orbit 错误";
+          setOrbitStatusText(`退出登录失败：${message}`);
         }
       }
     })();
@@ -1002,27 +1002,27 @@ export function SettingsView({
   const handleOrbitRunnerStart = () => {
     void runOrbitAction(
       "runner-start",
-      "Start Runner",
+      "启动运行器",
       orbitServiceClient.orbitRunnerStart,
-      "Orbit runner started.",
+      "Orbit 运行器已启动。",
     );
   };
 
   const handleOrbitRunnerStop = () => {
     void runOrbitAction(
       "runner-stop",
-      "Stop Runner",
+      "停止运行器",
       orbitServiceClient.orbitRunnerStop,
-      "Orbit runner stopped.",
+      "Orbit 运行器已停止。",
     );
   };
 
   const handleOrbitRunnerStatus = () => {
     void runOrbitAction(
       "runner-status",
-      "Refresh Status",
+      "刷新状态",
       orbitServiceClient.orbitRunnerStatus,
-      "Orbit runner status refreshed.",
+      "Orbit 运行器状态已刷新。",
     );
   };
 
@@ -1294,15 +1294,15 @@ export function SettingsView({
       groupedWorkspaces.find((entry) => entry.id === group.id)?.workspaces ?? [];
     const detail =
       groupProjects.length > 0
-        ? `\n\nProjects in this group will move to "${ungroupedLabel}".`
+        ? `\n\n该分组内的项目将移动到“${ungroupedLabel}”。`
         : "";
     const confirmed = await ask(
-      `Delete "${group.name}"?${detail}`,
+      `确定删除“${group.name}”吗？${detail}`,
       {
-        title: "Delete Group",
+        title: "删除分组",
         kind: "warning",
-        okLabel: "Delete",
-        cancelLabel: "Cancel",
+        okLabel: "删除",
+        cancelLabel: "取消",
       },
     );
     if (!confirmed) {
@@ -1329,13 +1329,13 @@ export function SettingsView({
     >
       <div className="settings-titlebar">
         <div className="settings-title" id="settings-modal-title">
-          Settings
+          设置
         </div>
         <button
           type="button"
           className="ghost icon-button settings-close"
           onClick={onClose}
-          aria-label="Close settings"
+          aria-label="关闭设置"
         >
           <X aria-hidden />
         </button>
@@ -1358,10 +1358,10 @@ export function SettingsView({
                   type="button"
                   className="settings-mobile-back"
                   onClick={() => setShowMobileDetail(false)}
-                  aria-label="Back to settings sections"
+                  aria-label="返回设置分区"
                 >
                   <ChevronLeft aria-hidden />
-                  Sections
+                  分区
                 </button>
                 <div className="settings-mobile-detail-title">
                   {activeSectionLabel}
