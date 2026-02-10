@@ -2,7 +2,6 @@ import type { DragEvent, MouseEvent, ReactNode, RefObject } from "react";
 import type { ReviewPromptState, ReviewPromptStep } from "../../../threads/hooks/useReviewPrompt";
 import type { WorkspaceLaunchScriptsState } from "../../../app/hooks/useWorkspaceLaunchScripts";
 import type {
-  AccessMode,
   BackendMode,
   ApprovalRequest,
   BranchInfo,
@@ -192,6 +191,8 @@ export type LayoutNodesOptions = {
   onCheckoutBranch: (name: string) => Promise<void>;
   onCreateBranch: (name: string) => Promise<void>;
   onCopyThread: () => void | Promise<void>;
+  onCopyThreadFull: () => void | Promise<void>;
+  onCopyThreadCompact: () => void | Promise<void>;
   onToggleTerminal: () => void;
   showTerminalButton: boolean;
   showWorkspaceTools: boolean;
@@ -387,9 +388,7 @@ export type LayoutNodesOptions = {
   selectedEffort: string | null;
   onSelectEffort: (effort: string | null) => void;
   reasoningSupported: boolean;
-  accessMode: AccessMode;
   backendMode: BackendMode;
-  onSelectAccessMode: (mode: AccessMode) => void;
   skills: SkillOption[];
   appsEnabled: boolean;
   apps: AppOption[];

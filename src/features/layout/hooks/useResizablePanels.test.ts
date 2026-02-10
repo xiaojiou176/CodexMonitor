@@ -66,6 +66,11 @@ describe("useResizablePanels", () => {
   it("persists sidebar width changes and clamps max", async () => {
     const hook = renderResizablePanels();
 
+    // Create a mock .app element so the resize handler can set CSS variables
+    const appDiv = document.createElement("div");
+    appDiv.classList.add("app");
+    document.body.appendChild(appDiv);
+
     act(() => {
       hook.result.onSidebarResizeStart({
         clientX: 0,
@@ -84,15 +89,20 @@ describe("useResizablePanels", () => {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
 
+    // During drag, the CSS variable is updated on DOM but React state is deferred
+    expect(appDiv.style.getPropertyValue("--sidebar-width")).toBe("420px");
+
+    // mouseUp commits the final value to React state
+    act(() => {
+      window.dispatchEvent(new MouseEvent("mouseup"));
+    });
+
     expect(hook.result.sidebarWidth).toBe(420);
     expect(window.localStorage.getItem("codexmonitor.sidebarWidth")).toBe(
       "420",
     );
 
-    act(() => {
-      window.dispatchEvent(new MouseEvent("mouseup"));
-    });
-
+    document.body.removeChild(appDiv);
     hook.unmount();
   });
 });

@@ -47,6 +47,7 @@
   --surface-diff-card: rgba(10, 14, 20, 0.32);
   --surface-bubble: rgba(255, 255, 255, 0.12);
   --surface-bubble-user: rgba(77, 153, 255, 0.45);
+  --surface-bubble-assistant: rgba(255, 255, 255, 0.06);
   --surface-context-core: rgba(10, 14, 20, 0.9);
   --surface-popover: rgba(10, 14, 20, 0.995);
   --surface-review: rgba(255, 144, 200, 0.1);

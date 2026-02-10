@@ -270,7 +270,6 @@ export async function sendUserMessage(
   options?: {
     model?: string | null;
     effort?: string | null;
-    accessMode?: "read-only" | "current" | "full-access";
     images?: string[];
     collaborationMode?: Record<string, unknown> | null;
   },
@@ -281,7 +280,7 @@ export async function sendUserMessage(
     text,
     model: options?.model ?? null,
     effort: options?.effort ?? null,
-    accessMode: options?.accessMode ?? null,
+    accessMode: null, // Always null — let app-server use config.toml
     images: options?.images ?? null,
   };
   if (options?.collaborationMode) {

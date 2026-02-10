@@ -16,38 +16,43 @@ type SecondaryLayoutNodes = Pick<
 >;
 
 export function buildSecondaryNodes(options: LayoutNodesOptions): SecondaryLayoutNodes {
-  const planPanelNode = <PlanPanel plan={options.plan} isProcessing={options.isProcessing} />;
-
-  const terminalPanelNode = options.terminalState ? (
-    <TerminalPanel
-      containerRef={options.terminalState.containerRef}
-      status={options.terminalState.status}
-      message={options.terminalState.message}
-    />
+  // Only mount PlanPanel when there is an active plan to display
+  const planPanelNode = options.plan ? (
+    <PlanPanel plan={options.plan} isProcessing={options.isProcessing} />
   ) : null;
 
-  const terminalDockNode = (
+  // Only mount TerminalDock when it is open to avoid mounting hooks/XTerm when hidden
+  const terminalDockNode = options.terminalOpen ? (
     <TerminalDock
-      isOpen={options.terminalOpen}
+      isOpen
       terminals={options.terminalTabs}
       activeTerminalId={options.activeTerminalId}
       onSelectTerminal={options.onSelectTerminal}
       onNewTerminal={options.onNewTerminal}
       onCloseTerminal={options.onCloseTerminal}
       onResizeStart={options.onResizeTerminal}
-      terminalNode={terminalPanelNode}
+      terminalNode={
+        options.terminalState ? (
+          <TerminalPanel
+            containerRef={options.terminalState.containerRef}
+            status={options.terminalState.status}
+            message={options.terminalState.message}
+          />
+        ) : null
+      }
     />
-  );
+  ) : null;
 
-  const debugPanelNode = (
+  // Only mount DebugPanel when it is visible
+  const debugPanelNode = options.debugOpen ? (
     <DebugPanel
       entries={options.debugEntries}
-      isOpen={options.debugOpen}
+      isOpen
       onClear={options.onClearDebug}
       onCopy={options.onCopyDebug}
       onResizeStart={options.onResizeDebug}
     />
-  );
+  ) : null;
 
   const debugPanelFullNode = (
     <DebugPanel

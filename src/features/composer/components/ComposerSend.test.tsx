@@ -50,8 +50,6 @@ function ComposerHarness({ onSend }: HarnessProps) {
       selectedEffort={null}
       onSelectEffort={() => {}}
       reasoningSupported={false}
-      accessMode="current"
-      onSelectAccessMode={() => {}}
       skills={[]}
       apps={[]}
       prompts={[]}

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch } from "react";
 import { buildConversationItem } from "../../../utils/threadItems";
 import { asString } from "../utils/threadNormalize";
@@ -28,6 +28,18 @@ type UseThreadItemEventsOptions = {
   onReviewExited?: (workspaceId: string, threadId: string) => void;
 };
 
+type PendingAgentDelta = {
+  workspaceId: string;
+  threadId: string;
+  itemId: string;
+  delta: string;
+  hasCustomName: boolean;
+};
+
+function deltaKey(workspaceId: string, threadId: string, itemId: string) {
+  return `${workspaceId}::${threadId}::${itemId}`;
+}
+
 export function useThreadItemEvents({
   activeThreadId,
   dispatch,
@@ -40,6 +52,58 @@ export function useThreadItemEvents({
   onUserMessageCreated,
   onReviewExited,
 }: UseThreadItemEventsOptions) {
+  const pendingAgentDeltasRef = useRef<Map<string, PendingAgentDelta>>(new Map());
+  const pendingAgentDeltaFrameRef = useRef<number | null>(null);
+
+  const flushPendingAgentDeltas = useCallback(() => {
+    pendingAgentDeltaFrameRef.current = null;
+    if (pendingAgentDeltasRef.current.size === 0) {
+      return;
+    }
+    const pending = Array.from(pendingAgentDeltasRef.current.values());
+    pendingAgentDeltasRef.current.clear();
+    for (const entry of pending) {
+      dispatch({
+        type: "appendAgentDelta",
+        workspaceId: entry.workspaceId,
+        threadId: entry.threadId,
+        itemId: entry.itemId,
+        delta: entry.delta,
+        hasCustomName: entry.hasCustomName,
+      });
+    }
+  }, [dispatch]);
+
+  const schedulePendingAgentDeltaFlush = useCallback(() => {
+    if (pendingAgentDeltaFrameRef.current !== null) {
+      return;
+    }
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      pendingAgentDeltaFrameRef.current = window.requestAnimationFrame(() => {
+        flushPendingAgentDeltas();
+      });
+      return;
+    }
+    pendingAgentDeltaFrameRef.current = window.setTimeout(() => {
+      flushPendingAgentDeltas();
+    }, 16) as unknown as number;
+  }, [flushPendingAgentDeltas]);
+
+  useEffect(() => {
+    return () => {
+      const frameId = pendingAgentDeltaFrameRef.current;
+      pendingAgentDeltaFrameRef.current = null;
+      if (frameId !== null && typeof window !== "undefined") {
+        if (typeof window.cancelAnimationFrame === "function") {
+          window.cancelAnimationFrame(frameId);
+        } else {
+          window.clearTimeout(frameId);
+        }
+      }
+      flushPendingAgentDeltas();
+    };
+  }, [flushPendingAgentDeltas]);
+
   const handleItemUpdate = useCallback(
     (
       workspaceId: string,
@@ -132,16 +196,26 @@ export function useThreadItemEvents({
       dispatch({ type: "ensureThread", workspaceId, threadId });
       markProcessing(threadId, true);
       const hasCustomName = Boolean(getCustomName(workspaceId, threadId));
-      dispatch({
-        type: "appendAgentDelta",
-        workspaceId,
-        threadId,
-        itemId,
-        delta,
-        hasCustomName,
-      });
+      const key = deltaKey(workspaceId, threadId, itemId);
+      const existing = pendingAgentDeltasRef.current.get(key);
+      if (existing) {
+        pendingAgentDeltasRef.current.set(key, {
+          ...existing,
+          delta: `${existing.delta}${delta}`,
+          hasCustomName: existing.hasCustomName || hasCustomName,
+        });
+      } else {
+        pendingAgentDeltasRef.current.set(key, {
+          workspaceId,
+          threadId,
+          itemId,
+          delta,
+          hasCustomName,
+        });
+      }
+      schedulePendingAgentDeltaFlush();
     },
-    [dispatch, getCustomName, markProcessing],
+    [dispatch, getCustomName, markProcessing, schedulePendingAgentDeltaFlush],
   );
 
   const onAgentMessageCompleted = useCallback(
@@ -156,6 +230,7 @@ export function useThreadItemEvents({
       itemId: string;
       text: string;
     }) => {
+      flushPendingAgentDeltas();
       const timestamp = Date.now();
       dispatch({ type: "ensureThread", workspaceId, threadId });
       const hasCustomName = Boolean(getCustomName(workspaceId, threadId));
@@ -188,6 +263,7 @@ export function useThreadItemEvents({
     [
       activeThreadId,
       dispatch,
+      flushPendingAgentDeltas,
       getCustomName,
       recordThreadActivity,
       safeMessageActivity,

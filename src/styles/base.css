@@ -22,6 +22,7 @@
   --surface-diff-card: rgba(14, 18, 28, 0.9);
   --surface-bubble: rgba(42, 46, 58, 0.9);
   --surface-bubble-user: rgba(77, 153, 255, 0.55);
+  --surface-bubble-assistant: rgba(42, 46, 58, 0.65);
   --surface-context-core: rgba(16, 20, 30, 0.96);
   --surface-popover: rgba(16, 20, 30, 0.995);
 }

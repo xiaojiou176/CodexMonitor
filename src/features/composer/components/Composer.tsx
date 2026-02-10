@@ -57,8 +57,6 @@ type ComposerProps = {
   selectedEffort: string | null;
   onSelectEffort: (effort: string) => void;
   reasoningSupported: boolean;
-  accessMode: "read-only" | "current" | "full-access";
-  onSelectAccessMode: (mode: "read-only" | "current" | "full-access") => void;
   skills: { name: string; description?: string }[];
   apps: AppOption[];
   prompts: CustomPromptOption[];
@@ -153,8 +151,6 @@ export const Composer = memo(function Composer({
   selectedEffort,
   onSelectEffort,
   reasoningSupported,
-  accessMode,
-  onSelectAccessMode,
   skills,
   apps,
   prompts,
@@ -725,8 +721,6 @@ export const Composer = memo(function Composer({
         selectedEffort={selectedEffort}
         onSelectEffort={onSelectEffort}
         reasoningSupported={reasoningSupported}
-        accessMode={accessMode}
-        onSelectAccessMode={onSelectAccessMode}
         contextUsage={contextUsage}
       />
     </footer>

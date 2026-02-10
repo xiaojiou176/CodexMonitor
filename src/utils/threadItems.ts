@@ -78,44 +78,108 @@ function formatCollabAgentStates(value: unknown) {
 
 export function normalizeItem(item: ConversationItem): ConversationItem {
   if (item.kind === "message") {
-    return { ...item, text: truncateText(item.text) };
+    const text = truncateText(item.text);
+    if (text === item.text) {
+      return item;
+    }
+    return { ...item, text };
   }
   if (item.kind === "explore") {
     return item;
   }
   if (item.kind === "reasoning") {
+    const summary = truncateText(item.summary);
+    const content = truncateText(item.content);
+    if (summary === item.summary && content === item.content) {
+      return item;
+    }
     return {
       ...item,
-      summary: truncateText(item.summary),
-      content: truncateText(item.content),
+      summary,
+      content,
     };
   }
   if (item.kind === "diff") {
-    return { ...item, diff: truncateText(item.diff) };
+    const diff = truncateText(item.diff);
+    if (diff === item.diff) {
+      return item;
+    }
+    return { ...item, diff };
   }
   if (item.kind === "tool") {
     const isNoTruncateTool = NO_TRUNCATE_TOOL_TYPES.has(item.toolType);
+    const title = truncateText(item.title, 200);
+    const detail = truncateText(item.detail, 2000);
+    const output = isNoTruncateTool
+      ? item.output
+      : item.output
+        ? truncateText(item.output)
+        : item.output;
+    const changes = item.changes
+      ? item.changes.map((change) => {
+          const diff =
+            isNoTruncateTool || !change.diff
+              ? change.diff
+              : truncateText(change.diff);
+          if (diff === change.diff) {
+            return change;
+          }
+          return {
+            ...change,
+            diff,
+          };
+        })
+      : item.changes;
+    const changesUnchanged =
+      !item.changes ||
+      item.changes.every((change, index) => changes?.[index] === change);
+    if (
+      title === item.title &&
+      detail === item.detail &&
+      output === item.output &&
+      changesUnchanged
+    ) {
+      return item;
+    }
     return {
       ...item,
-      title: truncateText(item.title, 200),
-      detail: truncateText(item.detail, 2000),
-      output: isNoTruncateTool
-        ? item.output
-        : item.output
-          ? truncateText(item.output)
-          : item.output,
-      changes: item.changes
-        ? item.changes.map((change) => ({
-            ...change,
-            diff:
-              isNoTruncateTool || !change.diff
-                ? change.diff
-                : truncateText(change.diff),
-          }))
-        : item.changes,
+      title,
+      detail,
+      output,
+      changes,
     };
   }
   return item;
+}
+
+export function prepareThreadItemsIncremental(
+  items: ConversationItem[],
+  changedIndex: number,
+) {
+  let limited = items;
+  let nextChangedIndex = changedIndex;
+
+  if (limited.length > MAX_ITEMS_PER_THREAD) {
+    const offset = limited.length - MAX_ITEMS_PER_THREAD;
+    limited = limited.slice(offset);
+    nextChangedIndex -= offset;
+    if (nextChangedIndex < 0 || nextChangedIndex >= limited.length) {
+      return limited;
+    }
+  }
+
+  if (nextChangedIndex < 0 || nextChangedIndex >= limited.length) {
+    return limited;
+  }
+
+  const current = limited[nextChangedIndex];
+  const normalized = normalizeItem(current);
+  if (normalized === current) {
+    return limited;
+  }
+  const next = [...limited];
+  next[nextChangedIndex] = normalized;
+  return next;
 }
 
 function cleanCommandText(commandText: string) {

@@ -186,7 +186,7 @@ describe("useThreadItemEvents", () => {
     );
   });
 
-  it("marks processing and appends agent deltas", () => {
+  it("marks processing and appends agent deltas", async () => {
     const { result, dispatch, markProcessing } = makeOptions();
 
     act(() => {
@@ -204,6 +204,12 @@ describe("useThreadItemEvents", () => {
       threadId: "thread-1",
     });
     expect(markProcessing).toHaveBeenCalledWith("thread-1", true);
+
+    // Delta is now batched via requestAnimationFrame; flush it
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
     expect(dispatch).toHaveBeenCalledWith({
       type: "appendAgentDelta",
       workspaceId: "ws-1",

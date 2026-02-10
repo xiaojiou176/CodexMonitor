@@ -5,14 +5,22 @@
   min-height: 0;
   min-width: 0;
   contain: layout style;
+  will-change: scroll-position;
 }
 
 /* Let the browser skip layout/paint for off-screen message rows */
 .message-row,
 .tool-group,
+.tool-inline,
+.item-card,
 .explore-row {
   content-visibility: auto;
   contain-intrinsic-size: auto 80px;
+}
+
+/* Tighter containment for individual message items to isolate repaints */
+.message-row {
+  contain: layout style paint;
 }
 
 .messages-full {
@@ -170,11 +178,15 @@
 
 .message {
   display: flex;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
-/* Visual rhythm: extra breathing room before user messages following assistant responses */
+/* Visual rhythm: extra breathing room between role transitions */
 .message.assistant + .message.user {
+  margin-top: 14px;
+}
+
+.message.user + .message.assistant {
   margin-top: 8px;
 }
 
@@ -265,11 +277,18 @@
 .message.assistant .bubble {
   max-width: min(100%, var(--message-doc-max-width, 760px));
   width: auto;
-  padding: 2px 0;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
+  padding: 16px 20px;
+  background: var(--surface-bubble-assistant, var(--surface-card));
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+/* Ensure markdown code blocks inside assistant bubble have correct spacing */
+.message.assistant .bubble .markdown-codeblock,
+.message.assistant .bubble .markdown-codeblock-single {
+  margin-left: -4px;
+  margin-right: -4px;
 }
 
 .message-image-grid {
@@ -928,9 +947,10 @@
 .markdown {
   white-space: normal;
   overflow-wrap: anywhere;
-  font-size: 14px;
-  line-height: 1.62;
+  font-size: 14.5px;
+  line-height: 1.75;
   color: var(--text-stronger);
+  letter-spacing: 0.006em;
 }
 
 .markdown > * {
@@ -938,7 +958,7 @@
 }
 
 .markdown > * + * {
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .markdown pre {
@@ -954,11 +974,13 @@
 
 .message .markdown :not(pre) > code {
   color: var(--text-stronger);
-  background: color-mix(in srgb, var(--surface-command) 82%, transparent);
-  border: 1px solid var(--border-subtle);
-  padding: 1px 5px;
+  background: color-mix(in srgb, var(--surface-command) 92%, transparent);
+  border: 1px solid var(--border-strong);
+  padding: 2px 6px;
   border-radius: 6px;
-  font-size: 0.97em;
+  font-size: 0.92em;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .message .markdown .message-file-link {
@@ -1141,8 +1163,8 @@
   border-radius: 10px;
   background: var(--surface-command);
   overflow: hidden;
-  box-shadow: none;
-  margin: 6px 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin: 10px 0;
 }
 
 .message .markdown-codeblock-header {
@@ -1232,7 +1254,7 @@
 
 .markdown ul,
 .markdown ol {
-  padding-left: 18px;
+  padding-left: 20px;
   margin: 0;
   list-style-position: outside;
 }
@@ -1247,8 +1269,9 @@
 }
 
 .markdown li {
-  margin: 4px 0;
+  margin: 6px 0;
   padding-left: 4px;
+  line-height: 1.72;
 }
 
 .message.assistant .markdown li > ul,
@@ -1267,7 +1290,8 @@
 }
 
 .markdown :where(strong) {
-  font-weight: 600;
+  font-weight: 620;
+  color: var(--text-stronger);
 }
 
 .markdown :where(em) {
@@ -1275,18 +1299,84 @@
 }
 
 .markdown :where(h1, h2, h3, h4) {
-  font-size: 1.02em;
   font-weight: 640;
   letter-spacing: 0.008em;
+  margin-top: 18px;
+}
+
+.markdown :where(h1) {
+  font-size: 1.2em;
+}
+
+.markdown :where(h2) {
+  font-size: 1.12em;
+}
+
+.markdown :where(h3) {
+  font-size: 1.05em;
+}
+
+.markdown :where(h4) {
+  font-size: 1.0em;
+}
+
+/* First heading in a sequence should not have extra top margin */
+.markdown > :where(h1, h2, h3, h4):first-child {
+  margin-top: 0;
 }
 
 .markdown :where(blockquote) {
   margin: 0;
-  padding: 6px 10px;
-  border-left: 2px solid var(--border-accent-soft);
-  background: color-mix(in srgb, var(--surface-card-strong) 65%, transparent);
-  border-radius: 6px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--border-accent-soft);
+  background: color-mix(in srgb, var(--surface-card-strong) 55%, transparent);
+  border-radius: 8px;
   color: var(--text-muted);
+  font-size: 0.96em;
+  line-height: 1.7;
+}
+
+/* Horizontal rules */
+.markdown hr {
+  border: none;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 16px 0;
+}
+
+/* Markdown tables */
+.markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.93em;
+  margin: 10px 0;
+  overflow-x: auto;
+  display: block;
+}
+
+.markdown thead th {
+  text-align: left;
+  font-weight: 620;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--border-strong);
+  color: var(--text-stronger);
+  background: color-mix(in srgb, var(--surface-control) 60%, transparent);
+  white-space: nowrap;
+}
+
+.markdown tbody td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: top;
+  line-height: 1.6;
+}
+
+.markdown tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown tbody tr:hover td {
+  background: color-mix(in srgb, var(--surface-control) 30%, transparent);
 }
 
 .markdown a {

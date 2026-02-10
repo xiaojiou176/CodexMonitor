@@ -30,7 +30,6 @@ type UseThreadsOptions = {
   model?: string | null;
   effort?: string | null;
   collaborationMode?: Record<string, unknown> | null;
-  accessMode?: "read-only" | "current" | "full-access";
   reviewDeliveryMode?: "inline" | "detached";
   steerEnabled?: boolean;
   threadTitleAutogenerationEnabled?: boolean;
@@ -46,7 +45,6 @@ export function useThreads({
   model,
   effort,
   collaborationMode,
-  accessMode,
   reviewDeliveryMode = "inline",
   steerEnabled = false,
   threadTitleAutogenerationEnabled = false,
@@ -389,7 +387,6 @@ export function useThreads({
   } = useThreadMessaging({
     activeWorkspace,
     activeThreadId,
-    accessMode,
     model,
     effort,
     collaborationMode,

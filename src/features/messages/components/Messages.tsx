@@ -88,6 +88,8 @@ export const Messages = memo(function Messages({
     new Set(),
   );
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const copiedMessageIdRef = useRef(copiedMessageId);
+  copiedMessageIdRef.current = copiedMessageId;
   const copyTimeoutRef = useRef<number | null>(null);
   const activeUserInputRequestId =
     threadId && userInputRequests.length
@@ -110,12 +112,29 @@ export const Messages = memo(function Messages({
     [],
   );
 
-  const updateAutoScroll = () => {
-    if (!containerRef.current) {
+  // Throttle scroll events to at most one per animation frame
+  const scrollRafRef = useRef<number | null>(null);
+  const updateAutoScroll = useCallback(() => {
+    if (scrollRafRef.current !== null) {
       return;
     }
-    autoScrollRef.current = isNearBottom(containerRef.current);
-  };
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      if (!containerRef.current) {
+        return;
+      }
+      autoScrollRef.current = isNearBottom(containerRef.current);
+    });
+  }, [isNearBottom]);
+
+  // Cleanup scroll RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+    };
+  }, []);
 
   const requestAutoScroll = useCallback(() => {
     const container = containerRef.current;
@@ -160,15 +179,38 @@ export const Messages = memo(function Messages({
     });
   }, []);
 
+  // Incrementally cache reasoning parse results — only re-parse items whose
+  // object reference actually changed, which avoids redundant work during
+  // streaming when only the last message delta changes.
+  const reasoningCacheRef = useRef(
+    new Map<string, { item: ConversationItem; parsed: ReturnType<typeof parseReasoning> }>(),
+  );
   const reasoningMetaById = useMemo(() => {
+    const cache = reasoningCacheRef.current;
     const meta = new Map<string, ReturnType<typeof parseReasoning>>();
+    const nextCache = new Map<string, { item: ConversationItem; parsed: ReturnType<typeof parseReasoning> }>();
     items.forEach((item) => {
       if (item.kind === "reasoning") {
-        meta.set(item.id, parseReasoning(item));
+        const cached = cache.get(item.id);
+        if (cached && cached.item === item) {
+          meta.set(item.id, cached.parsed);
+          nextCache.set(item.id, cached);
+        } else {
+          const parsed = parseReasoning(item);
+          meta.set(item.id, parsed);
+          nextCache.set(item.id, { item, parsed });
+        }
       }
     });
+    reasoningCacheRef.current = nextCache;
     return meta;
   }, [items]);
+
+  // Keep refs in sync so renderItem callback stays stable across renders
+  const expandedItemsRef = useRef(expandedItems);
+  expandedItemsRef.current = expandedItems;
+  const reasoningMetaByIdRef = useRef(reasoningMetaById);
+  reasoningMetaByIdRef.current = reasoningMetaById;
 
   const latestReasoningLabel = useMemo(() => {
     for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -367,10 +409,14 @@ export const Messages = memo(function Messages({
       />
     ) : null;
 
+  // renderItem uses refs for high-frequency state (copiedMessageId, expandedItems,
+  // reasoningMetaById) so the callback identity stays stable across streaming
+  // updates. The child Row components are memo'd, so stable callback + stable item
+  // references = zero wasted re-renders for unchanged rows.
   const renderItem = useCallback(
     (item: ConversationItem) => {
       if (item.kind === "message") {
-        const isCopied = copiedMessageId === item.id;
+        const isCopied = copiedMessageIdRef.current === item.id;
         return (
           <MessageRow
             key={item.id}
@@ -388,8 +434,9 @@ export const Messages = memo(function Messages({
         );
       }
       if (item.kind === "reasoning") {
-        const isExpanded = expandedItems.has(item.id);
-        const parsed = reasoningMetaById.get(item.id) ?? parseReasoning(item);
+        const isExpanded = expandedItemsRef.current.has(item.id);
+        const parsed =
+          reasoningMetaByIdRef.current.get(item.id) ?? parseReasoning(item);
         return (
           <ReasoningRow
             key={item.id}
@@ -424,7 +471,7 @@ export const Messages = memo(function Messages({
         return <DiffRow key={item.id} item={item} />;
       }
       if (item.kind === "tool") {
-        const isExpanded = expandedItems.has(item.id);
+        const isExpanded = expandedItemsRef.current.has(item.id);
         return (
           <ToolRow
             key={item.id}
@@ -447,7 +494,6 @@ export const Messages = memo(function Messages({
       return null;
     },
     [
-      copiedMessageId,
       handleCopyMessage,
       codeBlockCopyUseModifier,
       showMessageFilePath,
@@ -456,8 +502,6 @@ export const Messages = memo(function Messages({
       openFileLink,
       showFileLinkMenu,
       onOpenThreadLink,
-      expandedItems,
-      reasoningMetaById,
       toggleExpanded,
       requestAutoScroll,
     ],
@@ -523,14 +567,14 @@ export const Messages = memo(function Messages({
       />
       {!items.length && !userInputNode && !isThinking && !isLoadingMessages && (
         <div className="empty messages-empty">
-          {threadId ? "Send a prompt to the agent." : "Send a prompt to start a new agent."}
+          {threadId ? "发送消息开始对话。" : "发送消息开始新对话。"}
         </div>
       )}
       {!items.length && !userInputNode && !isThinking && isLoadingMessages && (
         <div className="empty messages-empty">
           <div className="messages-loading-indicator" role="status" aria-live="polite">
             <span className="working-spinner" aria-hidden />
-            <span className="messages-loading-label">Loading…</span>
+            <span className="messages-loading-label">正在加载对话记录…</span>
           </div>
         </div>
       )}

@@ -1,8 +1,6 @@
 import { useMemo } from "react";
-import type { AccessMode } from "../../../types";
 import { useTauriEvent } from "../../app/hooks/useTauriEvent";
 import {
-  subscribeMenuCycleAccessMode,
   subscribeMenuCycleCollaborationMode,
   subscribeMenuCycleModel,
   subscribeMenuCycleReasoning,
@@ -17,16 +15,12 @@ type UseComposerMenuActionsOptions = {
   collaborationModes: { id: string; label: string }[];
   selectedCollaborationModeId: string | null;
   onSelectCollaborationMode: (id: string | null) => void;
-  accessMode: AccessMode;
-  onSelectAccessMode: (mode: AccessMode) => void;
   reasoningOptions: string[];
   selectedEffort: string | null;
   onSelectEffort: (effort: string) => void;
   reasoningSupported: boolean;
   onFocusComposer?: () => void;
 };
-
-const ACCESS_ORDER: AccessMode[] = ["read-only", "current", "full-access"];
 
 export function useComposerMenuActions({
   models,
@@ -35,8 +29,6 @@ export function useComposerMenuActions({
   collaborationModes,
   selectedCollaborationModeId,
   onSelectCollaborationMode,
-  accessMode,
-  onSelectAccessMode,
   reasoningOptions,
   selectedEffort,
   onSelectEffort,
@@ -55,16 +47,6 @@ export function useComposerMenuActions({
         if (nextModel) {
           onFocusComposer?.();
           onSelectModel(nextModel.id);
-        }
-      },
-      cycleAccessMode() {
-        const currentIndex = ACCESS_ORDER.indexOf(accessMode);
-        const nextIndex =
-          currentIndex >= 0 ? (currentIndex + 1) % ACCESS_ORDER.length : 0;
-        const nextAccess = ACCESS_ORDER[nextIndex];
-        if (nextAccess) {
-          onFocusComposer?.();
-          onSelectAccessMode(nextAccess);
         }
       },
       cycleCollaborationMode() {
@@ -99,12 +81,10 @@ export function useComposerMenuActions({
       },
     }),
     [
-      accessMode,
       collaborationModes,
       models,
       onFocusComposer,
       onSelectCollaborationMode,
-      onSelectAccessMode,
       onSelectEffort,
       onSelectModel,
       reasoningOptions,
@@ -117,10 +97,6 @@ export function useComposerMenuActions({
 
   useTauriEvent(subscribeMenuCycleModel, () => {
     handlers.cycleModel();
-  });
-
-  useTauriEvent(subscribeMenuCycleAccessMode, () => {
-    handlers.cycleAccessMode();
   });
 
   useTauriEvent(subscribeMenuCycleCollaborationMode, () => {

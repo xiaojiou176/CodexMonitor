@@ -22,7 +22,6 @@ export type CodexSection = SettingsSection | "codex" | "features";
 
 export type ShortcutSettingKey =
   | "composerModelShortcut"
-  | "composerAccessShortcut"
   | "composerReasoningShortcut"
   | "composerCollaborationShortcut"
   | "interruptShortcut"
@@ -42,7 +41,6 @@ export type ShortcutSettingKey =
 
 export type ShortcutDraftKey =
   | "model"
-  | "access"
   | "reasoning"
   | "collaboration"
   | "interrupt"

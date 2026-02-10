@@ -2,7 +2,6 @@ import { useCallback, useRef } from "react";
 import type { Dispatch, MutableRefObject } from "react";
 import * as Sentry from "@sentry/react";
 import type {
-  AccessMode,
   RateLimitSnapshot,
   CustomPromptOption,
   DebugEntry,
@@ -34,13 +33,11 @@ type SendMessageOptions = {
   model?: string | null;
   effort?: string | null;
   collaborationMode?: Record<string, unknown> | null;
-  accessMode?: AccessMode;
 };
 
 type UseThreadMessagingOptions = {
   activeWorkspace: WorkspaceInfo | null;
   activeThreadId: string | null;
-  accessMode?: "read-only" | "current" | "full-access";
   model?: string | null;
   effort?: string | null;
   collaborationMode?: Record<string, unknown> | null;
@@ -84,7 +81,6 @@ function isUnsupportedTurnSteerError(message: string): boolean {
 export function useThreadMessaging({
   activeWorkspace,
   activeThreadId,
-  accessMode,
   model,
   effort,
   collaborationMode,
@@ -148,9 +144,6 @@ export function useThreadMessaging({
         "settings" in resolvedCollaborationMode
           ? resolvedCollaborationMode
           : null;
-      const resolvedAccessMode =
-        options?.accessMode !== undefined ? options.accessMode : accessMode;
-
       const isProcessing = threadStatusById[threadId]?.isProcessing ?? false;
       const activeTurnId = activeTurnIdByThread[threadId] ?? null;
       const steerSupported = steerSupportedByWorkspaceRef.current[workspace.id] !== false;
@@ -223,7 +216,6 @@ export function useThreadMessaging({
             model: resolvedModel,
             effort: resolvedEffort,
             collaborationMode: sanitizedCollaborationMode,
-            accessMode: resolvedAccessMode,
             images,
           },
         );
@@ -329,7 +321,6 @@ export function useThreadMessaging({
       }
     },
     [
-      accessMode,
       collaborationMode,
       customPrompts,
       dispatch,
@@ -649,7 +640,7 @@ export function useThreadMessaging({
         "Session status:",
         `- Model: ${model ?? "default"}`,
         `- Reasoning effort: ${effort ?? "default"}`,
-        `- Access: ${accessMode ?? "current"}`,
+        `- Access: config.toml`,
         `- Collaboration: ${collabId || "off"}`,
       ];
 
@@ -687,7 +678,6 @@ export function useThreadMessaging({
       safeMessageActivity();
     },
     [
-      accessMode,
       activeWorkspace,
       collaborationMode,
       dispatch,

@@ -116,12 +116,6 @@ export function SettingsShortcutsSection({
           help: `聚焦输入框后按下新快捷键。默认：${formatShortcut("cmd+shift+m")}`,
         },
         {
-          label: "切换权限模式",
-          draftKey: "access",
-          settingKey: "composerAccessShortcut",
-          help: `默认： ${formatShortcut("cmd+shift+a")}`,
-        },
-        {
           label: "切换推理模式",
           draftKey: "reasoning",
           settingKey: "composerReasoningShortcut",

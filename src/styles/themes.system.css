@@ -38,6 +38,7 @@
     --surface-diff-card: #fafbfc;
     --surface-bubble: #ffffff;
     --surface-bubble-user: rgba(37, 99, 235, 0.10);
+    --surface-bubble-assistant: #f8f9fb;
     --surface-context-core: #ffffff;
     --surface-popover: #ffffff;
     --surface-review: #fff7ed;
@@ -87,6 +88,7 @@
     --surface-diff-card: #fafbfc;
     --surface-bubble: #ffffff;
     --surface-bubble-user: rgba(37, 99, 235, 0.12);
+    --surface-bubble-assistant: #f6f7f9;
     --surface-context-core: #ffffff;
     --surface-popover: #ffffff;
   }

@@ -22,7 +22,6 @@ export const useSettingsShortcutDrafts = ({
   useEffect(() => {
     setShortcutDrafts({
       model: appSettings.composerModelShortcut ?? "",
-      access: appSettings.composerAccessShortcut ?? "",
       reasoning: appSettings.composerReasoningShortcut ?? "",
       collaboration: appSettings.composerCollaborationShortcut ?? "",
       interrupt: appSettings.interruptShortcut ?? "",
@@ -41,7 +40,6 @@ export const useSettingsShortcutDrafts = ({
       cycleWorkspacePrev: appSettings.cycleWorkspacePrevShortcut ?? "",
     });
   }, [
-    appSettings.composerAccessShortcut,
     appSettings.composerModelShortcut,
     appSettings.composerReasoningShortcut,
     appSettings.composerCollaborationShortcut,

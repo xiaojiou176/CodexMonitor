@@ -67,9 +67,11 @@ pub(crate) async fn start_thread_core(
     workspace_id: String,
 ) -> Result<Value, String> {
     let session = get_session_clone(sessions, &workspace_id).await?;
+    // Do not hardcode approvalPolicy here — let the app-server derive it
+    // from the user's config.toml setting.  Previously this was hardcoded to
+    // "on-request" which conflicted with danger-full-access configs.
     let params = json!({
-        "cwd": session.entry.path,
-        "approvalPolicy": "on-request"
+        "cwd": session.entry.path
     });
     session.send_request("thread/start", params).await
 }
@@ -190,27 +192,11 @@ pub(crate) async fn send_user_message_core(
     text: String,
     model: Option<String>,
     effort: Option<String>,
-    access_mode: Option<String>,
+    _access_mode: Option<String>,
     images: Option<Vec<String>>,
     collaboration_mode: Option<Value>,
 ) -> Result<Value, String> {
     let session = get_session_clone(sessions, &workspace_id).await?;
-    let access_mode = access_mode.unwrap_or_else(|| "current".to_string());
-    let sandbox_policy = match access_mode.as_str() {
-        "full-access" => json!({ "type": "dangerFullAccess" }),
-        "read-only" => json!({ "type": "readOnly" }),
-        _ => json!({
-            "type": "workspaceWrite",
-            "writableRoots": [session.entry.path],
-            "networkAccess": true
-        }),
-    };
-
-    let approval_policy = if access_mode == "full-access" {
-        "never"
-    } else {
-        "on-request"
-    };
 
     let input = build_turn_input_items(text, images)?;
 
@@ -218,8 +204,13 @@ pub(crate) async fn send_user_message_core(
     params.insert("threadId".to_string(), json!(thread_id));
     params.insert("input".to_string(), json!(input));
     params.insert("cwd".to_string(), json!(session.entry.path));
-    params.insert("approvalPolicy".to_string(), json!(approval_policy));
-    params.insert("sandboxPolicy".to_string(), json!(sandbox_policy));
+
+    // Never override sandboxPolicy or approvalPolicy here.  The app-server
+    // reads these from the user's config.toml (e.g. danger-full-access /
+    // sandbox: none).  This matches the official Codex CLI which never sends
+    // per-turn policy overrides.  The _access_mode parameter is kept in the
+    // signature for backward-compatibility but is intentionally ignored.
+
     params.insert("model".to_string(), json!(model));
     params.insert("effort".to_string(), json!(effort));
     if let Some(mode) = collaboration_mode {

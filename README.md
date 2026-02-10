@@ -70,8 +70,23 @@ npm install
 Run in dev mode:
 
 ```bash
-npm run tauri:dev
+npm run start:dev
 ```
+
+(Equivalent direct command: `npm run tauri:dev`.)
+
+### Optional: Create a desktop shortcut
+
+Create a one-click desktop launcher:
+
+```bash
+npm run shortcut:desktop
+```
+
+- macOS: creates `~/Desktop/CodexMonitor-Dev.command`
+- Linux: creates `~/Desktop/CodexMonitor-Dev.desktop`
+
+You can then double-click the shortcut to launch CodexMonitor in dev mode.
 
 ## iOS Support (WIP)
 

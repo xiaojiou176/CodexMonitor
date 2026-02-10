@@ -43,6 +43,58 @@ async function mount(handlers: Handlers) {
 }
 
 describe("useAppServerEvents", () => {
+  it("keeps a single subscription across rerenders and uses latest handlers", async () => {
+    const firstOnDelta = vi.fn();
+    const firstHandlers: Handlers = {
+      onAgentMessageDelta: firstOnDelta,
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<TestHarness handlers={firstHandlers} />);
+    });
+
+    expect(listener).toBeTypeOf("function");
+    expect(subscribeAppServerEvents).toHaveBeenCalledTimes(1);
+
+    const secondOnDelta = vi.fn();
+    const secondHandlers: Handlers = {
+      onAgentMessageDelta: secondOnDelta,
+    };
+
+    await act(async () => {
+      root.render(<TestHarness handlers={secondHandlers} />);
+    });
+
+    expect(subscribeAppServerEvents).toHaveBeenCalledTimes(1);
+    expect(unlisten).not.toHaveBeenCalled();
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "item/agentMessage/delta",
+          params: { threadId: "thread-1", itemId: "item-1", delta: "Hello" },
+        },
+      });
+    });
+
+    expect(firstOnDelta).not.toHaveBeenCalled();
+    expect(secondOnDelta).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "item-1",
+      delta: "Hello",
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+    expect(unlisten).toHaveBeenCalledTimes(1);
+  });
+
   it("routes app-server events to handlers", async () => {
     const handlers: Handlers = {
       onAppServerEvent: vi.fn(),

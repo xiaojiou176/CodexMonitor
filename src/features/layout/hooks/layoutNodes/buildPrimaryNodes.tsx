@@ -150,8 +150,6 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       selectedEffort={options.selectedEffort}
       onSelectEffort={options.onSelectEffort}
       reasoningSupported={options.reasoningSupported}
-      accessMode={options.accessMode}
-      onSelectAccessMode={options.onSelectAccessMode}
       skills={options.skills}
       appsEnabled={options.appsEnabled}
       apps={options.apps}
@@ -254,6 +252,8 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onCreateBranch={options.onCreateBranch}
       canCopyThread={options.activeItems.length > 0}
       onCopyThread={options.onCopyThread}
+      onCopyThreadFull={options.onCopyThreadFull}
+      onCopyThreadCompact={options.onCopyThreadCompact}
       onToggleTerminal={options.onToggleTerminal}
       isTerminalOpen={options.terminalOpen}
       showTerminalButton={options.showTerminalButton}
@@ -271,7 +271,6 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       launchScriptsState={options.launchScriptsState}
       extraActionsNode={options.mainHeaderActionsNode}
       backendMode={options.backendMode}
-      accessMode={options.accessMode}
     />
   ) : null;
 

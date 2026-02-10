@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Check from "lucide-react/dist/esm/icons/check";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import type { AccessMode, BackendMode, BranchInfo, OpenAppTarget, WorkspaceInfo } from "../../../types";
+import type { BackendMode, BranchInfo, OpenAppTarget, WorkspaceInfo } from "../../../types";
 import type { ReactNode } from "react";
 import { revealInFileManagerLabel } from "../../../utils/platformPaths";
 import { BranchList } from "../../git/components/BranchList";
@@ -33,6 +34,8 @@ type MainHeaderProps = {
   onCreateBranch: (name: string) => Promise<void> | void;
   canCopyThread?: boolean;
   onCopyThread?: () => void | Promise<void>;
+  onCopyThreadFull?: () => void | Promise<void>;
+  onCopyThreadCompact?: () => void | Promise<void>;
   onToggleTerminal: () => void;
   isTerminalOpen: boolean;
   showTerminalButton?: boolean;
@@ -50,7 +53,6 @@ type MainHeaderProps = {
   onSaveLaunchScript?: () => void;
   launchScriptsState?: WorkspaceLaunchScriptsState;
   backendMode?: BackendMode;
-  accessMode?: AccessMode;
   worktreeRename?: {
     name: string;
     error: string | null;
@@ -88,6 +90,8 @@ export function MainHeader({
   onCreateBranch,
   canCopyThread = false,
   onCopyThread,
+  onCopyThreadFull,
+  onCopyThreadCompact,
   onToggleTerminal,
   isTerminalOpen,
   showTerminalButton = true,
@@ -106,7 +110,6 @@ export function MainHeader({
   launchScriptsState,
   worktreeRename,
   backendMode = "local",
-  accessMode = "full-access",
 }: MainHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -178,19 +181,57 @@ export function MainHeader({
     };
   }, []);
 
+  const [copyMenuOpen, setCopyMenuOpen] = useState(false);
+  const copyMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!copyMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (copyMenuRef.current && !copyMenuRef.current.contains(e.target as Node)) {
+        setCopyMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [copyMenuOpen]);
+
+  const showCopyFeedback = useCallback(() => {
+    setCopyFeedback(true);
+    setCopyMenuOpen(false);
+    if (copyTimeoutRef.current) {
+      window.clearTimeout(copyTimeoutRef.current);
+    }
+    copyTimeoutRef.current = window.setTimeout(() => {
+      setCopyFeedback(false);
+    }, 1200);
+  }, []);
+
+  const handleCopyFull = useCallback(async () => {
+    try {
+      await (onCopyThreadFull ?? onCopyThread)?.();
+      showCopyFeedback();
+    } catch {
+      // Errors are handled upstream in the copy handler.
+    }
+  }, [onCopyThreadFull, onCopyThread, showCopyFeedback]);
+
+  const handleCopyCompact = useCallback(async () => {
+    try {
+      await onCopyThreadCompact?.();
+      showCopyFeedback();
+    } catch {
+      // Errors are handled upstream in the copy handler.
+    }
+  }, [onCopyThreadCompact, showCopyFeedback]);
+
   const handleCopyClick = async () => {
     if (!onCopyThread) {
       return;
     }
     try {
       await onCopyThread();
-      setCopyFeedback(true);
-      if (copyTimeoutRef.current) {
-        window.clearTimeout(copyTimeoutRef.current);
-      }
-      copyTimeoutRef.current = window.setTimeout(() => {
-        setCopyFeedback(false);
-      }, 1200);
+      showCopyFeedback();
     } catch {
       // Errors are handled upstream in the copy handler.
     }
@@ -504,22 +545,7 @@ export function MainHeader({
           >
             {backendMode === "local" ? "本地" : "远程"}
           </span>
-          <span
-            className={`status-rail-badge status-rail-access${accessMode === "full-access" ? " is-full" : ""}`}
-            title={
-              accessMode === "full-access"
-                ? "完全访问"
-                : accessMode === "read-only"
-                  ? "只读"
-                  : "当前权限"
-            }
-          >
-            {accessMode === "full-access"
-              ? "完全访问"
-              : accessMode === "read-only"
-                ? "只读"
-                : "当前"}
-          </span>
+          {/* Access mode badge removed — always uses config.toml */}
         </div>
       </div>
       <div className="main-header-actions">
@@ -597,20 +623,51 @@ export function MainHeader({
             <Terminal size={14} aria-hidden />
           </button>
         )}
-        <button
-          type="button"
-          className={`ghost main-header-action${copyFeedback ? " is-copied" : ""}`}
-          onClick={handleCopyClick}
-          disabled={!canCopyThread || !onCopyThread}
-          data-tauri-drag-region="false"
-          aria-label="复制对话"
-          title="复制对话"
-        >
-          <span className="main-header-icon" aria-hidden>
-            <Copy className="main-header-icon-copy" size={14} />
-            <Check className="main-header-icon-check" size={14} />
-          </span>
-        </button>
+        <div className="copy-thread-group" ref={copyMenuRef} data-tauri-drag-region="false">
+          <button
+            type="button"
+            className={`ghost main-header-action copy-thread-main${copyFeedback ? " is-copied" : ""}`}
+            onClick={handleCopyClick}
+            disabled={!canCopyThread || !onCopyThread}
+            aria-label="复制对话"
+            title="复制对话（含全部输出）"
+          >
+            <span className="main-header-icon" aria-hidden>
+              <Copy className="main-header-icon-copy" size={14} />
+              <Check className="main-header-icon-check" size={14} />
+            </span>
+          </button>
+          <button
+            type="button"
+            className="ghost main-header-action copy-thread-dropdown"
+            onClick={() => setCopyMenuOpen((prev) => !prev)}
+            disabled={!canCopyThread || !onCopyThread}
+            aria-label="复制选项"
+            title="复制选项"
+          >
+            <ChevronDown size={10} aria-hidden />
+          </button>
+          {copyMenuOpen && (
+            <div className="copy-thread-menu">
+              <button
+                type="button"
+                className="copy-thread-menu-item"
+                onClick={() => void handleCopyFull()}
+              >
+                <span className="copy-thread-menu-label">完整复制</span>
+                <span className="copy-thread-menu-hint">含工具 / 命令输出</span>
+              </button>
+              <button
+                type="button"
+                className="copy-thread-menu-item"
+                onClick={() => void handleCopyCompact()}
+              >
+                <span className="copy-thread-menu-label">精简复制</span>
+                <span className="copy-thread-menu-hint">省略工具 / 命令输出</span>
+              </button>
+            </div>
+          )}
+        </div>
         {extraActionsNode}
       </div>
     </header>

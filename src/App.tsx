@@ -115,7 +115,6 @@ import { useWorkspaceHome } from "./features/workspaces/hooks/useWorkspaceHome";
 import { useWorkspaceAgentMd } from "./features/workspaces/hooks/useWorkspaceAgentMd";
 import { isMobilePlatform } from "./utils/platformPaths";
 import type {
-  AccessMode,
   ComposerEditorSettings,
   WorkspaceInfo,
 } from "./types";
@@ -187,7 +186,6 @@ function MainApp() {
   } = useDebugLog();
   const shouldReduceTransparency = reduceTransparency || isMobilePlatform();
   useLiquidGlassEffect({ reduceTransparency: shouldReduceTransparency, onDebug: addDebugEntry });
-  const [accessMode, setAccessMode] = useState<AccessMode>("current");
   const { threadListSortKey, setThreadListSortKey } = useThreadListSortKey();
   const [activeTab, setActiveTab] = useState<
     "home" | "projects" | "codex" | "git" | "log"
@@ -323,12 +321,6 @@ function MainApp() {
 
   const { errorToasts, dismissErrorToast } = useErrorToasts();
 
-  useEffect(() => {
-    setAccessMode((prev) =>
-      prev === "current" ? appSettings.defaultAccessMode : prev
-    );
-  }, [appSettings.defaultAccessMode]);
-
   const {
     gitIssues,
     gitIssuesTotal,
@@ -456,7 +448,6 @@ function MainApp() {
 
   const composerShortcuts = {
     modelShortcut: appSettings.composerModelShortcut,
-    accessShortcut: appSettings.composerAccessShortcut,
     reasoningShortcut: appSettings.composerReasoningShortcut,
     collaborationShortcut: appSettings.collaborationModesEnabled
       ? appSettings.composerCollaborationShortcut
@@ -467,8 +458,6 @@ function MainApp() {
     onSelectModel: setSelectedModelId,
     selectedCollaborationModeId,
     onSelectCollaborationMode: setSelectedCollaborationModeId,
-    accessMode,
-    onSelectAccessMode: setAccessMode,
     reasoningOptions,
     selectedEffort,
     onSelectEffort: setSelectedEffort,
@@ -487,8 +476,6 @@ function MainApp() {
     collaborationModes,
     selectedCollaborationModeId,
     onSelectCollaborationMode: setSelectedCollaborationModeId,
-    accessMode,
-    onSelectAccessMode: setAccessMode,
     reasoningOptions,
     selectedEffort,
     onSelectEffort: setSelectedEffort,
@@ -696,7 +683,6 @@ function MainApp() {
     model: resolvedModel,
     effort: resolvedEffort,
     collaborationMode: collaborationModePayload,
-    accessMode,
     reviewDeliveryMode: appSettings.reviewDeliveryMode,
     steerEnabled: appSettings.steerEnabled,
     threadTitleAutogenerationEnabled: appSettings.threadTitleAutogenerationEnabled,
@@ -785,7 +771,7 @@ function MainApp() {
     setActiveTab,
   });
 
-  const { handleCopyThread } = useCopyThread({
+  const { handleCopyThread, handleCopyThreadFull, handleCopyThreadCompact } = useCopyThread({
     activeItems,
     onDebug: addDebugEntry,
   });
@@ -1889,6 +1875,8 @@ function MainApp() {
     onCheckoutBranch: handleCheckoutBranch,
     onCreateBranch: handleCreateBranch,
     onCopyThread: handleCopyThread,
+    onCopyThreadFull: handleCopyThreadFull,
+    onCopyThreadCompact: handleCopyThreadCompact,
     onToggleTerminal: handleToggleTerminal,
     showTerminalButton: !isCompact,
     showWorkspaceTools: !isCompact,
@@ -2100,9 +2088,7 @@ function MainApp() {
     selectedEffort,
     onSelectEffort: setSelectedEffort,
     reasoningSupported,
-    accessMode,
     backendMode: appSettings.backendMode,
-    onSelectAccessMode: setAccessMode,
     skills,
     appsEnabled: appSettings.experimentalAppsEnabled,
     apps,

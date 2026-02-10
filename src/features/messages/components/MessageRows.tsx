@@ -293,8 +293,8 @@ function deriveStreamingPhase(
 }
 
 const PHASE_LABELS: Record<"start" | "in-progress", string> = {
-  start: "启动中…",
-  "in-progress": "处理中…",
+  start: "等待 Agent 响应…",
+  "in-progress": "Agent 正在回复…",
 };
 
 export const WorkingIndicator = memo(function WorkingIndicator({
@@ -329,10 +329,10 @@ export const WorkingIndicator = memo(function WorkingIndicator({
             <span className="working-timer-clock">{formatDurationMs(elapsedMs)}</span>
           </div>
           <span className="working-text">
-            {reasoningLabel || (phase !== "done" ? PHASE_LABELS[phase] : "处理中…")}
+            {reasoningLabel || (phase !== "done" ? PHASE_LABELS[phase] : "Agent 正在回复…")}
           </span>
           <span className="working-phase-badge" aria-label={`阶段：${phase}`}>
-            {phase === "start" ? "启动" : "生成"}
+            {phase === "start" ? "连接中" : "输出中"}
           </span>
         </div>
       )}

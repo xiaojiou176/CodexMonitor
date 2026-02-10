@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import type { AccessMode } from "../../../types";
 import { matchesShortcut } from "../../../utils/shortcuts";
 
 type ModelOption = { id: string; displayName: string; model: string };
@@ -7,7 +6,6 @@ type ModelOption = { id: string; displayName: string; model: string };
 type UseComposerShortcutsOptions = {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   modelShortcut: string | null;
-  accessShortcut: string | null;
   reasoningShortcut: string | null;
   collaborationShortcut: string | null;
   models: ModelOption[];
@@ -16,20 +14,15 @@ type UseComposerShortcutsOptions = {
   onSelectModel: (id: string) => void;
   selectedCollaborationModeId: string | null;
   onSelectCollaborationMode: (id: string | null) => void;
-  accessMode: AccessMode;
-  onSelectAccessMode: (mode: AccessMode) => void;
   reasoningOptions: string[];
   selectedEffort: string | null;
   onSelectEffort: (effort: string) => void;
   reasoningSupported: boolean;
 };
 
-const ACCESS_ORDER: AccessMode[] = ["read-only", "current", "full-access"];
-
 export function useComposerShortcuts({
   textareaRef,
   modelShortcut,
-  accessShortcut,
   reasoningShortcut,
   collaborationShortcut,
   models,
@@ -38,8 +31,6 @@ export function useComposerShortcuts({
   onSelectModel,
   selectedCollaborationModeId,
   onSelectCollaborationMode,
-  accessMode,
-  onSelectAccessMode,
   reasoningOptions,
   selectedEffort,
   onSelectEffort,
@@ -63,16 +54,6 @@ export function useComposerShortcuts({
         const nextModel = models[nextIndex];
         if (nextModel) {
           onSelectModel(nextModel.id);
-        }
-        return;
-      }
-      if (matchesShortcut(event, accessShortcut)) {
-        event.preventDefault();
-        const currentIndex = ACCESS_ORDER.indexOf(accessMode);
-        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % ACCESS_ORDER.length : 0;
-        const nextAccess = ACCESS_ORDER[nextIndex];
-        if (nextAccess) {
-          onSelectAccessMode(nextAccess);
         }
         return;
       }
@@ -112,14 +93,11 @@ export function useComposerShortcuts({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
-    accessMode,
-    accessShortcut,
     collaborationModes,
     collaborationShortcut,
     modelShortcut,
     models,
     onSelectCollaborationMode,
-    onSelectAccessMode,
     onSelectEffort,
     onSelectModel,
     reasoningOptions,

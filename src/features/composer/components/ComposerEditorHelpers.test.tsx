@@ -41,8 +41,6 @@ function ComposerHarness({ initialText = "", editorSettings }: HarnessProps) {
       selectedEffort={null}
       onSelectEffort={() => {}}
       reasoningSupported={false}
-      accessMode="current"
-      onSelectAccessMode={() => {}}
       skills={[]}
       apps={[]}
       prompts={[]}

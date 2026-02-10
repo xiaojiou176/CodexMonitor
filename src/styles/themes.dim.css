@@ -39,6 +39,7 @@
   --surface-diff-card: rgba(32, 35, 42, 0.55);
   --surface-bubble: rgba(255, 255, 255, 0.14);
   --surface-bubble-user: rgba(77, 153, 255, 0.5);
+  --surface-bubble-assistant: rgba(255, 255, 255, 0.07);
   --surface-context-core: rgba(32, 35, 42, 0.92);
   --surface-popover: rgba(32, 35, 42, 0.98);
   /* Review */
@@ -89,6 +90,7 @@
   --surface-diff-card: rgba(32, 35, 42, 0.94);
   --surface-bubble: rgba(70, 75, 88, 0.92);
   --surface-bubble-user: rgba(77, 153, 255, 0.58);
+  --surface-bubble-assistant: rgba(55, 60, 72, 0.7);
   --surface-context-core: rgba(32, 35, 42, 0.98);
   --surface-popover: rgba(32, 35, 42, 0.995);
 }

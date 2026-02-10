@@ -15,7 +15,6 @@ function ShortcutHarness(props: {
   useComposerShortcuts({
     textareaRef,
     modelShortcut: null,
-    accessShortcut: null,
     reasoningShortcut: null,
     collaborationShortcut: props.collaborationShortcut,
     models: [],
@@ -24,8 +23,6 @@ function ShortcutHarness(props: {
     onSelectModel: () => {},
     selectedCollaborationModeId: props.selectedCollaborationModeId,
     onSelectCollaborationMode: props.onSelectCollaborationMode,
-    accessMode: "read-only",
-    onSelectAccessMode: () => {},
     reasoningOptions: [],
     selectedEffort: null,
     onSelectEffort: () => {},

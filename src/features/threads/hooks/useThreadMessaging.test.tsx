@@ -102,7 +102,6 @@ describe("useThreadMessaging telemetry", () => {
       useThreadMessaging({
         activeWorkspace: workspace,
         activeThreadId: "thread-1",
-        accessMode: "current",
         model: null,
         effort: null,
         collaborationMode: null,
@@ -159,7 +158,6 @@ describe("useThreadMessaging telemetry", () => {
       useThreadMessaging({
         activeWorkspace: workspace,
         activeThreadId: "thread-1",
-        accessMode: "current",
         model: null,
         effort: null,
         collaborationMode: null,
@@ -228,7 +226,6 @@ describe("useThreadMessaging telemetry", () => {
       useThreadMessaging({
         activeWorkspace: workspace,
         activeThreadId: "thread-1",
-        accessMode: "current",
         model: null,
         effort: null,
         collaborationMode: null,
@@ -310,7 +307,6 @@ describe("useThreadMessaging telemetry", () => {
       useThreadMessaging({
         activeWorkspace: workspace,
         activeThreadId: "thread-1",
-        accessMode: "current",
         model: null,
         effort: null,
         collaborationMode: null,

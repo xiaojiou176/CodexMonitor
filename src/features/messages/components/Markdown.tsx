@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type MouseEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -731,7 +731,7 @@ function markdownUrlTransform(url: string): string {
   return "";
 }
 
-export function Markdown({
+export const Markdown = memo(function Markdown({
   value,
   className,
   codeBlock,
@@ -894,4 +894,4 @@ export function Markdown({
       </ReactMarkdown>
     </div>
   );
-}
+});

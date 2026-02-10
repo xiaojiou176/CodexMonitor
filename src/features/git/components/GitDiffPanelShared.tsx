@@ -1,6 +1,10 @@
 import type { GitLogEntry } from "../../../types";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import { memo, useCallback, useState, type MouseEvent as ReactMouseEvent } from "react";
 import Check from "lucide-react/dist/esm/icons/check";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
+import FolderClosed from "lucide-react/dist/esm/icons/folder-closed";
 import Minus from "lucide-react/dist/esm/icons/minus";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
@@ -14,28 +18,103 @@ import {
   splitPath,
 } from "./GitDiffPanel.utils";
 
-type DirectoryGroup = {
-  directory: string;
-  files: DiffFile[];
+// ── Tree data structures ──
+
+type DiffTreeNode = {
+  name: string;
+  path: string;
+  type: "file" | "folder";
+  file?: DiffFile;
+  children: DiffTreeNode[];
+  stats: { additions: number; deletions: number };
 };
 
-function groupFilesByDirectory(files: DiffFile[]): DirectoryGroup[] {
-  const groups = new Map<string, DiffFile[]>();
+/** Build a nested tree from a flat list of diff files. Single-child
+ *  folder chains are collapsed into one node (e.g. "src/features/app"). */
+function buildDiffTree(files: DiffFile[]): DiffTreeNode[] {
+  const root: DiffTreeNode = {
+    name: "",
+    path: "",
+    type: "folder",
+    children: [],
+    stats: { additions: 0, deletions: 0 },
+  };
+
   for (const file of files) {
-    const lastSlash = file.path.lastIndexOf("/");
-    const dir = lastSlash >= 0 ? file.path.slice(0, lastSlash) : "";
-    if (!groups.has(dir)) {
-      groups.set(dir, []);
+    const parts = file.path.split("/");
+    let current = root;
+    let pathSoFar = "";
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      pathSoFar = pathSoFar ? `${pathSoFar}/${part}` : part;
+      if (i === parts.length - 1) {
+        // leaf file
+        current.children.push({
+          name: part,
+          path: file.path,
+          type: "file",
+          file,
+          children: [],
+          stats: { additions: file.additions, deletions: file.deletions },
+        });
+      } else {
+        let child = current.children.find(
+          (c) => c.type === "folder" && c.name === part,
+        );
+        if (!child) {
+          child = {
+            name: part,
+            path: pathSoFar,
+            type: "folder",
+            children: [],
+            stats: { additions: 0, deletions: 0 },
+          };
+          current.children.push(child);
+        }
+        current = child;
+      }
     }
-    groups.get(dir)!.push(file);
   }
-  // Sort directories; root files first, then alphabetical
-  const entries = Array.from(groups.entries()).sort((a, b) => {
-    if (a[0] === "") return -1;
-    if (b[0] === "") return 1;
-    return a[0].localeCompare(b[0]);
-  });
-  return entries.map(([directory, dirFiles]) => ({ directory, files: dirFiles }));
+
+  // Aggregate stats bottom-up
+  function aggregate(node: DiffTreeNode): void {
+    if (node.type === "file") return;
+    let add = 0;
+    let del = 0;
+    for (const child of node.children) {
+      aggregate(child);
+      add += child.stats.additions;
+      del += child.stats.deletions;
+    }
+    node.stats = { additions: add, deletions: del };
+    // Sort: folders first, then files, alphabetically within each
+    node.children.sort((a, b) => {
+      if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+  }
+  aggregate(root);
+
+  // Collapse single-child folder chains
+  function collapse(node: DiffTreeNode): DiffTreeNode {
+    if (node.type === "file") return node;
+    node.children = node.children.map(collapse);
+    if (
+      node.children.length === 1 &&
+      node.children[0].type === "folder" &&
+      node.name !== ""
+    ) {
+      const child = node.children[0];
+      return {
+        ...child,
+        name: `${node.name}/${child.name}`,
+      };
+    }
+    return node;
+  }
+
+  root.children = root.children.map(collapse);
+  return root.children;
 }
 
 export type DiffFile = {
@@ -275,6 +354,129 @@ function DiffFileRow({
   );
 }
 
+// ── Recursive tree row ──
+
+type DiffTreeRowProps = {
+  node: DiffTreeNode;
+  depth: number;
+  section: "staged" | "unstaged";
+  selectedFiles: Set<string>;
+  selectedPath: string | null;
+  expandedDirs: Set<string>;
+  onToggleDir: (path: string) => void;
+  onSelectFile?: (path: string) => void;
+  onFileClick: (
+    event: ReactMouseEvent<HTMLDivElement>,
+    path: string,
+    section: "staged" | "unstaged",
+  ) => void;
+  onShowFileMenu: (
+    event: ReactMouseEvent<HTMLDivElement>,
+    path: string,
+    section: "staged" | "unstaged",
+  ) => void;
+  onStageFile?: (path: string) => Promise<void> | void;
+  onUnstageFile?: (path: string) => Promise<void> | void;
+  onDiscardFile?: (path: string) => Promise<void> | void;
+};
+
+const DiffTreeRow = memo(function DiffTreeRow({
+  node,
+  depth,
+  section,
+  selectedFiles,
+  selectedPath,
+  expandedDirs,
+  onToggleDir,
+  onSelectFile,
+  onFileClick,
+  onShowFileMenu,
+  onStageFile,
+  onUnstageFile,
+  onDiscardFile,
+}: DiffTreeRowProps) {
+  if (node.type === "file" && node.file) {
+    const isSelected = selectedFiles.size > 1 && selectedFiles.has(node.file.path);
+    const isActive = selectedPath === node.file.path;
+    return (
+      <div style={{ paddingLeft: `${depth * 16}px` }}>
+        <DiffFileRow
+          file={node.file}
+          isSelected={isSelected}
+          isActive={isActive}
+          section={section}
+          onClick={(event) => onFileClick(event, node.file!.path, section)}
+          onKeySelect={() => onSelectFile?.(node.file!.path)}
+          onContextMenu={(event) => onShowFileMenu(event, node.file!.path, section)}
+          onStageFile={onStageFile}
+          onUnstageFile={onUnstageFile}
+          onDiscardFile={onDiscardFile}
+        />
+      </div>
+    );
+  }
+
+  const isExpanded = expandedDirs.has(node.path);
+  const ChevronIcon = isExpanded ? ChevronDown : ChevronRight;
+  const FolderIcon = isExpanded ? FolderOpen : FolderClosed;
+
+  return (
+    <div className="diff-tree-folder">
+      <div
+        className="diff-tree-folder-row"
+        style={{ paddingLeft: `${depth * 16}px` }}
+        role="button"
+        tabIndex={0}
+        onClick={() => onToggleDir(node.path)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onToggleDir(node.path);
+          }
+        }}
+        aria-expanded={isExpanded}
+      >
+        <span className="diff-tree-chevron" aria-hidden>
+          <ChevronIcon size={12} />
+        </span>
+        <span className="diff-tree-folder-icon" aria-hidden>
+          <FolderIcon size={13} />
+        </span>
+        <span className="diff-tree-folder-name" title={node.path}>
+          {node.name}
+        </span>
+        <span className="diff-tree-folder-stats">
+          <span className="diff-add">+{node.stats.additions}</span>
+          <span className="diff-sep">/</span>
+          <span className="diff-del">-{node.stats.deletions}</span>
+        </span>
+      </div>
+      {isExpanded && (
+        <div className="diff-tree-folder-children">
+          {node.children.map((child) => (
+            <DiffTreeRow
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              section={section}
+              selectedFiles={selectedFiles}
+              selectedPath={selectedPath}
+              expandedDirs={expandedDirs}
+              onToggleDir={onToggleDir}
+              onSelectFile={onSelectFile}
+              onFileClick={onFileClick}
+              onShowFileMenu={onShowFileMenu}
+              onStageFile={onStageFile}
+              onUnstageFile={onUnstageFile}
+              onDiscardFile={onDiscardFile}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
 type DiffSectionProps = {
   title: string;
   files: DiffFile[];
@@ -322,6 +524,35 @@ export function DiffSection({
   const canUnstageAll = section === "staged" && Boolean(onUnstageFile) && filePaths.length > 0;
   const canDiscardAll = section === "unstaged" && Boolean(onDiscardFiles) && filePaths.length > 0;
   const showSectionActions = canStageAll || canUnstageAll || canDiscardAll;
+
+  // Build tree and manage expand/collapse state (default: all expanded)
+  const tree = buildDiffTree(files);
+
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => {
+    const dirs = new Set<string>();
+    function collectDirs(nodes: DiffTreeNode[]) {
+      for (const node of nodes) {
+        if (node.type === "folder") {
+          dirs.add(node.path);
+          collectDirs(node.children);
+        }
+      }
+    }
+    collectDirs(tree);
+    return dirs;
+  });
+
+  const onToggleDir = useCallback((path: string) => {
+    setExpandedDirs((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
 
   return (
     <div className="diff-section">
@@ -386,33 +617,23 @@ export function DiffSection({
         )}
       </div>
       <div className="diff-section-list">
-        {groupFilesByDirectory(files).map((group) => (
-          <div key={group.directory} className="diff-directory-group">
-            {group.directory !== "" && (
-              <div className="diff-directory-label" title={group.directory}>
-                {group.directory}/
-              </div>
-            )}
-            {group.files.map((file) => {
-              const isSelected = selectedFiles.size > 1 && selectedFiles.has(file.path);
-              const isActive = selectedPath === file.path;
-              return (
-                <DiffFileRow
-                  key={`${section}-${file.path}`}
-                  file={file}
-                  isSelected={isSelected}
-                  isActive={isActive}
-                  section={section}
-                  onClick={(event) => onFileClick(event, file.path, section)}
-                  onKeySelect={() => onSelectFile?.(file.path)}
-                  onContextMenu={(event) => onShowFileMenu(event, file.path, section)}
-                  onStageFile={onStageFile}
-                  onUnstageFile={onUnstageFile}
-                  onDiscardFile={onDiscardFile}
-                />
-              );
-            })}
-          </div>
+        {tree.map((node) => (
+          <DiffTreeRow
+            key={node.path}
+            node={node}
+            depth={0}
+            section={section}
+            selectedFiles={selectedFiles}
+            selectedPath={selectedPath}
+            expandedDirs={expandedDirs}
+            onToggleDir={onToggleDir}
+            onSelectFile={onSelectFile}
+            onFileClick={onFileClick}
+            onShowFileMenu={onShowFileMenu}
+            onStageFile={onStageFile}
+            onUnstageFile={onUnstageFile}
+            onDiscardFile={onDiscardFile}
+          />
         ))}
       </div>
     </div>

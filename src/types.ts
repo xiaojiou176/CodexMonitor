@@ -113,7 +113,8 @@ export type ReviewTarget =
   | { type: "commit"; sha: string; title?: string }
   | { type: "custom"; instructions: string };
 
-export type AccessMode = "read-only" | "current" | "full-access";
+/** @deprecated Access mode is now always determined by config.toml. Kept for backward compatibility. */
+export type AccessMode = "current";
 export type BackendMode = "local" | "remote";
 export type RemoteBackendProvider = "tcp" | "orbit";
 export type ThemePreference = "system" | "light" | "dark" | "dim";
@@ -157,10 +158,8 @@ export type AppSettings = {
   orbitUseAccess: boolean;
   orbitAccessClientId: string | null;
   orbitAccessClientSecretRef: string | null;
-  defaultAccessMode: AccessMode;
   reviewDeliveryMode: "inline" | "detached";
   composerModelShortcut: string | null;
-  composerAccessShortcut: string | null;
   composerReasoningShortcut: string | null;
   composerCollaborationShortcut: string | null;
   interruptShortcut: string | null;

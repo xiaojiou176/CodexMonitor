@@ -515,7 +515,7 @@ describe("Messages", () => {
     );
 
     const workingText = container.querySelector(".working-text");
-    expect(workingText?.textContent ?? "").toContain("处理中");
+    expect(workingText?.textContent ?? "").toContain("Agent 正在回复");
     expect(workingText?.textContent ?? "").not.toContain("Old reasoning title");
   });
 

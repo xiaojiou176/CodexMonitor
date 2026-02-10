@@ -162,7 +162,6 @@ export const createOpenAppId = () => {
 
 export const buildShortcutDrafts = (appSettings: AppSettings): ShortcutDrafts => ({
   model: appSettings.composerModelShortcut ?? "",
-  access: appSettings.composerAccessShortcut ?? "",
   reasoning: appSettings.composerReasoningShortcut ?? "",
   collaboration: appSettings.composerCollaborationShortcut ?? "",
   interrupt: appSettings.interruptShortcut ?? "",

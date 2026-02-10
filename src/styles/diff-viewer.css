@@ -22,7 +22,7 @@
   border-radius: 14px;
   border: 1px solid var(--border-subtle);
   background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .diff-viewer-pr-header {

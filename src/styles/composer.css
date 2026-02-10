@@ -68,7 +68,7 @@
   display: grid;
   grid-template-columns: 1fr auto auto auto;
   gap: 12px;
-  align-items: center;
+  align-items: end;
 }
 
 .composer-input-area {
@@ -288,6 +288,8 @@
   align-items: center;
   justify-content: center;
   position: relative;
+  flex-shrink: 0;
+  margin-bottom: 8px;
 }
 
 .composer-action--mobile-menu {
@@ -641,37 +643,15 @@
   color: var(--text-faint);
 }
 
-/* Per-turn breakdown: "本轮 ↓12k ⚡85% ↑3.2k" */
-.context-meter-turn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding-left: 8px;
-  border-left: 1px solid var(--border-muted);
-}
-
-.context-meter-turn-label {
-  color: var(--text-faint);
+/* Cache hit badge: "缓存 96%" */
+.context-meter-cache-badge {
   font-size: 10px;
-}
-
-.context-meter-turn-value {
   font-variant-numeric: tabular-nums;
-  font-size: 10px;
-  color: var(--text-subtle);
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.context-meter-cached {
-  color: hsl(38, 80%, 50%);
-  font-size: 10px;
-}
-
-.context-meter-reasoning {
-  font-size: 10px;
-  color: var(--text-muted);
+  color: hsl(38, 70%, 50%);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: hsla(38, 70%, 50%, 0.1);
+  white-space: nowrap;
 }
 
 

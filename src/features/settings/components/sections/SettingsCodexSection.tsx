@@ -267,26 +267,10 @@ export function SettingsCodexSection({
       </div>
 
       <div className="settings-field">
-        <label className="settings-field-label" htmlFor="default-access">
-          默认访问模式
-        </label>
-        <select
-          id="default-access"
-          className="settings-select"
-          value={appSettings.defaultAccessMode}
-          onChange={(event) =>
-            void onUpdateAppSettings({
-              ...appSettings,
-              defaultAccessMode: event.target.value as AppSettings["defaultAccessMode"],
-            })
-          }
-        >
-          <option value="read-only">只读 — Agent 仅能读取文件</option>
-          <option value="current">按需申请 — 每次写入前需你确认</option>
-          <option value="full-access">完全访问 — Agent 可自由读写文件和执行命令</option>
-        </select>
+        <div className="settings-field-label">访问模式</div>
         <div className="settings-help">
-          控制新建对话时 Codex Agent 默认拥有的文件系统和命令执行权限。
+          权限由 <code>~/.codex/config.toml</code> 中的 <code>sandbox</code> 配置决定，CodexMonitor 完全尊重该设置，不做任何覆盖。
+          如需修改，请直接编辑下方的全局 config.toml。
         </div>
       </div>
       <div className="settings-field">

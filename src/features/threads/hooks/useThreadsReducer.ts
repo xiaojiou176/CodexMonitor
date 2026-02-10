@@ -9,7 +9,12 @@ import type {
   ThreadTokenUsage,
   TurnPlan,
 } from "../../../types";
-import { normalizeItem, prepareThreadItems, upsertItem } from "../../../utils/threadItems";
+import {
+  normalizeItem,
+  prepareThreadItems,
+  prepareThreadItemsIncremental,
+  upsertItem,
+} from "../../../utils/threadItems";
 
 const MAX_THREAD_NAME_LENGTH = 38;
 
@@ -718,23 +723,33 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       };
     }
     case "appendAgentDelta": {
-      const list = [...(state.itemsByThread[action.threadId] ?? [])];
-      const index = list.findIndex((msg) => msg.id === action.itemId);
-      if (index >= 0 && list[index].kind === "message") {
-        const existing = list[index];
-        list[index] = {
+      const currentList = state.itemsByThread[action.threadId] ?? [];
+      const index = currentList.findIndex((msg) => msg.id === action.itemId);
+      let updatedItems: ConversationItem[];
+      if (index >= 0 && currentList[index].kind === "message") {
+        const existing = currentList[index];
+        const mergedText = mergeStreamingText(existing.text, action.delta);
+        if (mergedText === existing.text) {
+          return state;
+        }
+        const next = [...currentList];
+        next[index] = {
           ...existing,
-          text: mergeStreamingText(existing.text, action.delta),
+          text: mergedText,
         };
+        updatedItems = prepareThreadItemsIncremental(next, index);
       } else {
-        list.push({
-          id: action.itemId,
-          kind: "message",
-          role: "assistant",
-          text: action.delta,
-        });
+        const next = [
+          ...currentList,
+          {
+            id: action.itemId,
+            kind: "message",
+            role: "assistant",
+            text: action.delta,
+          } as ConversationItem,
+        ];
+        updatedItems = prepareThreadItemsIncremental(next, next.length - 1);
       }
-      const updatedItems = prepareThreadItems(list);
       const nextThreadsByWorkspace = maybeRenameThreadFromAgent({
         workspaceId: action.workspaceId,
         threadId: action.threadId,
@@ -753,23 +768,33 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       };
     }
     case "completeAgentMessage": {
-      const list = [...(state.itemsByThread[action.threadId] ?? [])];
-      const index = list.findIndex((msg) => msg.id === action.itemId);
-      if (index >= 0 && list[index].kind === "message") {
-        const existing = list[index];
-        list[index] = {
+      const currentList = state.itemsByThread[action.threadId] ?? [];
+      const index = currentList.findIndex((msg) => msg.id === action.itemId);
+      let updatedItems: ConversationItem[];
+      if (index >= 0 && currentList[index].kind === "message") {
+        const existing = currentList[index];
+        const nextText = action.text || existing.text;
+        if (nextText === existing.text) {
+          return state;
+        }
+        const next = [...currentList];
+        next[index] = {
           ...existing,
-          text: action.text || existing.text,
+          text: nextText,
         };
+        updatedItems = prepareThreadItemsIncremental(next, index);
       } else {
-        list.push({
-          id: action.itemId,
-          kind: "message",
-          role: "assistant",
-          text: action.text,
-        });
+        const next = [
+          ...currentList,
+          {
+            id: action.itemId,
+            kind: "message",
+            role: "assistant",
+            text: action.text,
+          } as ConversationItem,
+        ];
+        updatedItems = prepareThreadItemsIncremental(next, next.length - 1);
       }
-      const updatedItems = prepareThreadItems(list);
       const nextThreadsByWorkspace = maybeRenameThreadFromAgent({
         workspaceId: action.workspaceId,
         threadId: action.threadId,
@@ -889,14 +914,19 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
               summary: "",
               content: "",
             };
+      const nextSummary = mergeStreamingText(
+        "summary" in base ? base.summary : "",
+        action.delta,
+      );
+      if (nextSummary === ("summary" in base ? base.summary : "")) {
+        return state;
+      }
       const updated: ConversationItem = {
         ...base,
-        summary: mergeStreamingText(
-          "summary" in base ? base.summary : "",
-          action.delta,
-        ),
+        summary: nextSummary,
       } as ConversationItem;
       const next = index >= 0 ? [...list] : [...list, updated];
+      const changedIndex = index >= 0 ? index : next.length - 1;
       if (index >= 0) {
         next[index] = updated;
       }
@@ -904,7 +934,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: prepareThreadItems(next),
+          [action.threadId]: prepareThreadItemsIncremental(next, changedIndex),
         },
       };
     }
@@ -920,11 +950,16 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
               summary: "",
               content: "",
             };
+      const nextSummary = addSummaryBoundary("summary" in base ? base.summary : "");
+      if (nextSummary === ("summary" in base ? base.summary : "")) {
+        return state;
+      }
       const updated: ConversationItem = {
         ...base,
-        summary: addSummaryBoundary("summary" in base ? base.summary : ""),
+        summary: nextSummary,
       } as ConversationItem;
       const next = index >= 0 ? [...list] : [...list, updated];
+      const changedIndex = index >= 0 ? index : next.length - 1;
       if (index >= 0) {
         next[index] = updated;
       }
@@ -932,7 +967,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: prepareThreadItems(next),
+          [action.threadId]: prepareThreadItemsIncremental(next, changedIndex),
         },
       };
     }
@@ -948,14 +983,19 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
               summary: "",
               content: "",
             };
+      const nextContent = mergeStreamingText(
+        "content" in base ? base.content : "",
+        action.delta,
+      );
+      if (nextContent === ("content" in base ? base.content : "")) {
+        return state;
+      }
       const updated: ConversationItem = {
         ...base,
-        content: mergeStreamingText(
-          "content" in base ? base.content : "",
-          action.delta,
-        ),
+        content: nextContent,
       } as ConversationItem;
       const next = index >= 0 ? [...list] : [...list, updated];
+      const changedIndex = index >= 0 ? index : next.length - 1;
       if (index >= 0) {
         next[index] = updated;
       }
@@ -963,7 +1003,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: prepareThreadItems(next),
+          [action.threadId]: prepareThreadItemsIncremental(next, changedIndex),
         },
       };
     }
@@ -984,6 +1024,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             };
       const existingOutput =
         base.kind === "tool" ? (base.output ?? "") : "";
+      const mergedOutput = mergeStreamingText(existingOutput, action.delta);
+      if (mergedOutput === existingOutput && index >= 0) {
+        return state;
+      }
       const updated: ConversationItem = {
         ...(base as ConversationItem),
         kind: "tool",
@@ -991,9 +1035,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         title: "方案",
         detail: "Generating plan...",
         status: "in_progress",
-        output: mergeStreamingText(existingOutput, action.delta),
+        output: mergedOutput,
       } as ConversationItem;
       const next = index >= 0 ? [...list] : [...list, updated];
+      const changedIndex = index >= 0 ? index : next.length - 1;
       if (index >= 0) {
         next[index] = updated;
       }
@@ -1001,7 +1046,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: prepareThreadItems(next),
+          [action.threadId]: prepareThreadItemsIncremental(next, changedIndex),
         },
       };
     }
@@ -1012,9 +1057,13 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         return state;
       }
       const existing = list[index];
+      const mergedOutput = mergeStreamingText(existing.output ?? "", action.delta);
+      if (mergedOutput === (existing.output ?? "")) {
+        return state;
+      }
       const updated: ConversationItem = {
         ...existing,
-        output: mergeStreamingText(existing.output ?? "", action.delta),
+        output: mergedOutput,
       } as ConversationItem;
       const next = [...list];
       next[index] = updated;
@@ -1022,7 +1071,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: prepareThreadItems(next),
+          [action.threadId]: prepareThreadItemsIncremental(next, index),
         },
       };
     }

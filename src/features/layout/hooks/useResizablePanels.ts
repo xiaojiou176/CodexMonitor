@@ -92,6 +92,8 @@ export function useResizablePanels() {
   );
   const resizeRef = useRef<ResizeState | null>(null);
   const rafRef = useRef<number | null>(null);
+  // Holds the latest DOM-written value during drag; committed on mouseUp.
+  const lastValueRef = useRef<number | null>(null);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY_SIDEBAR, String(sidebarWidth));
@@ -125,52 +127,50 @@ export function useResizablePanels() {
     );
   }, [debugPanelHeight]);
 
+  // Map panel type → CSS custom property name used by the layout grid
+  const CSS_VAR_MAP: Record<ResizeState["type"], string> = {
+    sidebar: "--sidebar-width",
+    "right-panel": "--right-panel-width",
+    "plan-panel": "--plan-panel-height",
+    "terminal-panel": "--terminal-panel-height",
+    "debug-panel": "--debug-panel-height",
+  };
+
   useEffect(() => {
+    // During drag we bypass React state and write the CSS variable directly
+    // on the .app element. This avoids per-frame React re-renders of the
+    // entire component tree. We commit to React state only on mouseUp.
     function applyResize(event: MouseEvent) {
       if (!resizeRef.current) {
         return;
       }
-      if (resizeRef.current.type === "sidebar") {
-        const delta = event.clientX - resizeRef.current.startX;
-        const next = clamp(
-          resizeRef.current.startWidth + delta,
-          MIN_SIDEBAR_WIDTH,
-          MAX_SIDEBAR_WIDTH,
-        );
-        setSidebarWidth(next);
-      } else if (resizeRef.current.type === "right-panel") {
-        const delta = event.clientX - resizeRef.current.startX;
-        const next = clamp(
-          resizeRef.current.startWidth - delta,
-          MIN_RIGHT_PANEL_WIDTH,
-          MAX_RIGHT_PANEL_WIDTH,
-        );
-        setRightPanelWidth(next);
-      } else if (resizeRef.current.type === "plan-panel") {
-        const delta = event.clientY - resizeRef.current.startY;
-        const next = clamp(
-          resizeRef.current.startHeight - delta,
-          MIN_PLAN_PANEL_HEIGHT,
-          MAX_PLAN_PANEL_HEIGHT,
-        );
-        setPlanPanelHeight(next);
-      } else if (resizeRef.current.type === "terminal-panel") {
-        const delta = event.clientY - resizeRef.current.startY;
-        const next = clamp(
-          resizeRef.current.startHeight - delta,
-          MIN_TERMINAL_PANEL_HEIGHT,
-          MAX_TERMINAL_PANEL_HEIGHT,
-        );
-        setTerminalPanelHeight(next);
+      const appEl = document.querySelector<HTMLElement>(".app");
+      if (!appEl) return;
+
+      let next: number;
+      const state = resizeRef.current;
+
+      if (state.type === "sidebar") {
+        const delta = event.clientX - state.startX;
+        next = clamp(state.startWidth + delta, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
+      } else if (state.type === "right-panel") {
+        const delta = event.clientX - state.startX;
+        next = clamp(state.startWidth - delta, MIN_RIGHT_PANEL_WIDTH, MAX_RIGHT_PANEL_WIDTH);
+      } else if (state.type === "plan-panel") {
+        const delta = event.clientY - state.startY;
+        next = clamp(state.startHeight - delta, MIN_PLAN_PANEL_HEIGHT, MAX_PLAN_PANEL_HEIGHT);
+      } else if (state.type === "terminal-panel") {
+        const delta = event.clientY - state.startY;
+        next = clamp(state.startHeight - delta, MIN_TERMINAL_PANEL_HEIGHT, MAX_TERMINAL_PANEL_HEIGHT);
       } else {
-        const delta = event.clientY - resizeRef.current.startY;
-        const next = clamp(
-          resizeRef.current.startHeight - delta,
-          MIN_DEBUG_PANEL_HEIGHT,
-          MAX_DEBUG_PANEL_HEIGHT,
-        );
-        setDebugPanelHeight(next);
+        const delta = event.clientY - state.startY;
+        next = clamp(state.startHeight - delta, MIN_DEBUG_PANEL_HEIGHT, MAX_DEBUG_PANEL_HEIGHT);
       }
+
+      // Direct DOM write — zero React overhead during drag
+      appEl.style.setProperty(CSS_VAR_MAP[state.type], `${next}px`);
+      // Stash the latest value so we can commit on mouseUp
+      lastValueRef.current = next;
     }
 
     // Throttle mouse-move with requestAnimationFrame for smoother resize
@@ -194,6 +194,29 @@ export function useResizablePanels() {
       }
       if (!resizeRef.current) {
         return;
+      }
+      // Commit final value to React state (single re-render)
+      const panelType = resizeRef.current.type;
+      const finalValue = lastValueRef.current;
+      if (finalValue !== null) {
+        switch (panelType) {
+          case "sidebar":
+            setSidebarWidth(finalValue);
+            break;
+          case "right-panel":
+            setRightPanelWidth(finalValue);
+            break;
+          case "plan-panel":
+            setPlanPanelHeight(finalValue);
+            break;
+          case "terminal-panel":
+            setTerminalPanelHeight(finalValue);
+            break;
+          case "debug-panel":
+            setDebugPanelHeight(finalValue);
+            break;
+        }
+        lastValueRef.current = null;
       }
       resizeRef.current = null;
       document.body.style.cursor = "";

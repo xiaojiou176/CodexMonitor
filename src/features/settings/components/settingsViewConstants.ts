@@ -118,7 +118,6 @@ export const SHORTCUT_DRAFT_KEY_BY_SETTING: Record<
   ShortcutDraftKey
 > = {
   composerModelShortcut: "model",
-  composerAccessShortcut: "access",
   composerReasoningShortcut: "reasoning",
   composerCollaborationShortcut: "collaboration",
   interruptShortcut: "interrupt",

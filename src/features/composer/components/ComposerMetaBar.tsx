@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { BrainCog } from "lucide-react";
-import type { AccessMode, ThreadTokenUsage } from "../../../types";
+import type { ThreadTokenUsage } from "../../../types";
 
 /** Format a token count into a short human-readable string (e.g. 1234 → "1.2k") */
 function fmtTokens(n: number): string {
@@ -26,8 +26,6 @@ type ComposerMetaBarProps = {
   selectedEffort: string | null;
   onSelectEffort: (effort: string) => void;
   reasoningSupported: boolean;
-  accessMode: AccessMode;
-  onSelectAccessMode: (mode: AccessMode) => void;
   contextUsage?: ThreadTokenUsage | null;
 };
 
@@ -43,8 +41,6 @@ export function ComposerMetaBar({
   selectedEffort,
   onSelectEffort,
   reasoningSupported,
-  accessMode,
-  onSelectAccessMode,
   contextUsage = null,
 }: ComposerMetaBarProps) {
   const contextWindow = contextUsage?.modelContextWindow ?? null;
@@ -213,41 +209,22 @@ export function ComposerMetaBar({
             ))}
           </select>
         </div>
-        <div className="composer-select-wrap">
-          <span className="composer-icon" aria-hidden>
-            <svg viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 4l7 3v5c0 4.5-3 7.5-7 8-4-0.5-7-3.5-7-8V7l7-3z"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M9.5 12.5l1.8 1.8 3.7-4"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </span>
-          <select
-            className="composer-select composer-select--approval"
-            aria-label="Agent 权限"
-            disabled={disabled}
-            value={accessMode}
-            onChange={(event) =>
-              onSelectAccessMode(event.target.value as AccessMode)
-            }
-          >
-            <option value="read-only">只读</option>
-            <option value="current">On-Request</option>
-            <option value="full-access">完全访问</option>
-          </select>
-        </div>
+        {/* Access mode removed — always uses config.toml setting */}
       </div>
-      <div className="composer-context-meter">
-        {/* ── Progress bar: used / total context window ── */}
+      <div
+        className="composer-context-meter"
+        title={
+          lastTokens > 0
+            ? [
+                `上下文窗口：${contextWindow ? fmtTokens(contextWindow) : "未知"}`,
+                `本轮输入：${fmtTokens(lastInputTokens)}`,
+                lastCachedTokens > 0 ? `  缓存命中：${cacheHitPercent}%` : null,
+                `本轮输出：${fmtTokens(lastOutputTokens)}`,
+                lastReasoningTokens > 0 ? `  推理：${fmtTokens(lastReasoningTokens)}` : null,
+              ].filter(Boolean).join("\n")
+            : undefined
+        }
+      >
         {usedPercent !== null && contextWindow ? (
           <>
             <div
@@ -270,34 +247,18 @@ export function ComposerMetaBar({
               />
             </div>
             <span className="context-meter-label">
-              {fmtTokens(usedTokens)}{" / "}{fmtTokens(contextWindow)}
+              {fmtTokens(usedTokens)} / {fmtTokens(contextWindow)}
             </span>
+            {cacheHitPercent !== null && cacheHitPercent > 0 && (
+              <span className="context-meter-cache-badge">
+                缓存 {cacheHitPercent}%
+              </span>
+            )}
           </>
         ) : (
           <span className="context-meter-label context-meter-label--empty">
             上下文 --
           </span>
-        )}
-
-        {/* ── Last-turn detail tooltip (hover to see breakdown) ── */}
-        {lastTokens > 0 && (
-          <div className="context-meter-turn">
-            <span className="context-meter-turn-label">本轮</span>
-            <span className="context-meter-turn-value">
-              ↓{fmtTokens(lastInputTokens)}
-              {lastCachedTokens > 0 && (
-                <span className="context-meter-cached" title="缓存命中">
-                  ⚡{cacheHitPercent}%
-                </span>
-              )}
-              {" "}↑{fmtTokens(lastOutputTokens)}
-              {lastReasoningTokens > 0 && (
-                <span className="context-meter-reasoning" title="推理 token">
-                  🧠{fmtTokens(lastReasoningTokens)}
-                </span>
-              )}
-            </span>
-          </div>
         )}
       </div>
     </div>

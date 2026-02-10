@@ -360,7 +360,6 @@ describe("tauri invoke wrappers", () => {
     invokeMock.mockResolvedValueOnce({});
 
     await sendUserMessage("ws-4", "thread-1", "hello", {
-      accessMode: "full-access",
       images: ["image.png"],
     });
 
@@ -370,7 +369,7 @@ describe("tauri invoke wrappers", () => {
       text: "hello",
       model: null,
       effort: null,
-      accessMode: "full-access",
+      accessMode: null,
       images: ["image.png"],
     });
   });
