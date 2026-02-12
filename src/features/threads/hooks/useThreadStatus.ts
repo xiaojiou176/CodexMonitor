@@ -33,5 +33,14 @@ export function useThreadStatus({ dispatch }: UseThreadStatusOptions) {
     [dispatch],
   );
 
-  return { markProcessing, markReviewing, setActiveTurnId };
+  const resetThreadRuntimeState = useCallback(
+    (threadId: string) => {
+      markReviewing(threadId, false);
+      markProcessing(threadId, false);
+      setActiveTurnId(threadId, null);
+    },
+    [markProcessing, markReviewing, setActiveTurnId],
+  );
+
+  return { markProcessing, markReviewing, setActiveTurnId, resetThreadRuntimeState };
 }

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "tmuxSessionName": "cursor-agents",
+  "sessions": [
+    {
+      "name": "codex-monitor-main",
+      "repoPath": ".",
+      "prompt": "Read AGENTS.md and summarize highest-priority implementation tasks with exact file paths."
+    },
+    {
+      "name": "backend-daemon",
+      "repoPath": "../CodexMonitor",
+      "resumeId": "chat_1234567890abcdef"
+    },
+    {
+      "name": "frontend-ui",
+      "repoPath": "../CodexMonitor",
+      "startCommand": "cursor-agent --model gpt-5 'Refine sidebar UX and keep tests green.'"
+    }
+  ]
+}

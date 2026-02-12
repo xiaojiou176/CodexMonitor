@@ -33,8 +33,264 @@ import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { formatRelativeTimeShort } from "../../../utils/time";
 
 const COLLAPSED_GROUPS_STORAGE_KEY = "codexmonitor.collapsedGroups";
+const THREAD_ORDER_STORAGE_KEY = "codexmonitor.threadOrderByWorkspace";
+const WORKSPACE_ORDER_STORAGE_KEY = "codexmonitor.workspaceOrderByGroup";
+const WORKSPACE_ALIAS_STORAGE_KEY = "codexmonitor.workspaceAliasesById";
 const UNGROUPED_COLLAPSE_ID = "__ungrouped__";
+const UNGROUPED_WORKSPACE_GROUP_KEY = "__ungrouped_workspace_group__";
 const ADD_MENU_WIDTH = 200;
+
+type ThreadOrderByWorkspace = Record<string, string[]>;
+type WorkspaceOrderByGroup = Record<string, string[]>;
+type WorkspaceAliasesById = Record<string, string>;
+
+function loadThreadOrderByWorkspace(): ThreadOrderByWorkspace {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(THREAD_ORDER_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") {
+      return {};
+    }
+    const next: ThreadOrderByWorkspace = {};
+    Object.entries(parsed).forEach(([workspaceId, value]) => {
+      if (!Array.isArray(value)) {
+        return;
+      }
+      const ids = value.filter((entry): entry is string => typeof entry === "string");
+      if (ids.length > 0) {
+        next[workspaceId] = ids;
+      }
+    });
+    return next;
+  } catch {
+    return {};
+  }
+}
+
+function saveThreadOrderByWorkspace(orderByWorkspace: ThreadOrderByWorkspace): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      THREAD_ORDER_STORAGE_KEY,
+      JSON.stringify(orderByWorkspace),
+    );
+  } catch {
+    // Best-effort persistence.
+  }
+}
+
+function resolveWorkspaceGroupKey(groupId: string | null): string {
+  return groupId ?? UNGROUPED_WORKSPACE_GROUP_KEY;
+}
+
+function loadWorkspaceOrderByGroup(): WorkspaceOrderByGroup {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_ORDER_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") {
+      return {};
+    }
+    const next: WorkspaceOrderByGroup = {};
+    Object.entries(parsed).forEach(([groupId, value]) => {
+      if (!Array.isArray(value)) {
+        return;
+      }
+      const ids = value.filter((entry): entry is string => typeof entry === "string");
+      if (ids.length > 0) {
+        next[groupId] = ids;
+      }
+    });
+    return next;
+  } catch {
+    return {};
+  }
+}
+
+function saveWorkspaceOrderByGroup(orderByGroup: WorkspaceOrderByGroup): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(WORKSPACE_ORDER_STORAGE_KEY, JSON.stringify(orderByGroup));
+  } catch {
+    // Best-effort persistence.
+  }
+}
+
+function loadWorkspaceAliasesById(): WorkspaceAliasesById {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_ALIAS_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") {
+      return {};
+    }
+    const next: WorkspaceAliasesById = {};
+    Object.entries(parsed).forEach(([workspaceId, value]) => {
+      if (typeof value !== "string") {
+        return;
+      }
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        next[workspaceId] = trimmed;
+      }
+    });
+    return next;
+  } catch {
+    return {};
+  }
+}
+
+function saveWorkspaceAliasesById(aliasesById: WorkspaceAliasesById): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(WORKSPACE_ALIAS_STORAGE_KEY, JSON.stringify(aliasesById));
+  } catch {
+    // Best-effort persistence.
+  }
+}
+
+function buildOrderedIds(baseOrder: string[], storedOrder: string[] | undefined): string[] {
+  if (!storedOrder || storedOrder.length === 0) {
+    return baseOrder;
+  }
+  const validIds = new Set(baseOrder);
+  const orderedIds: string[] = [];
+  const seen = new Set<string>();
+
+  storedOrder.forEach((id) => {
+    if (!validIds.has(id) || seen.has(id)) {
+      return;
+    }
+    seen.add(id);
+    orderedIds.push(id);
+  });
+
+  baseOrder.forEach((id) => {
+    if (seen.has(id)) {
+      return;
+    }
+    seen.add(id);
+    orderedIds.push(id);
+  });
+
+  return orderedIds;
+}
+
+function applyWorkspaceOrderForGroup(
+  workspaces: WorkspaceInfo[],
+  groupKey: string,
+  orderByGroup: WorkspaceOrderByGroup,
+): WorkspaceInfo[] {
+  if (workspaces.length <= 1) {
+    return workspaces;
+  }
+  const baseOrder = workspaces.map((workspace) => workspace.id);
+  const orderedIds = buildOrderedIds(baseOrder, orderByGroup[groupKey]);
+  if (orderedIds.every((id, index) => id === baseOrder[index])) {
+    return workspaces;
+  }
+  const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
+  return orderedIds
+    .map((workspaceId) => workspaceById.get(workspaceId))
+    .filter((workspace): workspace is WorkspaceInfo => Boolean(workspace));
+}
+
+function resolveRootThreadId(
+  threadId: string,
+  threadParentById: Record<string, string>,
+  visibleThreadIds: Set<string>,
+): string {
+  let current = threadId;
+  const visited = new Set<string>([threadId]);
+  let parentId = threadParentById[current];
+  while (parentId && !visited.has(parentId) && visibleThreadIds.has(parentId)) {
+    visited.add(parentId);
+    current = parentId;
+    parentId = threadParentById[current];
+  }
+  return current;
+}
+
+function buildRootThreadGroups(
+  threads: ThreadSummary[],
+  threadParentById: Record<string, string>,
+): { rootOrder: string[]; threadsByRoot: Map<string, ThreadSummary[]> } {
+  const visibleThreadIds = new Set(threads.map((thread) => thread.id));
+  const rootOrder: string[] = [];
+  const threadsByRoot = new Map<string, ThreadSummary[]>();
+
+  threads.forEach((thread) => {
+    const rootId = resolveRootThreadId(thread.id, threadParentById, visibleThreadIds);
+    const existing = threadsByRoot.get(rootId);
+    if (!existing) {
+      rootOrder.push(rootId);
+      threadsByRoot.set(rootId, [thread]);
+      return;
+    }
+    existing.push(thread);
+  });
+
+  return { rootOrder, threadsByRoot };
+}
+
+function buildOrderedRootIds(
+  rootOrder: string[],
+  storedRootOrder: string[] | undefined,
+): string[] {
+  return buildOrderedIds(rootOrder, storedRootOrder);
+}
+
+function applyThreadOrderForWorkspace(
+  threads: ThreadSummary[],
+  workspaceId: string,
+  orderByWorkspace: ThreadOrderByWorkspace,
+  threadParentById: Record<string, string>,
+): ThreadSummary[] {
+  if (threads.length <= 1) {
+    return threads;
+  }
+  const { rootOrder, threadsByRoot } = buildRootThreadGroups(threads, threadParentById);
+  const orderedRootIds = buildOrderedRootIds(rootOrder, orderByWorkspace[workspaceId]);
+
+  if (
+    orderedRootIds.length === rootOrder.length &&
+    orderedRootIds.every((rootId, index) => rootId === rootOrder[index])
+  ) {
+    return threads;
+  }
+
+  const orderedThreads: ThreadSummary[] = [];
+  orderedRootIds.forEach((rootId) => {
+    const rootThreads = threadsByRoot.get(rootId);
+    if (!rootThreads || rootThreads.length === 0) {
+      return;
+    }
+    orderedThreads.push(...rootThreads);
+  });
+  return orderedThreads;
+}
 
 type WorkspaceGroupSection = {
   id: string | null;
@@ -153,6 +409,22 @@ export const Sidebar = memo(function Sidebar({
   const [expandedWorkspaces, setExpandedWorkspaces] = useState(
     new Set<string>(),
   );
+  const [threadOrderByWorkspace, setThreadOrderByWorkspace] =
+    useState<ThreadOrderByWorkspace>(() => loadThreadOrderByWorkspace());
+  const [workspaceOrderByGroup, setWorkspaceOrderByGroup] =
+    useState<WorkspaceOrderByGroup>(() => loadWorkspaceOrderByGroup());
+  const [workspaceAliasesById, setWorkspaceAliasesById] =
+    useState<WorkspaceAliasesById>(() => loadWorkspaceAliasesById());
+  const [editingWorkspaceAliasId, setEditingWorkspaceAliasId] = useState<string | null>(null);
+  const [workspaceAliasDraft, setWorkspaceAliasDraft] = useState("");
+  const [draggingWorkspaceId, setDraggingWorkspaceId] = useState<string | null>(null);
+  const [dropWorkspaceId, setDropWorkspaceId] = useState<string | null>(null);
+  const [dropWorkspacePosition, setDropWorkspacePosition] = useState<
+    "before" | "after" | null
+  >(null);
+  const [dragWorkspaceGroupKey, setDragWorkspaceGroupKey] = useState<string | null>(null);
+  const draggingWorkspaceIdRef = useRef<string | null>(null);
+  const dragWorkspaceGroupKeyRef = useRef<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [addMenuAnchor, setAddMenuAnchor] = useState<{
@@ -166,6 +438,54 @@ export const Sidebar = memo(function Sidebar({
     COLLAPSED_GROUPS_STORAGE_KEY,
   );
   const { getThreadRows } = useThreadRows(threadParentById);
+  const handleRenameWorkspaceAlias = useCallback(
+    (workspaceId: string) => {
+      const workspace = workspaces.find((entry) => entry.id === workspaceId);
+      if (!workspace) {
+        return;
+      }
+      const currentAlias = workspaceAliasesById[workspaceId] ?? workspace.name;
+      setEditingWorkspaceAliasId(workspaceId);
+      setWorkspaceAliasDraft(currentAlias);
+    },
+    [workspaceAliasesById, workspaces],
+  );
+
+  const commitWorkspaceAlias = useCallback(
+    (workspaceId: string) => {
+      const workspace = workspaces.find((entry) => entry.id === workspaceId);
+      if (!workspace) {
+        setEditingWorkspaceAliasId(null);
+        setWorkspaceAliasDraft("");
+        return;
+      }
+      const nextAlias = workspaceAliasDraft.trim();
+      setWorkspaceAliasesById((previous) => {
+        const next = { ...previous };
+        if (!nextAlias || nextAlias === workspace.name) {
+          delete next[workspaceId];
+        } else {
+          next[workspaceId] = nextAlias;
+        }
+        saveWorkspaceAliasesById(next);
+        return next;
+      });
+      setEditingWorkspaceAliasId(null);
+      setWorkspaceAliasDraft("");
+    },
+    [workspaceAliasDraft, workspaces],
+  );
+
+  const cancelWorkspaceAliasEdit = useCallback(() => {
+    setEditingWorkspaceAliasId(null);
+    setWorkspaceAliasDraft("");
+  }, []);
+
+  const getWorkspaceDisplayName = useCallback(
+    (workspace: WorkspaceInfo) =>
+      workspaceAliasesById[workspace.id]?.trim() || workspace.name,
+    [workspaceAliasesById],
+  );
   const { showThreadMenu, showWorkspaceMenu, showWorktreeMenu } =
     useSidebarMenus({
       onDeleteThread,
@@ -173,6 +493,7 @@ export const Sidebar = memo(function Sidebar({
       onUnpinThread: unpinThread,
       isThreadPinned,
       onRenameThread,
+      onRenameWorkspaceAlias: handleRenameWorkspaceAlias,
       onReloadWorkspaceThreads,
       onDeleteWorkspace,
       onDeleteWorktree,
@@ -180,14 +501,82 @@ export const Sidebar = memo(function Sidebar({
   const debouncedQuery = useDebouncedValue(searchQuery, 150);
   const normalizedQuery = debouncedQuery.trim().toLowerCase();
 
+  const orderedThreadsByWorkspace = useMemo(() => {
+    const next: Record<string, ThreadSummary[]> = {};
+    Object.entries(threadsByWorkspace).forEach(([workspaceId, threads]) => {
+      next[workspaceId] = applyThreadOrderForWorkspace(
+        threads,
+        workspaceId,
+        threadOrderByWorkspace,
+        threadParentById,
+      );
+    });
+    return next;
+  }, [threadOrderByWorkspace, threadParentById, threadsByWorkspace]);
+
+  const handleReorderThreads = useCallback(
+    (
+      workspaceId: string,
+      sourceThreadId: string,
+      targetThreadId: string,
+      position: "before" | "after",
+    ) => {
+      if (sourceThreadId === targetThreadId) {
+        return;
+      }
+      const threads = threadsByWorkspace[workspaceId] ?? [];
+      if (threads.length <= 1) {
+        return;
+      }
+      const { rootOrder } = buildRootThreadGroups(threads, threadParentById);
+      const orderedRootIds = buildOrderedRootIds(
+        rootOrder,
+        threadOrderByWorkspace[workspaceId],
+      );
+
+      if (
+        !orderedRootIds.includes(sourceThreadId) ||
+        !orderedRootIds.includes(targetThreadId)
+      ) {
+        return;
+      }
+
+      const nextRootOrder = orderedRootIds.filter((threadId) => threadId !== sourceThreadId);
+      const targetIndex = nextRootOrder.indexOf(targetThreadId);
+      if (targetIndex < 0) {
+        return;
+      }
+      const insertIndex = position === "before" ? targetIndex : targetIndex + 1;
+      nextRootOrder.splice(insertIndex, 0, sourceThreadId);
+
+      if (nextRootOrder.every((threadId, index) => threadId === orderedRootIds[index])) {
+        return;
+      }
+
+      setThreadOrderByWorkspace((previous) => {
+        const next = {
+          ...previous,
+          [workspaceId]: nextRootOrder,
+        };
+        saveThreadOrderByWorkspace(next);
+        return next;
+      });
+    },
+    [threadOrderByWorkspace, threadParentById, threadsByWorkspace],
+  );
+
   const isWorkspaceMatch = useCallback(
     (workspace: WorkspaceInfo) => {
       if (!normalizedQuery) {
         return true;
       }
+      const displayName = getWorkspaceDisplayName(workspace).toLowerCase();
+      if (displayName.includes(normalizedQuery)) {
+        return true;
+      }
       return workspace.name.toLowerCase().includes(normalizedQuery);
     },
-    [normalizedQuery],
+    [getWorkspaceDisplayName, normalizedQuery],
   );
 
   const renderHighlightedName = useCallback(
@@ -249,7 +638,7 @@ export const Sidebar = memo(function Sidebar({
       if (!isWorkspaceMatch(workspace)) {
         return;
       }
-      const threads = threadsByWorkspace[workspace.id] ?? [];
+      const threads = orderedThreadsByWorkspace[workspace.id] ?? [];
       if (!threads.length) {
         return;
       }
@@ -300,29 +689,37 @@ export const Sidebar = memo(function Sidebar({
       );
   }, [
     workspaces,
-    threadsByWorkspace,
+    orderedThreadsByWorkspace,
     getThreadRows,
     getPinTimestamp,
     isWorkspaceMatch,
   ]);
 
+  const orderedGroupedWorkspaces = useMemo(
+    () =>
+      groupedWorkspaces
+        .map((group) => {
+          const groupKey = resolveWorkspaceGroupKey(group.id);
+          const visibleWorkspaces = group.workspaces.filter(isWorkspaceMatch);
+          return {
+            ...group,
+            workspaces: applyWorkspaceOrderForGroup(
+              visibleWorkspaces,
+              groupKey,
+              workspaceOrderByGroup,
+            ),
+          };
+        })
+        .filter((group) => group.workspaces.length > 0),
+    [groupedWorkspaces, isWorkspaceMatch, workspaceOrderByGroup],
+  );
+
   const scrollFadeDeps = useMemo(
-    () => [groupedWorkspaces, threadsByWorkspace, expandedWorkspaces, normalizedQuery],
-    [groupedWorkspaces, threadsByWorkspace, expandedWorkspaces, normalizedQuery],
+    () => [orderedGroupedWorkspaces, orderedThreadsByWorkspace, expandedWorkspaces, normalizedQuery],
+    [orderedGroupedWorkspaces, orderedThreadsByWorkspace, expandedWorkspaces, normalizedQuery],
   );
   const { sidebarBodyRef, scrollFade, updateScrollFade } =
     useSidebarScrollFade(scrollFadeDeps);
-
-  const filteredGroupedWorkspaces = useMemo(
-    () =>
-      groupedWorkspaces
-        .map((group) => ({
-          ...group,
-          workspaces: group.workspaces.filter(isWorkspaceMatch),
-        }))
-        .filter((group) => group.workspaces.length > 0),
-    [groupedWorkspaces, isWorkspaceMatch],
-  );
 
   const isSearchActive = Boolean(normalizedQuery);
 
@@ -353,6 +750,184 @@ export const Sidebar = memo(function Sidebar({
       return next;
     });
   }, []);
+
+  const resetWorkspaceDragState = useCallback(() => {
+    draggingWorkspaceIdRef.current = null;
+    dragWorkspaceGroupKeyRef.current = null;
+    setDraggingWorkspaceId(null);
+    setDropWorkspaceId(null);
+    setDropWorkspacePosition(null);
+    setDragWorkspaceGroupKey(null);
+  }, []);
+
+  const handleReorderWorkspaces = useCallback(
+    (
+      groupKey: string,
+      sourceWorkspaceId: string,
+      targetWorkspaceId: string,
+      position: "before" | "after",
+    ) => {
+      if (sourceWorkspaceId === targetWorkspaceId) {
+        return;
+      }
+      const group = groupedWorkspaces.find(
+        (entry) => resolveWorkspaceGroupKey(entry.id) === groupKey,
+      );
+      if (!group) {
+        return;
+      }
+      const baseOrder = group.workspaces.map((workspace) => workspace.id);
+      if (baseOrder.length <= 1) {
+        return;
+      }
+      const orderedIds = buildOrderedIds(baseOrder, workspaceOrderByGroup[groupKey]);
+      if (
+        !orderedIds.includes(sourceWorkspaceId) ||
+        !orderedIds.includes(targetWorkspaceId)
+      ) {
+        return;
+      }
+      const nextIds = orderedIds.filter((workspaceId) => workspaceId !== sourceWorkspaceId);
+      const targetIndex = nextIds.indexOf(targetWorkspaceId);
+      if (targetIndex < 0) {
+        return;
+      }
+      const insertIndex = position === "before" ? targetIndex : targetIndex + 1;
+      nextIds.splice(insertIndex, 0, sourceWorkspaceId);
+      if (nextIds.every((workspaceId, index) => workspaceId === orderedIds[index])) {
+        return;
+      }
+      setWorkspaceOrderByGroup((previous) => {
+        const next = {
+          ...previous,
+          [groupKey]: nextIds,
+        };
+        saveWorkspaceOrderByGroup(next);
+        return next;
+      });
+    },
+    [groupedWorkspaces, workspaceOrderByGroup],
+  );
+
+  const handleWorkspaceCardDragStart = useCallback(
+    (
+      event: React.DragEvent<HTMLDivElement>,
+      groupKey: string,
+      workspaceId: string,
+    ) => {
+      draggingWorkspaceIdRef.current = workspaceId;
+      dragWorkspaceGroupKeyRef.current = groupKey;
+      setDraggingWorkspaceId(workspaceId);
+      setDropWorkspaceId(null);
+      setDragWorkspaceGroupKey(groupKey);
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", workspaceId);
+        event.dataTransfer.setData("application/x-codexmonitor-workspace-group", groupKey);
+      }
+    },
+    [],
+  );
+
+  const handleWorkspaceCardDragOver = useCallback(
+    (
+      event: React.DragEvent<HTMLDivElement>,
+      groupKey: string,
+      targetWorkspaceId: string,
+    ) => {
+      const sourceWorkspaceId =
+        draggingWorkspaceIdRef.current ??
+        draggingWorkspaceId ??
+        event.dataTransfer?.getData("text/plain") ??
+        null;
+      const sourceGroupKey =
+        dragWorkspaceGroupKeyRef.current ??
+        dragWorkspaceGroupKey ??
+        event.dataTransfer?.getData("application/x-codexmonitor-workspace-group") ??
+        null;
+      if (
+        !sourceWorkspaceId ||
+        !sourceGroupKey ||
+        sourceWorkspaceId === targetWorkspaceId ||
+        sourceGroupKey !== groupKey
+      ) {
+        return;
+      }
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "move";
+      }
+      const rect = event.currentTarget.getBoundingClientRect();
+      const position =
+        event.clientY <= rect.top + rect.height / 2 ? "before" : "after";
+      if (dropWorkspaceId !== targetWorkspaceId) {
+        setDropWorkspaceId(targetWorkspaceId);
+      }
+      if (dropWorkspacePosition !== position) {
+        setDropWorkspacePosition(position);
+      }
+    },
+    [
+      dragWorkspaceGroupKey,
+      draggingWorkspaceId,
+      dropWorkspaceId,
+      dropWorkspacePosition,
+    ],
+  );
+
+  const handleWorkspaceCardDrop = useCallback(
+    (
+      event: React.DragEvent<HTMLDivElement>,
+      groupKey: string,
+      targetWorkspaceId: string,
+    ) => {
+      const sourceWorkspaceId =
+        draggingWorkspaceIdRef.current ??
+        draggingWorkspaceId ??
+        event.dataTransfer?.getData("text/plain") ??
+        null;
+      const sourceGroupKey =
+        dragWorkspaceGroupKeyRef.current ??
+        dragWorkspaceGroupKey ??
+        event.dataTransfer?.getData("application/x-codexmonitor-workspace-group") ??
+        null;
+      if (!sourceWorkspaceId || !sourceGroupKey || sourceGroupKey !== groupKey) {
+        resetWorkspaceDragState();
+        return;
+      }
+      event.preventDefault();
+      const position =
+        dropWorkspaceId === targetWorkspaceId && dropWorkspacePosition
+          ? dropWorkspacePosition
+          : (() => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              return event.clientY <= rect.top + rect.height / 2
+                ? "before"
+                : "after";
+            })();
+      handleReorderWorkspaces(
+        groupKey,
+        sourceWorkspaceId,
+        targetWorkspaceId,
+        position,
+      );
+      resetWorkspaceDragState();
+    },
+    [
+      dragWorkspaceGroupKey,
+      draggingWorkspaceId,
+      dropWorkspaceId,
+      dropWorkspacePosition,
+      handleReorderWorkspaces,
+      resetWorkspaceDragState,
+    ],
+  );
+
+  useEffect(() => {
+    if (isSearchActive) {
+      resetWorkspaceDragState();
+    }
+  }, [isSearchActive, resetWorkspaceDragState]);
 
   const getThreadTime = useCallback(
     (thread: ThreadSummary) => {
@@ -386,6 +961,17 @@ export const Sidebar = memo(function Sidebar({
       setSearchQuery("");
     }
   }, [isSearchOpen, searchQuery]);
+
+  useEffect(() => {
+    if (!editingWorkspaceAliasId) {
+      return;
+    }
+    const exists = workspaces.some((workspace) => workspace.id === editingWorkspaceAliasId);
+    if (!exists) {
+      setEditingWorkspaceAliasId(null);
+      setWorkspaceAliasDraft("");
+    }
+  }, [editingWorkspaceAliasId, workspaces]);
 
   return (
     <aside
@@ -473,8 +1059,9 @@ export const Sidebar = memo(function Sidebar({
               />
             </div>
           )}
-          {filteredGroupedWorkspaces.map((group) => {
+          {orderedGroupedWorkspaces.map((group) => {
             const groupId = group.id;
+            const groupKey = resolveWorkspaceGroupKey(group.id);
             const showGroupHeader = Boolean(groupId) || hasWorkspaceGroups;
             const toggleId = groupId ?? (showGroupHeader ? UNGROUPED_COLLAPSE_ID : null);
             const isGroupCollapsed = Boolean(
@@ -491,8 +1078,20 @@ export const Sidebar = memo(function Sidebar({
                 onToggleCollapse={toggleGroupCollapse}
               >
                 {group.workspaces.map((entry) => {
-                  const threads = threadsByWorkspace[entry.id] ?? [];
+                  const threads = orderedThreadsByWorkspace[entry.id] ?? [];
                   const isCollapsed = entry.settings.sidebarCollapsed;
+                  const workspaceDisplayName = getWorkspaceDisplayName(entry);
+                  const isWorkspaceDragging = draggingWorkspaceId === entry.id;
+                  const isWorkspaceDropTarget =
+                    dropWorkspaceId === entry.id &&
+                    draggingWorkspaceId !== null &&
+                    draggingWorkspaceId !== entry.id &&
+                    dragWorkspaceGroupKey === groupKey;
+                  const workspaceDropPosition =
+                    isWorkspaceDropTarget && dropWorkspacePosition
+                      ? dropWorkspacePosition
+                      : null;
+                  const isAliasEditing = editingWorkspaceAliasId === entry.id;
                   const isExpanded = expandedWorkspaces.has(entry.id);
                   const {
                     unpinnedRows,
@@ -514,7 +1113,9 @@ export const Sidebar = memo(function Sidebar({
                   const isPaging = threadListPagingByWorkspace[entry.id] ?? false;
                   const worktrees = worktreesByParent.get(entry.id) ?? [];
                   const addMenuOpen = addMenuAnchor?.workspaceId === entry.id;
-                  const isDraftNewAgent = newAgentDraftWorkspaceId === entry.id;
+                  const isDraftNewAgent =
+                    newAgentDraftWorkspaceId === entry.id ||
+                    startingDraftThreadWorkspaceId === entry.id;
                   const isDraftRowActive =
                     isDraftNewAgent &&
                     entry.id === activeWorkspaceId &&
@@ -528,7 +1129,7 @@ export const Sidebar = memo(function Sidebar({
                     <WorkspaceCard
                       key={entry.id}
                       workspace={entry}
-                      workspaceName={renderHighlightedName(entry.name)}
+                      workspaceName={renderHighlightedName(workspaceDisplayName)}
                       isActive={entry.id === activeWorkspaceId}
                       isCollapsed={isCollapsed}
                       addMenuOpen={addMenuOpen}
@@ -538,6 +1139,26 @@ export const Sidebar = memo(function Sidebar({
                       onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
                       onConnectWorkspace={onConnectWorkspace}
                       onToggleAddMenu={setAddMenuAnchor}
+                      isDraggable={!isSearchActive}
+                      isDragging={isWorkspaceDragging}
+                      isDropTarget={isWorkspaceDropTarget}
+                      dropPosition={workspaceDropPosition}
+                      onDragStart={(event) =>
+                        handleWorkspaceCardDragStart(event, groupKey, entry.id)
+                      }
+                      onDragOver={(event) =>
+                        handleWorkspaceCardDragOver(event, groupKey, entry.id)
+                      }
+                      onDrop={(event) =>
+                        handleWorkspaceCardDrop(event, groupKey, entry.id)
+                      }
+                      onDragEnd={resetWorkspaceDragState}
+                      isAliasEditing={isAliasEditing}
+                      aliasDraft={workspaceAliasDraft}
+                      onAliasDraftChange={setWorkspaceAliasDraft}
+                      onAliasSubmit={() => commitWorkspaceAlias(entry.id)}
+                      onAliasCancel={cancelWorkspaceAliasEdit}
+                      onStartAliasEdit={handleRenameWorkspaceAlias}
                     >
                       {addMenuOpen && addMenuAnchor &&
                         createPortal(
@@ -609,7 +1230,7 @@ export const Sidebar = memo(function Sidebar({
                         <WorktreeSection
                           worktrees={worktrees}
                           deletingWorktreeIds={deletingWorktreeIds}
-                          threadsByWorkspace={threadsByWorkspace}
+                          threadsByWorkspace={orderedThreadsByWorkspace}
                           threadStatusById={threadStatusById}
                           threadListLoadingByWorkspace={threadListLoadingByWorkspace}
                           threadListPagingByWorkspace={threadListPagingByWorkspace}
@@ -649,6 +1270,7 @@ export const Sidebar = memo(function Sidebar({
                           onLoadOlderThreads={onLoadOlderThreads}
                           onSelectThread={onSelectThread}
                           onShowThreadMenu={showThreadMenu}
+                          onReorderThreads={handleReorderThreads}
                         />
                       )}
                       {showThreadLoader && <ThreadLoading />}
@@ -658,7 +1280,7 @@ export const Sidebar = memo(function Sidebar({
               </WorkspaceGroup>
             );
           })}
-          {!filteredGroupedWorkspaces.length && (
+          {!orderedGroupedWorkspaces.length && (
             <div className="empty">
               {isSearchActive
                 ? "没有匹配的项目。"

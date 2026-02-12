@@ -33,6 +33,7 @@ type SendMessageOptions = {
   model?: string | null;
   effort?: string | null;
   collaborationMode?: Record<string, unknown> | null;
+  forceSteer?: boolean;
 };
 
 type UseThreadMessagingOptions = {
@@ -147,9 +148,10 @@ export function useThreadMessaging({
       const isProcessing = threadStatusById[threadId]?.isProcessing ?? false;
       const activeTurnId = activeTurnIdByThread[threadId] ?? null;
       const steerSupported = steerSupportedByWorkspaceRef.current[workspace.id] !== false;
+      const steerRequested = steerEnabled || options?.forceSteer === true;
       const shouldSteer =
-        isProcessing && steerEnabled && Boolean(activeTurnId) && steerSupported;
-      if (isProcessing && steerEnabled) {
+        isProcessing && steerRequested && Boolean(activeTurnId) && steerSupported;
+      if (isProcessing && steerRequested) {
         const optimisticText = finalText;
         if (optimisticText || images.length > 0) {
           dispatch({
@@ -208,6 +210,14 @@ export function useThreadMessaging({
       });
       let requestMode: "start" | "steer" = shouldSteer ? "steer" : "start";
       try {
+        if (options?.forceSteer && isProcessing && !activeTurnId) {
+          try {
+            await interruptTurnService(workspace.id, threadId, "pending");
+          } catch {
+            // Best effort preemption: continue with turn/start fallback.
+          }
+        }
+
         const startTurn = () => sendUserMessageService(
           workspace.id,
           threadId,
@@ -253,6 +263,20 @@ export function useThreadMessaging({
           requestMode = "start";
           response = (await startTurn()) as Record<string, unknown>;
           rpcError = extractRpcErrorMessage(response);
+        }
+
+        // When turn/start fails with "not found", force-refresh the thread
+        // via thread/resume so the app-server re-registers it, then retry once.
+        if (
+          rpcError
+          && requestMode === "start"
+          && rpcError.toLowerCase().includes("not found")
+        ) {
+          const refreshed = await refreshThread(workspace.id, threadId);
+          if (refreshed) {
+            response = (await startTurn()) as Record<string, unknown>;
+            rpcError = extractRpcErrorMessage(response);
+          }
         }
 
         onDebug?.({
@@ -332,6 +356,7 @@ export function useThreadMessaging({
       onDebug,
       pushThreadErrorMessage,
       recordThreadActivity,
+      refreshThread,
       safeMessageActivity,
       setActiveTurnId,
       steerEnabled,
@@ -340,7 +365,11 @@ export function useThreadMessaging({
   );
 
   const sendUserMessage = useCallback(
-    async (text: string, images: string[] = []) => {
+    async (
+      text: string,
+      images: string[] = [],
+      options?: Pick<SendMessageOptions, "forceSteer">,
+    ) => {
       if (!activeWorkspace) {
         return;
       }
@@ -371,6 +400,7 @@ export function useThreadMessaging({
       }
       await sendMessageToThread(activeWorkspace, threadId, finalText, images, {
         skipPromptExpansion: true,
+        forceSteer: options?.forceSteer,
       });
     },
     [

@@ -544,6 +544,29 @@ export type QueuedMessage = {
   text: string;
   createdAt: number;
   images?: string[];
+  workspaceId?: string;
+};
+
+export type QueueHealthBlockedReason =
+  | "processing"
+  | "reviewing"
+  | "workspace_unresolved"
+  | "command_requires_active_thread"
+  | "awaiting_turn_start_event"
+  | "global_processing";
+
+export type QueueHealthEntry = {
+  threadId: string;
+  queueLength: number;
+  inFlight: boolean;
+  blockedReason: QueueHealthBlockedReason | null;
+  lastFailureReason: string | null;
+  isStale?: boolean;
+  blockedForMs?: number | null;
+  lastStatusUpdatedAt?: number | null;
+  lastFailureAt?: number | null;
+  workspaceId?: string | null;
+  workspaceResolved?: boolean;
 };
 
 export type ModelOption = {

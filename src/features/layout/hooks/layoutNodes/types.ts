@@ -22,6 +22,7 @@ import type {
   LocalUsageSnapshot,
   ModelOption,
   OpenAppTarget,
+  QueueHealthEntry,
   QueuedMessage,
   RequestUserInputRequest,
   RequestUserInputResponse,
@@ -105,6 +106,8 @@ export type LayoutNodesOptions = {
   accountSwitching: boolean;
   codeBlockCopyUseModifier: boolean;
   showMessageFilePath: boolean;
+  messageFontSize: number;
+  onMessageFontSizeChange: (next: number) => void;
   openAppTargets: OpenAppTarget[];
   openAppIconById: Record<string, string>;
   selectedOpenAppId: string;
@@ -139,6 +142,7 @@ export type LayoutNodesOptions = {
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
   onSelectThread: (workspaceId: string, threadId: string) => void;
   onOpenThreadLink: (threadId: string) => void;
+  onReachMessagesTop?: () => boolean | void | Promise<boolean | void>;
   onDeleteThread: (workspaceId: string, threadId: string) => void;
   pinThread: (workspaceId: string, threadId: string) => boolean;
   unpinThread: (workspaceId: string, threadId: string) => void;
@@ -366,6 +370,8 @@ export type LayoutNodesOptions = {
   onReviewPromptConfirmCustom: () => Promise<void>;
   activeTokenUsage: ThreadTokenUsage | null;
   activeQueue: QueuedMessage[];
+  queueHealthEntries: QueueHealthEntry[];
+  legacyQueueMessageCount: number;
   draftText: string;
   onDraftChange: (next: string) => void;
   activeImages: string[];
@@ -378,6 +384,15 @@ export type LayoutNodesOptions = {
   onInsertHandled: (id: string) => void;
   onEditQueued: (item: QueuedMessage) => void;
   onDeleteQueued: (id: string) => void;
+  onSteerQueued: (id: string) => Promise<boolean> | boolean;
+  onSelectQueuedThread: (threadId: string) => void;
+  onRetryQueuedThread: (threadId: string) => void;
+  onClearQueuedThread: (threadId: string) => void;
+  onMigrateLegacyQueueWorkspaceIds: () => {
+    migratedMessages: number;
+    migratedThreads: number;
+  };
+  canSteerQueued: boolean;
   collaborationModes: CollaborationModeOption[];
   selectedCollaborationModeId: string | null;
   onSelectCollaborationMode: (id: string | null) => void;

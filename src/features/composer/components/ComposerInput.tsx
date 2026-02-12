@@ -38,6 +38,7 @@ type ComposerInputProps = {
   disabled: boolean;
   sendLabel: string;
   canStop: boolean;
+  preferQueueOverStop?: boolean;
   canSend: boolean;
   isProcessing: boolean;
   onStop: () => void;
@@ -140,6 +141,7 @@ export function ComposerInput({
   disabled,
   sendLabel,
   canStop,
+  preferQueueOverStop = false,
   canSend,
   isProcessing,
   onStop,
@@ -323,13 +325,15 @@ export function ComposerInput({
     }
   }, [disabled, mobileActionsOpen]);
 
+  const isStopAction = canStop && !preferQueueOverStop;
+
   const handleActionClick = useCallback(() => {
-    if (canStop) {
+    if (isStopAction) {
       onStop();
-    } else {
-      onSend();
+      return;
     }
-  }, [canStop, onSend, onStop]);
+    onSend();
+  }, [isStopAction, onSend, onStop]);
   const isDictating = dictationState === "listening";
   const isDictationBusy = dictationState !== "idle";
   const allowOpenDictationSettings = Boolean(
@@ -700,14 +704,14 @@ export function ComposerInput({
         {isDictating ? <Square aria-hidden /> : <Mic aria-hidden />}
       </button>
       <button
-        className={`composer-action${canStop ? " is-stop" : " is-send"}${
-          canStop && isProcessing ? " is-loading" : ""
+        className={`composer-action${isStopAction ? " is-stop" : " is-send"}${
+          isStopAction && isProcessing ? " is-loading" : ""
         }`}
         onClick={handleActionClick}
-        disabled={disabled || isDictationBusy || (!canStop && !canSend)}
-        aria-label={canStop ? "停止" : sendLabel}
+        disabled={disabled || isDictationBusy || (isStopAction ? false : !canSend)}
+        aria-label={isStopAction ? "停止" : sendLabel}
       >
-        {canStop ? (
+        {isStopAction ? (
           <>
             <span className="composer-action-stop-square" aria-hidden />
             {isProcessing && (

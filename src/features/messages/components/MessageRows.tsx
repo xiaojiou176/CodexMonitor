@@ -1,17 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { createPortal } from "react-dom";
-import Brain from "lucide-react/dist/esm/icons/brain";
 import Check from "lucide-react/dist/esm/icons/check";
 import Copy from "lucide-react/dist/esm/icons/copy";
-import Diff from "lucide-react/dist/esm/icons/diff";
-import FileDiff from "lucide-react/dist/esm/icons/file-diff";
-import FileText from "lucide-react/dist/esm/icons/file-text";
-import Image from "lucide-react/dist/esm/icons/image";
-import Search from "lucide-react/dist/esm/icons/search";
-import Terminal from "lucide-react/dist/esm/icons/terminal";
-import Users from "lucide-react/dist/esm/icons/users";
-import Wrench from "lucide-react/dist/esm/icons/wrench";
 import X from "lucide-react/dist/esm/icons/x";
 import type { ConversationItem } from "../../../types";
 import { languageFromPath } from "../../../utils/syntax";
@@ -23,12 +14,10 @@ import {
   exploreKindLabel,
   formatDurationMs,
   normalizeMessageImageSrc,
-  toolNameFromTitle,
   toolStatusTone,
   type MessageImage,
   type ParsedReasoning,
   type StatusTone,
-  type ToolSummary,
 } from "../utils/messageRenderUtils";
 import { Markdown } from "./Markdown";
 
@@ -43,6 +32,7 @@ type MarkdownFileLinkProps = {
 
 type WorkingIndicatorProps = {
   isThinking: boolean;
+  isStreaming?: boolean;
   processingStartedAt?: number | null;
   lastDurationMs?: number | null;
   hasItems: boolean;
@@ -54,6 +44,7 @@ type MessageRowProps = MarkdownFileLinkProps & {
   isCopied: boolean;
   onCopy: (item: Extract<ConversationItem, { kind: "message" }>) => void;
   codeBlockCopyUseModifier?: boolean;
+  shouldAutoCollapseLongAssistantMessage?: boolean;
 };
 
 type ReasoningRowProps = MarkdownFileLinkProps & {
@@ -84,6 +75,8 @@ type ExploreRowProps = {
 
 type CommandOutputProps = {
   output: string;
+  command: string;
+  tone: StatusTone;
 };
 
 const MessageImageGrid = memo(function MessageImageGrid({
@@ -176,7 +169,7 @@ const ImageLightbox = memo(function ImageLightbox({
   );
 });
 
-const CommandOutput = memo(function CommandOutput({ output }: CommandOutputProps) {
+const CommandOutput = memo(function CommandOutput({ output, command, tone }: CommandOutputProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isPinned, setIsPinned] = useState(true);
   const lines = useMemo(() => {
@@ -211,94 +204,116 @@ const CommandOutput = memo(function CommandOutput({ output }: CommandOutputProps
     node.scrollTop = node.scrollHeight;
   }, [lineWindow, isPinned]);
 
-  if (lineWindow.lines.length === 0) {
+  const statusLabel =
+    tone === "completed"
+      ? "✓ Success"
+      : tone === "failed"
+        ? "✕ Failed"
+        : "● Running";
+  const statusClass =
+    tone === "completed"
+      ? "success"
+      : tone === "failed"
+        ? "failed"
+        : "running";
+
+  if (lineWindow.lines.length === 0 && !command.trim()) {
     return null;
   }
 
   return (
     <div className="tool-inline-terminal" role="log" aria-live="polite">
-      <div
-        className="tool-inline-terminal-lines"
-        ref={containerRef}
-        onScroll={handleScroll}
-      >
-        {lineWindow.lines.map((line, index) => (
+      <div className="tool-inline-terminal-shell">bash</div>
+      <div className="tool-inline-terminal-command">$ {command}</div>
+      {lineWindow.lines.length > 0 ? (
+        <>
+          <div className="tool-inline-terminal-divider" aria-hidden />
           <div
-            key={`${lineWindow.offset + index}-${line}`}
-            className="tool-inline-terminal-line"
+            className="tool-inline-terminal-lines"
+            ref={containerRef}
+            onScroll={handleScroll}
           >
-            {line || " "}
+            {lineWindow.lines.map((line, index) => (
+              <div
+                key={`${lineWindow.offset + index}-${line}`}
+                className="tool-inline-terminal-line"
+              >
+                {line || " "}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      ) : null}
+      <div className={`tool-inline-terminal-status ${statusClass}`}>{statusLabel}</div>
     </div>
   );
 });
 
-function toolIconForSummary(
-  item: Extract<ConversationItem, { kind: "tool" }>,
-  summary: ToolSummary,
-) {
-  if (item.toolType === "commandExecution") {
-    return Terminal;
-  }
-  if (item.toolType === "fileChange") {
-    return FileDiff;
-  }
-  if (item.toolType === "webSearch") {
-    return Search;
-  }
-  if (item.toolType === "imageView") {
-    return Image;
-  }
-  if (item.toolType === "collabToolCall") {
-    return Users;
-  }
+const USER_MESSAGE_COLLAPSE_CHAR_THRESHOLD = 800;
+const USER_MESSAGE_COLLAPSE_LINE_THRESHOLD = 12;
+const ASSISTANT_MESSAGE_COLLAPSE_CHAR_THRESHOLD = 900;
+const ASSISTANT_MESSAGE_COLLAPSE_LINE_THRESHOLD = 14;
+const MESSAGE_PREVIEW_CHAR_LIMIT = 1200;
 
-  const label = summary.label.toLowerCase();
-  if (label === "read") {
-    return FileText;
+function shouldCollapseUserMessage(text: string): boolean {
+  if (text.length >= USER_MESSAGE_COLLAPSE_CHAR_THRESHOLD) {
+    return true;
   }
-  if (label === "searched") {
-    return Search;
-  }
+  return text.split(/\r?\n/).length >= USER_MESSAGE_COLLAPSE_LINE_THRESHOLD;
+}
 
-  const toolName = toolNameFromTitle(item.title).toLowerCase();
-  const title = item.title.toLowerCase();
-  if (toolName.includes("diff") || title.includes("diff")) {
-    return Diff;
+function shouldCollapseAssistantMessage(text: string): boolean {
+  if (text.length >= ASSISTANT_MESSAGE_COLLAPSE_CHAR_THRESHOLD) {
+    return true;
   }
+  return text.split(/\r?\n/).length >= ASSISTANT_MESSAGE_COLLAPSE_LINE_THRESHOLD;
+}
 
-  return Wrench;
+function buildMessagePreview(text: string): string {
+  if (text.length <= MESSAGE_PREVIEW_CHAR_LIMIT) {
+    return text;
+  }
+  return `${text.slice(0, MESSAGE_PREVIEW_CHAR_LIMIT).trimEnd()}…`;
 }
 
 /**
- * Derive streaming phase from elapsed time and whether we have content yet.
- * - "start": first ~2 seconds or before any items arrive
- * - "in-progress": actively generating content
+ * Derive streaming phase from elapsed time, whether we have content, and
+ * whether the agent is actively streaming output.
+ * - "start": waiting for the first response (no streaming yet)
+ * - "in-progress": actively generating content (streaming data received)
  * - "done": finished (shown via turn-complete)
  */
 function deriveStreamingPhase(
   isThinking: boolean,
   hasItems: boolean,
+  isStreaming: boolean,
   elapsedMs: number,
 ): "start" | "in-progress" | "done" {
   if (!isThinking) {
     return "done";
   }
+  // Only show "in-progress" when we have evidence of actual output.
+  // Previously this was purely time-based (>2s → in-progress) which
+  // misleadingly showed "输出中" even when no content had arrived.
+  if (isStreaming) {
+    return "in-progress";
+  }
   if (!hasItems && elapsedMs < 2000) {
     return "start";
   }
-  return "in-progress";
+  // After the initial start window, remain in "start" (等待响应) until
+  // real streaming data arrives, rather than falsely claiming "输出中".
+  return "start";
 }
 
 const PHASE_LABELS: Record<"start" | "in-progress", string> = {
   start: "等待 Agent 响应…",
-  "in-progress": "Agent 正在回复…",
+  "in-progress": "Agent 正在输出…",
 };
 
 export const WorkingIndicator = memo(function WorkingIndicator({
   isThinking,
+  isStreaming = false,
   processingStartedAt = null,
   lastDurationMs = null,
   hasItems,
@@ -318,7 +333,7 @@ export const WorkingIndicator = memo(function WorkingIndicator({
     return () => window.clearInterval(interval);
   }, [isThinking, processingStartedAt]);
 
-  const phase = deriveStreamingPhase(isThinking, hasItems, elapsedMs);
+  const phase = deriveStreamingPhase(isThinking, hasItems, isStreaming, elapsedMs);
 
   return (
     <>
@@ -329,10 +344,10 @@ export const WorkingIndicator = memo(function WorkingIndicator({
             <span className="working-timer-clock">{formatDurationMs(elapsedMs)}</span>
           </div>
           <span className="working-text">
-            {reasoningLabel || (phase !== "done" ? PHASE_LABELS[phase] : "Agent 正在回复…")}
+            {reasoningLabel || (phase !== "done" ? PHASE_LABELS[phase] : "Agent 正在输出…")}
           </span>
           <span className="working-phase-badge" aria-label={`阶段：${phase}`}>
-            {phase === "start" ? "连接中" : "输出中"}
+            {phase === "start" ? "等待中" : "输出中"}
           </span>
         </div>
       )}
@@ -340,7 +355,7 @@ export const WorkingIndicator = memo(function WorkingIndicator({
         <div className="turn-complete working-phase-done" aria-live="polite">
           <span className="turn-complete-line" aria-hidden />
           <span className="turn-complete-label">
-            完成于 {formatDurationMs(lastDurationMs)}
+            Worked for {formatDurationMs(lastDurationMs)}
           </span>
           <span className="turn-complete-line" aria-hidden />
         </div>
@@ -360,9 +375,32 @@ export const MessageRow = memo(function MessageRow({
   onOpenFileLink,
   onOpenFileLinkMenu,
   onOpenThreadLink,
+  shouldAutoCollapseLongAssistantMessage = false,
 }: MessageRowProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const hasText = item.text.trim().length > 0;
+  const isLongUserMessage =
+    item.role === "user" && hasText && shouldCollapseUserMessage(item.text);
+  const isLongAssistantMessage =
+    item.role === "assistant" &&
+    hasText &&
+    shouldAutoCollapseLongAssistantMessage &&
+    shouldCollapseAssistantMessage(item.text);
+  const [isUserCollapsed, setIsUserCollapsed] = useState(isLongUserMessage);
+  const [isAssistantCollapsed, setIsAssistantCollapsed] = useState(
+    isLongAssistantMessage,
+  );
+
+  useEffect(() => {
+    setIsUserCollapsed(isLongUserMessage);
+  }, [isLongUserMessage, item.id]);
+
+  useEffect(() => {
+    setIsAssistantCollapsed(isLongAssistantMessage);
+  }, [isLongAssistantMessage, item.id]);
+
+  const messagePreviewText = useMemo(() => buildMessagePreview(item.text), [item.text]);
+
   const imageItems = useMemo(() => {
     if (!item.images || item.images.length === 0) {
       return [];
@@ -378,9 +416,14 @@ export const MessageRow = memo(function MessageRow({
       .filter(Boolean) as MessageImage[];
   }, [item.images]);
 
+  const bubbleClasses = ["bubble", "message-bubble"];
+  if (isLongUserMessage) {
+    bubbleClasses.push("message-bubble-long-user");
+  }
+
   return (
     <div className={`message ${item.role}`}>
-      <div className="bubble message-bubble">
+      <div className={bubbleClasses.join(" ")}>
         {imageItems.length > 0 && (
           <MessageImageGrid
             images={imageItems}
@@ -388,19 +431,63 @@ export const MessageRow = memo(function MessageRow({
             hasText={hasText}
           />
         )}
-        {hasText && (
-          <Markdown
-            value={item.text}
-            className="markdown"
-            codeBlockStyle="message"
-            codeBlockCopyUseModifier={codeBlockCopyUseModifier}
-            showFilePath={showMessageFilePath}
-            workspaceId={workspaceId}
-            workspacePath={workspacePath}
-            onOpenFileLink={onOpenFileLink}
-            onOpenFileLinkMenu={onOpenFileLinkMenu}
-            onOpenThreadLink={onOpenThreadLink}
-          />
+        {hasText && isLongUserMessage && isUserCollapsed && (
+          <div className="message-user-collapsed">
+            <div className="message-user-preview">{messagePreviewText}</div>
+            <button
+              type="button"
+              className="ghost message-user-collapse-toggle"
+              onClick={() => setIsUserCollapsed(false)}
+            >
+              展开全文
+            </button>
+          </div>
+        )}
+        {hasText && isLongAssistantMessage && isAssistantCollapsed && (
+          <div className="message-assistant-collapsed">
+            <div className="message-assistant-preview">{messagePreviewText}</div>
+            <button
+              type="button"
+              className="ghost message-assistant-collapse-toggle"
+              onClick={() => setIsAssistantCollapsed(false)}
+            >
+              展开全文
+            </button>
+          </div>
+        )}
+        {hasText && !((isLongUserMessage && isUserCollapsed) || (isLongAssistantMessage && isAssistantCollapsed)) && (
+          <>
+            <Markdown
+              value={item.text}
+              className="markdown"
+              codeBlockStyle="message"
+              codeBlockCopyUseModifier={codeBlockCopyUseModifier}
+              showFilePath={showMessageFilePath}
+              workspaceId={workspaceId}
+              workspacePath={workspacePath}
+              onOpenFileLink={onOpenFileLink}
+              onOpenFileLinkMenu={onOpenFileLinkMenu}
+              onOpenThreadLink={onOpenThreadLink}
+            />
+            {isLongUserMessage && (
+              <button
+                type="button"
+                className="ghost message-user-collapse-toggle"
+                onClick={() => setIsUserCollapsed(true)}
+              >
+                收起
+              </button>
+            )}
+            {isLongAssistantMessage && (
+              <button
+                type="button"
+                className="ghost message-assistant-collapse-toggle"
+                onClick={() => setIsAssistantCollapsed(true)}
+              >
+                收起
+              </button>
+            )}
+          </>
         )}
         {lightboxIndex !== null && imageItems.length > 0 && (
           <ImageLightbox
@@ -442,26 +529,16 @@ export const ReasoningRow = memo(function ReasoningRow({
   const reasoningTone: StatusTone = hasBody ? "completed" : "processing";
   return (
     <div className="tool-inline reasoning-inline">
-      <button
-        type="button"
-        className="tool-inline-bar-toggle"
-        onClick={() => onToggle(item.id)}
-        aria-expanded={isExpanded}
-        aria-label="切换推理详情"
-      />
       <div className="tool-inline-content">
         <button
           type="button"
           className="tool-inline-summary tool-inline-toggle"
           onClick={() => onToggle(item.id)}
           aria-expanded={isExpanded}
+          aria-label="切换推理详情"
         >
-          <Brain
-            className={`tool-inline-icon ${reasoningTone}`}
-            size={14}
-            aria-hidden
-          />
-          <span className="tool-inline-value">{summaryTitle}</span>
+          <span className={`tool-inline-dot ${reasoningTone}`} aria-hidden />
+          <span className="tool-inline-activity">{summaryTitle || "Thinking"}</span>
         </button>
         {hasBody && (
           <Markdown
@@ -555,21 +632,22 @@ export const ToolRow = memo(function ToolRow({
     .filter(Boolean);
   const hasChanges = changeNames.length > 0;
   const tone = toolStatusTone(item, hasChanges);
-  const ToolIcon = toolIconForSummary(item, summary);
-  const summaryLabel = isFileChange
-    ? changeNames.length > 1
-      ? "files edited"
-      : "file edited"
-    : isCommand
-      ? ""
-      : summary.label;
   const summaryValue = isFileChange
     ? changeNames.length > 1
       ? `${changeNames[0]} +${changeNames.length - 1}`
       : changeNames[0] || "changes"
     : summary.value;
+  const activityText = isFileChange
+    ? `Edited ${summaryValue || "files"}`
+    : isCommand
+      ? "Ran command"
+      : summary.label === "searched"
+        ? `Searched ${summaryValue || ""}`.trim()
+        : summary.label === "read"
+          ? `Read ${summaryValue || ""}`.trim()
+          : summaryValue || item.title || "Used tool";
   const shouldFadeCommand =
-    isCommand && !isExpanded && (summaryValue?.length ?? 0) > 80;
+    isCommand && !isExpanded && activityText.length > 96;
   const showToolOutput = isExpanded && (!isFileChange || !hasChanges);
   const normalizedStatus = (item.status ?? "").toLowerCase();
   const isCommandRunning = isCommand && /in[_\s-]*progress|running|started/.test(normalizedStatus);
@@ -592,9 +670,7 @@ export const ToolRow = memo(function ToolRow({
   }, [isCommandRunning]);
 
   const showCommandOutput =
-    isCommand &&
-    summary.output &&
-    (isExpanded || (isCommandRunning && showLiveOutput) || isLongRunning);
+    isCommand && (isExpanded || (isCommandRunning && showLiveOutput) || isLongRunning);
 
   useEffect(() => {
     if (showCommandOutput && isCommandRunning && showLiveOutput) {
@@ -604,43 +680,32 @@ export const ToolRow = memo(function ToolRow({
 
   return (
     <div className={`tool-inline ${isExpanded ? "tool-inline-expanded" : ""}`}>
-      <button
-        type="button"
-        className="tool-inline-bar-toggle"
-        onClick={() => onToggle(item.id)}
-        aria-expanded={isExpanded}
-        aria-label="切换工具详情"
-      />
       <div className="tool-inline-content">
         <button
           type="button"
           className="tool-inline-summary tool-inline-toggle"
           onClick={() => onToggle(item.id)}
           aria-expanded={isExpanded}
+          aria-label="切换工具详情"
         >
-          <ToolIcon className={`tool-inline-icon ${tone}`} size={14} aria-hidden />
-          {summaryLabel && (
-            <span className="tool-inline-label">{summaryLabel}:</span>
-          )}
-          {summaryValue && (
-            <span
-              className={`tool-inline-value ${isCommand ? "tool-inline-command" : ""} ${
-                isCommand && isExpanded ? "tool-inline-command-full" : ""
-              }`}
-            >
-              {isCommand ? (
-                <span
-                  className={`tool-inline-command-text ${
-                    shouldFadeCommand ? "tool-inline-command-fade" : ""
-                  }`}
-                >
-                  {summaryValue}
-                </span>
-              ) : (
-                summaryValue
-              )}
-            </span>
-          )}
+          <span className={`tool-inline-dot ${tone}`} aria-hidden />
+          <span
+            className={`tool-inline-activity ${isCommand ? "tool-inline-command" : ""} ${
+              isCommand && isExpanded ? "tool-inline-command-full" : ""
+            }`}
+          >
+            {isCommand ? (
+              <span
+                className={`tool-inline-command-text ${
+                  shouldFadeCommand ? "tool-inline-command-fade" : ""
+                }`}
+              >
+                {activityText}
+              </span>
+            ) : (
+              activityText
+            )}
+          </span>
         </button>
         {isExpanded && summary.detail && !isFileChange && (
           <div className="tool-inline-detail">{summary.detail}</div>
@@ -691,7 +756,13 @@ export const ToolRow = memo(function ToolRow({
             onOpenThreadLink={onOpenThreadLink}
           />
         )}
-        {showCommandOutput && <CommandOutput output={summary.output ?? ""} />}
+        {showCommandOutput && (
+          <CommandOutput
+            output={summary.output ?? ""}
+            command={summaryValue || commandText || "command"}
+            tone={tone}
+          />
+        )}
         {showToolOutput && summary.output && !isCommand && (
           <Markdown
             value={summary.output}
@@ -711,26 +782,17 @@ export const ToolRow = memo(function ToolRow({
 });
 
 export const ExploreRow = memo(function ExploreRow({ item }: ExploreRowProps) {
-  const title = item.status === "exploring" ? "探索中" : "已探索";
+  const tone = item.status === "exploring" ? "processing" : "completed";
   return (
     <div className="tool-inline explore-inline">
-      <div className="tool-inline-bar-toggle" aria-hidden />
       <div className="tool-inline-content">
-        <div className="explore-inline-header">
-          <Terminal
-            className={`tool-inline-icon ${
-              item.status === "exploring" ? "processing" : "completed"
-            }`}
-            size={14}
-            aria-hidden
-          />
-          <span className="explore-inline-title">{title}</span>
-        </div>
         <div className="explore-inline-list">
           {item.entries.map((entry, index) => (
             <div key={`${entry.kind}-${entry.label}-${index}`} className="explore-inline-item">
-              <span className="explore-inline-kind">{exploreKindLabel(entry.kind)}</span>
-              <span className="explore-inline-label">{entry.label}</span>
+              <span className={`tool-inline-dot ${tone}`} aria-hidden />
+              <span className="explore-inline-label">
+                {exploreKindLabel(entry.kind)} {entry.label}
+              </span>
               {entry.detail && entry.detail !== entry.label && (
                 <span className="explore-inline-detail">{entry.detail}</span>
               )}

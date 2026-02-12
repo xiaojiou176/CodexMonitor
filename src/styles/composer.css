@@ -13,55 +13,241 @@
 .composer-queue {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 6px 8px;
+  gap: 8px;
+  padding: 8px 10px;
   border-radius: 10px;
   background: var(--surface-card);
   border: 1px solid var(--border-muted);
 }
 
+.composer-queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .composer-queue-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-subtle);
+}
+
+.composer-queue-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-queue-migrate,
+.composer-queue-toggle {
+  border: 1px solid var(--border-muted);
+  background: var(--surface-card-strong);
+  color: var(--text-quiet);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.composer-queue-migrate:hover,
+.composer-queue-toggle:hover {
+  color: var(--text-stronger);
+  border-color: var(--border-strong);
+}
+
+.composer-queue-collapsed-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px dashed var(--border-muted);
+  background: var(--surface-item);
+}
+
+.composer-queue-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.composer-queue-summary-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.composer-queue-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.composer-queue-status {
   font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-fainter);
+  line-height: 1.2;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--text-faint);
+  background: color-mix(in srgb, var(--surface-item) 85%, transparent);
+}
+
+.composer-queue-status.is-normal {
+  color: var(--text-muted);
+}
+
+.composer-queue-status.is-processing,
+.composer-queue-status.is-reviewing {
+  color: var(--text-warning-strong, #d98f1b);
+  border-color: color-mix(in srgb, var(--text-warning-strong, #d98f1b) 45%, var(--border-subtle));
+}
+
+.composer-queue-status.is-danger,
+.composer-queue-status.is-stale {
+  color: var(--text-danger-strong, #d64545);
+  border-color: color-mix(in srgb, var(--text-danger-strong, #d64545) 45%, var(--border-subtle));
+}
+
+.composer-queue-status.is-awaiting {
+  color: var(--text-accent, #4a90e2);
+  border-color: color-mix(in srgb, var(--text-accent, #4a90e2) 45%, var(--border-subtle));
+}
+
+.composer-queue-recover {
+  border: 1px solid var(--border-muted);
+  background: var(--surface-card-strong);
+  color: var(--text-quiet);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.composer-queue-recover:hover {
+  color: var(--text-stronger);
+  border-color: var(--border-strong);
 }
 
 .composer-queue-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .composer-queue-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
   border-radius: 8px;
   background: var(--surface-item);
   color: var(--text-quiet);
   font-size: 11px;
 }
 
-.composer-queue-text {
+.composer-queue-item-main {
+  min-width: 0;
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-queue-item-icon {
+  color: var(--text-fainter);
+  font-size: 10px;
+}
+
+.composer-queue-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.composer-queue-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .composer-queue-menu {
-  border: none;
-  background: transparent;
-  color: var(--text-faint);
-  font-size: 11px;
-  padding: 2px 4px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-card-strong);
+  color: var(--text-muted);
+  border-radius: 999px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  padding: 0;
   cursor: pointer;
 }
 
 .composer-queue-menu:hover {
   color: var(--text-stronger);
+  border-color: var(--border-strong);
+}
+
+.composer-queue-menu:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.composer-queue-steer {
+  border: 1px solid var(--border-muted);
+  background: var(--surface-card-strong);
+  color: var(--text-quiet);
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-size: 11px;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.composer-queue-steer:hover {
+  color: var(--text-stronger);
+  border-color: var(--border-strong);
+}
+
+.composer-queue-steer:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.composer-queue-delete {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-card-strong);
+  color: var(--text-faint);
+  border-radius: 999px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.composer-queue-delete:hover {
+  color: var(--text-danger-strong, #d64545);
+  border-color: color-mix(in srgb, var(--text-danger-strong, #d64545) 40%, var(--border-subtle));
+}
+
+.composer-queue-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px dashed var(--border-muted);
+  background: color-mix(in srgb, var(--surface-item) 82%, transparent);
 }
 
 .composer-input {
@@ -596,8 +782,50 @@
 /* ── Context Meter ─────────────────────────────────────────────────── */
 /* Replaces the old tiny ring with a readable progress bar + numbers.  */
 
-.composer-context-meter {
+.composer-font-size-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-card);
   margin-left: auto;
+  min-width: 0;
+}
+
+.composer-font-size-label {
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.composer-font-size-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-font-size-slider {
+  width: 88px;
+  margin: 0;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.composer-font-size-slider:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.composer-font-size-value {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.composer-context-meter {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -875,6 +1103,7 @@
     scrollbar-width: thin;
   }
 
+  .app.layout-phone .composer-font-size-control,
   .app.layout-phone .composer-context-meter {
     display: none;
   }

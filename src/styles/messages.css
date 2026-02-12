@@ -8,14 +8,13 @@
   will-change: scroll-position;
 }
 
-/* Let the browser skip layout/paint for off-screen message rows */
+/* Keep message row sizing deterministic for virtualized scrolling. */
 .message-row,
 .tool-group,
 .tool-inline,
 .item-card,
 .explore-row {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 80px;
+  content-visibility: visible;
 }
 
 /* Tighter containment for individual message items to isolate repaints */
@@ -30,6 +29,30 @@
   border: none;
 }
 
+.messages-virtual-content {
+  width: 100%;
+  position: relative;
+}
+
+.messages-virtual-row {
+  width: 100%;
+}
+
+.messages-full > .message,
+.messages-full > .tool-inline,
+.messages-full > .item-card,
+.messages-full > .turn-complete,
+.messages-full > .working,
+.messages-virtual-row > .message,
+.messages-virtual-row > .tool-inline,
+.messages-virtual-row > .item-card,
+.messages-virtual-row > .turn-complete,
+.messages-virtual-row > .working {
+  width: min(100%, var(--message-content-max-width, 920px));
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .main .messages-full {
   margin-top: calc(-1 * var(--main-topbar-height));
   padding-top: calc(12px + var(--main-topbar-height));
@@ -38,6 +61,7 @@
 .messages-empty {
   padding: 24px var(--main-panel-padding);
 }
+
 
 .messages-loading-indicator {
   display: inline-flex;
@@ -176,18 +200,29 @@
   }
 }
 
+
 .message {
   display: flex;
-  margin-bottom: 16px;
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 10px;
 }
 
 /* Visual rhythm: extra breathing room between role transitions */
 .message.assistant + .message.user {
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .message.user + .message.assistant {
-  margin-top: 8px;
+  margin-top: 6px;
+}
+
+.messages-full > :not(.message.assistant) + .message.assistant,
+.messages-full > .message.assistant + .message.assistant,
+.messages-virtual-row.item-message-assistant-divider > .message.assistant {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 16px;
+  margin-top: 14px;
 }
 
 .message.user {
@@ -195,14 +230,16 @@
 }
 
 .bubble {
-  max-width: 70%;
-  padding: 10px 14px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 8px 12px;
   border-radius: 14px;
   background: var(--surface-bubble);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: var(--message-font-size, 13px);
+  line-height: 1.5;
   overflow-wrap: anywhere;
   word-break: break-word;
+  white-space: normal;
 }
 
 .message-bubble {
@@ -223,11 +260,14 @@
   opacity: 0;
   transform: translateY(4px);
   transition: opacity 160ms ease, transform 160ms ease;
+  pointer-events: none;
 }
 
-.message:hover .message-copy-button {
+.message:hover .message-copy-button,
+.message:focus-within .message-copy-button {
   opacity: 1;
   transform: translateY(0);
+  pointer-events: auto;
 }
 
 .message-copy-icon {
@@ -271,24 +311,125 @@
 }
 
 .message.user .bubble {
-  background: var(--surface-bubble-user);
+  max-width: min(88%, 880px);
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-control) 82%, transparent);
+  padding: 8px 12px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+
+.message.user .bubble.message-bubble-long-user {
+  max-width: min(92%, 980px);
+  border-radius: 12px;
+}
+
+.message.user .markdown {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.message.user .markdown :where(p, li, blockquote, a) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .message.assistant .bubble {
-  max-width: min(100%, var(--message-doc-max-width, 760px));
-  width: auto;
-  padding: 16px 20px;
-  background: var(--surface-bubble-assistant, var(--surface-card));
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  max-width: 100%;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.message.assistant .markdown {
+  width: 100%;
+  max-width: none;
 }
 
 /* Ensure markdown code blocks inside assistant bubble have correct spacing */
 .message.assistant .bubble .markdown-codeblock,
 .message.assistant .bubble .markdown-codeblock-single {
-  margin-left: -4px;
-  margin-right: -4px;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.message.assistant .message-image-grid {
+  margin-left: 0;
+  margin-right: 0;
+  padding: 4px 0;
+}
+
+.message.assistant .message-image-grid--with-text {
+  margin-bottom: 10px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.message.user .message-copy-button {
+  display: none;
+}
+
+.message.assistant .message-copy-button {
+  top: -8px;
+  right: -2px;
+  bottom: auto;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--surface-card) 88%, transparent);
+}
+
+.message-user-collapsed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-user-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.message-user-collapse-toggle,
+.message-assistant-collapse-toggle {
+  align-self: flex-start;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface-card) 70%, transparent);
+}
+
+.message-user-collapse-toggle:hover,
+.message-assistant-collapse-toggle:hover {
+  color: var(--text-stronger);
+  border-color: var(--border-strong);
+}
+
+.message-assistant-collapsed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-assistant-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .message-image-grid {
@@ -469,14 +610,14 @@
 }
 
 .item-title {
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .item-subtitle {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
@@ -496,15 +637,15 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   min-width: 0;
 }
 
 .tool-inline {
-  border-left: 2px solid var(--border-subtle);
-  padding: 2px 0 2px 12px;
-  margin: 8px 0 12px;
+  border-left: none;
+  padding: 0;
+  margin: 4px 0 8px;
   display: flex;
   position: relative;
   min-width: 0;
@@ -513,7 +654,7 @@
 .tool-inline-content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -521,9 +662,10 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-stronger);
+  gap: 6px;
+  font-size: var(--message-font-size, 13px);
+  line-height: 1.58;
+  color: var(--text-muted);
   min-width: 0;
 }
 
@@ -542,10 +684,10 @@
 
 .tool-inline-bar-toggle {
   position: absolute;
-  left: -10px;
+  left: -4px;
   top: 0;
   bottom: 0;
-  width: 18px;
+  width: 12px;
   background: none;
   border: none;
   cursor: pointer;
@@ -557,20 +699,22 @@
 }
 
 .tool-inline-dot {
-  width: 8px;
-  height: 8px;
+  display: inline-flex;
+  width: 6px;
+  height: 6px;
   border-radius: 999px;
   background: var(--status-unknown);
-  box-shadow: 0 0 0 1px var(--border-subtle);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-subtle) 80%, transparent);
   flex: 0 0 auto;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .tool-inline-icon {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   color: var(--status-unknown);
   flex: 0 0 auto;
+  opacity: 0.72;
 }
 
 .tool-inline-icon.completed {
@@ -599,13 +743,21 @@
 
 .tool-inline-label {
   color: var(--text-muted);
-  text-transform: lowercase;
-  letter-spacing: 0.02em;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.tool-inline-activity {
+  color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tool-inline-value {
   color: var(--text-stronger);
-  font-weight: 500;
+  font-weight: 450;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -621,31 +773,32 @@
 }
 
 .tool-inline-command {
-  font-family: var(--code-font-family);
-  font-size: var(--code-font-size, 11px);
-  font-weight: var(--code-font-weight, 400);
-  line-height: var(--code-line-height, 1.28);
-  color: var(--text-quiet);
-  background: var(--surface-command);
-  padding: 2px 6px;
-  border-radius: 6px;
-  border: 1px solid var(--border-subtle);
+  font-family: inherit;
+  font-size: var(--message-font-size, 13px);
+  font-weight: 400;
+  line-height: 1.58;
+  color: var(--text-muted);
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  border: none;
   display: inline-flex;
   min-width: 0;
-  max-width: 420px;
+  max-width: min(100%, 900px);
 }
 
 .tool-inline-command-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
   display: inline-block;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .tool-inline-command-fade {
-  -webkit-mask-image: linear-gradient(90deg, #000 70%, transparent 100%);
-  mask-image: linear-gradient(90deg, #000 70%, transparent 100%);
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .tool-inline-command-full {
@@ -662,15 +815,16 @@
 
 .tool-inline-status {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .tool-inline-detail {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: var(--message-font-size, 13px);
+  line-height: 1.58;
+  color: var(--text-faint);
   white-space: pre-wrap;
 }
 
@@ -686,19 +840,20 @@
 .explore-inline-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 12px;
-  color: var(--text-stronger);
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
 .explore-inline-title {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .explore-inline-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .explore-inline-item {
@@ -707,7 +862,8 @@
   flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--message-font-size, 13px);
+  line-height: 1.58;
 }
 
 .explore-inline-kind {
@@ -726,7 +882,7 @@
 
 .explore-inline-detail {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--message-font-size, 13px);
   min-width: 0;
   flex: 1 1 auto;
   overflow-wrap: anywhere;
@@ -781,15 +937,35 @@
 }
 
 .tool-inline-terminal {
-  background: var(--surface-command);
-  border-radius: 10px;
-  border: 1px solid var(--border-subtle);
-  padding: 8px 10px;
+  background: color-mix(in srgb, var(--surface-control) 36%, var(--surface-messages));
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 92%, transparent);
+  padding: 10px 12px;
   font-size: var(--code-font-size, 11px);
-  color: var(--text-quiet);
+  color: var(--text-muted);
   font-family: var(--code-font-family);
   font-weight: var(--code-font-weight, 400);
-  line-height: var(--code-line-height, 1.28);
+  line-height: var(--code-line-height, 1.32);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tool-inline-terminal-shell {
+  font-size: 12px;
+  font-family: var(--ui-font-family);
+  color: var(--text-subtle);
+}
+
+.tool-inline-terminal-command {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-stronger);
+}
+
+.tool-inline-terminal-divider {
+  height: 1px;
+  background: color-mix(in srgb, var(--border-subtle) 80%, transparent);
 }
 
 .tool-inline-terminal-lines {
@@ -797,48 +973,66 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  line-height: var(--code-line-height, 1.28);
-  max-height: calc(var(--code-line-height, 1.28) * 6em);
-  min-height: calc(var(--code-line-height, 1.28) * 5em);
+  line-height: var(--code-line-height, 1.32);
+  max-height: calc(var(--code-line-height, 1.32) * 7em);
   overflow-y: auto;
   overflow-x: hidden;
-  gap: 2px;
+  gap: 3px;
   scrollbar-width: thin;
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 18px);
-  mask-image: linear-gradient(180deg, transparent 0%, #000 18px);
 }
 
 .tool-inline-terminal-line {
   white-space: pre-wrap;
   word-break: break-word;
+  color: var(--text-muted);
+}
+
+.tool-inline-terminal-status {
+  align-self: flex-end;
+  font-size: 12px;
+  font-family: var(--ui-font-family);
+  color: var(--text-subtle);
+}
+
+.tool-inline-terminal-status.success {
+  color: color-mix(in srgb, var(--status-success) 76%, var(--text-subtle));
+}
+
+.tool-inline-terminal-status.failed {
+  color: color-mix(in srgb, var(--status-error) 80%, var(--text-subtle));
+}
+
+.tool-inline-terminal-status.running {
+  color: color-mix(in srgb, var(--status-warning) 72%, var(--text-subtle));
 }
 
 
 .tool-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 8px 0 12px;
+  gap: 4px;
+  margin: 4px 0 8px;
 }
 
 .tool-group-header {
-  border-left: 2px solid var(--border-subtle);
-  padding: 2px 0 2px 12px;
+  border-left: none;
+  padding: 0;
 }
 
 .tool-group-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
   text-align: left;
-  font-size: 11px;
-  color: var(--text-muted);
-  letter-spacing: 0.02em;
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.5;
+  letter-spacing: 0;
 }
 
 .tool-group-toggle:focus-visible {
@@ -859,7 +1053,8 @@
 .tool-group-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
+  padding-left: 2px;
 }
 
 .tool-group-body .tool-inline {
@@ -867,7 +1062,8 @@
 }
 
 .reasoning-inline-detail {
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1.6;
   color: var(--text-muted);
 }
 
@@ -918,7 +1114,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-quiet);
 }
 
@@ -929,7 +1125,7 @@
 }
 
 .file-change-path {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-stronger);
 }
 
@@ -947,10 +1143,10 @@
 .markdown {
   white-space: normal;
   overflow-wrap: anywhere;
-  font-size: 14.5px;
-  line-height: 1.75;
+  font-size: var(--message-font-size, 13px);
+  line-height: 1.64;
   color: var(--text-stronger);
-  letter-spacing: 0.006em;
+  letter-spacing: 0.001em;
 }
 
 .markdown > * {
@@ -958,7 +1154,7 @@
 }
 
 .markdown > * + * {
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
 .markdown pre {
@@ -975,63 +1171,81 @@
 .message .markdown :not(pre) > code {
   color: var(--text-stronger);
   background: color-mix(in srgb, var(--surface-command) 92%, transparent);
-  border: 1px solid var(--border-strong);
-  padding: 2px 6px;
+  border: none;
+  padding: 1px 6px;
   border-radius: 6px;
-  font-size: 0.92em;
+  font-size: 0.9em;
   font-weight: 500;
-  white-space: nowrap;
+  white-space: break-spaces;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.message .markdown :not(pre) > code::selection {
+  background: color-mix(in srgb, var(--border-accent-soft) 70%, transparent);
+  color: var(--text-strong);
 }
 
 .message .markdown .message-file-link {
-  display: inline-flex;
+  display: inline;
   align-items: baseline;
-  gap: 6px;
+  gap: 0;
   max-width: 100%;
-  padding: 2px 7px;
-  border-radius: 8px;
-  border: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-command) 82%, transparent);
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
   color: var(--message-link-color);
-  text-decoration: none;
+  text-decoration: underline;
   vertical-align: baseline;
   overflow: hidden;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .message .markdown .message-file-link:hover {
-  border-color: var(--border-accent-soft);
+  border-color: transparent;
   color: var(--message-link-color);
 }
 
 .message .markdown .message-file-link-name {
-  font-family: var(--code-font-family);
-  font-weight: 520;
-  font-size: 0.88em;
-  line-height: 1.2;
-  white-space: nowrap;
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 1em;
+  line-height: inherit;
+  white-space: normal;
+}
+
+.message .markdown .message-file-link::selection,
+.message .markdown .message-file-link-name::selection {
+  background: color-mix(in srgb, var(--border-accent-soft) 70%, transparent);
+  color: var(--text-strong);
 }
 
 .message .markdown .message-file-link-line {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 5px;
-  border-radius: 999px;
-  border: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-control) 78%, transparent);
+  display: inline;
+  align-items: baseline;
+  margin-left: 4px;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
   color: var(--text-muted);
-  font-size: 0.64em;
-  line-height: 1.35;
-  letter-spacing: 0.02em;
+  font-size: 0.86em;
+  line-height: inherit;
+  letter-spacing: 0;
 }
 
 .message .markdown .message-file-link-path {
-  font-size: 0.62em;
-  line-height: 1.2;
+  display: inline;
+  margin-left: 4px;
+  font-size: 0.9em;
+  line-height: inherit;
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 32ch;
+  max-width: none;
 }
 
 .message-file-link-preview {
@@ -1179,6 +1393,8 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .message .markdown-codeblock-language {
@@ -1212,6 +1428,8 @@
   font-size: var(--code-font-size, 11px);
   font-weight: var(--code-font-weight, 400);
   line-height: var(--code-line-height, 1.28);
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .message .markdown-codeblock-single {
@@ -1227,6 +1445,8 @@
   font-weight: var(--code-font-weight, 400);
   line-height: var(--code-line-height, 1.28);
   box-shadow: none;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .message .markdown-codeblock-single code {
@@ -1271,7 +1491,7 @@
 .markdown li {
   margin: 6px 0;
   padding-left: 4px;
-  line-height: 1.72;
+  line-height: 1.62;
 }
 
 .message.assistant .markdown li > ul,
@@ -1285,13 +1505,9 @@
   margin: 0;
 }
 
-.message.assistant .markdown :where(p, ul, ol, pre, blockquote) {
-  max-width: 88ch;
-}
-
 .markdown :where(strong) {
-  font-weight: 620;
-  color: var(--text-stronger);
+  font-weight: 700;
+  color: var(--text-strong);
 }
 
 .markdown :where(em) {

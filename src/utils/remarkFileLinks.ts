@@ -33,6 +33,16 @@ function isPathCandidate(
   leadingContext: string,
   previousChar: string,
 ) {
+  const pathWithoutLine = value.replace(/:\d+(?::\d+)?$/, "");
+  const normalizedForSignal = pathWithoutLine
+    .replace(/^~\//, "")
+    .replace(/^\//, "")
+    .replace(/^(?:\.\.?\/)+/, "");
+  const segments = normalizedForSignal.split("/").filter(Boolean);
+  const hasMeaningfulSegment = segments.some(
+    (segment) => segment !== "." && segment !== ".." && /[\p{L}\p{N}]/u.test(segment),
+  );
+
   if (!value.includes("/")) {
     return false;
   }
@@ -46,12 +56,15 @@ function isPathCandidate(
     if (value.startsWith("/") && previousChar && /[A-Za-z0-9.]/.test(previousChar)) {
       return false;
     }
-    return true;
+    return hasMeaningfulSegment;
   }
   if (value.startsWith("~/")) {
-    return true;
+    return hasMeaningfulSegment;
   }
   const lastSegment = value.split("/").pop() ?? "";
+  if (!hasMeaningfulSegment) {
+    return false;
+  }
   if (lastSegment.includes(".")) {
     return true;
   }

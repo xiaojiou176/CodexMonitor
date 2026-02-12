@@ -43,12 +43,13 @@ vi.mock("../../../services/toasts", () => ({
 }));
 
 describe("useSidebarMenus", () => {
-  it("adds a show in file manager option for worktrees", async () => {
+  it("adds workspace alias rename action to workspace menu", async () => {
     const onDeleteThread = vi.fn();
     const onPinThread = vi.fn();
     const onUnpinThread = vi.fn();
     const isThreadPinned = vi.fn(() => false);
     const onRenameThread = vi.fn();
+    const onRenameWorkspaceAlias = vi.fn();
     const onReloadWorkspaceThreads = vi.fn();
     const onDeleteWorkspace = vi.fn();
     const onDeleteWorktree = vi.fn();
@@ -60,6 +61,52 @@ describe("useSidebarMenus", () => {
         onUnpinThread,
         isThreadPinned,
         onRenameThread,
+        onRenameWorkspaceAlias,
+        onReloadWorkspaceThreads,
+        onDeleteWorkspace,
+        onDeleteWorktree,
+      }),
+    );
+
+    const event = {
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+      clientX: 8,
+      clientY: 16,
+    } as unknown as ReactMouseEvent;
+
+    await result.current.showWorkspaceMenu(event, "ws-1");
+
+    const menuArgs =
+      menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
+    const renameItem = menuArgs.items.find(
+      (item: { text: string }) => item.text === "自定义名称",
+    );
+
+    expect(renameItem).toBeDefined();
+    await renameItem.action();
+    expect(onRenameWorkspaceAlias).toHaveBeenCalledWith("ws-1");
+  });
+
+  it("adds a show in file manager option for worktrees", async () => {
+    const onDeleteThread = vi.fn();
+    const onPinThread = vi.fn();
+    const onUnpinThread = vi.fn();
+    const isThreadPinned = vi.fn(() => false);
+    const onRenameThread = vi.fn();
+    const onRenameWorkspaceAlias = vi.fn();
+    const onReloadWorkspaceThreads = vi.fn();
+    const onDeleteWorkspace = vi.fn();
+    const onDeleteWorktree = vi.fn();
+
+    const { result } = renderHook(() =>
+      useSidebarMenus({
+        onDeleteThread,
+        onPinThread,
+        onUnpinThread,
+        isThreadPinned,
+        onRenameThread,
+        onRenameWorkspaceAlias,
         onReloadWorkspaceThreads,
         onDeleteWorkspace,
         onDeleteWorktree,
@@ -88,7 +135,8 @@ describe("useSidebarMenus", () => {
 
     await result.current.showWorktreeMenu(event, worktree);
 
-    const menuArgs = menuNew.mock.calls[0]?.[0];
+    const menuArgs =
+      menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
     const revealItem = menuArgs.items.find(
       (item: { text: string }) => item.text === `在${fileManagerName()}中显示`,
     );

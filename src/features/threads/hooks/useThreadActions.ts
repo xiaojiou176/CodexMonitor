@@ -189,6 +189,7 @@ export function useThreadActions({
       threadId: string,
       force = false,
       replaceLocal = false,
+      skipLoadedItemsShortcut = false,
     ) => {
       if (!threadId) {
         return null;
@@ -252,7 +253,7 @@ export function useThreadActions({
           if (shouldReplace) {
             replaceOnResumeRef.current[threadId] = false;
           }
-          if (localItems.length > 0 && !shouldReplace) {
+          if (localItems.length > 0 && !shouldReplace && !skipLoadedItemsShortcut) {
             loadedThreadsRef.current[threadId] = true;
             return threadId;
           }
@@ -277,11 +278,13 @@ export function useThreadActions({
             items.length > 0 &&
             localItems.length > 0 &&
             items.some((item) => localItems.some((local) => local.id === item.id));
+          const keepLocalWithoutMerge =
+            localItems.length > 0 && !hasOverlap && !skipLoadedItemsShortcut;
           const mergedItems =
             items.length > 0
               ? shouldReplace
                 ? items
-                : localItems.length > 0 && !hasOverlap
+                : keepLocalWithoutMerge
                   ? localItems
                   : mergeThreadItems(items, localItems)
               : localItems;
@@ -410,6 +413,16 @@ export function useThreadActions({
       return resumeThreadForWorkspace(workspaceId, threadId, true, true);
     },
     [replaceOnResumeRef, resumeThreadForWorkspace],
+  );
+
+  const loadOlderMessagesForThread = useCallback(
+    async (workspaceId: string, threadId: string) => {
+      if (!threadId) {
+        return null;
+      }
+      return resumeThreadForWorkspace(workspaceId, threadId, true, false, true);
+    },
+    [resumeThreadForWorkspace],
   );
 
   const resetWorkspaceThreads = useCallback(
@@ -591,19 +604,31 @@ export function useThreadActions({
           workspaceId: workspace.id,
           cursor,
         });
-        uniqueThreads.forEach((thread) => {
-          const threadId = String(thread?.id ?? "");
-          const preview = asString(thread?.preview ?? "").trim();
-          if (!threadId || !preview) {
-            return;
-          }
+        const lastAgentUpdates = uniqueThreads
+          .map((thread) => {
+            const threadId = String(thread?.id ?? "");
+            const preview = asString(thread?.preview ?? "").trim();
+            if (!threadId || !preview) {
+              return null;
+            }
+            return {
+              threadId,
+              text: preview,
+              timestamp: getThreadTimestamp(thread),
+            };
+          })
+          .filter(
+            (
+              entry,
+            ): entry is { threadId: string; text: string; timestamp: number } =>
+              Boolean(entry),
+          );
+        if (lastAgentUpdates.length > 0) {
           dispatch({
-            type: "setLastAgentMessage",
-            threadId,
-            text: preview,
-            timestamp: getThreadTimestamp(thread),
+            type: "setLastAgentMessagesBulk",
+            updates: lastAgentUpdates,
           });
-        });
+        }
       } catch (error) {
         onDebug?.({
           id: `${Date.now()}-client-thread-list-error`,
@@ -733,19 +758,31 @@ export function useThreadActions({
           workspaceId: workspace.id,
           cursor,
         });
-        matchingThreads.forEach((thread) => {
-          const threadId = String(thread?.id ?? "");
-          const preview = asString(thread?.preview ?? "").trim();
-          if (!threadId || !preview) {
-            return;
-          }
+        const lastAgentUpdates = matchingThreads
+          .map((thread) => {
+            const threadId = String(thread?.id ?? "");
+            const preview = asString(thread?.preview ?? "").trim();
+            if (!threadId || !preview) {
+              return null;
+            }
+            return {
+              threadId,
+              text: preview,
+              timestamp: getThreadTimestamp(thread),
+            };
+          })
+          .filter(
+            (
+              entry,
+            ): entry is { threadId: string; text: string; timestamp: number } =>
+              Boolean(entry),
+          );
+        if (lastAgentUpdates.length > 0) {
           dispatch({
-            type: "setLastAgentMessage",
-            threadId,
-            text: preview,
-            timestamp: getThreadTimestamp(thread),
+            type: "setLastAgentMessagesBulk",
+            updates: lastAgentUpdates,
           });
-        });
+        }
       } catch (error) {
         onDebug?.({
           id: `${Date.now()}-client-thread-list-older-error`,
@@ -795,6 +832,7 @@ export function useThreadActions({
     forkThreadForWorkspace,
     resumeThreadForWorkspace,
     refreshThread,
+    loadOlderMessagesForThread,
     resetWorkspaceThreads,
     listThreadsForWorkspace,
     loadOlderThreadsForWorkspace,

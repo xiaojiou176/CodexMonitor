@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppServerEvent } from "../../../types";
 import { subscribeAppServerEvents } from "../../../services/events";
@@ -82,11 +83,13 @@ describe("useAppServerEvents", () => {
     });
 
     expect(firstOnDelta).not.toHaveBeenCalled();
-    expect(secondOnDelta).toHaveBeenCalledWith({
-      workspaceId: "ws-1",
-      threadId: "thread-1",
-      itemId: "item-1",
-      delta: "Hello",
+    await waitFor(() => {
+      expect(secondOnDelta).toHaveBeenCalledWith({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        itemId: "item-1",
+        delta: "Hello",
+      });
     });
 
     await act(async () => {
@@ -130,11 +133,13 @@ describe("useAppServerEvents", () => {
         },
       });
     });
-    expect(handlers.onAgentMessageDelta).toHaveBeenCalledWith({
-      workspaceId: "ws-1",
-      threadId: "thread-1",
-      itemId: "item-1",
-      delta: "Hello",
+    await waitFor(() => {
+      expect(handlers.onAgentMessageDelta).toHaveBeenCalledWith({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        itemId: "item-1",
+        delta: "Hello",
+      });
     });
 
     act(() => {
@@ -393,6 +398,51 @@ describe("useAppServerEvents", () => {
           },
         ],
       },
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("coalesces consecutive agent deltas for the same message", async () => {
+    const handlers: Handlers = {
+      onAgentMessageDelta: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "item/agentMessage/delta",
+          params: { threadId: "thread-1", itemId: "item-1", delta: "Hel" },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "item/agentMessage/delta",
+          params: { threadId: "thread-1", itemId: "item-1", delta: "lo " },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "item/agentMessage/delta",
+          params: { threadId: "thread-1", itemId: "item-1", delta: "World" },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(handlers.onAgentMessageDelta).toHaveBeenCalledTimes(1);
+      expect(handlers.onAgentMessageDelta).toHaveBeenCalledWith({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        itemId: "item-1",
+        delta: "Hello World",
+      });
     });
 
     await act(async () => {

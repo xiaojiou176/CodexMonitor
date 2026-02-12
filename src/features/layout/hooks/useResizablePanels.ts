@@ -30,6 +30,14 @@ type ResizeState = {
   startHeight: number;
 };
 
+const CSS_VAR_MAP: Record<ResizeState["type"], string> = {
+  sidebar: "--sidebar-width",
+  "right-panel": "--right-panel-width",
+  "plan-panel": "--plan-panel-height",
+  "terminal-panel": "--terminal-panel-height",
+  "debug-panel": "--debug-panel-height",
+};
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -126,15 +134,6 @@ export function useResizablePanels() {
       String(debugPanelHeight),
     );
   }, [debugPanelHeight]);
-
-  // Map panel type → CSS custom property name used by the layout grid
-  const CSS_VAR_MAP: Record<ResizeState["type"], string> = {
-    sidebar: "--sidebar-width",
-    "right-panel": "--right-panel-width",
-    "plan-panel": "--plan-panel-height",
-    "terminal-panel": "--terminal-panel-height",
-    "debug-panel": "--debug-panel-height",
-  };
 
   useEffect(() => {
     // During drag we bypass React state and write the CSS variable directly

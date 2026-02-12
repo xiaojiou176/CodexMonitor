@@ -315,6 +315,7 @@ export function useComposerAutocompleteState({
         return;
       }
       if (isAutocompleteOpen) {
+        const hasMatches = autocompleteMatches.length > 0;
         if (event.key === "ArrowDown") {
           event.preventDefault();
           moveHighlight(1);
@@ -325,7 +326,7 @@ export function useComposerAutocompleteState({
           moveHighlight(-1);
           return;
         }
-        if (event.key === "Enter" && !event.shiftKey) {
+        if (event.key === "Enter" && !event.shiftKey && hasMatches) {
           event.preventDefault();
           const selected =
             autocompleteMatches[highlightIndex] ?? autocompleteMatches[0];
@@ -334,7 +335,7 @@ export function useComposerAutocompleteState({
           }
           return;
         }
-        if (event.key === "Tab") {
+        if (event.key === "Tab" && hasMatches) {
           event.preventDefault();
           const selected =
             autocompleteMatches[highlightIndex] ?? autocompleteMatches[0];

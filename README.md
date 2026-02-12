@@ -88,6 +88,31 @@ npm run shortcut:desktop
 
 You can then double-click the shortcut to launch CodexMonitor in dev mode.
 
+## Cursor Agent Control Plane (No IDE)
+
+This repository now includes a practical control-plane workflow for running multiple Cursor Agent sessions without opening multiple IDE windows.
+
+Quick commands:
+
+```bash
+npm run cursor:doctor
+npm run cursor:manifest:init
+npm run cursor:sessions:print
+npm run cursor:sessions:tmux
+```
+
+Optional panel bootstrap (claudecodeui):
+
+```bash
+npm run cursor:panel:bootstrap
+npm run cursor:panel:bootstrap:docker
+```
+
+Canonical runbook:
+
+- `docs/cursor-control-plane.md`
+- `docs/examples/cursor-agents.manifest.example.json`
+
 ## iOS Support (WIP)
 
 iOS support is currently in progress.
@@ -231,7 +256,14 @@ Recommended validation commands:
 npm run lint
 npm run test
 npm run typecheck
+npm run test:coverage:gate
 cd src-tauri && cargo check
+```
+
+One-shot JavaScript quality gate:
+
+```bash
+npm run test:repo
 ```
 
 ## Project Structure

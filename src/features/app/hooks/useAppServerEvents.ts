@@ -30,6 +30,7 @@ type AgentCompleted = {
 
 type AppServerEventHandlers = {
   onWorkspaceConnected?: (workspaceId: string) => void;
+  onWorkspaceDisconnected?: (workspaceId: string) => void;
   onThreadStarted?: (workspaceId: string, thread: Record<string, unknown>) => void;
   onThreadNameUpdated?: (
     workspaceId: string,
@@ -88,6 +89,7 @@ type AppServerEventHandlers = {
     workspaceId: string,
     payload: { loginId: string | null; success: boolean; error: string | null },
   ) => void;
+  onIsAlive?: (workspaceId: string) => void;
 };
 
 export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
@@ -96,6 +98,7 @@ export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
   "account/updated",
   "codex/backgroundThread",
   "codex/connected",
+  "codex/disconnected",
   "error",
   "item/agentMessage/delta",
   "item/commandExecution/outputDelta",
@@ -117,14 +120,55 @@ export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
   "turn/started",
 ] as const satisfies readonly SupportedAppServerMethod[];
 
+const AGENT_DELTA_FLUSH_INTERVAL_MS = 16;
+
 export function useAppServerEvents(handlers: AppServerEventHandlers) {
   const handlersRef = useRef(handlers);
+  const pendingAgentDeltasRef = useRef<Map<string, AgentDelta>>(new Map());
+  const pendingAgentDeltaFlushTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     handlersRef.current = handlers;
   }, [handlers]);
 
   useEffect(() => {
+    const flushAgentMessageDeltas = () => {
+      if (pendingAgentDeltaFlushTimerRef.current !== null) {
+        window.clearTimeout(pendingAgentDeltaFlushTimerRef.current);
+        pendingAgentDeltaFlushTimerRef.current = null;
+      }
+      if (!pendingAgentDeltasRef.current.size) {
+        return;
+      }
+      const pending = pendingAgentDeltasRef.current;
+      pendingAgentDeltasRef.current = new Map();
+      const currentHandlers = handlersRef.current;
+      for (const event of pending.values()) {
+        currentHandlers.onAgentMessageDelta?.(event);
+      }
+    };
+
+    const enqueueAgentMessageDelta = (event: AgentDelta) => {
+      const key = `${event.workspaceId}:${event.threadId}:${event.itemId}`;
+      const existing = pendingAgentDeltasRef.current.get(key);
+      if (existing) {
+        pendingAgentDeltasRef.current.set(key, {
+          ...existing,
+          delta: `${existing.delta}${event.delta}`,
+        });
+      } else {
+        pendingAgentDeltasRef.current.set(key, event);
+      }
+
+      if (pendingAgentDeltaFlushTimerRef.current !== null) {
+        return;
+      }
+      pendingAgentDeltaFlushTimerRef.current = window.setTimeout(() => {
+        pendingAgentDeltaFlushTimerRef.current = null;
+        flushAgentMessageDeltas();
+      }, AGENT_DELTA_FLUSH_INTERVAL_MS);
+    };
+
     const unlisten = subscribeAppServerEvents((payload) => {
       const currentHandlers = handlersRef.current;
 
@@ -135,10 +179,19 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       if (!method) {
         return;
       }
+
+      // Signal that we received any event from this workspace — used by
+      // the stale-processing guard to detect silent disconnects.
+      currentHandlers.onIsAlive?.(workspace_id);
       const params = getAppServerParams(payload);
 
       if (method === "codex/connected") {
         currentHandlers.onWorkspaceConnected?.(workspace_id);
+        return;
+      }
+
+      if (method === "codex/disconnected") {
+        currentHandlers.onWorkspaceDisconnected?.(workspace_id);
         return;
       }
 
@@ -203,7 +256,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         const itemId = String(params.itemId ?? params.item_id ?? "");
         const delta = String(params.delta ?? "");
         if (threadId && itemId && delta) {
-          currentHandlers.onAgentMessageDelta?.({
+          enqueueAgentMessageDelta({
             workspaceId: workspace_id,
             threadId,
             itemId,
@@ -272,6 +325,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "turn/completed") {
+        flushAgentMessageDeltas();
         const turn = params.turn as Record<string, unknown> | undefined;
         const threadId = String(
           params.threadId ?? params.thread_id ?? turn?.threadId ?? turn?.thread_id ?? "",
@@ -354,6 +408,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "item/completed") {
+        flushAgentMessageDeltas();
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const item = params.item as Record<string, unknown> | undefined;
         if (threadId && item) {
@@ -454,6 +509,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
     });
 
     return () => {
+      flushAgentMessageDeltas();
       unlisten();
     };
   }, []);

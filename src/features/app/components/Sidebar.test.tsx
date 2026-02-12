@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRef } from "react";
@@ -10,6 +10,7 @@ afterEach(() => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
   }
+  window.localStorage.clear();
   cleanup();
 });
 
@@ -238,4 +239,404 @@ describe("Sidebar", () => {
     fireEvent.click(draftRow);
     expect(onSelectWorkspace).toHaveBeenCalledWith("ws-1");
   });
+
+  it("supports dragging thread rows after target in lower half", async () => {
+    const workspace = {
+      id: "ws-1",
+      name: "Workspace",
+      path: "/tmp/workspace",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspace],
+          },
+        ]}
+        threadsByWorkspace={{
+          "ws-1": [
+            { id: "thread-1", name: "Alpha", updatedAt: 1000 },
+            { id: "thread-2", name: "Beta", updatedAt: 900 },
+          ],
+        }}
+      />,
+    );
+
+    const alphaRow = screen.getByText("Alpha").closest(".thread-row");
+    const betaRow = screen.getByText("Beta").closest(".thread-row");
+    expect(alphaRow?.getAttribute("draggable")).toBe("true");
+    expect(betaRow?.getAttribute("draggable")).toBe("true");
+
+    if (!alphaRow || !betaRow) {
+      throw new Error("Missing thread rows for drag test");
+    }
+
+    vi.spyOn(betaRow, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 100,
+      top: 100,
+      left: 0,
+      right: 240,
+      bottom: 140,
+      width: 240,
+      height: 40,
+      toJSON: () => ({}),
+    });
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+      getData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(alphaRow, { dataTransfer });
+
+    const dragOverEvent = createEvent.dragOver(betaRow, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", { value: 135 });
+    fireEvent(betaRow, dragOverEvent);
+
+    const dropEvent = createEvent.drop(betaRow, { dataTransfer });
+    Object.defineProperty(dropEvent, "clientY", { value: 135 });
+    fireEvent(betaRow, dropEvent);
+
+    await waitFor(() => {
+      const threadNames = Array.from(
+        container.querySelectorAll(".thread-row .thread-name"),
+      ).map((node) => node.textContent?.trim());
+      expect(threadNames.slice(0, 2)).toEqual(["Beta", "Alpha"]);
+    });
+
+    const stored = window.localStorage.getItem("codexmonitor.threadOrderByWorkspace");
+    expect(stored).toBeTruthy();
+    expect(JSON.parse(stored ?? "{}")).toEqual({
+      "ws-1": ["thread-2", "thread-1"],
+    });
+  });
+
+  it("supports dragging thread rows before target in upper half", async () => {
+    const workspace = {
+      id: "ws-1",
+      name: "Workspace",
+      path: "/tmp/workspace",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspace],
+          },
+        ]}
+        threadsByWorkspace={{
+          "ws-1": [
+            { id: "thread-1", name: "Alpha", updatedAt: 1000 },
+            { id: "thread-2", name: "Beta", updatedAt: 900 },
+          ],
+        }}
+      />,
+    );
+
+    const alphaRow = screen.getByText("Alpha").closest(".thread-row");
+    const betaRow = screen.getByText("Beta").closest(".thread-row");
+    if (!alphaRow || !betaRow) {
+      throw new Error("Missing thread rows for drag test");
+    }
+
+    vi.spyOn(alphaRow, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 100,
+      top: 100,
+      left: 0,
+      right: 240,
+      bottom: 140,
+      width: 240,
+      height: 40,
+      toJSON: () => ({}),
+    });
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+      getData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(betaRow, { dataTransfer });
+
+    const dragOverEvent = createEvent.dragOver(alphaRow, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", { value: 105 });
+    fireEvent(alphaRow, dragOverEvent);
+
+    const dropEvent = createEvent.drop(alphaRow, { dataTransfer });
+    Object.defineProperty(dropEvent, "clientY", { value: 105 });
+    fireEvent(alphaRow, dropEvent);
+
+    await waitFor(() => {
+      const threadNames = Array.from(
+        container.querySelectorAll(".thread-row .thread-name"),
+      ).map((node) => node.textContent?.trim());
+      expect(threadNames.slice(0, 2)).toEqual(["Beta", "Alpha"]);
+    });
+
+    const stored = window.localStorage.getItem("codexmonitor.threadOrderByWorkspace");
+    expect(stored).toBeTruthy();
+    expect(JSON.parse(stored ?? "{}")).toEqual({
+      "ws-1": ["thread-2", "thread-1"],
+    });
+  });
+
+  it("keeps New Agent draft row visible when only starting state remains", () => {
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[
+          {
+            id: "ws-1",
+            name: "Workspace",
+            path: "/tmp/workspace",
+            connected: true,
+            settings: { sidebarCollapsed: false },
+          },
+        ]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [
+              {
+                id: "ws-1",
+                name: "Workspace",
+                path: "/tmp/workspace",
+                connected: true,
+                settings: { sidebarCollapsed: false },
+              },
+            ],
+          },
+        ]}
+        newAgentDraftWorkspaceId={null}
+        startingDraftThreadWorkspaceId="ws-1"
+        activeWorkspaceId="ws-2"
+        activeThreadId="thread-existing"
+      />,
+    );
+
+    const draftRow = screen.getByRole("button", { name: /新建对话/i });
+    expect(draftRow).toBeTruthy();
+    expect(draftRow.className).toContain("thread-row-draft");
+  });
+
+  it("supports dragging workspace rows after target in lower half", async () => {
+    const workspaceA = {
+      id: "ws-1",
+      name: "Alpha Repo",
+      path: "/tmp/alpha",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+    const workspaceB = {
+      id: "ws-2",
+      name: "Beta Repo",
+      path: "/tmp/beta",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspaceA, workspaceB]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspaceA, workspaceB],
+          },
+        ]}
+      />,
+    );
+
+    const alphaRow = screen.getByText("Alpha Repo").closest(".workspace-row");
+    const betaRow = screen.getByText("Beta Repo").closest(".workspace-row");
+    expect(alphaRow?.getAttribute("draggable")).toBe("true");
+    expect(betaRow?.getAttribute("draggable")).toBe("true");
+
+    if (!alphaRow || !betaRow) {
+      throw new Error("Missing workspace rows for drag test");
+    }
+
+    vi.spyOn(betaRow, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 200,
+      top: 200,
+      left: 0,
+      right: 280,
+      bottom: 248,
+      width: 280,
+      height: 48,
+      toJSON: () => ({}),
+    });
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+      getData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(alphaRow, { dataTransfer });
+
+    const dragOverEvent = createEvent.dragOver(betaRow, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", { value: 245 });
+    fireEvent(betaRow, dragOverEvent);
+
+    const dropEvent = createEvent.drop(betaRow, { dataTransfer });
+    Object.defineProperty(dropEvent, "clientY", { value: 245 });
+    fireEvent(betaRow, dropEvent);
+
+    await waitFor(() => {
+      const workspaceNames = Array.from(
+        container.querySelectorAll(".workspace-row .workspace-name"),
+      ).map((node) => node.textContent?.trim());
+      expect(workspaceNames.slice(0, 2)).toEqual(["Beta Repo", "Alpha Repo"]);
+    });
+
+    const stored = window.localStorage.getItem("codexmonitor.workspaceOrderByGroup");
+    expect(stored).toBeTruthy();
+    expect(JSON.parse(stored ?? "{}")).toEqual({
+      __ungrouped_workspace_group__: ["ws-2", "ws-1"],
+    });
+  });
+
+  it("supports dragging workspace rows before target in upper half", async () => {
+    const workspaceA = {
+      id: "ws-1",
+      name: "Alpha Repo",
+      path: "/tmp/alpha",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+    const workspaceB = {
+      id: "ws-2",
+      name: "Beta Repo",
+      path: "/tmp/beta",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspaceA, workspaceB]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspaceA, workspaceB],
+          },
+        ]}
+      />,
+    );
+
+    const alphaRow = screen.getByText("Alpha Repo").closest(".workspace-row");
+    const betaRow = screen.getByText("Beta Repo").closest(".workspace-row");
+    if (!alphaRow || !betaRow) {
+      throw new Error("Missing workspace rows for drag test");
+    }
+
+    vi.spyOn(alphaRow, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 200,
+      top: 200,
+      left: 0,
+      right: 280,
+      bottom: 248,
+      width: 280,
+      height: 48,
+      toJSON: () => ({}),
+    });
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+      getData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(betaRow, { dataTransfer });
+
+    const dragOverEvent = createEvent.dragOver(alphaRow, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", { value: 205 });
+    fireEvent(alphaRow, dragOverEvent);
+
+    const dropEvent = createEvent.drop(alphaRow, { dataTransfer });
+    Object.defineProperty(dropEvent, "clientY", { value: 205 });
+    fireEvent(alphaRow, dropEvent);
+
+    await waitFor(() => {
+      const workspaceNames = Array.from(
+        container.querySelectorAll(".workspace-row .workspace-name"),
+      ).map((node) => node.textContent?.trim());
+      expect(workspaceNames.slice(0, 2)).toEqual(["Beta Repo", "Alpha Repo"]);
+    });
+
+    const stored = window.localStorage.getItem("codexmonitor.workspaceOrderByGroup");
+    expect(stored).toBeTruthy();
+    expect(JSON.parse(stored ?? "{}")).toEqual({
+      __ungrouped_workspace_group__: ["ws-2", "ws-1"],
+    });
+  });
+
+  it("uses custom workspace alias from localStorage", () => {
+    window.localStorage.setItem(
+      "codexmonitor.workspaceAliasesById",
+      JSON.stringify({ "ws-1": "Design System" }),
+    );
+
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[
+          {
+            id: "ws-1",
+            name: "Workspace",
+            path: "/tmp/workspace",
+            connected: true,
+            settings: { sidebarCollapsed: false },
+          },
+        ]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [
+              {
+                id: "ws-1",
+                name: "Workspace",
+                path: "/tmp/workspace",
+                connected: true,
+                settings: { sidebarCollapsed: false },
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Design System")).toBeTruthy();
+  });
+
 });

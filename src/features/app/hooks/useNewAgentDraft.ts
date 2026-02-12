@@ -81,11 +81,27 @@ export function useNewAgentDraft({
   const clearDraftStateIfDifferentWorkspace = useCallback(
     (workspaceId: string) => {
       if (workspaceId !== newAgentDraftWorkspaceId) {
+        if (startingDraftThreadWorkspaceId) {
+          setNewAgentDraftWorkspaceId(null);
+          return;
+        }
         clearDraftState();
       }
     },
-    [clearDraftState, newAgentDraftWorkspaceId],
+    [
+      clearDraftState,
+      newAgentDraftWorkspaceId,
+      startingDraftThreadWorkspaceId,
+    ],
   );
+
+  const clearDraftStateOnNavigation = useCallback(() => {
+    if (startingDraftThreadWorkspaceId) {
+      setNewAgentDraftWorkspaceId(null);
+      return;
+    }
+    clearDraftState();
+  }, [clearDraftState, startingDraftThreadWorkspaceId]);
 
   const runWithDraftStart = useCallback(
     async (runner: () => Promise<void>) => {
@@ -138,6 +154,7 @@ export function useNewAgentDraft({
     startNewAgentDraft,
     clearDraftState,
     clearDraftStateIfDifferentWorkspace,
+    clearDraftStateOnNavigation,
     runWithDraftStart,
   };
 }

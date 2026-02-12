@@ -1,6 +1,7 @@
 import type { ConversationItem } from "../types";
 
-const MAX_ITEMS_PER_THREAD = 200;
+// 0 disables client-side item capping so full thread history remains scrollable.
+const MAX_ITEMS_PER_THREAD = 0;
 const MAX_ITEM_TEXT = 20000;
 const TOOL_OUTPUT_RECENT_ITEMS = 40;
 const NO_TRUNCATE_TOOL_TYPES = new Set(["fileChange", "commandExecution"]);
@@ -159,7 +160,7 @@ export function prepareThreadItemsIncremental(
   let limited = items;
   let nextChangedIndex = changedIndex;
 
-  if (limited.length > MAX_ITEMS_PER_THREAD) {
+  if (MAX_ITEMS_PER_THREAD > 0 && limited.length > MAX_ITEMS_PER_THREAD) {
     const offset = limited.length - MAX_ITEMS_PER_THREAD;
     limited = limited.slice(offset);
     nextChangedIndex -= offset;
@@ -498,7 +499,7 @@ export function prepareThreadItems(items: ConversationItem[]) {
   }
   const normalized = filtered.map((item) => normalizeItem(item));
   const limited =
-    normalized.length > MAX_ITEMS_PER_THREAD
+    MAX_ITEMS_PER_THREAD > 0 && normalized.length > MAX_ITEMS_PER_THREAD
       ? normalized.slice(-MAX_ITEMS_PER_THREAD)
       : normalized;
   const summarized = summarizeExploration(limited);
@@ -1000,15 +1001,20 @@ export function mergeThreadItems(
   if (!localItems.length) {
     return remoteItems;
   }
-  const byId = new Map(remoteItems.map((item) => [item.id, item]));
+
+  const localById = new Map(localItems.map((item) => [item.id, item]));
+  const remoteById = new Map(remoteItems.map((item) => [item.id, item]));
+
   const merged = remoteItems.map((item) => {
-    const local = localItems.find((entry) => entry.id === item.id);
+    const local = localById.get(item.id);
     return local ? chooseRicherItem(item, local) : item;
   });
+
   localItems.forEach((item) => {
-    if (!byId.has(item.id)) {
+    if (!remoteById.has(item.id)) {
       merged.push(item);
     }
   });
+
   return merged;
 }

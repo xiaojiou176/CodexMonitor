@@ -44,6 +44,19 @@ jobs:
       - name: Tests
         run: npm run test
 
+  coverage-js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Coverage gate
+        run: npm run test:coverage:gate
+
   test-tauri:
     name: Rust tests (${{ matrix.platform.name }})
     runs-on: ${{ matrix.platform.os }}
@@ -104,6 +117,7 @@ jobs:
       - lint
       - typecheck
       - test-js
+      - coverage-js
       - test-tauri
     strategy:
       fail-fast: false

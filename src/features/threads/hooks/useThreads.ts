@@ -20,6 +20,7 @@ import { useThreadSelectors } from "./useThreadSelectors";
 import { useThreadStatus } from "./useThreadStatus";
 import { useThreadUserInput } from "./useThreadUserInput";
 import { useThreadTitleAutogeneration } from "./useThreadTitleAutogeneration";
+import { useThreadStaleGuard } from "./useThreadStaleGuard";
 import { setThreadName as setThreadNameService } from "../../../services/tauri";
 import { makeCustomNameKey, saveCustomName } from "../utils/threadStorage";
 
@@ -99,7 +100,7 @@ export function useThreads({
     onDebug,
   });
 
-  const { markProcessing, markReviewing, setActiveTurnId } = useThreadStatus({
+  const { markProcessing, markReviewing, setActiveTurnId, resetThreadRuntimeState } = useThreadStatus({
     dispatch,
   });
 
@@ -116,6 +117,16 @@ export function useThreads({
     },
     [activeThreadId, dispatch],
   );
+
+  const { recordAlive, handleDisconnected } = useThreadStaleGuard({
+    activeWorkspaceId,
+    activeThreadId,
+    threadStatusById: state.threadStatusById,
+    markProcessing,
+    markReviewing,
+    setActiveTurnId,
+    pushThreadErrorMessage,
+  });
 
   const safeMessageActivity = useCallback(() => {
     try {
@@ -268,8 +279,10 @@ export function useThreads({
       ...threadHandlers,
       onAccountUpdated: handleAccountUpdated,
       onAccountLoginCompleted: handleAccountLoginCompleted,
+      onWorkspaceDisconnected: handleDisconnected,
+      onIsAlive: recordAlive,
     }),
-    [threadHandlers, handleAccountUpdated, handleAccountLoginCompleted],
+    [threadHandlers, handleAccountUpdated, handleAccountLoginCompleted, handleDisconnected, recordAlive],
   );
 
   useAppServerEvents(handlers);
@@ -279,6 +292,7 @@ export function useThreads({
     forkThreadForWorkspace,
     resumeThreadForWorkspace,
     refreshThread,
+    loadOlderMessagesForThread,
     resetWorkspaceThreads,
     listThreadsForWorkspace,
     loadOlderThreadsForWorkspace,
@@ -318,7 +332,15 @@ export function useThreads({
         return null;
       }
     } else if (!loadedThreadsRef.current[threadId]) {
-      await resumeThreadForWorkspace(activeWorkspace.id, threadId);
+      const resumed = await resumeThreadForWorkspace(activeWorkspace.id, threadId);
+      if (!resumed) {
+        // Thread no longer exists on the server — start a fresh one so the user
+        // is not stuck on a stale threadId that will keep returning "not found".
+        threadId = await startThreadForWorkspace(activeWorkspace.id);
+        if (!threadId) {
+          return null;
+        }
+      }
     }
     return threadId;
   }, [activeWorkspace, activeThreadId, resumeThreadForWorkspace, startThreadForWorkspace]);
@@ -336,7 +358,15 @@ export function useThreads({
           return null;
         }
       } else if (!loadedThreadsRef.current[threadId]) {
-        await resumeThreadForWorkspace(workspaceId, threadId);
+        const resumed = await resumeThreadForWorkspace(workspaceId, threadId);
+        if (!resumed) {
+          threadId = await startThreadForWorkspace(workspaceId, {
+            activate: shouldActivate,
+          });
+          if (!threadId) {
+            return null;
+          }
+        }
       }
       if (shouldActivate && currentActiveThreadId !== threadId) {
         dispatch({ type: "setActiveThreadId", workspaceId, threadId });
@@ -480,6 +510,7 @@ export function useThreads({
     forkThreadForWorkspace,
     listThreadsForWorkspace,
     refreshThread,
+    loadOlderMessagesForThread,
     resetWorkspaceThreads,
     loadOlderThreadsForWorkspace,
     sendUserMessage,
@@ -514,5 +545,6 @@ export function useThreads({
     handleApprovalDecision,
     handleApprovalRemember,
     handleUserInputSubmit,
+    resetThreadRuntimeState,
   };
 }

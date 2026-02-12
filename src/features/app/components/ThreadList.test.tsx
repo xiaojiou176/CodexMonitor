@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ThreadSummary } from "../../../types";
 import { ThreadList } from "./ThreadList";
@@ -39,6 +39,7 @@ const baseProps = {
   onLoadOlderThreads: vi.fn(),
   onSelectThread: vi.fn(),
   onShowThreadMenu: vi.fn(),
+  onReorderThreads: vi.fn(),
 };
 
 describe("ThreadList", () => {
@@ -102,6 +103,137 @@ describe("ThreadList", () => {
     const loadButton = screen.getByRole("button", { name: "加载更早的..." });
     fireEvent.click(loadButton);
     expect(onLoadOlderThreads).toHaveBeenCalledWith("ws-1");
+  });
+
+  it("reorders root threads before target when dropped in upper half", () => {
+    const onReorderThreads = vi.fn();
+    const { container } = render(
+      <ThreadList
+        {...baseProps}
+        unpinnedRows={[
+          { thread: { ...thread, id: "thread-1", name: "Alpha" }, depth: 0 },
+          {
+            thread: { id: "thread-3", name: "Beta", updatedAt: 1100 },
+            depth: 0,
+          },
+        ]}
+        onReorderThreads={onReorderThreads}
+      />,
+    );
+
+    const rows = Array.from(container.querySelectorAll(".thread-row"));
+    const alphaRow = rows.find(
+      (row) => row.querySelector(".thread-name")?.textContent === "Alpha",
+    );
+    const betaRow = rows.find(
+      (row) => row.querySelector(".thread-name")?.textContent === "Beta",
+    );
+    expect(alphaRow?.getAttribute("draggable")).toBe("true");
+    expect(betaRow?.getAttribute("draggable")).toBe("true");
+
+    if (!alphaRow || !betaRow) {
+      throw new Error("Missing rows for drag reorder test");
+    }
+
+    vi.spyOn(betaRow, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 100,
+      top: 100,
+      left: 0,
+      right: 240,
+      bottom: 140,
+      width: 240,
+      height: 40,
+      toJSON: () => ({}),
+    });
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+      getData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(alphaRow, { dataTransfer });
+
+    const dragOverEvent = createEvent.dragOver(betaRow, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", { value: 110 });
+    fireEvent(betaRow, dragOverEvent);
+
+    const dropEvent = createEvent.drop(betaRow, { dataTransfer });
+    Object.defineProperty(dropEvent, "clientY", { value: 110 });
+    fireEvent(betaRow, dropEvent);
+
+    expect(onReorderThreads).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "thread-3",
+      "before",
+    );
+  });
+
+  it("reorders root threads after target when dropped in lower half", () => {
+    const onReorderThreads = vi.fn();
+    const { container } = render(
+      <ThreadList
+        {...baseProps}
+        unpinnedRows={[
+          { thread: { ...thread, id: "thread-1", name: "Alpha" }, depth: 0 },
+          {
+            thread: { id: "thread-3", name: "Beta", updatedAt: 1100 },
+            depth: 0,
+          },
+        ]}
+        onReorderThreads={onReorderThreads}
+      />,
+    );
+
+    const rows = Array.from(container.querySelectorAll(".thread-row"));
+    const alphaRow = rows.find(
+      (row) => row.querySelector(".thread-name")?.textContent === "Alpha",
+    );
+    const betaRow = rows.find(
+      (row) => row.querySelector(".thread-name")?.textContent === "Beta",
+    );
+    if (!alphaRow || !betaRow) {
+      throw new Error("Missing rows for drag reorder test");
+    }
+
+    vi.spyOn(betaRow, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 100,
+      top: 100,
+      left: 0,
+      right: 240,
+      bottom: 140,
+      width: 240,
+      height: 40,
+      toJSON: () => ({}),
+    });
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+      getData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(alphaRow, { dataTransfer });
+
+    const dragOverEvent = createEvent.dragOver(betaRow, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", { value: 135 });
+    fireEvent(betaRow, dragOverEvent);
+
+    const dropEvent = createEvent.drop(betaRow, { dataTransfer });
+    Object.defineProperty(dropEvent, "clientY", { value: 135 });
+    fireEvent(betaRow, dropEvent);
+
+    expect(onReorderThreads).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "thread-3",
+      "after",
+    );
   });
 
   it("renders nested rows with indentation and disables pinning", () => {

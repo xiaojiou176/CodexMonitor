@@ -13,6 +13,7 @@ type SidebarMenuHandlers = {
   onUnpinThread: (workspaceId: string, threadId: string) => void;
   isThreadPinned: (workspaceId: string, threadId: string) => boolean;
   onRenameThread: (workspaceId: string, threadId: string) => void;
+  onRenameWorkspaceAlias: (workspaceId: string) => void;
   onReloadWorkspaceThreads: (workspaceId: string) => void;
   onDeleteWorkspace: (workspaceId: string) => void;
   onDeleteWorktree: (workspaceId: string) => void;
@@ -24,6 +25,7 @@ export function useSidebarMenus({
   onUnpinThread,
   isThreadPinned,
   onRenameThread,
+  onRenameWorkspaceAlias,
   onReloadWorkspaceThreads,
   onDeleteWorkspace,
   onDeleteWorktree,
@@ -90,6 +92,10 @@ export function useSidebarMenus({
     async (event: MouseEvent, workspaceId: string) => {
       event.preventDefault();
       event.stopPropagation();
+      const renameAliasItem = await MenuItem.new({
+        text: "自定义名称",
+        action: () => onRenameWorkspaceAlias(workspaceId),
+      });
       const reloadItem = await MenuItem.new({
         text: "刷新对话",
         action: () => onReloadWorkspaceThreads(workspaceId),
@@ -98,12 +104,14 @@ export function useSidebarMenus({
         text: "删除",
         action: () => onDeleteWorkspace(workspaceId),
       });
-      const menu = await Menu.new({ items: [reloadItem, deleteItem] });
+      const menu = await Menu.new({
+        items: [renameAliasItem, reloadItem, deleteItem],
+      });
       const window = getCurrentWindow();
       const position = new LogicalPosition(event.clientX, event.clientY);
       await menu.popup(position, window);
     },
-    [onReloadWorkspaceThreads, onDeleteWorkspace],
+    [onDeleteWorkspace, onReloadWorkspaceThreads, onRenameWorkspaceAlias],
   );
 
   const showWorktreeMenu = useCallback(

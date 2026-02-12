@@ -352,6 +352,50 @@ describe("useThreadActions", () => {
     });
   });
 
+  it("loads older messages by merging even when local items already exist", async () => {
+    const localItem: ConversationItem = {
+      id: "local-assistant-1",
+      kind: "message",
+      role: "assistant",
+      text: "Local snapshot",
+    };
+    const remoteItem: ConversationItem = {
+      id: "remote-assistant-2",
+      kind: "message",
+      role: "assistant",
+      text: "Older remote message",
+    };
+
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          id: "thread-1",
+          preview: "History",
+          updated_at: 1000,
+        },
+      },
+    });
+    vi.mocked(buildItemsFromThread).mockReturnValue([remoteItem]);
+    vi.mocked(isReviewingFromThread).mockReturnValue(false);
+    vi.mocked(mergeThreadItems).mockReturnValue([localItem, remoteItem]);
+
+    const { result, dispatch } = renderActions({
+      itemsByThread: { "thread-1": [localItem] },
+    });
+
+    await act(async () => {
+      await result.current.loadOlderMessagesForThread("ws-1", "thread-1");
+    });
+
+    expect(resumeThread).toHaveBeenCalledWith("ws-1", "thread-1");
+    expect(mergeThreadItems).toHaveBeenCalledWith([remoteItem], [localItem]);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadItems",
+      threadId: "thread-1",
+      items: [localItem, remoteItem],
+    });
+  });
+
   it("clears processing state from resume when latest turns are completed", async () => {
     const localItem: ConversationItem = {
       id: "local-assistant-1",

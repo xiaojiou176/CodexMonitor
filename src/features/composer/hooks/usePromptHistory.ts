@@ -34,11 +34,15 @@ function writeStoredHistory(key: string, value: string[]) {
   if (typeof window === "undefined") {
     return;
   }
-  if (value.length === 0) {
-    window.localStorage.removeItem(getStorageKey(key));
+  try {
+    if (value.length === 0) {
+      window.localStorage.removeItem(getStorageKey(key));
+      return;
+    }
+    window.localStorage.setItem(getStorageKey(key), JSON.stringify(value));
+  } catch {
     return;
   }
-  window.localStorage.setItem(getStorageKey(key), JSON.stringify(value));
 }
 
 type UsePromptHistoryOptions = {

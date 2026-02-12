@@ -24,6 +24,18 @@ export default defineConfig(async () => ({
     environment: "node",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     setupFiles: ["src/test/vitest.setup.ts"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text-summary", "json-summary"],
+      reportsDirectory: ".runtime-cache/coverage/vitest",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/test/**",
+        "src/main.tsx",
+      ],
+    },
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

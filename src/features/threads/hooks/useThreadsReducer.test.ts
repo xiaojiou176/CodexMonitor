@@ -543,6 +543,43 @@ describe("threadReducer", () => {
     expect(next.turnDiffByThread["thread-1"]).toBeUndefined();
   });
 
+  it("applies bulk last-agent updates with timestamp guard", () => {
+    const base: ThreadState = {
+      ...initialState,
+      lastAgentMessageByThread: {
+        "thread-1": {
+          text: "old",
+          timestamp: 200,
+        },
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setLastAgentMessagesBulk",
+      updates: [
+        {
+          threadId: "thread-1",
+          text: "stale",
+          timestamp: 150,
+        },
+        {
+          threadId: "thread-2",
+          text: "fresh",
+          timestamp: 300,
+        },
+      ],
+    });
+
+    expect(next.lastAgentMessageByThread["thread-1"]).toEqual({
+      text: "old",
+      timestamp: 200,
+    });
+    expect(next.lastAgentMessageByThread["thread-2"]).toEqual({
+      text: "fresh",
+      timestamp: 300,
+    });
+  });
+
   it("hides background threads and keeps them hidden on future syncs", () => {
     const withThread = threadReducer(initialState, {
       type: "ensureThread",

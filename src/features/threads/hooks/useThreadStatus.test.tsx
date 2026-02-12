@@ -57,4 +57,32 @@ describe("useThreadStatus", () => {
       turnId: "turn-9",
     });
   });
+
+  it("resets thread runtime state", () => {
+    const dispatch = vi.fn();
+    vi.spyOn(Date, "now").mockReturnValue(4321);
+    const { result } = renderHook(() => useThreadStatus({ dispatch }));
+
+    act(() => {
+      result.current.resetThreadRuntimeState("thread-9");
+    });
+
+    expect(dispatch).toHaveBeenCalledTimes(3);
+    expect(dispatch).toHaveBeenNthCalledWith(1, {
+      type: "markReviewing",
+      threadId: "thread-9",
+      isReviewing: false,
+    });
+    expect(dispatch).toHaveBeenNthCalledWith(2, {
+      type: "markProcessing",
+      threadId: "thread-9",
+      isProcessing: false,
+      timestamp: 4321,
+    });
+    expect(dispatch).toHaveBeenNthCalledWith(3, {
+      type: "setActiveTurnId",
+      threadId: "thread-9",
+      turnId: null,
+    });
+  });
 });

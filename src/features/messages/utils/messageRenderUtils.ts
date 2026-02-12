@@ -342,7 +342,10 @@ export function formatDurationMs(durationMs: number) {
   const durationSeconds = Math.max(0, Math.floor(durationMs / 1000));
   const durationMinutes = Math.floor(durationSeconds / 60);
   const durationRemainder = durationSeconds % 60;
-  return `${durationMinutes}:${String(durationRemainder).padStart(2, "0")}`;
+  if (durationMinutes <= 0) {
+    return `${durationRemainder}s`;
+  }
+  return `${durationMinutes}m ${durationRemainder}s`;
 }
 
 export function statusToneFromText(status?: string): StatusTone {

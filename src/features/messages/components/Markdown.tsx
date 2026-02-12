@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type MouseEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type MouseEvent, type ClipboardEvent } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -74,6 +74,87 @@ type FileLinkPreviewState = {
   path: string;
   truncated: boolean;
 };
+
+type FilePreviewCacheEntry = {
+  content: string;
+  truncated: boolean;
+  mtime: number | string | null;
+};
+
+const FILE_PREVIEW_CACHE_LIMIT = 64;
+const filePreviewCache = new Map<string, FilePreviewCacheEntry>();
+const filePreviewInflight = new Map<string, Promise<FilePreviewCacheEntry>>();
+
+function previewCacheKey(workspaceId: string, previewPath: string) {
+  return `${workspaceId}::${previewPath}`;
+}
+
+function touchPreviewCacheEntry(key: string) {
+  const entry = filePreviewCache.get(key);
+  if (!entry) {
+    return null;
+  }
+  filePreviewCache.delete(key);
+  filePreviewCache.set(key, entry);
+  return entry;
+}
+
+function setPreviewCacheEntry(key: string, entry: FilePreviewCacheEntry) {
+  if (filePreviewCache.has(key)) {
+    filePreviewCache.delete(key);
+  }
+  filePreviewCache.set(key, entry);
+  while (filePreviewCache.size > FILE_PREVIEW_CACHE_LIMIT) {
+    const oldest = filePreviewCache.keys().next().value;
+    if (!oldest) {
+      break;
+    }
+    filePreviewCache.delete(oldest);
+  }
+}
+
+function extractPreviewMtime(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value;
+  }
+  return null;
+}
+
+async function readPreviewFileCached(workspaceId: string, previewPath: string) {
+  const key = previewCacheKey(workspaceId, previewPath);
+  const cached = touchPreviewCacheEntry(key);
+  if (cached) {
+    return cached;
+  }
+
+  const inFlight = filePreviewInflight.get(key);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const request = readWorkspaceFile(workspaceId, previewPath)
+    .then((response) => {
+      const responseRecord = response as Record<string, unknown>;
+      const entry: FilePreviewCacheEntry = {
+        content: response.content ?? "",
+        truncated: Boolean(response.truncated),
+        mtime: extractPreviewMtime(
+          responseRecord.mtime ?? responseRecord.modified_at ?? responseRecord.modifiedAt,
+        ),
+      };
+      setPreviewCacheEntry(key, entry);
+      return entry;
+    })
+    .finally(() => {
+      filePreviewInflight.delete(key);
+    });
+
+  filePreviewInflight.set(key, request);
+  return request;
+}
 
 function normalizePathSeparators(path: string) {
   return path.replace(/\\/g, "/");
@@ -450,6 +531,14 @@ function FileReferenceLink({
     rawPath,
     workspacePath,
   );
+  const hoverDetails = [fileName];
+  if (lineLabel) {
+    hoverDetails.push(`L${lineLabel}`);
+  }
+  if (showFilePath && parentPath) {
+    hoverDetails.push(parentPath);
+  }
+  const hoverTitle = hoverDetails.join(" · ") || fullPath;
   const [previewAnchor, setPreviewAnchor] = useState<FileLinkPreviewAnchor | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -476,7 +565,7 @@ function FileReferenceLink({
 
   const scheduleClose = () => {
     clearCloseTimer();
-    closeTimerRef.current = window.setTimeout(closePreview, 120);
+    closeTimerRef.current = window.setTimeout(closePreview, 260);
   };
 
   const openPreview = (target: HTMLAnchorElement) => {
@@ -514,17 +603,29 @@ function FileReferenceLink({
       return;
     }
     let cancelled = false;
-    setIsPreviewLoading(true);
     setPreviewError(null);
+
+    const cacheKey = previewCacheKey(workspaceId, previewPath);
+    const cached = touchPreviewCacheEntry(cacheKey);
+    if (cached) {
+      setIsPreviewLoading(false);
+      setPreviewState(buildPreviewState(rawPath, cached.content, cached.truncated));
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsPreviewLoading(true);
     setPreviewState(null);
 
-    readWorkspaceFile(workspaceId, previewPath)
-      .then((response) => {
+    readPreviewFileCached(workspaceId, previewPath)
+      .then((cachedFile) => {
         if (cancelled) {
           return;
         }
-        const content = response.content ?? "";
-        setPreviewState(buildPreviewState(rawPath, content, Boolean(response.truncated)));
+        setPreviewState(
+          buildPreviewState(rawPath, cachedFile.content, cachedFile.truncated),
+        );
       })
       .catch((error) => {
         if (cancelled) {
@@ -548,7 +649,8 @@ function FileReferenceLink({
       <a
         href={href}
         className="message-file-link"
-        title={fullPath}
+        title={hoverTitle}
+        data-copy-text={fullPath}
         onClick={(event) => onClick(event, rawPath)}
         onContextMenu={(event) => onContextMenu(event, rawPath)}
         onMouseEnter={(event) => openPreview(event.currentTarget)}
@@ -557,10 +659,6 @@ function FileReferenceLink({
         onBlur={scheduleClose}
       >
         <span className="message-file-link-name">{fileName}</span>
-        {lineLabel ? <span className="message-file-link-line">L{lineLabel}</span> : null}
-        {showFilePath && parentPath ? (
-          <span className="message-file-link-path">{parentPath}</span>
-        ) : null}
       </a>
       {isPreviewOpen && previewAnchor
         ? createPortal(
@@ -803,6 +901,7 @@ export const Markdown = memo(function Markdown({
             </a>
           );
         }
+
         if (isFileLinkUrl(url)) {
           const path = decodeFileLink(url);
           return (
@@ -817,13 +916,36 @@ export const Markdown = memo(function Markdown({
             />
           );
         }
+
+        const linkablePath = getLinkablePath(url);
+        if (linkablePath) {
+          const fileHref = toFileLink(linkablePath);
+          return (
+            <FileReferenceLink
+              href={fileHref}
+              rawPath={linkablePath}
+              showFilePath={showFilePath}
+              workspaceId={workspaceId}
+              workspacePath={workspacePath}
+              onClick={handleFileLinkClick}
+              onContextMenu={handleFileLinkContextMenu}
+            />
+          );
+        }
+
         const isExternal =
           url.startsWith("http://") ||
           url.startsWith("https://") ||
           url.startsWith("mailto:");
+        const isRelativeNavigation =
+          url.startsWith("/") || url.startsWith("./") || url.startsWith("../");
+
+        if (isRelativeNavigation) {
+          return <span>{children}</span>;
+        }
 
         if (!isExternal) {
-          return <a href={href}>{children}</a>;
+          return <span>{children}</span>;
         }
 
         return (
@@ -883,8 +1005,68 @@ export const Markdown = memo(function Markdown({
     codeBlockCopyUseModifier,
   ]);
 
+  const handleCopy = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
+    const clipboardData = event.clipboardData;
+    const selection = window.getSelection();
+    if (!clipboardData || !selection || selection.rangeCount === 0) {
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    if (range.collapsed) {
+      return;
+    }
+
+    const startElement =
+      range.startContainer.nodeType === Node.ELEMENT_NODE
+        ? (range.startContainer as Element)
+        : range.startContainer.parentElement;
+    const endElement =
+      range.endContainer.nodeType === Node.ELEMENT_NODE
+        ? (range.endContainer as Element)
+        : range.endContainer.parentElement;
+    const startInFileLink = Boolean(
+      startElement?.closest("a.message-file-link[data-copy-text]"),
+    );
+    const endInFileLink = Boolean(
+      endElement?.closest("a.message-file-link[data-copy-text]"),
+    );
+
+    // Preserve native copy for partial-selection inside a file link.
+    // Otherwise users selecting only a segment would be forced to copy full path text.
+    if (startInFileLink || endInFileLink) {
+      return;
+    }
+
+    const fragment = range.cloneContents();
+    const container = document.createElement("div");
+    container.appendChild(fragment);
+
+    const fileLinks = container.querySelectorAll(
+      "a.message-file-link[data-copy-text]",
+    );
+    if (fileLinks.length === 0) {
+      return;
+    }
+
+    fileLinks.forEach((link) => {
+      const copyText = link.getAttribute("data-copy-text");
+      if (copyText) {
+        link.textContent = copyText;
+      }
+    });
+
+    const plainText = container.textContent ?? "";
+    if (!plainText) {
+      return;
+    }
+
+    event.preventDefault();
+    clipboardData.setData("text/plain", plainText);
+  }, []);
+
   return (
-    <div className={className}>
+    <div className={className} onCopy={handleCopy}>
       <ReactMarkdown
         remarkPlugins={REMARK_PLUGINS}
         urlTransform={markdownUrlTransform}

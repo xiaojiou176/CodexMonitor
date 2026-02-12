@@ -1,7 +1,7 @@
 :root[data-theme="light"] {
   color-scheme: light;
-  --accent-primary: #e5582a;
-  --accent-primary-hover: #cf4c22;
+  --accent-primary: #2563eb;
+  --accent-primary-hover: #1d4ed8;
   --text-primary: #111827;
   --text-strong: #111827;
   --text-emphasis: #111827;
@@ -12,11 +12,11 @@
   --text-faint: #9ca3af;
   --text-fainter: #b6bdc7;
   --text-dim: #c4cbd6;
-  /* ── Snow-white surface palette ──
-     All major surfaces are pure white; hierarchy is expressed through
-     borders and micro-shadows instead of background-gray gradations. */
-  --surface-sidebar: #ffffff;
-  --surface-sidebar-opaque: #ffffff;
+  /* ── Light theme surface palette ──
+     Sidebar uses a subtle gray so the navigation rail is visually separated
+     from the main reading canvas without adding heavy contrast. */
+  --surface-sidebar: #f7f7f5;
+  --surface-sidebar-opaque: #f7f7f5;
   --surface-topbar: #ffffff;
   --surface-right-panel: #ffffff;
   --surface-composer: #ffffff;
@@ -24,8 +24,8 @@
   --surface-card: #ffffff;
   --surface-card-strong: #ffffff;
   --surface-card-muted: #fafbfc;
-  --surface-item: #f7f8fa;
-  --surface-quiet: #f5f6f8;
+  --surface-item: #f6f6f3;
+  --surface-quiet: #f4f4f1;
   --surface-control: rgba(17, 24, 39, 0.04);
   --surface-control-hover: rgba(17, 24, 39, 0.07);
   --surface-control-disabled: rgba(17, 24, 39, 0.02);
@@ -46,11 +46,11 @@
   --text-review-active: #9a3412;
   --surface-review-done: #eaf7ef;
   --text-review-done: #166534;
-  --border-subtle: #e5e7eb;
-  --border-muted: #ebedf0;
-  --border-strong: #d4d9e0;
-  --border-stronger: #c8ced6;
-  --border-quiet: #c8ced6;
+  --border-subtle: #e6e6e3;
+  --border-muted: #ebebe8;
+  --border-strong: #d8d8d2;
+  --border-stronger: #cecec8;
+  --border-quiet: #cecec8;
   --border-accent: rgba(37, 99, 235, 0.45);
   --border-accent-soft: rgba(37, 99, 235, 0.25);
   --text-accent: var(--accent-primary);
@@ -65,8 +65,8 @@
 }
 
 :root[data-theme="light"] .app.reduced-transparency {
-  --surface-sidebar: #ffffff;
-  --surface-sidebar-opaque: #ffffff;
+  --surface-sidebar: #f7f7f5;
+  --surface-sidebar-opaque: #f7f7f5;
   --surface-topbar: #ffffff;
   --surface-right-panel: #ffffff;
   --surface-composer: #ffffff;

@@ -31,6 +31,16 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
     ? options.threadStatusById[options.activeThreadId] ?? null
     : null;
 
+  // The agent is "streaming" when it has produced at least one non-user item
+  // while the turn is still in progress.  This lets the WorkingIndicator
+  // accurately show "输出中" only when content is actually arriving.
+  const hasAgentOutput =
+    options.isProcessing &&
+    options.activeItems.some(
+      (item) =>
+        item.kind !== "message" || item.role !== "user",
+    );
+
   const sidebarNode = (
     <Sidebar
       workspaces={options.workspaces}
@@ -101,7 +111,9 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onPlanAccept={options.onPlanAccept}
       onPlanSubmitChanges={options.onPlanSubmitChanges}
       onOpenThreadLink={options.onOpenThreadLink}
+      onReachTop={options.onReachMessagesTop}
       isThinking={options.isProcessing}
+      isStreaming={hasAgentOutput}
       isLoadingMessages={
         options.activeThreadId
           ? options.threadResumeLoadingById[options.activeThreadId] ?? false
@@ -122,9 +134,11 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onFileAutocompleteActiveChange={options.onFileAutocompleteActiveChange}
       contextUsage={options.activeTokenUsage}
       queuedMessages={options.activeQueue}
+      queueHealthEntries={options.queueHealthEntries}
+      legacyQueueMessageCount={options.legacyQueueMessageCount}
       sendLabel={
         options.composerSendLabel ??
-        (options.isProcessing && !options.steerEnabled ? "Queue" : "Send")
+        (options.isProcessing ? "Queue" : "Send")
       }
       steerEnabled={options.steerEnabled}
       isProcessing={options.isProcessing}
@@ -140,6 +154,12 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onInsertHandled={options.onInsertHandled}
       onEditQueued={options.onEditQueued}
       onDeleteQueued={options.onDeleteQueued}
+      onSteerQueued={options.onSteerQueued}
+      onSelectQueuedThread={options.onSelectQueuedThread}
+      onRetryQueuedThread={options.onRetryQueuedThread}
+      onClearQueuedThread={options.onClearQueuedThread}
+      onMigrateLegacyQueue={options.onMigrateLegacyQueueWorkspaceIds}
+      canSteerQueued={options.canSteerQueued}
       collaborationModes={options.collaborationModes}
       selectedCollaborationModeId={options.selectedCollaborationModeId}
       onSelectCollaborationMode={options.onSelectCollaborationMode}
@@ -190,6 +210,8 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onReviewPromptConfirmCommit={options.onReviewPromptConfirmCommit}
       onReviewPromptUpdateCustomInstructions={options.onReviewPromptUpdateCustomInstructions}
       onReviewPromptConfirmCustom={options.onReviewPromptConfirmCustom}
+      messageFontSize={options.messageFontSize}
+      onMessageFontSizeChange={options.onMessageFontSizeChange}
     />
   ) : null;
 

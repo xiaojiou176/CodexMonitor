@@ -83,7 +83,26 @@ pub(crate) async fn resume_thread_core(
 ) -> Result<Value, String> {
     let session = get_session_clone(sessions, &workspace_id).await?;
     let params = json!({ "threadId": thread_id });
-    session.send_request("thread/resume", params).await
+
+    // Prefer thread/resume over thread/read: thread/resume registers the
+    // thread as active in the app-server so that subsequent turn/start calls
+    // can find it.  thread/read is lighter but does NOT activate the thread,
+    // which causes "thread not found" errors on turn/start.
+    match session.send_request("thread/resume", params.clone()).await {
+        Ok(response) => Ok(response),
+        Err(resume_error) => {
+            let normalized = resume_error.to_lowercase();
+            let should_fallback = normalized.contains("method not found")
+                || normalized.contains("unknown method")
+                || normalized.contains("thread/resume");
+            if !should_fallback {
+                return Err(resume_error);
+            }
+            // Older codex versions may not support thread/resume — fall back
+            // to thread/read which is available everywhere.
+            session.send_request("thread/read", params).await
+        }
+    }
 }
 
 pub(crate) async fn fork_thread_core(

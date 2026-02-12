@@ -64,6 +64,27 @@ describe("threadItems", () => {
     expect(secondOutput).toBe(output);
   });
 
+  it("keeps full thread history without client-side item cap", () => {
+    const items: ConversationItem[] = Array.from({ length: 260 }, (_, index) => ({
+      id: `msg-${index}`,
+      kind: "message",
+      role: "assistant",
+      text: `message-${index}`,
+    }));
+
+    const prepared = prepareThreadItems(items);
+
+    expect(prepared).toHaveLength(260);
+    const first = prepared[0];
+    const last = prepared[prepared.length - 1];
+    expect(first.kind).toBe("message");
+    expect(last.kind).toBe("message");
+    if (first.kind === "message" && last.kind === "message") {
+      expect(first.text).toBe("message-0");
+      expect(last.text).toBe("message-259");
+    }
+  });
+
   it("drops assistant review summaries that duplicate completed review items", () => {
     const items: ConversationItem[] = [
       {

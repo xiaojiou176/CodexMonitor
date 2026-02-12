@@ -7,8 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type {
   ConversationItem,
   OpenAppTarget,
@@ -22,7 +21,6 @@ import { useFileLinkOpener } from "../hooks/useFileLinkOpener";
 import {
   SCROLL_THRESHOLD_PX,
   buildToolGroups,
-  formatCount,
   parseReasoning,
   scrollKeyForItems,
   toolStatusTone,
@@ -37,11 +35,22 @@ import {
   WorkingIndicator,
 } from "./MessageRows";
 
+const ASSISTANT_AUTO_COLLAPSE_KEEP_RECENT_COUNT = 5;
+const VIRTUAL_ROW_ESTIMATE_PX = 140;
+const VIRTUAL_OVERSCAN_ROWS = 18;
+const VIRTUAL_ENABLE_MIN_ROWS = 120;
+const VIRTUAL_TOP_REACH_THRESHOLD_PX = 16;
+const VIRTUAL_TOP_REACH_COOLDOWN_MS = 900;
+const VIRTUAL_AUTO_TOP_REACH_ENABLED = true;
+const AUTO_SCROLL_CAPTURE_THRESHOLD_PX = SCROLL_THRESHOLD_PX;
+const AUTO_SCROLL_RELEASE_THRESHOLD_PX = SCROLL_THRESHOLD_PX * 3;
+
 type MessagesProps = {
   items: ConversationItem[];
   threadId: string | null;
   workspaceId?: string | null;
   isThinking: boolean;
+  isStreaming?: boolean;
   isLoadingMessages?: boolean;
   processingStartedAt?: number | null;
   lastDurationMs?: number | null;
@@ -58,13 +67,30 @@ type MessagesProps = {
   onPlanAccept?: () => void;
   onPlanSubmitChanges?: (changes: string) => void;
   onOpenThreadLink?: (threadId: string) => void;
+  onReachTop?: () => boolean | void | Promise<boolean | void>;
 };
+
+type RenderableItemEntry = {
+  key: string;
+  item: ConversationItem;
+  rowClassName: string;
+};
+
+function rowClassNameForItem(item: ConversationItem): string {
+  if (item.kind === "message") {
+    return item.role === "assistant"
+      ? "item-message-assistant"
+      : "item-message-user";
+  }
+  return `item-${item.kind}`;
+}
 
 export const Messages = memo(function Messages({
   items,
   threadId,
   workspaceId = null,
   isThinking,
+  isStreaming = false,
   isLoadingMessages = false,
   processingStartedAt = null,
   lastDurationMs = null,
@@ -78,15 +104,16 @@ export const Messages = memo(function Messages({
   onPlanAccept,
   onPlanSubmitChanges,
   onOpenThreadLink,
+  onReachTop,
 }: MessagesProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const autoScrollRef = useRef(true);
+
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const topReachInFlightRef = useRef(false);
+  const topReachLastAtRef = useRef(0);
   const manuallyToggledExpandedRef = useRef<Set<string>>(new Set());
-  const [collapsedToolGroups, setCollapsedToolGroups] = useState<Set<string>>(
-    new Set(),
-  );
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copiedMessageIdRef = useRef(copiedMessageId);
   copiedMessageIdRef.current = copiedMessageId;
@@ -106,35 +133,73 @@ export const Messages = memo(function Messages({
     selectedOpenAppId,
   );
 
-  const isNearBottom = useCallback(
-    (node: HTMLDivElement) =>
-      node.scrollHeight - node.scrollTop - node.clientHeight <= SCROLL_THRESHOLD_PX,
+  const distanceFromBottom = useCallback(
+    (node: HTMLDivElement) => node.scrollHeight - node.scrollTop - node.clientHeight,
     [],
   );
 
-  // Throttle scroll events to at most one per animation frame
-  const scrollRafRef = useRef<number | null>(null);
-  const updateAutoScroll = useCallback(() => {
-    if (scrollRafRef.current !== null) {
+  const isNearBottom = useCallback(
+    (node: HTMLDivElement) =>
+      distanceFromBottom(node) <= AUTO_SCROLL_CAPTURE_THRESHOLD_PX,
+    [distanceFromBottom],
+  );
+
+  const computeAutoScrollEnabled = useCallback(
+    (node: HTMLDivElement, previousEnabled: boolean) => {
+      const distance = distanceFromBottom(node);
+      if (previousEnabled) {
+        return distance <= AUTO_SCROLL_RELEASE_THRESHOLD_PX;
+      }
+      return distance <= AUTO_SCROLL_CAPTURE_THRESHOLD_PX;
+    },
+    [distanceFromBottom],
+  );
+
+
+  const triggerTopReach = useCallback(() => {
+    if (!onReachTop) {
       return;
     }
-    scrollRafRef.current = requestAnimationFrame(() => {
-      scrollRafRef.current = null;
-      if (!containerRef.current) {
-        return;
-      }
-      autoScrollRef.current = isNearBottom(containerRef.current);
-    });
-  }, [isNearBottom]);
+    const now = Date.now();
+    if (topReachInFlightRef.current) {
+      return;
+    }
+    if (now - topReachLastAtRef.current < VIRTUAL_TOP_REACH_COOLDOWN_MS) {
+      return;
+    }
+    topReachInFlightRef.current = true;
+    topReachLastAtRef.current = now;
+    Promise.resolve(onReachTop())
+      .catch(() => {
+        // Best-effort only; top history fetch failures are handled by caller.
+      })
+      .finally(() => {
+        topReachInFlightRef.current = false;
+      });
+  }, [onReachTop]);
 
-  // Cleanup scroll RAF on unmount
-  useEffect(() => {
-    return () => {
-      if (scrollRafRef.current !== null) {
-        cancelAnimationFrame(scrollRafRef.current);
-      }
-    };
-  }, []);
+  // Keep auto-scroll state in sync immediately when user scrolls.
+  // The virtual window state itself is batched into RAF to avoid jitter.
+  const updateAutoScroll = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    const scrollTop = container.scrollTop;
+    const nextAutoScrollEnabled = computeAutoScrollEnabled(
+      container,
+      autoScrollRef.current,
+    );
+    autoScrollRef.current = nextAutoScrollEnabled;
+
+    if (
+      VIRTUAL_AUTO_TOP_REACH_ENABLED &&
+      onReachTop &&
+      scrollTop <= VIRTUAL_TOP_REACH_THRESHOLD_PX
+    ) {
+      triggerTopReach();
+    }
+  }, [computeAutoScrollEnabled, onReachTop, triggerTopReach]);
 
   const requestAutoScroll = useCallback(() => {
     const container = containerRef.current;
@@ -152,23 +217,15 @@ export const Messages = memo(function Messages({
 
   useLayoutEffect(() => {
     autoScrollRef.current = true;
+    topReachInFlightRef.current = false;
+    topReachLastAtRef.current = 0;
+
   }, [threadId]);
+
 
   const toggleExpanded = useCallback((id: string) => {
     manuallyToggledExpandedRef.current.add(id);
     setExpandedItems((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
-  const toggleToolGroup = useCallback((id: string) => {
-    setCollapsedToolGroups((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -310,9 +367,70 @@ export const Messages = memo(function Messages({
       return;
     }
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [scrollKey, isThinking, isNearBottom, threadId]);
+  }, [isNearBottom, isThinking, scrollKey, threadId]);
+
+  const assistantAutoCollapsedIds = useMemo(() => {
+    const ids = new Set<string>();
+    let recentAssistantCount = 0;
+    for (let index = visibleItems.length - 1; index >= 0; index -= 1) {
+      const item = visibleItems[index];
+      if (item.kind !== "message" || item.role !== "assistant") {
+        continue;
+      }
+      if (recentAssistantCount >= ASSISTANT_AUTO_COLLAPSE_KEEP_RECENT_COUNT) {
+        ids.add(item.id);
+      }
+      recentAssistantCount += 1;
+    }
+    return ids;
+  }, [visibleItems]);
 
   const groupedItems = useMemo(() => buildToolGroups(visibleItems), [visibleItems]);
+
+  const renderableEntries = useMemo<RenderableItemEntry[]>(() => {
+    const flattened = groupedItems.flatMap((entry) => {
+      if (entry.kind === "toolGroup") {
+        return entry.group.items.map((item) => ({
+          key: item.id,
+          item,
+          rowClassName: rowClassNameForItem(item),
+        }));
+      }
+      return [
+        {
+          key: entry.item.id,
+          item: entry.item,
+          rowClassName: rowClassNameForItem(entry.item),
+        },
+      ];
+    });
+
+    return flattened.map((entry, index) => {
+      const needsAssistantDivider =
+        entry.item.kind === "message" &&
+        entry.item.role === "assistant" &&
+        index > 0;
+      if (!needsAssistantDivider) {
+        return entry;
+      }
+      return {
+        ...entry,
+        rowClassName: `${entry.rowClassName} item-message-assistant-divider`,
+      };
+    });
+  }, [groupedItems]);
+
+  const shouldVirtualize = renderableEntries.length >= VIRTUAL_ENABLE_MIN_ROWS;
+
+  const rowVirtualizer = useVirtualizer({
+    count: renderableEntries.length,
+    getItemKey: (index) => renderableEntries[index]?.key ?? index,
+    getScrollElement: () => containerRef.current,
+    estimateSize: () => VIRTUAL_ROW_ESTIMATE_PX,
+    overscan: VIRTUAL_OVERSCAN_ROWS,
+    enabled: shouldVirtualize,
+  });
+  const virtualRows = shouldVirtualize ? rowVirtualizer.getVirtualItems() : [];
 
   const hasActiveUserInputRequest = activeUserInputRequestId !== null;
   const hasVisibleUserInputRequest = hasActiveUserInputRequest && Boolean(onUserInputSubmit);
@@ -430,6 +548,7 @@ export const Messages = memo(function Messages({
             onOpenFileLink={openFileLink}
             onOpenFileLinkMenu={showFileLinkMenu}
             onOpenThreadLink={onOpenThreadLink}
+            shouldAutoCollapseLongAssistantMessage={assistantAutoCollapsedIds.has(item.id)}
           />
         );
       }
@@ -504,6 +623,7 @@ export const Messages = memo(function Messages({
       onOpenThreadLink,
       toggleExpanded,
       requestAutoScroll,
+      assistantAutoCollapsedIds,
     ],
   );
 
@@ -513,53 +633,52 @@ export const Messages = memo(function Messages({
       ref={containerRef}
       onScroll={updateAutoScroll}
     >
-      {groupedItems.map((entry) => {
-        if (entry.kind === "toolGroup") {
-          const { group } = entry;
-          const isCollapsed = collapsedToolGroups.has(group.id);
-          const summaryParts = [
-            formatCount(group.toolCount, "tool call", "tool calls"),
-          ];
-          if (group.messageCount > 0) {
-            summaryParts.push(formatCount(group.messageCount, "message", "messages"));
-          }
-          const summaryText = summaryParts.join(", ");
-          const groupBodyId = `tool-group-${group.id}`;
-          const ChevronIcon = isCollapsed ? ChevronDown : ChevronUp;
-          return (
-            <div
-              key={`tool-group-${group.id}`}
-              className={`tool-group ${isCollapsed ? "tool-group-collapsed" : ""}`}
-            >
-              <div className="tool-group-header">
-                <button
-                  type="button"
-                  className="tool-group-toggle"
-                  onClick={() => toggleToolGroup(group.id)}
-                  aria-expanded={!isCollapsed}
-                  aria-controls={groupBodyId}
-                  aria-label={isCollapsed ? "展开工具调用" : "折叠工具调用"}
-                >
-                  <span className="tool-group-chevron" aria-hidden>
-                    <ChevronIcon size={14} />
-                  </span>
-                  <span className="tool-group-summary">{summaryText}</span>
-                </button>
+      {/* Top manual "load older" control removed.
+          Upward scroll-to-top still triggers onReachTop for history loading. */}
+      {renderableEntries.length > 0 && shouldVirtualize && (
+        <div
+          className="messages-virtual-content"
+          style={{ height: rowVirtualizer.getTotalSize() }}
+        >
+          {virtualRows.map((virtualRow) => {
+            const entry = renderableEntries[virtualRow.index];
+            if (!entry) {
+              return null;
+            }
+            return (
+              <div
+                key={entry.key}
+                data-index={virtualRow.index}
+                ref={rowVirtualizer.measureElement}
+                className={`messages-virtual-row ${entry.rowClassName}`}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translate3d(0, ${virtualRow.start}px, 0)`,
+                }}
+              >
+                {renderItem(entry.item)}
               </div>
-              {!isCollapsed && (
-                <div className="tool-group-body" id={groupBodyId}>
-                  {group.items.map(renderItem)}
-                </div>
-              )}
+            );
+          })}
+        </div>
+      )}
+      {renderableEntries.length > 0 && !shouldVirtualize && (
+        <div className="messages-virtual-content">
+          {renderableEntries.map((entry) => (
+            <div key={entry.key} className={`messages-virtual-row ${entry.rowClassName}`}>
+              {renderItem(entry.item)}
             </div>
-          );
-        }
-        return renderItem(entry.item);
-      })}
+          ))}
+        </div>
+      )}
       {planFollowupNode}
       {userInputNode}
       <WorkingIndicator
         isThinking={isThinking}
+        isStreaming={isStreaming}
         processingStartedAt={processingStartedAt}
         lastDurationMs={lastDurationMs}
         hasItems={items.length > 0}

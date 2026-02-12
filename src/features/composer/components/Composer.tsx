@@ -13,6 +13,7 @@ import type {
   ComposerEditorSettings,
   CustomPromptOption,
   DictationTranscript,
+  QueueHealthEntry,
   QueuedMessage,
   ThreadTokenUsage,
 } from "../../../types";
@@ -63,8 +64,16 @@ type ComposerProps = {
   files: string[];
   contextUsage?: ThreadTokenUsage | null;
   queuedMessages?: QueuedMessage[];
+  queueHealthEntries?: QueueHealthEntry[];
+  legacyQueueMessageCount?: number;
   onEditQueued?: (item: QueuedMessage) => void;
   onDeleteQueued?: (id: string) => void;
+  onSteerQueued?: (id: string) => Promise<boolean> | boolean;
+  onSelectQueuedThread?: (threadId: string) => void;
+  onRetryQueuedThread?: (threadId: string) => void;
+  onClearQueuedThread?: (threadId: string) => void;
+  onMigrateLegacyQueue?: () => void;
+  canSteerQueued?: boolean;
   sendLabel?: string;
   draftText?: string;
   onDraftChange?: (text: string) => void;
@@ -118,6 +127,8 @@ type ComposerProps = {
   onReviewPromptUpdateCustomInstructions?: (value: string) => void;
   onReviewPromptConfirmCustom?: () => Promise<void>;
   onFileAutocompleteActiveChange?: (active: boolean) => void;
+  messageFontSize?: number;
+  onMessageFontSizeChange?: (next: number) => void;
 };
 
 const DEFAULT_EDITOR_SETTINGS: ComposerEditorSettings = {
@@ -140,7 +151,6 @@ export const Composer = memo(function Composer({
   disabled = false,
   appsEnabled,
   isProcessing,
-  steerEnabled,
   collaborationModes,
   selectedCollaborationModeId,
   onSelectCollaborationMode,
@@ -157,8 +167,16 @@ export const Composer = memo(function Composer({
   files,
   contextUsage = null,
   queuedMessages = [],
+  queueHealthEntries = [],
+  legacyQueueMessageCount = 0,
   onEditQueued,
   onDeleteQueued,
+  onSteerQueued,
+  onSelectQueuedThread,
+  onRetryQueuedThread,
+  onClearQueuedThread,
+  onMigrateLegacyQueue,
+  canSteerQueued = false,
   sendLabel = "发送",
   draftText = "",
   onDraftChange,
@@ -206,6 +224,8 @@ export const Composer = memo(function Composer({
   onReviewPromptUpdateCustomInstructions,
   onReviewPromptConfirmCustom,
   onFileAutocompleteActiveChange,
+  messageFontSize = 13,
+  onMessageFontSizeChange,
 }: ComposerProps) {
   const [text, setText] = useState(draftText);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
@@ -549,14 +569,23 @@ export const Composer = memo(function Composer({
     <footer className={`composer${disabled ? " is-disabled" : ""}`}>
       <ComposerQueue
         queuedMessages={queuedMessages}
+        queueHealthEntries={queueHealthEntries}
+        legacyQueueMessageCount={legacyQueueMessageCount}
         onEditQueued={onEditQueued}
         onDeleteQueued={onDeleteQueued}
+        onSteerQueued={onSteerQueued}
+        onSelectQueuedThread={onSelectQueuedThread}
+        onRetryQueuedThread={onRetryQueuedThread}
+        onClearQueuedThread={onClearQueuedThread}
+        onMigrateLegacyQueue={onMigrateLegacyQueue}
+        canSteerQueued={canSteerQueued}
       />
       <ComposerInput
         text={text}
         disabled={disabled}
         sendLabel={sendLabel}
         canStop={canStop}
+        preferQueueOverStop={isProcessing}
         canSend={canSend}
         isProcessing={isProcessing}
         onStop={onStop}
@@ -641,7 +670,6 @@ export const Composer = memo(function Composer({
           if (
             event.key === "Tab" &&
             !event.shiftKey &&
-            steerEnabled &&
             isProcessing &&
             !suggestionsOpen
           ) {
@@ -722,6 +750,8 @@ export const Composer = memo(function Composer({
         onSelectEffort={onSelectEffort}
         reasoningSupported={reasoningSupported}
         contextUsage={contextUsage}
+        messageFontSize={messageFontSize}
+        onMessageFontSizeChange={onMessageFontSizeChange}
       />
     </footer>
   );

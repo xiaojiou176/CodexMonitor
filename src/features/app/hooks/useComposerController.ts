@@ -10,6 +10,9 @@ export function useComposerController({
   activeWorkspace,
   isProcessing,
   isReviewing,
+  threadStatusById,
+  threadWorkspaceById,
+  workspacesById,
   steerEnabled,
   appsEnabled,
   connectWorkspace,
@@ -23,6 +26,7 @@ export function useComposerController({
   startApps,
   startMcp,
   startStatus,
+  onRecoverStaleThread,
 }: {
   activeThreadId: string | null;
   activeTurnId: string | null;
@@ -30,6 +34,17 @@ export function useComposerController({
   activeWorkspace: WorkspaceInfo | null;
   isProcessing: boolean;
   isReviewing: boolean;
+  threadStatusById: Record<
+    string,
+    {
+      isProcessing?: boolean;
+      isReviewing?: boolean;
+      processingStartedAt?: number | null;
+      lastDurationMs?: number | null;
+    }
+  >;
+  threadWorkspaceById: Record<string, string>;
+  workspacesById: Map<string, WorkspaceInfo>;
   steerEnabled: boolean;
   appsEnabled: boolean;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
@@ -37,7 +52,11 @@ export function useComposerController({
     workspaceId: string,
     options?: { activate?: boolean },
   ) => Promise<string | null>;
-  sendUserMessage: (text: string, images?: string[]) => Promise<void>;
+  sendUserMessage: (
+    text: string,
+    images?: string[],
+    options?: { forceSteer?: boolean },
+  ) => Promise<void>;
   sendUserMessageToThread: (
     workspace: WorkspaceInfo,
     threadId: string,
@@ -51,6 +70,7 @@ export function useComposerController({
   startApps: (text: string) => Promise<void>;
   startMcp: (text: string) => Promise<void>;
   startStatus: (text: string) => Promise<void>;
+  onRecoverStaleThread?: (threadId: string) => void;
 }) {
   const [composerDraftsByThread, setComposerDraftsByThread] = useState<
     Record<string, string>
@@ -72,14 +92,23 @@ export function useComposerController({
 
   const {
     activeQueue,
+    legacyQueueMessageCount,
+    queueHealthEntries,
     handleSend,
     queueMessage,
     removeQueuedMessage,
+    steerQueuedMessage,
+    retryThreadQueue,
+    clearThreadQueue,
+    migrateLegacyQueueWorkspaceIds,
   } = useQueuedSend({
     activeThreadId,
     activeTurnId,
     isProcessing,
     isReviewing,
+    threadStatusById,
+    threadWorkspaceById,
+    workspacesById,
     steerEnabled,
     appsEnabled,
     activeWorkspace,
@@ -95,6 +124,7 @@ export function useComposerController({
     startMcp,
     startStatus,
     clearActiveImages,
+    onRecoverStaleThread,
   });
 
   const activeDraft = useMemo(
@@ -148,6 +178,16 @@ export function useComposerController({
     [activeThreadId, removeQueuedMessage],
   );
 
+  const handleSteerQueued = useCallback(
+    async (id: string) => {
+      if (!activeThreadId) {
+        return false;
+      }
+      return steerQueuedMessage(activeThreadId, id);
+    },
+    [activeThreadId, steerQueuedMessage],
+  );
+
   const clearDraftForThread = useCallback((threadId: string) => {
     setComposerDraftsByThread((prev) => {
       if (!(threadId in prev)) {
@@ -167,9 +207,14 @@ export function useComposerController({
     setImagesForThread,
     removeImagesForThread,
     activeQueue,
+    legacyQueueMessageCount,
+    queueHealthEntries,
     handleSend,
     queueMessage,
     removeQueuedMessage,
+    retryQueuedThread: retryThreadQueue,
+    clearQueuedThread: clearThreadQueue,
+    migrateLegacyQueueWorkspaceIds,
     prefillDraft,
     setPrefillDraft,
     composerInsert,
@@ -179,6 +224,7 @@ export function useComposerController({
     handleSendPrompt,
     handleEditQueued,
     handleDeleteQueued,
+    handleSteerQueued,
     clearDraftForThread,
   };
 }

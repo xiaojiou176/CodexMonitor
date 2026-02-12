@@ -259,6 +259,14 @@ export type ThreadAction =
       threadId: string;
       text: string;
       timestamp: number;
+    }
+  | {
+      type: "setLastAgentMessagesBulk";
+      updates: Array<{
+        threadId: string;
+        text: string;
+        timestamp: number;
+      }>;
     };
 
 const emptyItems: Record<string, ConversationItem[]> = {};
@@ -902,6 +910,34 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           [action.threadId]: { text: action.text, timestamp: action.timestamp },
         },
       };
+    case "setLastAgentMessagesBulk": {
+      if (action.updates.length === 0) {
+        return state;
+      }
+      let didChange = false;
+      const nextLastAgentMessageByThread = { ...state.lastAgentMessageByThread };
+      action.updates.forEach((update) => {
+        if (!update.threadId || !update.text) {
+          return;
+        }
+        const existing = nextLastAgentMessageByThread[update.threadId];
+        if (existing?.timestamp >= update.timestamp) {
+          return;
+        }
+        nextLastAgentMessageByThread[update.threadId] = {
+          text: update.text,
+          timestamp: update.timestamp,
+        };
+        didChange = true;
+      });
+      if (!didChange) {
+        return state;
+      }
+      return {
+        ...state,
+        lastAgentMessageByThread: nextLastAgentMessageByThread,
+      };
+    }
     case "appendReasoningSummary": {
       const list = state.itemsByThread[action.threadId] ?? [];
       const index = list.findIndex((entry) => entry.id === action.itemId);

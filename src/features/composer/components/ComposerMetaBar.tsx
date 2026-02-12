@@ -27,6 +27,8 @@ type ComposerMetaBarProps = {
   onSelectEffort: (effort: string) => void;
   reasoningSupported: boolean;
   contextUsage?: ThreadTokenUsage | null;
+  messageFontSize?: number;
+  onMessageFontSizeChange?: (next: number) => void;
 };
 
 export function ComposerMetaBar({
@@ -42,6 +44,8 @@ export function ComposerMetaBar({
   onSelectEffort,
   reasoningSupported,
   contextUsage = null,
+  messageFontSize = 13,
+  onMessageFontSizeChange,
 }: ComposerMetaBarProps) {
   const contextWindow = contextUsage?.modelContextWindow ?? null;
   const lastTurn = contextUsage?.last ?? null;
@@ -210,6 +214,26 @@ export function ComposerMetaBar({
           </select>
         </div>
         {/* Access mode removed — always uses config.toml setting */}
+      </div>
+      <div className="composer-font-size-control">
+        <label className="composer-font-size-label" htmlFor="composer-message-font-size">
+          消息字号
+        </label>
+        <div className="composer-font-size-row">
+          <input
+            id="composer-message-font-size"
+            className="composer-font-size-slider"
+            type="range"
+            min={11}
+            max={16}
+            step={1}
+            value={messageFontSize}
+            onChange={(event) => onMessageFontSizeChange?.(Number(event.target.value))}
+            aria-label="消息字号"
+            disabled={disabled}
+          />
+          <span className="composer-font-size-value">{messageFontSize}px</span>
+        </div>
       </div>
       <div
         className="composer-context-meter"

@@ -669,6 +669,41 @@
   padding-left: 6px;
 }
 
+.workspace-row.workspace-row-draggable {
+  cursor: grab;
+}
+
+.workspace-row.workspace-row-draggable:active {
+  cursor: grabbing;
+}
+
+.workspace-row.workspace-row-dragging {
+  opacity: 0.56;
+}
+
+.workspace-row.workspace-row-drop-target::before {
+  background: color-mix(in srgb, var(--surface-active) 72%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 45%, transparent);
+}
+
+.workspace-row.workspace-row-drop-target::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent-primary);
+  pointer-events: none;
+}
+
+.workspace-row.workspace-row-drop-target-before::after {
+  top: 1px;
+}
+
+.workspace-row.workspace-row-drop-target-after::after {
+  bottom: 1px;
+}
 
 .workspace-name {
   font-weight: 600;
@@ -677,6 +712,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.workspace-alias-input {
+  min-width: 0;
+  width: min(220px, 100%);
+  border: 1px solid var(--border-accent);
+  border-radius: 6px;
+  background: var(--surface-card-strong);
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 2px 6px;
+}
+
+.workspace-alias-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--border-accent-soft);
 }
 
 .workspace-name-match {
@@ -740,6 +792,17 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+}
+
+.workspace-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--text-faint);
+}
+
+.workspace-row.active .workspace-icon {
+  color: var(--text-strong);
 }
 
 .workspace-toggle {
@@ -862,7 +925,7 @@
   padding: 4px 10px 4px calc(6px + var(--thread-indent, 0px));
   border-radius: 6px;
   color: var(--text-quiet);
-  font-size: 12px;
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
   -webkit-app-region: no-drag;
@@ -921,12 +984,52 @@
   box-shadow: inset 2px 0 0 var(--accent-primary);
 }
 
+.thread-row.thread-row-draggable {
+  cursor: grab;
+}
+
+.thread-row.thread-row-draggable:active {
+  cursor: grabbing;
+}
+
+.thread-row.thread-row-dragging {
+  opacity: 0.5;
+}
+
+.thread-row.thread-row-drop-target {
+  background: color-mix(in srgb, var(--surface-active) 78%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 55%, transparent),
+    inset 2px 0 0 var(--accent-primary);
+}
+
+.thread-row.thread-row-drop-target::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent-primary);
+  pointer-events: none;
+}
+
+.thread-row.thread-row-drop-target-before::after {
+  top: 1px;
+}
+
+.thread-row.thread-row-drop-target-after::after {
+  bottom: 1px;
+}
+
 .thread-name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .thread-meta {
@@ -938,7 +1041,7 @@
 
 .thread-time {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -972,7 +1075,7 @@
   border: none;
   background: transparent;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12px;
   text-align: left;
   padding: 2px 6px 2px 16px;
   cursor: pointer;

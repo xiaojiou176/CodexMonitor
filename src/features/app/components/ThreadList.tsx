@@ -1,4 +1,5 @@
-import type { CSSProperties, MouseEvent } from "react";
+import { useCallback, useRef, useState } from "react";
+import type { CSSProperties, DragEvent, MouseEvent } from "react";
 
 import type { ThreadSummary } from "../../../types";
 
@@ -36,6 +37,12 @@ type ThreadListProps = {
     threadId: string,
     canPin: boolean,
   ) => void;
+  onReorderThreads?: (
+    workspaceId: string,
+    sourceThreadId: string,
+    targetThreadId: string,
+    position: "before" | "after",
+  ) => void;
 };
 
 export function ThreadList({
@@ -57,8 +64,99 @@ export function ThreadList({
   onLoadOlderThreads,
   onSelectThread,
   onShowThreadMenu,
+  onReorderThreads,
 }: ThreadListProps) {
+  const [draggingRootId, setDraggingRootId] = useState<string | null>(null);
+  const [dropTargetRootId, setDropTargetRootId] = useState<string | null>(null);
+  const [dropTargetPosition, setDropTargetPosition] = useState<
+    "before" | "after" | null
+  >(null);
+  const draggingRootIdRef = useRef<string | null>(null);
   const indentUnit = nested ? 10 : 14;
+
+  const resetDragState = useCallback(() => {
+    draggingRootIdRef.current = null;
+    setDraggingRootId(null);
+    setDropTargetRootId(null);
+    setDropTargetPosition(null);
+  }, []);
+
+  const handleDragStart = useCallback(
+    (event: DragEvent<HTMLDivElement>, rootId: string, isReorderableRoot: boolean) => {
+      if (!isReorderableRoot) {
+        return;
+      }
+      draggingRootIdRef.current = rootId;
+      setDraggingRootId(rootId);
+      setDropTargetRootId(null);
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", rootId);
+      }
+    },
+    [],
+  );
+
+  const handleDragOver = useCallback(
+    (event: DragEvent<HTMLDivElement>, targetRootId: string, isReorderableRoot: boolean) => {
+      if (!isReorderableRoot) {
+        return;
+      }
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "move";
+      }
+      const sourceRootId =
+        draggingRootIdRef.current ?? event.dataTransfer?.getData("text/plain") ?? null;
+      if (!sourceRootId || sourceRootId === targetRootId) {
+        return;
+      }
+      const rect = event.currentTarget.getBoundingClientRect();
+      const position =
+        event.clientY <= rect.top + rect.height / 2 ? "before" : "after";
+      if (dropTargetRootId !== targetRootId) {
+        setDropTargetRootId(targetRootId);
+      }
+      if (dropTargetPosition !== position) {
+        setDropTargetPosition(position);
+      }
+    },
+    [dropTargetPosition, dropTargetRootId],
+  );
+
+  const handleDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>, targetRootId: string, isReorderableRoot: boolean) => {
+      if (!isReorderableRoot) {
+        return;
+      }
+      event.preventDefault();
+      const sourceRootId =
+        draggingRootIdRef.current ?? event.dataTransfer?.getData("text/plain") ?? null;
+      if (!sourceRootId || sourceRootId === targetRootId) {
+        resetDragState();
+        return;
+      }
+      const position =
+        dropTargetRootId === targetRootId && dropTargetPosition
+          ? dropTargetPosition
+          : (() => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              return event.clientY <= rect.top + rect.height / 2
+                ? "before"
+                : "after";
+            })();
+      onReorderThreads?.(workspaceId, sourceRootId, targetRootId, position);
+      resetDragState();
+    },
+    [
+      dropTargetPosition,
+      dropTargetRootId,
+      onReorderThreads,
+      resetDragState,
+      workspaceId,
+    ],
+  );
+
   const renderThreadRow = ({ thread, depth }: ThreadRow) => {
     const relativeTime = getThreadTime(thread);
     const indentStyle =
@@ -75,6 +173,16 @@ export function ThreadList({
           : "ready";
     const canPin = depth === 0;
     const isPinned = canPin && isThreadPinned(workspaceId, thread.id);
+    const isReorderableRoot =
+      Boolean(onReorderThreads) && !nested && depth === 0 && !isPinned;
+    const isDragging = draggingRootId === thread.id;
+    const isDropTarget =
+      isReorderableRoot &&
+      dropTargetRootId === thread.id &&
+      draggingRootId !== null &&
+      draggingRootId !== thread.id;
+    const isDropTargetBefore = isDropTarget && dropTargetPosition === "before";
+    const isDropTargetAfter = isDropTarget && dropTargetPosition === "after";
 
     return (
       <div
@@ -83,7 +191,11 @@ export function ThreadList({
           workspaceId === activeWorkspaceId && thread.id === activeThreadId
             ? "active"
             : ""
-        }`}
+        }${isReorderableRoot ? " thread-row-draggable" : ""}${
+          isDragging ? " thread-row-dragging" : ""
+        }${isDropTarget ? " thread-row-drop-target" : ""}${
+          isDropTargetBefore ? " thread-row-drop-target-before" : ""
+        }${isDropTargetAfter ? " thread-row-drop-target-after" : ""}`}
         style={indentStyle}
         onClick={() => onSelectThread(workspaceId, thread.id)}
         onContextMenu={(event) =>
@@ -91,6 +203,15 @@ export function ThreadList({
         }
         role="button"
         tabIndex={0}
+        draggable={isReorderableRoot}
+        onDragStart={(event) =>
+          handleDragStart(event, thread.id, isReorderableRoot)
+        }
+        onDragOver={(event) =>
+          handleDragOver(event, thread.id, isReorderableRoot)
+        }
+        onDrop={(event) => handleDrop(event, thread.id, isReorderableRoot)}
+        onDragEnd={resetDragState}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();

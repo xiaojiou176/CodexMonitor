@@ -25,21 +25,41 @@ vi.mock("../../../utils/platformPaths", async () => {
 
 type HarnessProps = {
   onSend: (text: string, images: string[]) => void;
+  onQueue?: (text: string, images: string[]) => void;
+  onStop?: () => void;
+  canStop?: boolean;
+  isProcessing?: boolean;
+  steerEnabled?: boolean;
+  sendLabel?: string;
+  messageFontSize?: number;
+  onMessageFontSizeChange?: (next: number) => void;
+  files?: string[];
 };
 
-function ComposerHarness({ onSend }: HarnessProps) {
+function ComposerHarness({
+  onSend,
+  onQueue = () => {},
+  onStop = () => {},
+  canStop = false,
+  isProcessing = false,
+  steerEnabled = false,
+  sendLabel = "发送",
+  messageFontSize = 13,
+  onMessageFontSizeChange,
+  files = [],
+}: HarnessProps) {
   const [draftText, setDraftText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   return (
     <Composer
       onSend={onSend}
-      onQueue={() => {}}
-      onStop={() => {}}
-      canStop={false}
-      isProcessing={false}
+      onQueue={onQueue}
+      onStop={onStop}
+      canStop={canStop}
+      isProcessing={isProcessing}
       appsEnabled={true}
-      steerEnabled={false}
+      steerEnabled={steerEnabled}
       collaborationModes={[]}
       selectedCollaborationModeId={null}
       onSelectCollaborationMode={() => {}}
@@ -53,11 +73,14 @@ function ComposerHarness({ onSend }: HarnessProps) {
       skills={[]}
       apps={[]}
       prompts={[]}
-      files={[]}
+      files={files}
+      sendLabel={sendLabel}
       draftText={draftText}
       onDraftChange={setDraftText}
       textareaRef={textareaRef}
       dictationEnabled={false}
+      messageFontSize={messageFontSize}
+      onMessageFontSizeChange={onMessageFontSizeChange}
     />
   );
 }
@@ -79,6 +102,24 @@ describe("Composer send triggers", () => {
 
     expect(onSend).toHaveBeenCalledTimes(1);
     expect(onSend).toHaveBeenCalledWith("hello world", []);
+  });
+
+  it("still sends when prompt history persistence fails for long text", () => {
+    const onSend = vi.fn();
+    const longText = "x".repeat(120_000);
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+
+    render(<ComposerHarness onSend={onSend} />);
+
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: longText } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    expect(setItemSpy).toHaveBeenCalled();
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith(longText, []);
   });
 
   it("sends once on send-button click", () => {
@@ -106,5 +147,80 @@ describe("Composer send triggers", () => {
     expect(onSend).toHaveBeenCalledTimes(1);
     expect(onSend).toHaveBeenCalledWith("dismiss keyboard", []);
     expect(blurSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends on Enter when autocomplete is open but has no matches", () => {
+    const onSend = vi.fn();
+    render(<ComposerHarness onSend={onSend} files={[]} />);
+
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "@missing-path" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith("@missing-path", []);
+  });
+
+  it("queues on action-button click instead of interrupting in queue mode", () => {
+    const onSend = vi.fn();
+    const onStop = vi.fn();
+    render(
+      <ComposerHarness
+        onSend={onSend}
+        onStop={onStop}
+        canStop={true}
+        isProcessing={true}
+        steerEnabled={false}
+        sendLabel="Queue"
+      />,
+    );
+
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "queued while processing" } });
+    fireEvent.click(screen.getByLabelText("Queue"));
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith("queued while processing", []);
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  it("queues on action-button click in steer mode while processing", () => {
+    const onSend = vi.fn();
+    const onStop = vi.fn();
+    render(
+      <ComposerHarness
+        onSend={onSend}
+        onStop={onStop}
+        canStop={true}
+        isProcessing={true}
+        steerEnabled={true}
+        sendLabel="Queue"
+      />,
+    );
+
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "queue in steer mode" } });
+    fireEvent.click(screen.getByLabelText("Queue"));
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith("queue in steer mode", []);
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  it("changes message font size from composer footer slider", () => {
+    const onSend = vi.fn();
+    const onMessageFontSizeChange = vi.fn();
+    render(
+      <ComposerHarness
+        onSend={onSend}
+        messageFontSize={13}
+        onMessageFontSizeChange={onMessageFontSizeChange}
+      />,
+    );
+
+    const slider = screen.getByLabelText("消息字号");
+    fireEvent.change(slider, { target: { value: "15" } });
+
+    expect(onMessageFontSizeChange).toHaveBeenCalledWith(15);
   });
 });

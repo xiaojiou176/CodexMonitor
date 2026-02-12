@@ -148,6 +148,36 @@ const GitHubPanelData = lazy(() =>
   })),
 );
 
+const MESSAGE_FONT_SIZE_STORAGE_KEY = "codexmonitor.messageFontSize";
+const MESSAGE_FONT_SIZE_MIN = 11;
+const MESSAGE_FONT_SIZE_MAX = 16;
+const MESSAGE_FONT_SIZE_DEFAULT = 13;
+
+function clampMessageFontSize(value: number): number {
+  if (!Number.isFinite(value)) {
+    return MESSAGE_FONT_SIZE_DEFAULT;
+  }
+  return Math.min(
+    MESSAGE_FONT_SIZE_MAX,
+    Math.max(MESSAGE_FONT_SIZE_MIN, Math.round(value)),
+  );
+}
+
+function loadMessageFontSize(): number {
+  if (typeof window === "undefined") {
+    return MESSAGE_FONT_SIZE_DEFAULT;
+  }
+  try {
+    const raw = window.localStorage.getItem(MESSAGE_FONT_SIZE_STORAGE_KEY);
+    if (!raw) {
+      return MESSAGE_FONT_SIZE_DEFAULT;
+    }
+    return clampMessageFontSize(Number(raw));
+  } catch {
+    return MESSAGE_FONT_SIZE_DEFAULT;
+  }
+}
+
 function MainApp() {
   const {
     appSettings,
@@ -187,6 +217,16 @@ function MainApp() {
   const shouldReduceTransparency = reduceTransparency || isMobilePlatform();
   useLiquidGlassEffect({ reduceTransparency: shouldReduceTransparency, onDebug: addDebugEntry });
   const { threadListSortKey, setThreadListSortKey } = useThreadListSortKey();
+  const [messageFontSize, setMessageFontSize] = useState<number>(() => loadMessageFontSize());
+  const handleMessageFontSizeChange = useCallback((next: number) => {
+    const clamped = clampMessageFontSize(next);
+    setMessageFontSize(clamped);
+    try {
+      window.localStorage.setItem(MESSAGE_FONT_SIZE_STORAGE_KEY, String(clamped));
+    } catch {
+      // Best-effort persistence.
+    }
+  }, []);
   const [activeTab, setActiveTab] = useState<
     "home" | "projects" | "codex" | "git" | "log"
   >("codex");
@@ -275,15 +315,26 @@ function MainApp() {
     toggleDebugPanelShortcut: appSettings.toggleDebugPanelShortcut,
     toggleTerminalShortcut: appSettings.toggleTerminalShortcut,
   });
-  const sidebarToggleProps = {
-    isCompact,
-    sidebarCollapsed,
-    rightPanelCollapsed,
-    onCollapseSidebar: collapseSidebar,
-    onExpandSidebar: expandSidebar,
-    onCollapseRightPanel: collapseRightPanel,
-    onExpandRightPanel: expandRightPanel,
-  };
+  const sidebarToggleProps = useMemo(
+    () => ({
+      isCompact,
+      sidebarCollapsed,
+      rightPanelCollapsed,
+      onCollapseSidebar: collapseSidebar,
+      onExpandSidebar: expandSidebar,
+      onCollapseRightPanel: collapseRightPanel,
+      onExpandRightPanel: expandRightPanel,
+    }),
+    [
+      isCompact,
+      sidebarCollapsed,
+      rightPanelCollapsed,
+      collapseSidebar,
+      expandSidebar,
+      collapseRightPanel,
+      expandRightPanel,
+    ],
+  );
   const {
     settingsOpen,
     settingsSection,
@@ -643,6 +694,7 @@ function MainApp() {
     loadOlderThreadsForWorkspace,
     resetWorkspaceThreads,
     refreshThread,
+    loadOlderMessagesForThread,
     sendUserMessage,
     sendUserMessageToThread,
     startFork,
@@ -676,6 +728,7 @@ function MainApp() {
     handleUserInputSubmit,
     refreshAccountInfo,
     refreshAccountRateLimits,
+    resetThreadRuntimeState,
   } = useThreads({
     activeWorkspace,
     onWorkspaceConnected: markWorkspaceConnected,
@@ -690,6 +743,17 @@ function MainApp() {
     onMessageActivity: queueGitStatusRefresh,
     threadSortKey: threadListSortKey,
   });
+
+  const threadWorkspaceById = useMemo(() => {
+    const result: Record<string, string> = {};
+    for (const workspace of workspaces) {
+      const threads = threadsByWorkspace[workspace.id] ?? [];
+      for (const thread of threads) {
+        result[thread.id] = workspace.id;
+      }
+    }
+    return result;
+  }, [threadsByWorkspace, workspaces]);
 
   const { handleSetThreadListSortKey, handleRefreshAllWorkspaceThreads } =
     useThreadListActions({
@@ -725,8 +789,8 @@ function MainApp() {
     startingDraftThreadWorkspaceId,
     isDraftModeForActiveWorkspace: isNewAgentDraftMode,
     startNewAgentDraft,
-    clearDraftState,
     clearDraftStateIfDifferentWorkspace,
+    clearDraftStateOnNavigation,
     runWithDraftStart,
   } = useNewAgentDraft({
     activeWorkspace,
@@ -1126,8 +1190,13 @@ function MainApp() {
     clearActiveImages,
     removeImagesForThread,
     activeQueue,
+    queueHealthEntries,
+    legacyQueueMessageCount,
     handleSend,
     queueMessage,
+    migrateLegacyQueueWorkspaceIds,
+    retryQueuedThread,
+    clearQueuedThread,
     prefillDraft,
     setPrefillDraft,
     composerInsert,
@@ -1137,6 +1206,7 @@ function MainApp() {
     handleSendPrompt,
     handleEditQueued,
     handleDeleteQueued,
+    handleSteerQueued,
     clearDraftForThread,
   } = useComposerController({
     activeThreadId,
@@ -1145,6 +1215,9 @@ function MainApp() {
     activeWorkspace,
     isProcessing,
     isReviewing,
+    threadStatusById,
+    threadWorkspaceById,
+    workspacesById,
     steerEnabled: appSettings.steerEnabled,
     appsEnabled: appSettings.experimentalAppsEnabled,
     connectWorkspace,
@@ -1158,7 +1231,13 @@ function MainApp() {
     startApps,
     startMcp,
     startStatus,
+    onRecoverStaleThread: resetThreadRuntimeState,
   });
+
+  const activeQueueHealthEntries = useMemo(
+    () => (activeThreadId ? queueHealthEntries.filter((entry) => entry.threadId === activeThreadId) : []),
+    [activeThreadId, queueHealthEntries],
+  );
 
   const {
     runs: workspaceRuns,
@@ -1546,7 +1625,7 @@ function MainApp() {
     (workspaceId: string, threadId: string) => {
       exitDiffView();
       resetPullRequestSelection();
-      clearDraftState();
+      clearDraftStateOnNavigation();
       selectWorkspace(workspaceId);
       setActiveThreadId(threadId, workspaceId);
       if (isCompact) {
@@ -1554,7 +1633,7 @@ function MainApp() {
       }
     },
     [
-      clearDraftState,
+      clearDraftStateOnNavigation,
       exitDiffView,
       isCompact,
       resetPullRequestSelection,
@@ -1571,12 +1650,12 @@ function MainApp() {
       }
       exitDiffView();
       resetPullRequestSelection();
-      clearDraftState();
+      clearDraftStateOnNavigation();
       setActiveThreadId(threadId, activeWorkspaceId);
     },
     [
       activeWorkspaceId,
-      clearDraftState,
+      clearDraftStateOnNavigation,
       exitDiffView,
       resetPullRequestSelection,
       setActiveThreadId,
@@ -1642,6 +1721,97 @@ function MainApp() {
       )
     );
   };
+
+  const activeItemsLengthRef = useRef(activeItems.length);
+  const activeFirstItemIdRef = useRef<string | null>(activeItems[0]?.id ?? null);
+  const activeLastItemIdRef = useRef<string | null>(
+    activeItems[activeItems.length - 1]?.id ?? null,
+  );
+  useEffect(() => {
+    activeItemsLengthRef.current = activeItems.length;
+    activeFirstItemIdRef.current = activeItems[0]?.id ?? null;
+    activeLastItemIdRef.current = activeItems[activeItems.length - 1]?.id ?? null;
+  }, [activeItems]);
+
+  const topHistoryLoadStateRef = useRef<{
+    key: string | null;
+    inFlight: boolean;
+    lastAt: number;
+  }>({ key: null, inFlight: false, lastAt: 0 });
+
+  const handleReachMessagesTop = useCallback(async () => {
+    const workspaceId = activeWorkspace?.id ?? null;
+    const threadId = activeThreadId ?? null;
+    if (!workspaceId || !threadId) {
+      return false;
+    }
+    if (threadStatusById[threadId]?.isProcessing) {
+      return false;
+    }
+    const key = `${workspaceId}:${threadId}`;
+    const state = topHistoryLoadStateRef.current;
+    if (state.key !== key) {
+      state.key = key;
+      state.inFlight = false;
+      state.lastAt = 0;
+    }
+    const now = Date.now();
+    if (state.inFlight || now - state.lastAt < 180) {
+      return false;
+    }
+    state.inFlight = true;
+    state.lastAt = now;
+    const beforeCount = activeItemsLengthRef.current;
+    const beforeFirstItemId = activeFirstItemIdRef.current;
+    const beforeLastItemId = activeLastItemIdRef.current;
+    try {
+      await loadOlderMessagesForThread(workspaceId, threadId);
+
+      const waitStartedAt = Date.now();
+      let afterCount = activeItemsLengthRef.current;
+      let afterFirstItemId = activeFirstItemIdRef.current;
+      let afterLastItemId = activeLastItemIdRef.current;
+
+      while (
+        Date.now() - waitStartedAt < 900 &&
+        afterCount === beforeCount &&
+        afterFirstItemId === beforeFirstItemId &&
+        afterLastItemId === beforeLastItemId
+      ) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, 50);
+        });
+        afterCount = activeItemsLengthRef.current;
+        afterFirstItemId = activeFirstItemIdRef.current;
+        afterLastItemId = activeLastItemIdRef.current;
+      }
+
+      const didLoadOlder =
+        afterCount > beforeCount ||
+        (Boolean(beforeFirstItemId) &&
+          Boolean(afterFirstItemId) &&
+          afterFirstItemId !== beforeFirstItemId);
+
+      const didThreadItemsChange =
+        afterCount !== beforeCount ||
+        afterFirstItemId !== beforeFirstItemId ||
+        afterLastItemId !== beforeLastItemId;
+
+      if (!didLoadOlder && !didThreadItemsChange) {
+        state.lastAt = Date.now();
+        return false;
+      }
+
+      return true;
+    } finally {
+      state.inFlight = false;
+    }
+  }, [
+    activeThreadId,
+    activeWorkspace,
+    loadOlderMessagesForThread,
+    threadStatusById,
+  ]);
 
   const showGitDetail =
     Boolean(selectedDiffPath) && isPhone && centerMode === "diff";
@@ -1752,6 +1922,8 @@ function MainApp() {
     accountSwitching,
     codeBlockCopyUseModifier: appSettings.composerCodeBlockCopyUseModifier,
     showMessageFilePath: appSettings.showMessageFilePath,
+    messageFontSize,
+    onMessageFontSizeChange: handleMessageFontSizeChange,
     openAppTargets: appSettings.openAppTargets,
     openAppIconById,
     selectedOpenAppId: appSettings.selectedOpenAppId,
@@ -1763,6 +1935,7 @@ function MainApp() {
     handleUserInputSubmit,
     onPlanAccept: handlePlanAccept,
     onPlanSubmitChanges: handlePlanSubmitChanges,
+    onReachMessagesTop: handleReachMessagesTop,
     onOpenSettings: () => openSettings(),
     onOpenDictationSettings: () => openSettings("dictation"),
     onOpenDebug: handleDebugClick,
@@ -1770,7 +1943,7 @@ function MainApp() {
     onAddWorkspace: handleAddWorkspace,
     onSelectHome: () => {
       resetPullRequestSelection();
-      clearDraftState();
+      clearDraftStateOnNavigation();
       selectHome();
     },
     onSelectWorkspace: (workspaceId) => {
@@ -1801,7 +1974,7 @@ function MainApp() {
     onSelectThread: (workspaceId, threadId) => {
       exitDiffView();
       resetPullRequestSelection();
-      clearDraftState();
+      clearDraftStateOnNavigation();
       selectWorkspace(workspaceId);
       setActiveThreadId(threadId, workspaceId);
     },
@@ -1858,7 +2031,7 @@ function MainApp() {
     onUsageWorkspaceChange: setUsageWorkspaceId,
     onSelectHomeThread: (workspaceId, threadId) => {
       exitDiffView();
-      clearDraftState();
+      clearDraftStateOnNavigation();
       selectWorkspace(workspaceId);
       setActiveThreadId(threadId, workspaceId);
       if (isCompact) {
@@ -1913,7 +2086,7 @@ function MainApp() {
     onSelectTab: (tab) => {
       if (tab === "home") {
         resetPullRequestSelection();
-        clearDraftState();
+        clearDraftStateOnNavigation();
         selectHome();
         return;
       }
@@ -2058,6 +2231,8 @@ function MainApp() {
     onReviewPromptConfirmCustom: confirmCustom,
     activeTokenUsage,
     activeQueue,
+    queueHealthEntries: activeQueueHealthEntries,
+    legacyQueueMessageCount,
     draftText: activeDraft,
     onDraftChange: handleDraftChange,
     activeImages,
@@ -2078,6 +2253,28 @@ function MainApp() {
     },
     onEditQueued: handleEditQueued,
     onDeleteQueued: handleDeleteQueued,
+    onSteerQueued: handleSteerQueued,
+    onSelectQueuedThread: (threadId) => {
+      const workspaceId = threadWorkspaceById[threadId];
+      if (!workspaceId) {
+        return;
+      }
+      exitDiffView();
+      clearDraftStateOnNavigation();
+      selectWorkspace(workspaceId);
+      setActiveThreadId(threadId, workspaceId);
+      if (isCompact) {
+        setActiveTab("codex");
+      }
+    },
+    onRetryQueuedThread: (threadId) => {
+      retryQueuedThread(threadId);
+    },
+    onClearQueuedThread: (threadId) => {
+      clearQueuedThread(threadId);
+    },
+    onMigrateLegacyQueueWorkspaceIds: migrateLegacyQueueWorkspaceIds,
+    canSteerQueued: Boolean(activeThreadId),
     collaborationModes,
     selectedCollaborationModeId,
     onSelectCollaborationMode: setSelectedCollaborationModeId,
@@ -2219,7 +2416,8 @@ function MainApp() {
           "--debug-panel-height": `${debugPanelHeight}px`,
           "--ui-font-family": appSettings.uiFontFamily,
           "--code-font-family": appSettings.codeFontFamily,
-          "--code-font-size": `${appSettings.codeFontSize}px`
+          "--code-font-size": `${appSettings.codeFontSize}px`,
+          "--message-font-size": `${messageFontSize}px`
         } as React.CSSProperties
       }
     >

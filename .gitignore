@@ -27,7 +27,12 @@ dist-ssr
 CodexMonitor.zip
 .codex-worktrees/
 .codexmonitor/
+.codex/Memory/
+.codex/Plans/
+.codex-memory.jsonl
+.runtime-cache/
 public/assets/material-icons/
 
 # Nix
 result
+.aider*

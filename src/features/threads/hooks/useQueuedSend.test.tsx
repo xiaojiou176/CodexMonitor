@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
 import { useQueuedSend } from "./useQueuedSend";
+
+const QUEUED_MESSAGES_STORAGE_KEY = "codexmonitor.queuedMessagesByThread";
 
 const workspace: WorkspaceInfo = {
   id: "workspace-1",
@@ -16,7 +18,7 @@ const makeOptions = (
   overrides: Partial<Parameters<typeof useQueuedSend>[0]> = {},
 ) => ({
   activeThreadId: "thread-1",
-  activeTurnId: "turn-1",
+  activeTurnId: null,
   isProcessing: false,
   isReviewing: false,
   steerEnabled: false,
@@ -38,6 +40,10 @@ const makeOptions = (
 });
 
 describe("useQueuedSend", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it("sends queued messages one at a time after processing completes", async () => {
     const options = makeOptions();
     const { result, rerender } = renderHook(
@@ -93,7 +99,7 @@ describe("useQueuedSend", () => {
     expect(options.sendUserMessage).toHaveBeenCalledWith("Alpha", []);
   });
 
-  it("queues send while processing when steer is disabled", async () => {
+  it("queues send while processing", async () => {
     const options = makeOptions({ isProcessing: true, steerEnabled: false });
     const { result } = renderHook((props) => useQueuedSend(props), {
       initialProps: options,
@@ -108,7 +114,59 @@ describe("useQueuedSend", () => {
     expect(result.current.activeQueue[0]?.text).toBe("Queued");
   });
 
-  it("sends immediately while processing when steer is enabled", async () => {
+  it("does not flush active queue while active turn id exists", async () => {
+    const options = makeOptions({
+      activeTurnId: "turn-1",
+      isProcessing: false,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: false,
+          isReviewing: false,
+          processingStartedAt: null,
+        },
+      },
+    });
+
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("wait-for-turn-end");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(result.current.activeQueue.map((item) => item.text)).toEqual(["wait-for-turn-end"]);
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeTurnId: null,
+        threadStatusById: {
+          "thread-1": {
+            isProcessing: false,
+            isReviewing: false,
+            processingStartedAt: null,
+          },
+        },
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenCalledWith("wait-for-turn-end", []);
+  });
+
+  it("queues while processing when steer is enabled", async () => {
     const options = makeOptions({ isProcessing: true, steerEnabled: true });
     const { result } = renderHook((props) => useQueuedSend(props), {
       initialProps: options,
@@ -118,12 +176,12 @@ describe("useQueuedSend", () => {
       await result.current.handleSend("Steer");
     });
 
-    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
-    expect(options.sendUserMessage).toHaveBeenCalledWith("Steer", []);
-    expect(result.current.activeQueue).toHaveLength(0);
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(result.current.activeQueue).toHaveLength(1);
+    expect(result.current.activeQueue[0]?.text).toBe("Steer");
   });
 
-  it("queues send while processing when steer is enabled but turn id is unavailable", async () => {
+  it("allows steering queued message while processing when turn id is unavailable", async () => {
     const options = makeOptions({
       isProcessing: true,
       steerEnabled: true,
@@ -134,12 +192,149 @@ describe("useQueuedSend", () => {
     });
 
     await act(async () => {
-      await result.current.handleSend("Wait for turn");
+      await result.current.queueMessage("Wait for turn");
+    });
+
+    const queued = result.current.activeQueue[0];
+    expect(queued?.text).toBe("Wait for turn");
+
+    await act(async () => {
+      const ok = await result.current.steerQueuedMessage("thread-1", queued?.id ?? "");
+      expect(ok).toBe(true);
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenCalledWith("Wait for turn", [], {
+      forceSteer: true,
+    });
+    expect(result.current.activeQueue).toHaveLength(0);
+  });
+
+  it("allows steering queued message when idle", async () => {
+    const options = makeOptions({
+      isProcessing: false,
+      steerEnabled: true,
+      activeTurnId: null,
+      activeWorkspace: null,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("steer while idle");
+    });
+
+    const queued = result.current.activeQueue[0];
+    expect(queued?.text).toBe("steer while idle");
+
+    await act(async () => {
+      const ok = await result.current.steerQueuedMessage("thread-1", queued?.id ?? "");
+      expect(ok).toBe(true);
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenCalledWith("steer while idle", [], {
+      forceSteer: true,
+    });
+    expect(result.current.activeQueue).toHaveLength(0);
+  });
+
+  it("allows steering queued message when steer mode is disabled", async () => {
+    const options = makeOptions({
+      isProcessing: false,
+      steerEnabled: false,
+      activeTurnId: null,
+      activeWorkspace: null,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("steer with toggle off");
+    });
+
+    const queued = result.current.activeQueue[0];
+    expect(queued?.text).toBe("steer with toggle off");
+
+    await act(async () => {
+      const ok = await result.current.steerQueuedMessage("thread-1", queued?.id ?? "");
+      expect(ok).toBe(true);
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenCalledWith("steer with toggle off", [], {
+      forceSteer: true,
+    });
+    expect(result.current.activeQueue).toHaveLength(0);
+  });
+
+  it("queues while processing when steer is enabled and turn id exists", async () => {
+    const options = makeOptions({
+      isProcessing: true,
+      steerEnabled: true,
+      activeTurnId: "turn-1",
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("Steer direct send");
     });
 
     expect(options.sendUserMessage).not.toHaveBeenCalled();
     expect(result.current.activeQueue).toHaveLength(1);
-    expect(result.current.activeQueue[0]?.text).toBe("Wait for turn");
+    expect(result.current.activeQueue[0]?.text).toBe("Steer direct send");
+  });
+
+  it("queues when active turn id exists and steer is enabled even if processing is false", async () => {
+    const options = makeOptions({
+      isProcessing: false,
+      steerEnabled: true,
+      activeTurnId: "turn-1",
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("Steer with turn id only");
+    });
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(result.current.activeQueue).toHaveLength(1);
+    expect(result.current.activeQueue[0]?.text).toBe("Steer with turn id only");
+  });
+
+  it("allows steering queued message when active turn id exists and processing is false", async () => {
+    const options = makeOptions({
+      isProcessing: false,
+      steerEnabled: true,
+      activeTurnId: "turn-1",
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("queued via steer button");
+    });
+
+    const queued = result.current.activeQueue[0];
+    expect(queued?.text).toBe("queued via steer button");
+
+    await act(async () => {
+      const ok = await result.current.steerQueuedMessage("thread-1", queued?.id ?? "");
+      expect(ok).toBe(true);
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenCalledWith("queued via steer button", [], {
+      forceSteer: true,
+    });
+    expect(result.current.activeQueue).toHaveLength(0);
   });
 
   it("retries queued send after failure", async () => {
@@ -168,7 +363,7 @@ describe("useQueuedSend", () => {
     expect(options.sendUserMessage).toHaveBeenLastCalledWith("Retry", []);
   });
 
-  it("queues messages per thread and only flushes the active thread", async () => {
+  it("queues messages per thread and only flushes the active thread without workspace mapping", async () => {
     const options = makeOptions({ isProcessing: true });
     const { result, rerender } = renderHook(
       (props) => useQueuedSend(props),
@@ -187,6 +382,17 @@ describe("useQueuedSend", () => {
     });
 
     expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(result.current.queueHealthEntries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          threadId: "thread-1",
+          queueLength: 1,
+          inFlight: false,
+          blockedReason: "workspace_unresolved",
+          lastFailureReason: null,
+        }),
+      ]),
+    );
 
     await act(async () => {
       rerender({ ...options, activeThreadId: "thread-1", isProcessing: false });
@@ -197,6 +403,420 @@ describe("useQueuedSend", () => {
 
     expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
     expect(options.sendUserMessage).toHaveBeenCalledWith("Thread-1", []);
+  });
+
+  it("does not drain non-active queue while another thread is globally processing", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      isProcessing: true,
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: false },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("wait until global processing ends");
+    });
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "thread-2",
+        activeTurnId: "turn-2",
+        activeWorkspace: workspaceTwo,
+        isProcessing: true,
+        isReviewing: false,
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
+    expect(result.current.queuedByThread["thread-1"]?.map((item) => item.text)).toEqual([
+      "wait until global processing ends",
+    ]);
+    expect(
+      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1")?.blockedReason,
+    ).toBe("global_processing");
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "thread-2",
+        activeTurnId: null,
+        activeWorkspace: workspaceTwo,
+        isProcessing: false,
+        isReviewing: false,
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspace,
+      "thread-1",
+      "wait until global processing ends",
+      [],
+    );
+  });
+
+  it("drains active-thread queue even when another thread is globally processing", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      activeTurnId: null,
+      isProcessing: false,
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": {
+          isProcessing: true,
+          isReviewing: false,
+          processingStartedAt: Date.now(),
+        },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("active thread should still drain");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenCalledWith("active thread should still drain", []);
+  });
+
+  it("drains queued messages for non-active thread when workspace mapping is available", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      isProcessing: true,
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: false },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("Thread-1 background drain");
+    });
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "thread-2",
+        activeTurnId: null,
+        activeWorkspace: workspaceTwo,
+        isProcessing: false,
+        isReviewing: false,
+      });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspace,
+      "thread-1",
+      "Thread-1 background drain",
+      [],
+    );
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("blocks non-active queued thread while another thread is globally processing", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+
+    const options = makeOptions({
+      activeThreadId: "thread-2",
+      activeWorkspace: workspaceTwo,
+      isProcessing: true,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          isReviewing: false,
+          processingStartedAt: Date.now(),
+        },
+        "thread-2": {
+          isProcessing: false,
+          isReviewing: false,
+          processingStartedAt: null,
+        },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("thread-2 waits for global processing");
+    });
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "thread-1",
+        activeWorkspace: workspace,
+        isProcessing: true,
+        threadStatusById: {
+          "thread-1": {
+            isProcessing: true,
+            isReviewing: false,
+            processingStartedAt: Date.now(),
+          },
+          "thread-2": {
+            isProcessing: false,
+            isReviewing: false,
+            processingStartedAt: null,
+          },
+        },
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
+    expect(
+      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-2")
+        ?.blockedReason,
+    ).toBe("global_processing");
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "thread-1",
+        activeWorkspace: workspace,
+        isProcessing: false,
+        threadStatusById: {
+          "thread-1": {
+            isProcessing: false,
+            isReviewing: false,
+            processingStartedAt: null,
+          },
+          "thread-2": {
+            isProcessing: false,
+            isReviewing: false,
+            processingStartedAt: null,
+          },
+        },
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspaceTwo,
+      "thread-2",
+      "thread-2 waits for global processing",
+      [],
+    );
+  });
+
+  it("drains non-active queued thread using queued workspace id fallback", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      isProcessing: true,
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: false },
+      },
+      threadWorkspaceById: {
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("Thread-1 queued while active");
+    });
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "thread-2",
+        activeTurnId: null,
+        activeWorkspace: workspaceTwo,
+        isProcessing: false,
+        isReviewing: false,
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspace,
+      "thread-1",
+      "Thread-1 queued while active",
+      [],
+    );
+  });
+
+  it("continues background drain when status events are missing", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      isProcessing: true,
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: false },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("Background first");
+      await result.current.queueMessage("Background second");
+    });
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "thread-2",
+        activeTurnId: null,
+        activeWorkspace: workspaceTwo,
+        isProcessing: false,
+        isReviewing: false,
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(2);
+    expect(options.sendUserMessageToThread).toHaveBeenNthCalledWith(
+      1,
+      workspace,
+      "thread-1",
+      "Background first",
+      [],
+    );
+    expect(options.sendUserMessageToThread).toHaveBeenNthCalledWith(
+      2,
+      workspace,
+      "thread-1",
+      "Background second",
+      [],
+    );
   });
 
   it("connects workspace before sending when disconnected", async () => {
@@ -424,6 +1044,121 @@ describe("useQueuedSend", () => {
     expect(result.current.activeQueue).toHaveLength(0);
   });
 
+  it("restores queued messages from local storage", async () => {
+    const persisted = {
+      "thread-1": [
+        {
+          id: "persisted-1",
+          text: "Recovered",
+          createdAt: 123,
+          images: ["img-a"],
+        },
+      ],
+      "thread-2": [
+        {
+          id: "persisted-2",
+          text: "Other thread",
+          createdAt: 456,
+        },
+      ],
+    };
+    window.localStorage.setItem(
+      QUEUED_MESSAGES_STORAGE_KEY,
+      JSON.stringify(persisted),
+    );
+
+    const options = makeOptions({ isProcessing: true });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    expect(result.current.activeQueue).toHaveLength(1);
+    expect(result.current.activeQueue[0]).toMatchObject({
+      id: "persisted-1",
+      text: "Recovered",
+      createdAt: 123,
+      images: ["img-a"],
+    });
+  });
+
+  it("auto-migrates legacy queued messages with missing workspaceId", async () => {
+    window.localStorage.setItem(
+      QUEUED_MESSAGES_STORAGE_KEY,
+      JSON.stringify({
+        "thread-1": [
+          {
+            id: "legacy-1",
+            text: "Legacy queue",
+            createdAt: 100,
+          },
+        ],
+      }),
+    );
+
+    const options = makeOptions({
+      activeThreadId: "thread-2",
+      activeWorkspace: {
+        ...workspace,
+        id: "workspace-2",
+      },
+      threadStatusById: {
+        "thread-1": { isProcessing: true, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: false },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", { ...workspace, id: "workspace-2" }],
+      ]),
+    });
+
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.legacyQueueMessageCount).toBe(0);
+
+    const stored = JSON.parse(
+      window.localStorage.getItem(QUEUED_MESSAGES_STORAGE_KEY) ?? "{}",
+    ) as Record<string, Array<{ workspaceId?: string }>>;
+
+    expect(stored["thread-1"]?.[0]?.workspaceId).toBe("workspace-1");
+  });
+
+  it("keeps queued messages after remount", async () => {
+    const options = makeOptions({ isProcessing: true });
+    const { result, unmount } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("Persist me", ["img-1"]);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    unmount();
+
+    const remountedOptions = makeOptions({ isProcessing: true });
+    const { result: remounted } = renderHook((props) => useQueuedSend(props), {
+      initialProps: remountedOptions,
+    });
+
+    expect(remounted.current.activeQueue).toHaveLength(1);
+    expect(remounted.current.activeQueue[0]).toMatchObject({
+      text: "Persist me",
+      images: ["img-1"],
+    });
+  });
+
   it("preserves images for queued messages", async () => {
     const options = makeOptions();
     const { result } = renderHook((props) => useQueuedSend(props), {
@@ -443,5 +1178,291 @@ describe("useQueuedSend", () => {
       "img-1",
       "img-2",
     ]);
+  });
+
+  it("marks processing stale entries in queue health", async () => {
+    const processingStartedAt = Date.now() - 120_000;
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      isProcessing: true,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          isReviewing: false,
+          processingStartedAt,
+        },
+      },
+      threadWorkspaceById: {},
+      workspacesById: new Map(),
+    });
+
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("for stale");
+      await Promise.resolve();
+    });
+
+    const staleEntry = result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1");
+    expect(staleEntry?.blockedReason).toBe("processing");
+    expect(staleEntry?.isStale).toBe(true);
+    expect((staleEntry?.blockedForMs ?? 0)).toBeGreaterThanOrEqual(90_000);
+  });
+
+  it("does not auto-dispatch active-thread queue while processing is stale", async () => {
+    const onRecoverStaleThread = vi.fn();
+    const options = makeOptions({
+      isProcessing: false,
+      onRecoverStaleThread,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: false,
+          isReviewing: false,
+          processingStartedAt: null,
+        },
+      },
+    });
+
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("first");
+      await result.current.queueMessage("second");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenNthCalledWith(1, "first", []);
+
+    await act(async () => {
+      rerender({
+        ...options,
+        isProcessing: true,
+        threadStatusById: {
+          "thread-1": {
+            isProcessing: true,
+            isReviewing: false,
+            processingStartedAt: Date.now() - 120_000,
+          },
+        },
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onRecoverStaleThread).not.toHaveBeenCalled();
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(result.current.activeQueue.map((item) => item.text)).toEqual(["second"]);
+  });
+
+  it("flushes active-thread queue only after processing ends", async () => {
+    const options = makeOptions({
+      isProcessing: false,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: false,
+          isReviewing: false,
+          processingStartedAt: null,
+        },
+      },
+    });
+
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("first");
+      await result.current.queueMessage("second");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenNthCalledWith(1, "first", []);
+
+    await act(async () => {
+      rerender({
+        ...options,
+        isProcessing: true,
+        threadStatusById: {
+          "thread-1": {
+            isProcessing: true,
+            isReviewing: false,
+            processingStartedAt: Date.now() - 120_000,
+          },
+        },
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(result.current.activeQueue.map((item) => item.text)).toEqual(["second"]);
+
+    await act(async () => {
+      rerender({
+        ...options,
+        isProcessing: false,
+        threadStatusById: {
+          "thread-1": {
+            isProcessing: false,
+            isReviewing: false,
+            processingStartedAt: null,
+          },
+        },
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(options.sendUserMessage).toHaveBeenNthCalledWith(2, "second", []);
+  });
+
+  it("records lastFailureAt when dispatch fails", async () => {
+    const options = makeOptions({
+      sendUserMessage: vi.fn().mockRejectedValue(new Error("dispatch failed")),
+    });
+
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("will fail");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalled();
+
+    const failedEntry = result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1");
+    expect(failedEntry?.lastFailureAt).toEqual(expect.any(Number));
+  });
+
+  it("supports retrying a specific queued thread", async () => {
+    const onRecoverStaleThread = vi.fn();
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      isProcessing: false,
+      onRecoverStaleThread,
+    });
+
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("retry me");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      result.current.retryThreadQueue("thread-1");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(onRecoverStaleThread).toHaveBeenCalledWith("thread-1");
+  });
+
+  it("supports clearing a specific queued thread", async () => {
+    const onRecoverStaleThread = vi.fn();
+    const options = makeOptions({
+      activeWorkspace: null,
+      isProcessing: true,
+      onRecoverStaleThread,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          isReviewing: false,
+          processingStartedAt: Date.now() - 120_000,
+        },
+      },
+    });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("keep");
+      await result.current.queueMessage("remove");
+    });
+
+    expect(result.current.activeQueue).toHaveLength(2);
+
+    act(() => {
+      result.current.clearThreadQueue("thread-1");
+    });
+
+    expect(result.current.activeQueue).toHaveLength(0);
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "thread-2",
+        activeWorkspace: { ...workspace, id: "workspace-2" },
+        isProcessing: false,
+      });
+    });
+
+    expect(
+      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1"),
+    ).toBeUndefined();
+    expect(onRecoverStaleThread).toHaveBeenCalledWith("thread-1");
+  });
+
+  it("hides stale status-only non-active threads from queue diagnostics", () => {
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      isProcessing: false,
+      threadStatusById: {
+        "thread-2": {
+          isProcessing: true,
+          isReviewing: false,
+          processingStartedAt: Date.now() - 180_000,
+        },
+      },
+    });
+
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    expect(
+      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-2"),
+    ).toBeUndefined();
   });
 });
