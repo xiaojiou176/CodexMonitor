@@ -12,6 +12,11 @@ import {
   remarkFileLinks,
   toFileLink,
 } from "../../../utils/remarkFileLinks";
+import {
+  extractUrlLines,
+  normalizeListIndentation,
+  normalizeStateDumpBlocks,
+} from "./markdownNormalization";
 
 type MarkdownProps = {
   value: string;
@@ -271,109 +276,6 @@ function extractCodeFromPre(node?: PreProps["node"]) {
   };
 }
 
-function normalizeUrlLine(line: string) {
-  const trimmed = line.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const withoutBullet = trimmed.replace(/^(?:[-*]|\d+\.)\s+/, "");
-  if (!/^https?:\/\/\S+$/i.test(withoutBullet)) {
-    return null;
-  }
-  return withoutBullet;
-}
-
-function extractUrlLines(value: string) {
-  const lines = value.split(/\r?\n/);
-  const urls = lines
-    .map((line) => normalizeUrlLine(line))
-    .filter((line): line is string => Boolean(line));
-  const nonEmptyLines = lines.filter((line) => line.trim().length > 0);
-  if (nonEmptyLines.length === 0) {
-    return null;
-  }
-  if (urls.length !== nonEmptyLines.length) {
-    return null;
-  }
-  return urls;
-}
-
-function normalizeListIndentation(value: string) {
-  const lines = value.split(/\r?\n/);
-  let inFence = false;
-  let activeOrderedItem = false;
-  let orderedBaseIndent = 4;
-  let orderedIndentOffset: number | null = null;
-
-  const countLeadingSpaces = (line: string) =>
-    line.match(/^\s*/)?.[0].length ?? 0;
-  const spaces = (count: number) => " ".repeat(Math.max(0, count));
-  const normalized = lines.map((line) => {
-    const fenceMatch = line.match(/^\s*(```|~~~)/);
-    if (fenceMatch) {
-      inFence = !inFence;
-      activeOrderedItem = false;
-      orderedIndentOffset = null;
-      return line;
-    }
-    if (inFence) {
-      return line;
-    }
-    if (!line.trim()) {
-      return line;
-    }
-
-    const orderedMatch = line.match(/^(\s*)\d+\.\s+/);
-    if (orderedMatch) {
-      const rawIndent = orderedMatch[1].length;
-      const normalizedIndent =
-        rawIndent > 0 && rawIndent < 4 ? 4 : rawIndent;
-      activeOrderedItem = true;
-      orderedBaseIndent = normalizedIndent + 4;
-      orderedIndentOffset = null;
-      if (normalizedIndent !== rawIndent) {
-        return `${spaces(normalizedIndent)}${line.trimStart()}`;
-      }
-      return line;
-    }
-
-    const bulletMatch = line.match(/^(\s*)([-*+])\s+/);
-    if (bulletMatch) {
-      const rawIndent = bulletMatch[1].length;
-      let targetIndent = rawIndent;
-
-      if (!activeOrderedItem && rawIndent > 0 && rawIndent < 4) {
-        targetIndent = 4;
-      }
-
-      if (activeOrderedItem) {
-        if (orderedIndentOffset === null && rawIndent < orderedBaseIndent) {
-          orderedIndentOffset = orderedBaseIndent - rawIndent;
-        }
-        if (orderedIndentOffset !== null) {
-          const adjustedIndent = rawIndent + orderedIndentOffset;
-          if (adjustedIndent <= orderedBaseIndent + 12) {
-            targetIndent = adjustedIndent;
-          }
-        }
-      }
-
-      if (targetIndent !== rawIndent) {
-        return `${spaces(targetIndent)}${line.trimStart()}`;
-      }
-      return line;
-    }
-
-    const leadingSpaces = countLeadingSpaces(line);
-    if (activeOrderedItem && leadingSpaces < orderedBaseIndent) {
-      activeOrderedItem = false;
-      orderedIndentOffset = null;
-    }
-    return line;
-  });
-  return normalized.join("\n");
-}
-
 function LinkBlock({ urls }: LinkBlockProps) {
   return (
     <div className="markdown-linkblock">
@@ -489,8 +391,18 @@ function computePreviewAnchor(link: HTMLAnchorElement): FileLinkPreviewAnchor {
 function buildPreviewState(rawPath: string, content: string, truncated: boolean): FileLinkPreviewState {
   const targetLine = parseLineNumber(rawPath);
   const source = content.split(/\r?\n/);
-  const fallbackStart = 0;
-  const focusIndex = targetLine ? Math.max(0, targetLine - 1) : fallbackStart;
+  if (source.length === 0) {
+    return {
+      title: "文件为空",
+      path: stripLineSuffix(rawPath),
+      truncated,
+      lines: [],
+    };
+  }
+  const effectiveLineNumber = targetLine
+    ? Math.min(Math.max(targetLine, 1), source.length)
+    : 1;
+  const focusIndex = effectiveLineNumber - 1;
   const start = Math.max(0, focusIndex - 3);
   const end = Math.min(source.length, focusIndex + 4);
   const lines = source.slice(start, end).map((text, index) => {
@@ -498,12 +410,12 @@ function buildPreviewState(rawPath: string, content: string, truncated: boolean)
     return {
       lineNumber,
       text,
-      focused: Boolean(targetLine) && lineNumber === targetLine,
+      focused: lineNumber === effectiveLineNumber,
     };
   });
 
   return {
-    title: `L${targetLine ?? start + 1} 附近`,
+    title: `L${effectiveLineNumber} 附近`,
     path: stripLineSuffix(rawPath),
     truncated,
     lines,
@@ -842,10 +754,10 @@ export const Markdown = memo(function Markdown({
   onOpenFileLinkMenu,
   onOpenThreadLink,
 }: MarkdownProps) {
-  const normalizedValue = codeBlock ? value : normalizeListIndentation(value);
-  const content = codeBlock
-    ? `\`\`\`\n${normalizedValue}\n\`\`\``
-    : normalizedValue;
+  const normalizedValue = codeBlock
+    ? value
+    : normalizeListIndentation(normalizeStateDumpBlocks(value));
+  const content = normalizedValue;
   const handleFileLinkClick = useCallback(
     (event: React.MouseEvent, path: string) => {
       event.preventDefault();
@@ -937,11 +849,12 @@ export const Markdown = memo(function Markdown({
           url.startsWith("http://") ||
           url.startsWith("https://") ||
           url.startsWith("mailto:");
+        const isHashNavigation = url.startsWith("#");
         const isRelativeNavigation =
           url.startsWith("/") || url.startsWith("./") || url.startsWith("../");
 
-        if (isRelativeNavigation) {
-          return <span>{children}</span>;
+        if (isHashNavigation || isRelativeNavigation) {
+          return <a href={href}>{children}</a>;
         }
 
         if (!isExternal) {
@@ -1064,6 +977,16 @@ export const Markdown = memo(function Markdown({
     event.preventDefault();
     clipboardData.setData("text/plain", plainText);
   }, []);
+
+  if (codeBlock) {
+    return (
+      <div className={className}>
+        <pre className="markdown-codeblock-single">
+          <code>{normalizedValue}</code>
+        </pre>
+      </div>
+    );
+  }
 
   return (
     <div className={className} onCopy={handleCopy}>

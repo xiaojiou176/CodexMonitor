@@ -21,6 +21,7 @@ import { DEFAULT_COMMIT_MESSAGE_PROMPT } from "../../../utils/commitMessagePromp
 
 const allowedThemes = new Set(["system", "light", "dark", "dim"]);
 const allowedPersonality = new Set(["friendly", "pragmatic"]);
+const allowedThreadScrollRestoreMode = new Set(["latest", "remember"]);
 
 function buildDefaultSettings(): AppSettings {
   const isMac = isMacPlatform();
@@ -63,6 +64,7 @@ function buildDefaultSettings(): AppSettings {
     uiScale: UI_SCALE_DEFAULT,
     theme: "system",
     showMessageFilePath: true,
+    threadScrollRestoreMode: "latest",
     threadTitleAutogenerationEnabled: false,
     uiFontFamily: DEFAULT_UI_FONT_FAMILY,
     codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
@@ -140,6 +142,11 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
     personality: allowedPersonality.has(settings.personality)
       ? settings.personality
       : "friendly",
+    threadScrollRestoreMode: allowedThreadScrollRestoreMode.has(
+      settings.threadScrollRestoreMode,
+    )
+      ? settings.threadScrollRestoreMode
+      : "latest",
     reviewDeliveryMode:
       settings.reviewDeliveryMode === "detached" ? "detached" : "inline",
     commitMessagePrompt,

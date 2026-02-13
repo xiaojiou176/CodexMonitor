@@ -20,6 +20,15 @@ const RELATIVE_ALLOWED_PREFIXES = [
   "docs/",
   "scripts/",
 ];
+const ABSOLUTE_ALLOWED_PREFIXES = [
+  "/Users/",
+  "/home/",
+  "/tmp/",
+  "/var/",
+  "/etc/",
+  "/opt/",
+  "/Applications/",
+];
 
 type MarkdownNode = {
   type: string;
@@ -53,8 +62,24 @@ function isPathCandidate(
     return false;
   }
   if (value.startsWith("/") || value.startsWith("./") || value.startsWith("../")) {
-    if (value.startsWith("/") && previousChar && /[A-Za-z0-9.]/.test(previousChar)) {
-      return false;
+    if (value.startsWith("/")) {
+      if (previousChar && /[\p{L}\p{N}.]/u.test(previousChar)) {
+        return false;
+      }
+      const absoluteSegments = pathWithoutLine.split("/").filter(Boolean);
+      const hasNestedAbsolutePath = absoluteSegments.length >= 2;
+      const lastAbsoluteSegment = absoluteSegments[absoluteSegments.length - 1] ?? "";
+      const hasFileLikeTail = lastAbsoluteSegment.includes(".");
+      const hasKnownAbsolutePrefix = ABSOLUTE_ALLOWED_PREFIXES.some((prefix) =>
+        value.startsWith(prefix),
+      );
+      if (
+        !hasNestedAbsolutePath &&
+        !hasFileLikeTail &&
+        !hasKnownAbsolutePrefix
+      ) {
+        return false;
+      }
     }
     return hasMeaningfulSegment;
   }

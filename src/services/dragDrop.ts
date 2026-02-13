@@ -19,6 +19,15 @@ type SubscriptionOptions = {
 let unlisten: (() => void) | null = null;
 let listenPromise: Promise<() => void> | null = null;
 const listeners = new Set<Listener>();
+let workspaceReorderDragging = false;
+
+export function setWorkspaceReorderDragging(isDragging: boolean) {
+  workspaceReorderDragging = isDragging;
+}
+
+export function isWorkspaceReorderDragging() {
+  return workspaceReorderDragging;
+}
 
 function start(options?: SubscriptionOptions) {
   if (unlisten || listenPromise) {

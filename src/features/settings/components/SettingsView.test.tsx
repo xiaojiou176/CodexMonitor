@@ -57,6 +57,7 @@ const baseSettings: AppSettings = {
   uiScale: 1,
   theme: "system",
   showMessageFilePath: true,
+  threadScrollRestoreMode: "latest",
   threadTitleAutogenerationEnabled: false,
   uiFontFamily:
     'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -317,6 +318,20 @@ describe("SettingsView Display", () => {
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ theme: "dark" }),
+      );
+    });
+  });
+
+  it("updates thread scroll restore mode", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({ onUpdateAppSettings });
+
+    const select = screen.getByLabelText("线程切换滚动策略");
+    fireEvent.change(select, { target: { value: "remember" } });
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ threadScrollRestoreMode: "remember" }),
       );
     });
   });

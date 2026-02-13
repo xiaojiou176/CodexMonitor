@@ -37,6 +37,7 @@ describe("useAppSettings", () => {
         backendMode: "remote",
         remoteBackendHost: "example:1234",
         personality: "unknown",
+        threadScrollRestoreMode: "unexpected" as unknown as AppSettings["threadScrollRestoreMode"],
         uiFontFamily: "",
         codeFontFamily: "  ",
         codeFontSize: 25,
@@ -53,6 +54,7 @@ describe("useAppSettings", () => {
     expect(result.current.settings.codeFontFamily).toContain("ui-monospace");
     expect(result.current.settings.codeFontSize).toBe(16);
     expect(result.current.settings.personality).toBe("friendly");
+    expect(result.current.settings.threadScrollRestoreMode).toBe("latest");
     expect(result.current.settings.backendMode).toBe("remote");
     expect(result.current.settings.remoteBackendHost).toBe("example:1234");
   });

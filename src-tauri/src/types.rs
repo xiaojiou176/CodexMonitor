@@ -573,6 +573,11 @@ pub(crate) struct AppSettings {
         rename = "showMessageFilePath"
     )]
     pub(crate) show_message_file_path: bool,
+    #[serde(
+        default = "default_thread_scroll_restore_mode",
+        rename = "threadScrollRestoreMode"
+    )]
+    pub(crate) thread_scroll_restore_mode: String,
     #[serde(default, rename = "threadTitleAutogenerationEnabled")]
     pub(crate) thread_title_autogeneration_enabled: bool,
     #[serde(default = "default_ui_font_family", rename = "uiFontFamily")]
@@ -753,6 +758,10 @@ fn default_usage_show_remaining() -> bool {
 
 fn default_show_message_file_path() -> bool {
     true
+}
+
+fn default_thread_scroll_restore_mode() -> String {
+    "latest".to_string()
 }
 
 fn default_ui_font_family() -> String {
@@ -1178,6 +1187,7 @@ impl Default for AppSettings {
             theme: default_theme(),
             usage_show_remaining: default_usage_show_remaining(),
             show_message_file_path: default_show_message_file_path(),
+            thread_scroll_restore_mode: default_thread_scroll_restore_mode(),
             thread_title_autogeneration_enabled: false,
             ui_font_family: default_ui_font_family(),
             code_font_family: default_code_font_family(),
@@ -1340,6 +1350,7 @@ mod tests {
         assert_eq!(settings.theme, "system");
         assert!(!settings.usage_show_remaining);
         assert!(settings.show_message_file_path);
+        assert_eq!(settings.thread_scroll_restore_mode, "latest");
         assert!(!settings.thread_title_autogeneration_enabled);
         assert!(settings.ui_font_family.contains("system-ui"));
         assert!(settings.code_font_family.contains("ui-monospace"));

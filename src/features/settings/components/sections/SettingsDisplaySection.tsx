@@ -107,6 +107,29 @@ export function SettingsDisplaySection({
           <span className="settings-toggle-knob" />
         </button>
       </div>
+      <div className="settings-field">
+        <label className="settings-field-label" htmlFor="thread-scroll-restore-mode">
+          线程切换滚动策略
+        </label>
+        <select
+          id="thread-scroll-restore-mode"
+          className="settings-select"
+          value={appSettings.threadScrollRestoreMode}
+          onChange={(event) =>
+            void onUpdateAppSettings({
+              ...appSettings,
+              threadScrollRestoreMode:
+                event.target.value as AppSettings["threadScrollRestoreMode"],
+            })
+          }
+        >
+          <option value="latest">进入线程自动到底部（推荐）</option>
+          <option value="remember">回到上次阅读位置</option>
+        </select>
+        <div className="settings-help">
+          自动到底部适合实时追踪输出；回到上次位置适合长线程分段阅读。
+        </div>
+      </div>
       <div className="settings-toggle-row">
         <div>
           <div className="settings-toggle-title">自动生成对话标题</div>

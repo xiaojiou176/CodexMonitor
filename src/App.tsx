@@ -1678,6 +1678,23 @@ function MainApp() {
       ? entry.settings.sortOrder
       : Number.MAX_SAFE_INTEGER;
 
+  const persistWorkspaceOrder = useCallback(
+    async (orderedWorkspaces: WorkspaceInfo[], groupId: string | null) => {
+      if (orderedWorkspaces.length <= 1) {
+        return;
+      }
+      await Promise.all(
+        orderedWorkspaces.map((entry, idx) =>
+          updateWorkspaceSettings(entry.id, {
+            sortOrder: idx,
+            groupId,
+          }),
+        ),
+      );
+    },
+    [updateWorkspaceSettings],
+  );
+
   const handleMoveWorkspace = async (
     workspaceId: string,
     direction: "up" | "down"
@@ -1713,14 +1730,23 @@ function MainApp() {
     const temp = next[index];
     next[index] = next[nextIndex];
     next[nextIndex] = temp;
-    await Promise.all(
-      next.map((entry, idx) =>
-        updateWorkspaceSettings(entry.id, {
-          sortOrder: idx
-        })
-      )
-    );
+    await persistWorkspaceOrder(next, targetGroupId);
   };
+
+  const handleReorderWorkspaceGroup = useCallback(
+    async (groupId: string | null, orderedWorkspaceIds: string[]) => {
+      const orderedWorkspaces: WorkspaceInfo[] = [];
+      orderedWorkspaceIds.forEach((workspaceId) => {
+        const workspace = workspacesById.get(workspaceId);
+        if (!workspace || (workspace.kind ?? "main") === "worktree") {
+          return;
+        }
+        orderedWorkspaces.push(workspace);
+      });
+      await persistWorkspaceOrder(orderedWorkspaces, groupId);
+    },
+    [persistWorkspaceOrder, workspacesById],
+  );
 
   const activeItemsLengthRef = useRef(activeItems.length);
   const activeFirstItemIdRef = useRef<string | null>(activeItems[0]?.id ?? null);
@@ -1922,6 +1948,7 @@ function MainApp() {
     accountSwitching,
     codeBlockCopyUseModifier: appSettings.composerCodeBlockCopyUseModifier,
     showMessageFilePath: appSettings.showMessageFilePath,
+    threadScrollRestoreMode: appSettings.threadScrollRestoreMode,
     messageFontSize,
     onMessageFontSizeChange: handleMessageFontSizeChange,
     openAppTargets: appSettings.openAppTargets,
@@ -2345,6 +2372,7 @@ function MainApp() {
     onWorkspaceDragEnter: handleWorkspaceDragEnter,
     onWorkspaceDragLeave: handleWorkspaceDragLeave,
     onWorkspaceDrop: handleWorkspaceDrop,
+    onReorderWorkspaceGroup: handleReorderWorkspaceGroup,
   });
 
   const workspaceHomeNode = activeWorkspace ? (

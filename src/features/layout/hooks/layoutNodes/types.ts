@@ -27,6 +27,7 @@ import type {
   RequestUserInputRequest,
   RequestUserInputResponse,
   SkillOption,
+  ThreadScrollRestoreMode,
   ThreadListSortKey,
   ThreadSummary,
   ThreadTokenUsage,
@@ -106,6 +107,7 @@ export type LayoutNodesOptions = {
   accountSwitching: boolean;
   codeBlockCopyUseModifier: boolean;
   showMessageFilePath: boolean;
+  threadScrollRestoreMode: ThreadScrollRestoreMode;
   messageFontSize: number;
   onMessageFontSizeChange: (next: number) => void;
   openAppTargets: OpenAppTarget[];
@@ -160,6 +162,10 @@ export type LayoutNodesOptions = {
   onWorkspaceDragEnter: (event: DragEvent<HTMLElement>) => void;
   onWorkspaceDragLeave: (event: DragEvent<HTMLElement>) => void;
   onWorkspaceDrop: (event: DragEvent<HTMLElement>) => void;
+  onReorderWorkspaceGroup: (
+    groupId: string | null,
+    orderedWorkspaceIds: string[],
+  ) => void | Promise<void>;
   updaterState: UpdateState;
   onUpdate: () => void;
   onDismissUpdate: () => void;

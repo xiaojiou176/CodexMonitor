@@ -650,33 +650,17 @@ export const ToolRow = memo(function ToolRow({
     isCommand && !isExpanded && activityText.length > 96;
   const showToolOutput = isExpanded && (!isFileChange || !hasChanges);
   const normalizedStatus = (item.status ?? "").toLowerCase();
+  const statusText = item.status
+    ? item.status.replace(/[_-]+/g, " ").trim()
+    : "";
   const isCommandRunning = isCommand && /in[_\s-]*progress|running|started/.test(normalizedStatus);
-  const commandDurationMs =
-    typeof item.durationMs === "number" ? item.durationMs : null;
-  const isLongRunning = commandDurationMs !== null && commandDurationMs >= 1200;
-  const [showLiveOutput, setShowLiveOutput] = useState(false);
+  const showCommandOutput = isCommand && isExpanded;
 
   useEffect(() => {
-    if (!isCommandRunning) {
-      setShowLiveOutput(false);
-      return;
-    }
-    const timeoutId = window.setTimeout(() => {
-      setShowLiveOutput(true);
-    }, 600);
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [isCommandRunning]);
-
-  const showCommandOutput =
-    isCommand && (isExpanded || (isCommandRunning && showLiveOutput) || isLongRunning);
-
-  useEffect(() => {
-    if (showCommandOutput && isCommandRunning && showLiveOutput) {
+    if (showCommandOutput && isCommandRunning) {
       onRequestAutoScroll?.();
     }
-  }, [isCommandRunning, onRequestAutoScroll, showCommandOutput, showLiveOutput]);
+  }, [isCommandRunning, onRequestAutoScroll, showCommandOutput]);
 
   return (
     <div className={`tool-inline ${isExpanded ? "tool-inline-expanded" : ""}`}>
@@ -706,6 +690,7 @@ export const ToolRow = memo(function ToolRow({
               activityText
             )}
           </span>
+          {statusText ? <span className="tool-inline-status">{statusText}</span> : null}
         </button>
         {isExpanded && summary.detail && !isFileChange && (
           <div className="tool-inline-detail">{summary.detail}</div>
@@ -787,17 +772,19 @@ export const ExploreRow = memo(function ExploreRow({ item }: ExploreRowProps) {
     <div className="tool-inline explore-inline">
       <div className="tool-inline-content">
         <div className="explore-inline-list">
-          {item.entries.map((entry, index) => (
-            <div key={`${entry.kind}-${entry.label}-${index}`} className="explore-inline-item">
-              <span className={`tool-inline-dot ${tone}`} aria-hidden />
-              <span className="explore-inline-label">
-                {exploreKindLabel(entry.kind)} {entry.label}
-              </span>
-              {entry.detail && entry.detail !== entry.label && (
-                <span className="explore-inline-detail">{entry.detail}</span>
-              )}
-            </div>
-          ))}
+          {item.entries.map((entry, index) => {
+            const detailSuffix =
+              entry.detail && entry.detail !== entry.label ? ` — ${entry.detail}` : "";
+            return (
+              <div key={`${entry.kind}-${entry.label}-${index}`} className="explore-inline-item">
+                <span className={`tool-inline-dot ${tone}`} aria-hidden />
+                <span className="explore-inline-label">
+                  {exploreKindLabel(entry.kind)} {entry.label}
+                  {detailSuffix}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

@@ -31,6 +31,7 @@ import { useThreadRows } from "../hooks/useThreadRows";
 import { useDismissibleMenu } from "../hooks/useDismissibleMenu";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { formatRelativeTimeShort } from "../../../utils/time";
+import { setWorkspaceReorderDragging } from "../../../services/dragDrop";
 
 const COLLAPSED_GROUPS_STORAGE_KEY = "codexmonitor.collapsedGroups";
 const THREAD_ORDER_STORAGE_KEY = "codexmonitor.threadOrderByWorkspace";
@@ -43,6 +44,14 @@ const ADD_MENU_WIDTH = 200;
 type ThreadOrderByWorkspace = Record<string, string[]>;
 type WorkspaceOrderByGroup = Record<string, string[]>;
 type WorkspaceAliasesById = Record<string, string>;
+type WorkspaceDropPosition = "before" | "after";
+type WorkspacePointerDragContext = {
+  sourceWorkspaceId: string;
+  sourceGroupKey: string;
+  startX: number;
+  startY: number;
+  isActive: boolean;
+};
 
 function loadThreadOrderByWorkspace(): ThreadOrderByWorkspace {
   if (typeof window === "undefined") {
@@ -352,6 +361,10 @@ type SidebarProps = {
   onWorkspaceDragEnter: (event: React.DragEvent<HTMLElement>) => void;
   onWorkspaceDragLeave: (event: React.DragEvent<HTMLElement>) => void;
   onWorkspaceDrop: (event: React.DragEvent<HTMLElement>) => void;
+  onReorderWorkspaceGroup?: (
+    groupId: string | null,
+    orderedWorkspaceIds: string[],
+  ) => void | Promise<void>;
 };
 
 export const Sidebar = memo(function Sidebar({
@@ -405,6 +418,7 @@ export const Sidebar = memo(function Sidebar({
   onWorkspaceDragEnter,
   onWorkspaceDragLeave,
   onWorkspaceDrop,
+  onReorderWorkspaceGroup,
 }: SidebarProps) {
   const [expandedWorkspaces, setExpandedWorkspaces] = useState(
     new Set<string>(),
@@ -419,12 +433,13 @@ export const Sidebar = memo(function Sidebar({
   const [workspaceAliasDraft, setWorkspaceAliasDraft] = useState("");
   const [draggingWorkspaceId, setDraggingWorkspaceId] = useState<string | null>(null);
   const [dropWorkspaceId, setDropWorkspaceId] = useState<string | null>(null);
-  const [dropWorkspacePosition, setDropWorkspacePosition] = useState<
-    "before" | "after" | null
-  >(null);
+  const [dropWorkspacePosition, setDropWorkspacePosition] = useState<WorkspaceDropPosition | null>(null);
   const [dragWorkspaceGroupKey, setDragWorkspaceGroupKey] = useState<string | null>(null);
   const draggingWorkspaceIdRef = useRef<string | null>(null);
   const dragWorkspaceGroupKeyRef = useRef<string | null>(null);
+  const pointerWorkspaceDragRef = useRef<WorkspacePointerDragContext | null>(null);
+  const dropWorkspaceIdRef = useRef<string | null>(null);
+  const dropWorkspacePositionRef = useRef<WorkspaceDropPosition | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [addMenuAnchor, setAddMenuAnchor] = useState<{
@@ -754,11 +769,17 @@ export const Sidebar = memo(function Sidebar({
   const resetWorkspaceDragState = useCallback(() => {
     draggingWorkspaceIdRef.current = null;
     dragWorkspaceGroupKeyRef.current = null;
+    pointerWorkspaceDragRef.current = null;
+    dropWorkspaceIdRef.current = null;
+    dropWorkspacePositionRef.current = null;
+    setWorkspaceReorderDragging(false);
     setDraggingWorkspaceId(null);
     setDropWorkspaceId(null);
     setDropWorkspacePosition(null);
     setDragWorkspaceGroupKey(null);
   }, []);
+
+  useEffect(() => () => setWorkspaceReorderDragging(false), []);
 
   const handleReorderWorkspaces = useCallback(
     (
@@ -805,8 +826,15 @@ export const Sidebar = memo(function Sidebar({
         saveWorkspaceOrderByGroup(next);
         return next;
       });
+      if (onReorderWorkspaceGroup) {
+        void Promise.resolve(
+          onReorderWorkspaceGroup(group.id ?? null, nextIds),
+        ).catch((error) => {
+          console.error("Failed to persist workspace reorder", error);
+        });
+      }
     },
-    [groupedWorkspaces, workspaceOrderByGroup],
+    [groupedWorkspaces, onReorderWorkspaceGroup, workspaceOrderByGroup],
   );
 
   const handleWorkspaceCardDragStart = useCallback(
@@ -815,8 +843,10 @@ export const Sidebar = memo(function Sidebar({
       groupKey: string,
       workspaceId: string,
     ) => {
+      pointerWorkspaceDragRef.current = null;
       draggingWorkspaceIdRef.current = workspaceId;
       dragWorkspaceGroupKeyRef.current = groupKey;
+      setWorkspaceReorderDragging(true);
       setDraggingWorkspaceId(workspaceId);
       setDropWorkspaceId(null);
       setDragWorkspaceGroupKey(groupKey);
@@ -860,6 +890,8 @@ export const Sidebar = memo(function Sidebar({
       const rect = event.currentTarget.getBoundingClientRect();
       const position =
         event.clientY <= rect.top + rect.height / 2 ? "before" : "after";
+      dropWorkspaceIdRef.current = targetWorkspaceId;
+      dropWorkspacePositionRef.current = position;
       if (dropWorkspaceId !== targetWorkspaceId) {
         setDropWorkspaceId(targetWorkspaceId);
       }
@@ -874,6 +906,225 @@ export const Sidebar = memo(function Sidebar({
       dropWorkspacePosition,
     ],
   );
+
+  const handleWorkspaceCardDragEnter = useCallback(
+    (
+      event: React.DragEvent<HTMLDivElement>,
+      groupKey: string,
+      targetWorkspaceId: string,
+    ) => {
+      handleWorkspaceCardDragOver(event, groupKey, targetWorkspaceId);
+    },
+    [handleWorkspaceCardDragOver],
+  );
+
+  const resolveWorkspaceDropTarget = useCallback(
+    ({
+      sourceWorkspaceId,
+      sourceGroupKey,
+      clientY,
+      candidateElement,
+      fallbackContainer,
+    }: {
+      sourceWorkspaceId: string;
+      sourceGroupKey: string;
+      clientY: number;
+      candidateElement?: Element | null;
+      fallbackContainer?: HTMLElement | null;
+    }): { targetWorkspaceId: string | null; targetPosition: WorkspaceDropPosition | null } => {
+      const targetRow = candidateElement?.closest<HTMLElement>(
+        "[data-workspace-id][data-workspace-group-key]",
+      );
+      const targetId = targetRow?.dataset.workspaceId ?? null;
+      const targetGroupKey = targetRow?.dataset.workspaceGroupKey ?? null;
+      if (
+        targetRow &&
+        targetId &&
+        targetGroupKey === sourceGroupKey &&
+        targetId !== sourceWorkspaceId
+      ) {
+        const rect = targetRow.getBoundingClientRect();
+        const position: WorkspaceDropPosition =
+          clientY <= rect.top + rect.height / 2 ? "before" : "after";
+        return {
+          targetWorkspaceId: targetId,
+          targetPosition: position,
+        };
+      }
+
+      const rowContainer = fallbackContainer ?? sidebarBodyRef.current;
+      if (!rowContainer) {
+        return { targetWorkspaceId: null, targetPosition: null };
+      }
+      const workspaceRows = Array.from(
+        rowContainer.querySelectorAll<HTMLElement>(
+          "[data-workspace-id][data-workspace-group-key]",
+        ),
+      ).filter((row) => {
+        const rowWorkspaceId = row.dataset.workspaceId;
+        const rowGroupKey = row.dataset.workspaceGroupKey;
+        return (
+          Boolean(rowWorkspaceId) &&
+          rowWorkspaceId !== sourceWorkspaceId &&
+          rowGroupKey === sourceGroupKey
+        );
+      });
+      if (workspaceRows.length === 0) {
+        return { targetWorkspaceId: null, targetPosition: null };
+      }
+
+      let nearestRow: HTMLElement | null = null;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      for (const row of workspaceRows) {
+        const rect = row.getBoundingClientRect();
+        if (clientY >= rect.top && clientY <= rect.bottom) {
+          nearestRow = row;
+          break;
+        }
+        const centerY = rect.top + rect.height / 2;
+        const distance = Math.abs(clientY - centerY);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestRow = row;
+        }
+      }
+      if (!nearestRow) {
+        return { targetWorkspaceId: null, targetPosition: null };
+      }
+      const rect = nearestRow.getBoundingClientRect();
+      const nearestWorkspaceId = nearestRow.dataset.workspaceId ?? null;
+      if (!nearestWorkspaceId) {
+        return { targetWorkspaceId: null, targetPosition: null };
+      }
+      let targetPosition: WorkspaceDropPosition;
+      if (clientY < rect.top) {
+        targetPosition = "before";
+      } else if (clientY > rect.bottom) {
+        targetPosition = "after";
+      } else {
+        targetPosition = clientY <= rect.top + rect.height / 2 ? "before" : "after";
+      }
+      return {
+        targetWorkspaceId: nearestWorkspaceId,
+        targetPosition,
+      };
+    },
+    [sidebarBodyRef],
+  );
+
+  const handleWorkspaceCardPointerDown = useCallback(
+    (
+      event: React.PointerEvent<HTMLDivElement>,
+      groupKey: string,
+      workspaceId: string,
+    ) => {
+      if (isSearchActive || event.button !== 0) {
+        return;
+      }
+      const targetElement = event.target as HTMLElement | null;
+      if (
+        targetElement?.closest(
+          "button, input, textarea, select, a, [contenteditable='true'], .connect",
+        )
+      ) {
+        return;
+      }
+      pointerWorkspaceDragRef.current = {
+        sourceWorkspaceId: workspaceId,
+        sourceGroupKey: groupKey,
+        startX: event.clientX,
+        startY: event.clientY,
+        isActive: false,
+      };
+    },
+    [isSearchActive],
+  );
+
+  useEffect(() => {
+    function handleWindowPointerMove(event: PointerEvent) {
+      const pointerContext = pointerWorkspaceDragRef.current;
+      if (!pointerContext) {
+        return;
+      }
+      if ((event.buttons & 1) !== 1) {
+        pointerWorkspaceDragRef.current = null;
+        if (pointerContext.isActive) {
+          resetWorkspaceDragState();
+        }
+        return;
+      }
+      const dragDistance = Math.hypot(
+        event.clientX - pointerContext.startX,
+        event.clientY - pointerContext.startY,
+      );
+      if (!pointerContext.isActive) {
+        if (dragDistance < 6) {
+          return;
+        }
+        pointerContext.isActive = true;
+        pointerWorkspaceDragRef.current = pointerContext;
+        draggingWorkspaceIdRef.current = pointerContext.sourceWorkspaceId;
+        dragWorkspaceGroupKeyRef.current = pointerContext.sourceGroupKey;
+        setWorkspaceReorderDragging(true);
+        setDraggingWorkspaceId(pointerContext.sourceWorkspaceId);
+        setDragWorkspaceGroupKey(pointerContext.sourceGroupKey);
+      }
+
+      const resolvedTarget = resolveWorkspaceDropTarget({
+        sourceWorkspaceId: pointerContext.sourceWorkspaceId,
+        sourceGroupKey: pointerContext.sourceGroupKey,
+        clientY: event.clientY,
+        candidateElement:
+          typeof document.elementFromPoint === "function"
+            ? document.elementFromPoint(event.clientX, event.clientY)
+            : null,
+        fallbackContainer: sidebarBodyRef.current,
+      });
+      dropWorkspaceIdRef.current = resolvedTarget.targetWorkspaceId;
+      dropWorkspacePositionRef.current = resolvedTarget.targetPosition;
+      setDropWorkspaceId((previous) =>
+        previous === resolvedTarget.targetWorkspaceId
+          ? previous
+          : resolvedTarget.targetWorkspaceId,
+      );
+      setDropWorkspacePosition((previous) =>
+        previous === resolvedTarget.targetPosition
+          ? previous
+          : resolvedTarget.targetPosition,
+      );
+    }
+
+    function finalizeWindowPointerDrag() {
+      const pointerContext = pointerWorkspaceDragRef.current;
+      if (!pointerContext) {
+        return;
+      }
+      pointerWorkspaceDragRef.current = null;
+      if (!pointerContext.isActive) {
+        return;
+      }
+      const targetWorkspaceId = dropWorkspaceIdRef.current;
+      const targetPosition = dropWorkspacePositionRef.current;
+      if (targetWorkspaceId && targetPosition) {
+        handleReorderWorkspaces(
+          pointerContext.sourceGroupKey,
+          pointerContext.sourceWorkspaceId,
+          targetWorkspaceId,
+          targetPosition,
+        );
+      }
+      resetWorkspaceDragState();
+    }
+
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", finalizeWindowPointerDrag);
+    window.addEventListener("pointercancel", finalizeWindowPointerDrag);
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", finalizeWindowPointerDrag);
+      window.removeEventListener("pointercancel", finalizeWindowPointerDrag);
+    };
+  }, [handleReorderWorkspaces, resetWorkspaceDragState, resolveWorkspaceDropTarget, sidebarBodyRef]);
 
   const handleWorkspaceCardDrop = useCallback(
     (
@@ -973,14 +1224,73 @@ export const Sidebar = memo(function Sidebar({
     }
   }, [editingWorkspaceAliasId, workspaces]);
 
+  const handleSidebarDragOver = useCallback(
+    (event: React.DragEvent<HTMLElement>) => {
+      if (draggingWorkspaceIdRef.current) {
+        event.preventDefault();
+        return;
+      }
+      onWorkspaceDragOver(event);
+    },
+    [onWorkspaceDragOver],
+  );
+
+  const handleSidebarDrop = useCallback(
+    (event: React.DragEvent<HTMLElement>) => {
+      const sourceWorkspaceId =
+        draggingWorkspaceIdRef.current ?? draggingWorkspaceId ?? null;
+      const sourceGroupKey =
+        dragWorkspaceGroupKeyRef.current ?? dragWorkspaceGroupKey ?? null;
+      if (sourceWorkspaceId && sourceGroupKey) {
+        let targetWorkspaceId = dropWorkspaceId;
+        let targetPosition = dropWorkspacePosition;
+        if (!targetWorkspaceId || !targetPosition) {
+          const resolvedTarget = resolveWorkspaceDropTarget({
+            sourceWorkspaceId,
+            sourceGroupKey,
+            clientY: event.clientY,
+            candidateElement: event.target as Element | null,
+            fallbackContainer: event.currentTarget as HTMLElement,
+          });
+          targetWorkspaceId = resolvedTarget.targetWorkspaceId;
+          targetPosition = resolvedTarget.targetPosition;
+        }
+        if (!targetWorkspaceId || !targetPosition) {
+          resetWorkspaceDragState();
+          return;
+        }
+        event.preventDefault();
+        handleReorderWorkspaces(
+          sourceGroupKey,
+          sourceWorkspaceId,
+          targetWorkspaceId,
+          targetPosition,
+        );
+        resetWorkspaceDragState();
+        return;
+      }
+      onWorkspaceDrop(event);
+    },
+    [
+      dragWorkspaceGroupKey,
+      draggingWorkspaceId,
+      dropWorkspaceId,
+      dropWorkspacePosition,
+      handleReorderWorkspaces,
+      onWorkspaceDrop,
+      resetWorkspaceDragState,
+      resolveWorkspaceDropTarget,
+    ],
+  );
+
   return (
     <aside
       className={`sidebar${isSearchOpen ? " search-open" : ""}`}
       ref={workspaceDropTargetRef}
-      onDragOver={onWorkspaceDragOver}
+      onDragOver={handleSidebarDragOver}
       onDragEnter={onWorkspaceDragEnter}
       onDragLeave={onWorkspaceDragLeave}
-      onDrop={onWorkspaceDrop}
+      onDrop={handleSidebarDrop}
     >
       <SidebarHeader
         onSelectHome={onSelectHome}
@@ -1129,6 +1439,7 @@ export const Sidebar = memo(function Sidebar({
                     <WorkspaceCard
                       key={entry.id}
                       workspace={entry}
+                      workspaceGroupKey={groupKey}
                       workspaceName={renderHighlightedName(workspaceDisplayName)}
                       isActive={entry.id === activeWorkspaceId}
                       isCollapsed={isCollapsed}
@@ -1145,6 +1456,12 @@ export const Sidebar = memo(function Sidebar({
                       dropPosition={workspaceDropPosition}
                       onDragStart={(event) =>
                         handleWorkspaceCardDragStart(event, groupKey, entry.id)
+                      }
+                      onPointerDown={(event) =>
+                        handleWorkspaceCardPointerDown(event, groupKey, entry.id)
+                      }
+                      onDragEnter={(event) =>
+                        handleWorkspaceCardDragEnter(event, groupKey, entry.id)
                       }
                       onDragOver={(event) =>
                         handleWorkspaceCardDragOver(event, groupKey, entry.id)

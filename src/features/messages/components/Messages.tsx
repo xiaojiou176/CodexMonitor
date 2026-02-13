@@ -44,6 +44,99 @@ const VIRTUAL_TOP_REACH_COOLDOWN_MS = 900;
 const VIRTUAL_AUTO_TOP_REACH_ENABLED = true;
 const AUTO_SCROLL_CAPTURE_THRESHOLD_PX = SCROLL_THRESHOLD_PX;
 const AUTO_SCROLL_RELEASE_THRESHOLD_PX = SCROLL_THRESHOLD_PX * 3;
+const TOOL_EXPANSION_STORAGE_KEY = "codex_monitor.tool_expansion.v1";
+const THREAD_SCROLL_POSITION_STORAGE_KEY =
+  "codex_monitor.thread_scroll_positions.v1";
+
+type PersistedToolExpansionState = Record<string, Record<string, boolean>>;
+type PersistedThreadScrollPositions = Record<string, number>;
+
+function loadPersistedToolExpansionState(): PersistedToolExpansionState {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(TOOL_EXPANSION_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    const result: PersistedToolExpansionState = {};
+    Object.entries(parsed).forEach(([threadKey, value]) => {
+      if (!threadKey || !value || typeof value !== "object" || Array.isArray(value)) {
+        return;
+      }
+      const threadState: Record<string, boolean> = {};
+      Object.entries(value).forEach(([itemId, expanded]) => {
+        if (itemId && typeof expanded === "boolean") {
+          threadState[itemId] = expanded;
+        }
+      });
+      if (Object.keys(threadState).length > 0) {
+        result[threadKey] = threadState;
+      }
+    });
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function savePersistedToolExpansionState(state: PersistedToolExpansionState) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(TOOL_EXPANSION_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Best-effort persistence; ignore storage quota/privacy mode failures.
+  }
+}
+
+function loadPersistedThreadScrollPositions(): PersistedThreadScrollPositions {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(THREAD_SCROLL_POSITION_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    const result: PersistedThreadScrollPositions = {};
+    Object.entries(parsed).forEach(([key, value]) => {
+      if (!key || typeof value !== "number" || !Number.isFinite(value)) {
+        return;
+      }
+      result[key] = Math.max(0, Math.round(value));
+    });
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function savePersistedThreadScrollPositions(
+  state: PersistedThreadScrollPositions,
+) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      THREAD_SCROLL_POSITION_STORAGE_KEY,
+      JSON.stringify(state),
+    );
+  } catch {
+    // Best-effort persistence; ignore storage quota/privacy mode failures.
+  }
+}
 
 type MessagesProps = {
   items: ConversationItem[];
@@ -59,6 +152,7 @@ type MessagesProps = {
   selectedOpenAppId: string;
   codeBlockCopyUseModifier?: boolean;
   showMessageFilePath?: boolean;
+  threadScrollRestoreMode?: "latest" | "remember";
   userInputRequests?: RequestUserInputRequest[];
   onUserInputSubmit?: (
     request: RequestUserInputRequest,
@@ -99,6 +193,7 @@ export const Messages = memo(function Messages({
   selectedOpenAppId,
   codeBlockCopyUseModifier = false,
   showMessageFilePath = true,
+  threadScrollRestoreMode = "latest",
   userInputRequests = [],
   onUserInputSubmit,
   onPlanAccept,
@@ -109,8 +204,29 @@ export const Messages = memo(function Messages({
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const autoScrollRef = useRef(true);
+  const pendingThreadPinRef = useRef<string | null>(null);
+  const currentThreadScrollStorageKeyRef = useRef<string | null>(null);
+  const pendingScrollPersistRafRef = useRef<number | null>(null);
+  const pendingScrollPersistValueRef = useRef<{
+    storageKey: string;
+    scrollTop: number;
+  } | null>(null);
+
+  const threadScrollStorageKey = useMemo(() => {
+    if (!threadId) {
+      return null;
+    }
+    return `${workspaceId ?? "global"}::${threadId}`;
+  }, [threadId, workspaceId]);
 
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [persistedToolExpansionState, setPersistedToolExpansionState] =
+    useState<PersistedToolExpansionState>(() => loadPersistedToolExpansionState());
+  const persistedToolExpansionStateRef = useRef(persistedToolExpansionState);
+  persistedToolExpansionStateRef.current = persistedToolExpansionState;
+  const persistedThreadScrollPositionsRef = useRef<PersistedThreadScrollPositions>(
+    loadPersistedThreadScrollPositions(),
+  );
   const topReachInFlightRef = useRef(false);
   const topReachLastAtRef = useRef(0);
   const manuallyToggledExpandedRef = useRef<Set<string>>(new Set());
@@ -178,6 +294,59 @@ export const Messages = memo(function Messages({
       });
   }, [onReachTop]);
 
+  const persistThreadScrollPositionNow = useCallback(
+    (storageKey: string, scrollTop: number) => {
+      const normalizedTop = Math.max(0, Math.round(scrollTop));
+      const current = persistedThreadScrollPositionsRef.current[storageKey];
+      if (current === normalizedTop) {
+        return;
+      }
+      const nextState = {
+        ...persistedThreadScrollPositionsRef.current,
+        [storageKey]: normalizedTop,
+      };
+      persistedThreadScrollPositionsRef.current = nextState;
+      savePersistedThreadScrollPositions(nextState);
+    },
+    [],
+  );
+
+  const persistThreadScrollPosition = useCallback(
+    (storageKey: string, scrollTop: number) => {
+      if (typeof window === "undefined") {
+        return;
+      }
+      pendingScrollPersistValueRef.current = {
+        storageKey,
+        scrollTop,
+      };
+      if (pendingScrollPersistRafRef.current !== null) {
+        return;
+      }
+      pendingScrollPersistRafRef.current = window.requestAnimationFrame(() => {
+        pendingScrollPersistRafRef.current = null;
+        const pending = pendingScrollPersistValueRef.current;
+        if (!pending) {
+          return;
+        }
+        persistThreadScrollPositionNow(pending.storageKey, pending.scrollTop);
+      });
+    },
+    [persistThreadScrollPositionNow],
+  );
+
+  useEffect(() => {
+    return () => {
+      const pending = pendingScrollPersistValueRef.current;
+      if (pending) {
+        persistThreadScrollPositionNow(pending.storageKey, pending.scrollTop);
+      }
+      if (pendingScrollPersistRafRef.current !== null) {
+        window.cancelAnimationFrame(pendingScrollPersistRafRef.current);
+      }
+    };
+  }, [persistThreadScrollPositionNow]);
+
   // Keep auto-scroll state in sync immediately when user scrolls.
   // The virtual window state itself is batched into RAF to avoid jitter.
   const updateAutoScroll = useCallback(() => {
@@ -199,7 +368,17 @@ export const Messages = memo(function Messages({
     ) {
       triggerTopReach();
     }
-  }, [computeAutoScrollEnabled, onReachTop, triggerTopReach]);
+    if (threadScrollRestoreMode === "remember" && threadScrollStorageKey) {
+      persistThreadScrollPosition(threadScrollStorageKey, scrollTop);
+    }
+  }, [
+    computeAutoScrollEnabled,
+    onReachTop,
+    persistThreadScrollPosition,
+    threadScrollRestoreMode,
+    threadScrollStorageKey,
+    triggerTopReach,
+  ]);
 
   const requestAutoScroll = useCallback(() => {
     const container = containerRef.current;
@@ -216,11 +395,28 @@ export const Messages = memo(function Messages({
   }, [isNearBottom]);
 
   useLayoutEffect(() => {
+    const container = containerRef.current;
+    const previousStorageKey = currentThreadScrollStorageKeyRef.current;
+    if (
+      threadScrollRestoreMode === "remember" &&
+      container &&
+      previousStorageKey
+    ) {
+      persistThreadScrollPositionNow(previousStorageKey, container.scrollTop);
+    }
+    currentThreadScrollStorageKeyRef.current = threadScrollStorageKey;
     autoScrollRef.current = true;
     topReachInFlightRef.current = false;
     topReachLastAtRef.current = 0;
-
-  }, [threadId]);
+    manuallyToggledExpandedRef.current = new Set();
+    setExpandedItems((prev) => (prev.size === 0 ? prev : new Set()));
+    pendingThreadPinRef.current = threadId;
+  }, [
+    persistThreadScrollPositionNow,
+    threadId,
+    threadScrollRestoreMode,
+    threadScrollStorageKey,
+  ]);
 
 
   const toggleExpanded = useCallback((id: string) => {
@@ -235,6 +431,30 @@ export const Messages = memo(function Messages({
       return next;
     });
   }, []);
+
+  const toggleToolExpanded = useCallback(
+    (id: string) => {
+      manuallyToggledExpandedRef.current.add(id);
+      if (!threadId) {
+        return;
+      }
+      setPersistedToolExpansionState((prev) => {
+        const threadState = prev[threadId] ?? {};
+        const nextExpanded = !(threadState[id] ?? false);
+        const nextThreadState = {
+          ...threadState,
+          [id]: nextExpanded,
+        };
+        const nextState = {
+          ...prev,
+          [threadId]: nextThreadState,
+        };
+        savePersistedToolExpansionState(nextState);
+        return nextState;
+      });
+    },
+    [threadId],
+  );
 
   // Incrementally cache reasoning parse results — only re-parse items whose
   // object reference actually changed, which avoids redundant work during
@@ -312,6 +532,11 @@ export const Messages = memo(function Messages({
         item.toolType === "plan" &&
         (item.output ?? "").trim().length > 0
       ) {
+        const threadToolState =
+          threadId ? persistedToolExpansionStateRef.current[threadId] : undefined;
+        if (threadToolState && Object.prototype.hasOwnProperty.call(threadToolState, item.id)) {
+          return;
+        }
         if (manuallyToggledExpandedRef.current.has(item.id)) {
           return;
         }
@@ -326,7 +551,7 @@ export const Messages = memo(function Messages({
         return;
       }
     }
-  }, [visibleItems]);
+  }, [threadId, visibleItems]);
 
   useEffect(() => {
     return () => {
@@ -431,6 +656,67 @@ export const Messages = memo(function Messages({
     enabled: shouldVirtualize,
   });
   const virtualRows = shouldVirtualize ? rowVirtualizer.getVirtualItems() : [];
+
+  useLayoutEffect(() => {
+    if (!threadId || pendingThreadPinRef.current !== threadId) {
+      return;
+    }
+    if (isLoadingMessages && renderableEntries.length === 0) {
+      return;
+    }
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const scrollToThreadBottom = () => {
+      if (shouldVirtualize && renderableEntries.length > 0) {
+        rowVirtualizer.scrollToIndex(renderableEntries.length - 1, {
+          align: "end",
+        });
+      }
+      container.scrollTop = container.scrollHeight;
+    };
+    const restoreThreadScrollPosition = () => {
+      if (threadScrollRestoreMode === "latest") {
+        scrollToThreadBottom();
+        autoScrollRef.current = true;
+        return;
+      }
+      const savedScrollTop = threadScrollStorageKey
+        ? persistedThreadScrollPositionsRef.current[threadScrollStorageKey]
+        : null;
+      if (typeof savedScrollTop !== "number" || !Number.isFinite(savedScrollTop)) {
+        scrollToThreadBottom();
+        autoScrollRef.current = true;
+        return;
+      }
+      const restoredScrollTop = savedScrollTop;
+      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+      container.scrollTop = Math.min(
+        Math.max(restoredScrollTop, 0),
+        maxScrollTop,
+      );
+      autoScrollRef.current = isNearBottom(container);
+    };
+
+    restoreThreadScrollPosition();
+    const rafId = window.requestAnimationFrame(restoreThreadScrollPosition);
+    pendingThreadPinRef.current = null;
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [
+    isLoadingMessages,
+    renderableEntries.length,
+    rowVirtualizer,
+    shouldVirtualize,
+    threadId,
+    threadScrollRestoreMode,
+    threadScrollStorageKey,
+    isNearBottom,
+  ]);
 
   const hasActiveUserInputRequest = activeUserInputRequestId !== null;
   const hasVisibleUserInputRequest = hasActiveUserInputRequest && Boolean(onUserInputSubmit);
@@ -590,13 +876,16 @@ export const Messages = memo(function Messages({
         return <DiffRow key={item.id} item={item} />;
       }
       if (item.kind === "tool") {
-        const isExpanded = expandedItemsRef.current.has(item.id);
+        const persistedExpanded = Boolean(
+          threadId && persistedToolExpansionStateRef.current[threadId]?.[item.id],
+        );
+        const isExpanded = persistedExpanded || expandedItemsRef.current.has(item.id);
         return (
           <ToolRow
             key={item.id}
             item={item}
             isExpanded={isExpanded}
-            onToggle={toggleExpanded}
+            onToggle={toggleToolExpanded}
             showMessageFilePath={showMessageFilePath}
             workspaceId={workspaceId}
             workspacePath={workspacePath}
@@ -622,8 +911,10 @@ export const Messages = memo(function Messages({
       showFileLinkMenu,
       onOpenThreadLink,
       toggleExpanded,
+      toggleToolExpanded,
       requestAutoScroll,
       assistantAutoCollapsedIds,
+      threadId,
     ],
   );
 

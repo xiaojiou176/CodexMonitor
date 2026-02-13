@@ -656,6 +656,8 @@
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  --tool-inline-text-color: var(--text-muted);
+  --tool-inline-text-weight: 400;
 }
 
 .tool-inline-summary {
@@ -665,7 +667,8 @@
   gap: 6px;
   font-size: var(--message-font-size, 13px);
   line-height: 1.58;
-  color: var(--text-muted);
+  color: var(--tool-inline-text-color);
+  font-weight: var(--tool-inline-text-weight);
   min-width: 0;
 }
 
@@ -742,13 +745,15 @@
 }
 
 .tool-inline-label {
-  color: var(--text-muted);
+  color: var(--tool-inline-text-color);
+  font-weight: var(--tool-inline-text-weight);
   text-transform: none;
   letter-spacing: 0;
 }
 
 .tool-inline-activity {
-  color: var(--text-muted);
+  color: var(--tool-inline-text-color);
+  font-weight: var(--tool-inline-text-weight);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -756,8 +761,8 @@
 }
 
 .tool-inline-value {
-  color: var(--text-stronger);
-  font-weight: 450;
+  color: var(--tool-inline-text-color);
+  font-weight: var(--tool-inline-text-weight);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -775,9 +780,9 @@
 .tool-inline-command {
   font-family: inherit;
   font-size: var(--message-font-size, 13px);
-  font-weight: 400;
+  font-weight: var(--tool-inline-text-weight);
   line-height: 1.58;
-  color: var(--text-muted);
+  color: var(--tool-inline-text-color);
   background: transparent;
   padding: 0;
   border-radius: 0;
@@ -788,6 +793,8 @@
 }
 
 .tool-inline-command-text {
+  color: var(--tool-inline-text-color);
+  font-weight: var(--tool-inline-text-weight);
   overflow: visible;
   text-overflow: unset;
   white-space: normal;
@@ -815,8 +822,10 @@
 
 .tool-inline-status {
   margin-left: auto;
-  font-size: 11px;
-  color: var(--text-subtle);
+  font-size: var(--message-font-size, 13px);
+  line-height: 1.58;
+  color: var(--tool-inline-text-color);
+  font-weight: var(--tool-inline-text-weight);
   text-transform: none;
   letter-spacing: 0;
 }
@@ -824,12 +833,14 @@
 .tool-inline-detail {
   font-size: var(--message-font-size, 13px);
   line-height: 1.58;
-  color: var(--text-faint);
+  color: var(--tool-inline-text-color);
+  font-weight: var(--tool-inline-text-weight);
   white-space: pre-wrap;
 }
 
 .tool-inline-muted {
-  color: var(--text-faint);
+  color: var(--tool-inline-text-color);
+  font-weight: var(--tool-inline-text-weight);
 }
 
 .explore-inline .tool-inline-bar-toggle {
@@ -873,18 +884,10 @@
 }
 
 .explore-inline-label {
-  color: var(--text-stronger);
+  color: var(--tool-inline-text-color);
+  font-weight: var(--tool-inline-text-weight);
   min-width: 0;
   flex: 0 1 auto;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.explore-inline-detail {
-  color: var(--text-faint);
-  font-size: var(--message-font-size, 13px);
-  min-width: 0;
-  flex: 1 1 auto;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -1169,22 +1172,20 @@
 }
 
 .message .markdown :not(pre) > code {
-  color: var(--text-stronger);
-  background: color-mix(in srgb, var(--surface-command) 92%, transparent);
-  border: none;
-  padding: 1px 6px;
+  color: color-mix(in srgb, var(--text-stronger) 78%, var(--message-link-color));
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 86%, transparent);
+  padding: 0 5px;
   border-radius: 6px;
   font-size: 0.9em;
-  font-weight: 500;
+  font-weight: 560;
   white-space: break-spaces;
   overflow-wrap: anywhere;
   word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
-.message .markdown :not(pre) > code::selection {
-  background: color-mix(in srgb, var(--border-accent-soft) 70%, transparent);
-  color: var(--text-strong);
-}
 
 .message .markdown .message-file-link {
   display: inline;
@@ -1216,11 +1217,6 @@
   white-space: normal;
 }
 
-.message .markdown .message-file-link::selection,
-.message .markdown .message-file-link-name::selection {
-  background: color-mix(in srgb, var(--border-accent-soft) 70%, transparent);
-  color: var(--text-strong);
-}
 
 .message .markdown .message-file-link-line {
   display: inline;

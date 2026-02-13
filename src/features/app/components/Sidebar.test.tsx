@@ -454,10 +454,12 @@ describe("Sidebar", () => {
       connected: true,
       settings: { sidebarCollapsed: false },
     };
+    const onReorderWorkspaceGroup = vi.fn().mockResolvedValue(undefined);
 
     const { container } = render(
       <Sidebar
         {...baseProps}
+        onReorderWorkspaceGroup={onReorderWorkspaceGroup}
         workspaces={[workspaceA, workspaceB]}
         groupedWorkspaces={[
           {
@@ -519,6 +521,7 @@ describe("Sidebar", () => {
     expect(JSON.parse(stored ?? "{}")).toEqual({
       __ungrouped_workspace_group__: ["ws-2", "ws-1"],
     });
+    expect(onReorderWorkspaceGroup).toHaveBeenCalledWith(null, ["ws-2", "ws-1"]);
   });
 
   it("supports dragging workspace rows before target in upper half", async () => {
@@ -598,6 +601,334 @@ describe("Sidebar", () => {
     expect(JSON.parse(stored ?? "{}")).toEqual({
       __ungrouped_workspace_group__: ["ws-2", "ws-1"],
     });
+  });
+
+  it("persists grouped workspace reorder callback with group id", async () => {
+    const workspaceA = {
+      id: "ws-1",
+      name: "Alpha Repo",
+      path: "/tmp/alpha",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+    const workspaceB = {
+      id: "ws-2",
+      name: "Beta Repo",
+      path: "/tmp/beta",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+    const onReorderWorkspaceGroup = vi.fn().mockResolvedValue(undefined);
+
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        onReorderWorkspaceGroup={onReorderWorkspaceGroup}
+        workspaces={[workspaceA, workspaceB]}
+        groupedWorkspaces={[
+          {
+            id: "group-1",
+            name: "Team",
+            workspaces: [workspaceA, workspaceB],
+          },
+        ]}
+      />,
+    );
+
+    const alphaRow = screen.getByText("Alpha Repo").closest(".workspace-row");
+    const betaRow = screen.getByText("Beta Repo").closest(".workspace-row");
+    if (!alphaRow || !betaRow) {
+      throw new Error("Missing grouped workspace rows for drag test");
+    }
+
+    vi.spyOn(betaRow, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 200,
+      top: 200,
+      left: 0,
+      right: 280,
+      bottom: 248,
+      width: 280,
+      height: 48,
+      toJSON: () => ({}),
+    });
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+      getData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(alphaRow, { dataTransfer });
+
+    const dragOverEvent = createEvent.dragOver(betaRow, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", { value: 245 });
+    fireEvent(betaRow, dragOverEvent);
+
+    const dropEvent = createEvent.drop(betaRow, { dataTransfer });
+    Object.defineProperty(dropEvent, "clientY", { value: 245 });
+    fireEvent(betaRow, dropEvent);
+
+    await waitFor(() => {
+      const workspaceNames = Array.from(
+        container.querySelectorAll(".workspace-row .workspace-name"),
+      ).map((node) => node.textContent?.trim());
+      expect(workspaceNames.slice(0, 2)).toEqual(["Beta Repo", "Alpha Repo"]);
+    });
+
+    const stored = window.localStorage.getItem("codexmonitor.workspaceOrderByGroup");
+    expect(stored).toBeTruthy();
+    expect(JSON.parse(stored ?? "{}")).toEqual({
+      "group-1": ["ws-2", "ws-1"],
+    });
+    expect(onReorderWorkspaceGroup).toHaveBeenCalledWith("group-1", ["ws-2", "ws-1"]);
+  });
+
+  it("reorders workspaces when dropped on sidebar container fallback", async () => {
+    const workspaceA = {
+      id: "ws-1",
+      name: "Alpha Repo",
+      path: "/tmp/alpha",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+    const workspaceB = {
+      id: "ws-2",
+      name: "Beta Repo",
+      path: "/tmp/beta",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+    const onReorderWorkspaceGroup = vi.fn().mockResolvedValue(undefined);
+    const onWorkspaceDrop = vi.fn();
+
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        onWorkspaceDrop={onWorkspaceDrop}
+        onReorderWorkspaceGroup={onReorderWorkspaceGroup}
+        workspaces={[workspaceA, workspaceB]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspaceA, workspaceB],
+          },
+        ]}
+      />,
+    );
+
+    const alphaRow = screen.getByText("Alpha Repo").closest(".workspace-row");
+    const betaRow = screen.getByText("Beta Repo").closest(".workspace-row");
+    const sidebar = container.querySelector(".sidebar");
+    if (!alphaRow || !betaRow || !sidebar) {
+      throw new Error("Missing workspace drag elements for sidebar fallback test");
+    }
+
+    vi.spyOn(betaRow, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 200,
+      top: 200,
+      left: 0,
+      right: 280,
+      bottom: 248,
+      width: 280,
+      height: 48,
+      toJSON: () => ({}),
+    });
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+      getData: vi.fn(),
+      types: ["text/plain", "application/x-codexmonitor-workspace-group"],
+      files: [],
+      items: [],
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(alphaRow, { dataTransfer });
+    const dropEvent = createEvent.drop(sidebar, { dataTransfer });
+    Object.defineProperty(dropEvent, "clientY", { value: 245 });
+    Object.defineProperty(dropEvent, "target", { value: betaRow });
+    fireEvent(sidebar, dropEvent);
+
+    await waitFor(() => {
+      const workspaceNames = Array.from(
+        container.querySelectorAll(".workspace-row .workspace-name"),
+      ).map((node) => node.textContent?.trim());
+      expect(workspaceNames.slice(0, 2)).toEqual(["Beta Repo", "Alpha Repo"]);
+    });
+
+    expect(onReorderWorkspaceGroup).toHaveBeenCalledWith(null, ["ws-2", "ws-1"]);
+    expect(onWorkspaceDrop).not.toHaveBeenCalled();
+  });
+
+  it("reorders workspaces from pointer position when drop target is not a row", async () => {
+    const workspaceA = {
+      id: "ws-1",
+      name: "Alpha Repo",
+      path: "/tmp/alpha",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+    const workspaceB = {
+      id: "ws-2",
+      name: "Beta Repo",
+      path: "/tmp/beta",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+    const onReorderWorkspaceGroup = vi.fn().mockResolvedValue(undefined);
+    const onWorkspaceDrop = vi.fn();
+
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        onWorkspaceDrop={onWorkspaceDrop}
+        onReorderWorkspaceGroup={onReorderWorkspaceGroup}
+        workspaces={[workspaceA, workspaceB]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspaceA, workspaceB],
+          },
+        ]}
+      />,
+    );
+
+    const alphaRow = screen.getByText("Alpha Repo").closest(".workspace-row");
+    const betaRow = screen.getByText("Beta Repo").closest(".workspace-row");
+    const sidebar = container.querySelector(".sidebar");
+    const sidebarBody = container.querySelector(".sidebar-body");
+    if (!alphaRow || !betaRow || !sidebar || !sidebarBody) {
+      throw new Error("Missing workspace drag elements for pointer fallback test");
+    }
+
+    vi.spyOn(alphaRow, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 200,
+      top: 200,
+      left: 0,
+      right: 280,
+      bottom: 248,
+      width: 280,
+      height: 48,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(betaRow, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 260,
+      top: 260,
+      left: 0,
+      right: 280,
+      bottom: 308,
+      width: 280,
+      height: 48,
+      toJSON: () => ({}),
+    });
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+      getData: vi.fn(),
+      types: ["text/plain", "application/x-codexmonitor-workspace-group"],
+      files: [],
+      items: [],
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(alphaRow, { dataTransfer });
+    const dropEvent = createEvent.drop(sidebar, { dataTransfer });
+    Object.defineProperty(dropEvent, "clientY", { value: 295 });
+    Object.defineProperty(dropEvent, "target", { value: sidebarBody });
+    fireEvent(sidebar, dropEvent);
+
+    await waitFor(() => {
+      const workspaceNames = Array.from(
+        container.querySelectorAll(".workspace-row .workspace-name"),
+      ).map((node) => node.textContent?.trim());
+      expect(workspaceNames.slice(0, 2)).toEqual(["Beta Repo", "Alpha Repo"]);
+    });
+
+    expect(onReorderWorkspaceGroup).toHaveBeenCalledWith(null, ["ws-2", "ws-1"]);
+    expect(onWorkspaceDrop).not.toHaveBeenCalled();
+  });
+
+  it("reorders workspaces with pointer fallback when html5 drop does not fire", async () => {
+    const workspaceA = {
+      id: "ws-1",
+      name: "Alpha Repo",
+      path: "/tmp/alpha",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+    const workspaceB = {
+      id: "ws-2",
+      name: "Beta Repo",
+      path: "/tmp/beta",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+    const onReorderWorkspaceGroup = vi.fn().mockResolvedValue(undefined);
+
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        onReorderWorkspaceGroup={onReorderWorkspaceGroup}
+        workspaces={[workspaceA, workspaceB]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspaceA, workspaceB],
+          },
+        ]}
+      />,
+    );
+
+    const alphaRow = screen.getByText("Alpha Repo").closest(".workspace-row");
+    const betaRow = screen.getByText("Beta Repo").closest(".workspace-row");
+    if (!alphaRow || !betaRow) {
+      throw new Error("Missing workspace rows for pointer drag fallback test");
+    }
+
+    vi.spyOn(alphaRow, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 200,
+      top: 200,
+      left: 0,
+      right: 280,
+      bottom: 248,
+      width: 280,
+      height: 48,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(betaRow, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 260,
+      top: 260,
+      left: 0,
+      right: 280,
+      bottom: 308,
+      width: 280,
+      height: 48,
+      toJSON: () => ({}),
+    });
+    fireEvent.pointerDown(alphaRow, { button: 0, clientX: 20, clientY: 205 });
+    fireEvent.pointerMove(window, { buttons: 1, clientX: 20, clientY: 295 });
+    fireEvent.pointerUp(window, { clientX: 20, clientY: 295 });
+
+    await waitFor(() => {
+      const workspaceNames = Array.from(
+        container.querySelectorAll(".workspace-row .workspace-name"),
+      ).map((node) => node.textContent?.trim());
+      expect(workspaceNames.slice(0, 2)).toEqual(["Beta Repo", "Alpha Repo"]);
+    });
+
+    expect(onReorderWorkspaceGroup).toHaveBeenCalledWith(null, ["ws-2", "ws-1"]);
   });
 
   it("uses custom workspace alias from localStorage", () => {

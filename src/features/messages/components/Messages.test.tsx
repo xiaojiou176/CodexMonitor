@@ -46,6 +46,7 @@ describe("Messages", () => {
   });
 
   beforeEach(() => {
+    window.localStorage.clear();
     useFileLinkOpenerMock.mockClear();
     openFileLinkMock.mockReset();
     showFileLinkMenuMock.mockReset();
@@ -145,6 +146,104 @@ describe("Messages", () => {
 
     const markdown = container.querySelector(".markdown");
     expect(markdown?.textContent ?? "").toContain("Literal [image] token");
+  });
+
+  it("normalizes Q/A option blocks into stable three-level lists", () => {
+    const qaText = [
+      "- Q2 渲染模板怎么定？",
+      "- A: 保守修复",
+      "- 含义: 只修复塌层问题",
+      "- 动作: 保持当前组件结构",
+      "- 影响成本: 改动小，风险低",
+      "- B: 系统化治理",
+      "- 含义: 同时统一输出模板",
+      "- 动作: 增加渲染归一化策略",
+      "- 影响成本: 改动中等，收益更高",
+    ].join("\n");
+    const items: ConversationItem[] = [
+      {
+        id: "msg-qa-three-level",
+        kind: "message",
+        role: "assistant",
+        text: qaText,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const markdown = container.querySelector(".markdown");
+    const rootList = markdown?.querySelector("ul");
+    expect(rootList).toBeTruthy();
+
+    const rootItems = Array.from(rootList?.children ?? []).filter(
+      (node): node is HTMLLIElement => node instanceof HTMLLIElement,
+    );
+    expect(rootItems).toHaveLength(1);
+
+    const optionList = rootItems[0].querySelector("ul");
+    expect(optionList).toBeTruthy();
+    const optionItems = Array.from(optionList?.children ?? []).filter(
+      (node): node is HTMLLIElement => node instanceof HTMLLIElement,
+    );
+    expect(optionItems).toHaveLength(2);
+    expect(optionItems[0].textContent ?? "").toContain("A: 保守修复");
+    expect(optionItems[1].textContent ?? "").toContain("B: 系统化治理");
+
+    const firstDetails = Array.from(optionItems[0].querySelector("ul")?.children ?? []).filter(
+      (node): node is HTMLLIElement => node instanceof HTMLLIElement,
+    );
+    const secondDetails = Array.from(optionItems[1].querySelector("ul")?.children ?? []).filter(
+      (node): node is HTMLLIElement => node instanceof HTMLLIElement,
+    );
+
+    expect(firstDetails).toHaveLength(3);
+    expect(secondDetails).toHaveLength(3);
+    expect(firstDetails[0].textContent ?? "").toContain("含义:");
+    expect(firstDetails[2].textContent ?? "").toContain("影响成本:");
+    expect(secondDetails[1].textContent ?? "").toContain("动作:");
+  });
+
+  it("only applies Q/A nesting for explicit option labels", () => {
+    const text = [
+      "- Q9 这里只是普通列表",
+      "- X: 这不是标准 A/B/C 选项",
+      "- 含义: 这是普通说明，不应被强制嵌套",
+    ].join("\n");
+    const items: ConversationItem[] = [
+      {
+        id: "msg-qa-non-template",
+        kind: "message",
+        role: "assistant",
+        text,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const rootList = container.querySelector(".markdown ul");
+    const rootItems = Array.from(rootList?.children ?? []).filter(
+      (node): node is HTMLLIElement => node instanceof HTMLLIElement,
+    );
+    expect(rootItems).toHaveLength(3);
+    expect(rootItems[0].querySelector("ul")).toBeNull();
   });
 
   it("collapses long user messages by default and toggles expand/collapse", () => {
@@ -275,6 +374,30 @@ describe("Messages", () => {
     expect(onOpenThreadLink).toHaveBeenCalledWith("thread-review-1");
   });
 
+  it("keeps hash links as real anchors", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-hash-link",
+        kind: "message",
+        role: "assistant",
+        text: "跳转 [Q3](#q3-anchor)",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector('a[href="#q3-anchor"]')).toBeTruthy();
+  });
+
   it("does not render unknown markdown links as hyperlinks", () => {
     const items: ConversationItem[] = [
       {
@@ -300,6 +423,84 @@ describe("Messages", () => {
     expect(container.textContent ?? "").toContain("架构优雅性");
     expect(container.querySelector('a[href="可读性"]')).toBeNull();
     expect(container.querySelector('a[href="架构优雅性"]')).toBeNull();
+  });
+
+  it("normalizes state_dump blocks into a stable three-level markdown structure", () => {
+    const text = [
+      "<state_dump>",
+      "<task>持久化 ToolRow 折叠状态并修复线程切换后滚动到顶部问题</task>",
+      "<phase>Phase 4 / Step 4</phase>",
+      '<files_modified>["Messages.tsx","Messages.test.tsx"]</files_modified>',
+      '<pending>["等待你在真实会话里验证：切线程回流、运行中会话回流、展开/收起记忆"]</pending>',
+      "<blockers>none</blockers>",
+      "</state_dump>",
+    ].join(" ");
+    const items: ConversationItem[] = [
+      {
+        id: "msg-state-dump",
+        kind: "message",
+        role: "assistant",
+        text,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const markdown = container.querySelector(".markdown");
+    expect(markdown?.textContent ?? "").not.toContain("<state_dump>");
+    expect(screen.getByText("状态快照")).toBeTruthy();
+
+    const rootList = markdown?.querySelector("ul");
+    const rootItems = Array.from(rootList?.children ?? []).filter(
+      (node): node is HTMLLIElement => node instanceof HTMLLIElement,
+    );
+    expect(rootItems.length).toBeGreaterThanOrEqual(5);
+    expect(rootItems[0].querySelector("ul")).toBeTruthy();
+
+    expect(screen.getByText("Messages.tsx")).toBeTruthy();
+    expect(screen.getByText("Messages.test.tsx")).toBeTruthy();
+  });
+
+  it("keeps state_dump literal text inside fenced code blocks", () => {
+    const text = [
+      "```xml",
+      "<state_dump>",
+      "<task>只作为示例展示</task>",
+      "</state_dump>",
+      "```",
+    ].join("\n");
+    const items: ConversationItem[] = [
+      {
+        id: "msg-state-dump-fence",
+        kind: "message",
+        role: "assistant",
+        text,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.textContent ?? "").toContain("<state_dump>");
+    expect(screen.queryByText("状态快照")).toBeNull();
+    expect(container.querySelectorAll(".message-file-link")).toHaveLength(0);
   });
 
   it("renders file references as compact links and opens them", () => {
@@ -506,6 +707,43 @@ describe("Messages", () => {
     expect(screen.getByText("line-5 target")).toBeTruthy();
   });
 
+  it("clamps preview line lookup when requested line exceeds file length", async () => {
+    readWorkspaceFileMock.mockResolvedValue({
+      content: ["line-1", "line-2", "line-3 final"].join("\n"),
+      truncated: false,
+    });
+
+    const items: ConversationItem[] = [
+      {
+        id: "msg-file-link-preview-overflow",
+        kind: "message",
+        role: "assistant",
+        text: "Check `src/features/messages/components/Markdown.tsx:999`",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-preview-overflow"
+        workspacePath="/tmp/repo"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const fileLink = container.querySelector(".message-file-link");
+    expect(fileLink).toBeTruthy();
+    fireEvent.mouseEnter(fileLink as Element);
+
+    await waitFor(() => {
+      expect(screen.getByText("line-3 final")).toBeTruthy();
+    });
+    expect(screen.queryByText("文件为空。")).toBeNull();
+  });
+
   it("reuses cached hover preview payload for identical workspace files", async () => {
     readWorkspaceFileMock.mockResolvedValue({
       content: [
@@ -684,7 +922,7 @@ describe("Messages", () => {
     expect(container.querySelector("a")).toBeNull();
   });
 
-  it("renders malformed relative markdown links as plain text", () => {
+  it("keeps malformed relative markdown links as normal anchors, not file links", () => {
     const items: ConversationItem[] = [
       {
         id: "msg-bad-relative-link",
@@ -705,9 +943,139 @@ describe("Messages", () => {
       />,
     );
 
-    expect(container.querySelector("a")).toBeNull();
+    expect(container.querySelector('a[href=".././././../.."]')).toBeTruthy();
     expect(container.querySelector(".message-file-link")).toBeNull();
     expect(container.textContent ?? "").toContain(".././././../..");
+  });
+
+  it("does not convert plain slash words like 影响/成本 into file links", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-slash-plain-text",
+        kind: "message",
+        role: "assistant",
+        text: "影响/成本: 低中，适合“非当前主战项目”。",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".message-file-link")).toBeNull();
+  });
+
+  it("renders tool output containing fences as plain code text", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "tool-fence-output",
+        kind: "tool",
+        toolType: "search",
+        title: "Search: render output",
+        detail: "/repo",
+        status: "completed",
+        output: ["before", "```bash", "echo hi", "```", "after"].join("\n"),
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "切换工具详情" }));
+    expect(container.textContent ?? "").toContain("```bash");
+    expect(container.textContent ?? "").toContain("echo hi");
+    expect(container.textContent ?? "").toContain("after");
+  });
+
+  it("keeps long-running command output collapsed by default and supports re-collapse", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "tool-long-command-collapse",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command: rg foo src",
+        detail: "/repo",
+        status: "completed",
+        durationMs: 3200,
+        output: ["line-1", "line-2", "line-3"].join("\n"),
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".tool-inline-terminal")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("line-1");
+
+    const toggleButton = screen.getByRole("button", { name: "切换工具详情" });
+    fireEvent.click(toggleButton);
+
+    expect(container.querySelector(".tool-inline-terminal")).toBeTruthy();
+    expect(container.textContent ?? "").toContain("line-1");
+
+    fireEvent.click(toggleButton);
+
+    expect(container.querySelector(".tool-inline-terminal")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("line-1");
+  });
+
+  it("keeps running command output collapsed until explicit expand", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "tool-running-command-collapse",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command: npm run dev",
+        detail: "/repo",
+        status: "running",
+        output: ["booting...", "ready"].join("\n"),
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={true}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".tool-inline-terminal")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("booting...");
+
+    const toggleButton = screen.getByRole("button", { name: "切换工具详情" });
+    fireEvent.click(toggleButton);
+    expect(container.querySelector(".tool-inline-terminal")).toBeTruthy();
+    expect(container.textContent ?? "").toContain("booting...");
+
+    fireEvent.click(toggleButton);
+    expect(container.querySelector(".tool-inline-terminal")).toBeNull();
   });
 
   it("does not re-render messages while typing when message props stay stable", () => {
@@ -1283,6 +1651,206 @@ describe("Messages", () => {
     expect(scrollNode.scrollTop).toBe(900);
   });
 
+  it("pins to bottom after thread messages finish loading", () => {
+    const { container, rerender } = render(
+      <Messages
+        items={[]}
+        threadId="thread-loading"
+        workspaceId="ws-1"
+        isThinking={false}
+        isLoadingMessages
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const messagesNode = container.querySelector(".messages.messages-full");
+    expect(messagesNode).toBeTruthy();
+    const scrollNode = messagesNode as HTMLDivElement;
+
+    Object.defineProperty(scrollNode, "clientHeight", {
+      configurable: true,
+      value: 200,
+    });
+    Object.defineProperty(scrollNode, "scrollHeight", {
+      configurable: true,
+      value: 1200,
+    });
+    scrollNode.scrollTop = 0;
+
+    rerender(
+      <Messages
+        items={[
+          {
+            id: "msg-loaded",
+            kind: "message",
+            role: "assistant",
+            text: "Loaded content",
+          },
+        ]}
+        threadId="thread-loading"
+        workspaceId="ws-1"
+        isThinking
+        isLoadingMessages={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(scrollNode.scrollTop).toBe(1200);
+  });
+
+  it("restores saved scroll position per thread when strategy is remember", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-remember-1",
+        kind: "message",
+        role: "assistant",
+        text: "Remember mode",
+      },
+    ];
+
+    const { container, rerender } = render(
+      <Messages
+        items={items}
+        threadId="thread-remember-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        threadScrollRestoreMode="remember"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const messagesNode = container.querySelector(".messages.messages-full");
+    expect(messagesNode).toBeTruthy();
+    const scrollNode = messagesNode as HTMLDivElement;
+
+    Object.defineProperty(scrollNode, "clientHeight", {
+      configurable: true,
+      value: 200,
+    });
+    Object.defineProperty(scrollNode, "scrollHeight", {
+      configurable: true,
+      value: 1000,
+    });
+
+    scrollNode.scrollTop = 260;
+    fireEvent.scroll(scrollNode);
+
+    Object.defineProperty(scrollNode, "scrollHeight", {
+      configurable: true,
+      value: 900,
+    });
+
+    rerender(
+      <Messages
+        items={items}
+        threadId="thread-remember-2"
+        workspaceId="ws-1"
+        isThinking={false}
+        threadScrollRestoreMode="remember"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(scrollNode.scrollTop).toBe(900);
+
+    scrollNode.scrollTop = 120;
+    fireEvent.scroll(scrollNode);
+
+    Object.defineProperty(scrollNode, "scrollHeight", {
+      configurable: true,
+      value: 1000,
+    });
+
+    rerender(
+      <Messages
+        items={items}
+        threadId="thread-remember-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        threadScrollRestoreMode="remember"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(scrollNode.scrollTop).toBe(260);
+  });
+
+  it("keeps default latest strategy and pins to bottom on thread revisit", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-latest-1",
+        kind: "message",
+        role: "assistant",
+        text: "Latest mode",
+      },
+    ];
+
+    const { container, rerender } = render(
+      <Messages
+        items={items}
+        threadId="thread-latest-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const messagesNode = container.querySelector(".messages.messages-full");
+    expect(messagesNode).toBeTruthy();
+    const scrollNode = messagesNode as HTMLDivElement;
+
+    Object.defineProperty(scrollNode, "clientHeight", {
+      configurable: true,
+      value: 200,
+    });
+    Object.defineProperty(scrollNode, "scrollHeight", {
+      configurable: true,
+      value: 1000,
+    });
+
+    scrollNode.scrollTop = 240;
+    fireEvent.scroll(scrollNode);
+
+    Object.defineProperty(scrollNode, "scrollHeight", {
+      configurable: true,
+      value: 900,
+    });
+    rerender(
+      <Messages
+        items={items}
+        threadId="thread-latest-2"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    expect(scrollNode.scrollTop).toBe(900);
+
+    Object.defineProperty(scrollNode, "scrollHeight", {
+      configurable: true,
+      value: 1000,
+    });
+    rerender(
+      <Messages
+        items={items}
+        threadId="thread-latest-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(scrollNode.scrollTop).toBe(1000);
+  });
+
   it("keeps user scroll position when new items stream in the same thread", () => {
     const initialItems: ConversationItem[] = [
       {
@@ -1347,6 +1915,100 @@ describe("Messages", () => {
     );
 
     expect(scrollNode.scrollTop).toBe(220);
+  });
+
+  it("persists tool row expand state per thread across thread switches", () => {
+    const threadOneItems: ConversationItem[] = [
+      {
+        id: "tool-thread-1",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command: echo thread-1",
+        detail: "/repo",
+        status: "completed",
+        output: "thread-1 output",
+      },
+    ];
+    const threadTwoItems: ConversationItem[] = [
+      {
+        id: "tool-thread-2",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command: echo thread-2",
+        detail: "/repo",
+        status: "completed",
+        output: "thread-2 output",
+      },
+    ];
+
+    const { container, rerender } = render(
+      <Messages
+        items={threadOneItems}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".tool-inline-terminal")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "切换工具详情" }));
+    expect(container.querySelector(".tool-inline-terminal")).toBeTruthy();
+    expect(container.textContent ?? "").toContain("thread-1 output");
+
+    rerender(
+      <Messages
+        items={threadTwoItems}
+        threadId="thread-2"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.textContent ?? "").not.toContain("thread-1 output");
+
+    rerender(
+      <Messages
+        items={threadOneItems}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".tool-inline-terminal")).toBeTruthy();
+    expect(container.textContent ?? "").toContain("thread-1 output");
+
+    fireEvent.click(screen.getByRole("button", { name: "切换工具详情" }));
+    expect(container.querySelector(".tool-inline-terminal")).toBeNull();
+
+    rerender(
+      <Messages
+        items={threadTwoItems}
+        threadId="thread-2"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    rerender(
+      <Messages
+        items={threadOneItems}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".tool-inline-terminal")).toBeNull();
   });
 
   it("auto-triggers top-history callback once on scroll-to-top", () => {

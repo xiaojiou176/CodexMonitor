@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DragEvent } from "react";
-import { subscribeWindowDragDrop } from "../../../services/dragDrop";
+import {
+  isWorkspaceReorderDragging,
+  subscribeWindowDragDrop,
+} from "../../../services/dragDrop";
 
 function isDragFileTransfer(types: readonly string[] | undefined) {
   if (!types || types.length === 0) {
@@ -94,6 +97,10 @@ export function useWorkspaceDropZone({
       if (!dropTargetRef.current) {
         return;
       }
+      if (isWorkspaceReorderDragging()) {
+        setIsDragOver(false);
+        return;
+      }
       const payload = event.payload;
       if (payload.type === "leave") {
         setIsDragOver(false);
@@ -142,7 +149,7 @@ export function useWorkspaceDropZone({
   }, [disabled, emitPaths]);
 
   const handleDragOver = (event: DragEvent<HTMLElement>) => {
-    if (disabled) {
+    if (disabled || isWorkspaceReorderDragging()) {
       return;
     }
     if (isDragFileTransfer(event.dataTransfer?.types)) {
@@ -153,7 +160,7 @@ export function useWorkspaceDropZone({
   };
 
   const handleDragEnter = (event: DragEvent<HTMLElement>) => {
-    if (disabled) {
+    if (disabled || isWorkspaceReorderDragging()) {
       return;
     }
     dragDepthRef.current += 1;
@@ -162,6 +169,10 @@ export function useWorkspaceDropZone({
 
   const handleDragLeave = (event: DragEvent<HTMLElement>) => {
     if (disabled) {
+      return;
+    }
+    if (isWorkspaceReorderDragging()) {
+      setIsDragOver(false);
       return;
     }
     const relatedTarget = event.relatedTarget as Node | null;
@@ -177,6 +188,11 @@ export function useWorkspaceDropZone({
 
   const handleDrop = (event: DragEvent<HTMLElement>) => {
     if (disabled) {
+      return;
+    }
+    if (isWorkspaceReorderDragging()) {
+      setIsDragOver(false);
+      lastClientPositionRef.current = null;
       return;
     }
     dragDepthRef.current = 0;

@@ -5,6 +5,7 @@ import type { WorkspaceInfo } from "../../../types";
 
 type WorkspaceCardProps = {
   workspace: WorkspaceInfo;
+  workspaceGroupKey?: string;
   workspaceName?: React.ReactNode;
   isActive: boolean;
   isCollapsed: boolean;
@@ -25,6 +26,8 @@ type WorkspaceCardProps = {
   isDropTarget?: boolean;
   dropPosition?: "before" | "after" | null;
   onDragStart?: (event: DragEvent<HTMLDivElement>) => void;
+  onPointerDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
+  onDragEnter?: (event: DragEvent<HTMLDivElement>) => void;
   onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
   onDrop?: (event: DragEvent<HTMLDivElement>) => void;
   onDragEnd?: (event: DragEvent<HTMLDivElement>) => void;
@@ -39,6 +42,7 @@ type WorkspaceCardProps = {
 
 export function WorkspaceCard({
   workspace,
+  workspaceGroupKey,
   workspaceName,
   isActive,
   isCollapsed,
@@ -54,6 +58,8 @@ export function WorkspaceCard({
   isDropTarget = false,
   dropPosition = null,
   onDragStart,
+  onPointerDown,
+  onDragEnter,
   onDragOver,
   onDrop,
   onDragEnd,
@@ -83,12 +89,16 @@ export function WorkspaceCard({
             ? " workspace-row-drop-target-after"
             : ""
         }`}
+        data-workspace-id={workspace.id}
+        data-workspace-group-key={workspaceGroupKey}
         role="button"
         tabIndex={0}
         onClick={() => onSelectWorkspace(workspace.id)}
         onContextMenu={(event) => onShowWorkspaceMenu(event, workspace.id)}
         draggable={isDraggable}
         onDragStart={onDragStart}
+        onPointerDown={onPointerDown}
+        onDragEnter={onDragEnter}
         onDragOver={onDragOver}
         onDrop={onDrop}
         onDragEnd={onDragEnd}

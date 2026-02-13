@@ -119,6 +119,7 @@ export type BackendMode = "local" | "remote";
 export type RemoteBackendProvider = "tcp" | "orbit";
 export type ThemePreference = "system" | "light" | "dark" | "dim";
 export type PersonalityPreference = "friendly" | "pragmatic";
+export type ThreadScrollRestoreMode = "latest" | "remember";
 
 
 export type ComposerEditorPreset = "default" | "helpful" | "smart";
@@ -181,6 +182,7 @@ export type AppSettings = {
   uiScale: number;
   theme: ThemePreference;
   showMessageFilePath: boolean;
+  threadScrollRestoreMode: ThreadScrollRestoreMode;
   threadTitleAutogenerationEnabled: boolean;
   uiFontFamily: string;
   codeFontFamily: string;

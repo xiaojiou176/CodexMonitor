@@ -93,6 +93,7 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onWorkspaceDragEnter={options.onWorkspaceDragEnter}
       onWorkspaceDragLeave={options.onWorkspaceDragLeave}
       onWorkspaceDrop={options.onWorkspaceDrop}
+      onReorderWorkspaceGroup={options.onReorderWorkspaceGroup}
     />
   );
 
@@ -106,6 +107,7 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       selectedOpenAppId={options.selectedOpenAppId}
       codeBlockCopyUseModifier={options.codeBlockCopyUseModifier}
       showMessageFilePath={options.showMessageFilePath}
+      threadScrollRestoreMode={options.threadScrollRestoreMode}
       userInputRequests={options.userInputRequests}
       onUserInputSubmit={options.handleUserInputSubmit}
       onPlanAccept={options.onPlanAccept}
