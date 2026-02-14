@@ -22,6 +22,22 @@ import { DEFAULT_COMMIT_MESSAGE_PROMPT } from "../../../utils/commitMessagePromp
 const allowedThemes = new Set(["system", "light", "dark", "dim"]);
 const allowedPersonality = new Set(["friendly", "pragmatic"]);
 const allowedThreadScrollRestoreMode = new Set(["latest", "remember"]);
+const AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_DEFAULT = 30;
+const AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MIN = 5;
+const AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MAX = 240;
+
+function clampAutoArchiveSubAgentThreadsMinutes(value: number): number {
+  if (!Number.isFinite(value)) {
+    return AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_DEFAULT;
+  }
+  return Math.min(
+    AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MAX,
+    Math.max(
+      AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MIN,
+      Math.round(value),
+    ),
+  );
+}
 
 function buildDefaultSettings(): AppSettings {
   const isMac = isMacPlatform();
@@ -78,6 +94,9 @@ function buildDefaultSettings(): AppSettings {
     collaborationModesEnabled: true,
     steerEnabled: true,
     unifiedExecEnabled: true,
+    autoArchiveSubAgentThreadsEnabled: true,
+    autoArchiveSubAgentThreadsMaxAgeMinutes:
+      AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_DEFAULT,
     experimentalAppsEnabled: false,
     personality: "friendly",
     dictationEnabled: false,
@@ -149,6 +168,14 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
       : "latest",
     reviewDeliveryMode:
       settings.reviewDeliveryMode === "detached" ? "detached" : "inline",
+    autoArchiveSubAgentThreadsEnabled:
+      typeof settings.autoArchiveSubAgentThreadsEnabled === "boolean"
+        ? settings.autoArchiveSubAgentThreadsEnabled
+        : true,
+    autoArchiveSubAgentThreadsMaxAgeMinutes:
+      clampAutoArchiveSubAgentThreadsMinutes(
+        settings.autoArchiveSubAgentThreadsMaxAgeMinutes,
+      ),
     commitMessagePrompt,
     openAppTargets: normalizedTargets,
     selectedOpenAppId,

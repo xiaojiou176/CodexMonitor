@@ -38,7 +38,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "pretauri:dev": "npm run sync:material-icons",
-    "tauri:dev": "npm run doctor:strict && tauri dev",
+    "tauri:dev": "npm run doctor:strict && node scripts/tauri-dev-auto-port.mjs",
     "pretauri:build": "npm run sync:material-icons",
     "tauri:build": "npm run doctor:strict && tauri build",
     "pretauri:dev:win": "npm run sync:material-icons",

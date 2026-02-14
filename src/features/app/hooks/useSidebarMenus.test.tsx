@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WorkspaceInfo } from "../../../types";
 import { useSidebarMenus } from "./useSidebarMenus";
@@ -43,6 +43,10 @@ vi.mock("../../../services/toasts", () => ({
 }));
 
 describe("useSidebarMenus", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("adds workspace alias rename action to workspace menu", async () => {
     const onDeleteThread = vi.fn();
     const onPinThread = vi.fn();
@@ -144,5 +148,83 @@ describe("useSidebarMenus", () => {
     expect(revealItem).toBeDefined();
     await revealItem.action();
     expect(revealItemInDir).toHaveBeenCalledWith("/tmp/worktree-1");
+  });
+
+  it("archives selected threads in batch when right-click target is selected", async () => {
+    const onDeleteThread = vi.fn();
+    const onDeleteThreads = vi.fn();
+    const { result } = renderHook(() =>
+      useSidebarMenus({
+        onDeleteThread,
+        onDeleteThreads,
+        getSelectedThreadIds: () => ["thread-1", "thread-2"],
+        onPinThread: vi.fn(),
+        onUnpinThread: vi.fn(),
+        isThreadPinned: vi.fn(() => false),
+        onRenameThread: vi.fn(),
+        onRenameWorkspaceAlias: vi.fn(),
+        onReloadWorkspaceThreads: vi.fn(),
+        onDeleteWorkspace: vi.fn(),
+        onDeleteWorktree: vi.fn(),
+      }),
+    );
+
+    const event = {
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+      clientX: 5,
+      clientY: 6,
+    } as unknown as ReactMouseEvent;
+
+    await result.current.showThreadMenu(event, "ws-1", "thread-2", true);
+
+    const menuArgs = menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
+    const archiveItem = menuArgs.items.find(
+      (item: { text: string }) => item.text === "归档所选 (2)",
+    );
+    expect(archiveItem).toBeDefined();
+
+    await archiveItem.action();
+    expect(onDeleteThreads).toHaveBeenCalledWith("ws-1", ["thread-1", "thread-2"]);
+    expect(onDeleteThread).not.toHaveBeenCalled();
+  });
+
+  it("archives only clicked thread when right-click target is outside selection", async () => {
+    const onDeleteThread = vi.fn();
+    const onDeleteThreads = vi.fn();
+    const { result } = renderHook(() =>
+      useSidebarMenus({
+        onDeleteThread,
+        onDeleteThreads,
+        getSelectedThreadIds: () => ["thread-1", "thread-2"],
+        onPinThread: vi.fn(),
+        onUnpinThread: vi.fn(),
+        isThreadPinned: vi.fn(() => false),
+        onRenameThread: vi.fn(),
+        onRenameWorkspaceAlias: vi.fn(),
+        onReloadWorkspaceThreads: vi.fn(),
+        onDeleteWorkspace: vi.fn(),
+        onDeleteWorktree: vi.fn(),
+      }),
+    );
+
+    const event = {
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+      clientX: 7,
+      clientY: 9,
+    } as unknown as ReactMouseEvent;
+
+    await result.current.showThreadMenu(event, "ws-1", "thread-3", true);
+
+    const menuArgs = menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
+    const archiveItem = menuArgs.items.find(
+      (item: { text: string }) => item.text === "归档",
+    );
+    expect(archiveItem).toBeDefined();
+
+    await archiveItem.action();
+    expect(onDeleteThread).toHaveBeenCalledWith("ws-1", "thread-3");
+    expect(onDeleteThreads).not.toHaveBeenCalled();
   });
 });

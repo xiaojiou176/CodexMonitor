@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConversationItem, WorkspaceInfo } from "../../../types";
+import type {
+  ConversationItem,
+  ThreadArchiveBatchResult,
+  WorkspaceInfo,
+} from "../../../types";
 import {
   archiveThread,
+  archiveThreads,
   forkThread,
   listThreads,
   resumeThread,
@@ -26,6 +31,7 @@ vi.mock("../../../services/tauri", () => ({
   resumeThread: vi.fn(),
   listThreads: vi.fn(),
   archiveThread: vi.fn(),
+  archiveThreads: vi.fn(),
 }));
 
 vi.mock("../../../utils/threadItems", () => ({
@@ -741,21 +747,124 @@ describe("useThreadActions", () => {
     });
   });
 
-  it("archives threads and reports errors", async () => {
-    vi.mocked(archiveThread).mockRejectedValue(new Error("nope"));
+  it("archives threads in batch and reports partial failure summary", async () => {
+    vi.mocked(archiveThreads).mockResolvedValue({
+      allSucceeded: false,
+      okIds: ["thread-8"],
+      failed: [{ threadId: "thread-9", error: "denied" }],
+      total: 2,
+    });
     const onDebug = vi.fn();
     const { result } = renderActions({ onDebug });
 
+    let summary: ThreadArchiveBatchResult | undefined;
     await act(async () => {
-      await result.current.archiveThread("ws-1", "thread-9");
+      summary = await result.current.archiveThreads("ws-1", [
+        "thread-8",
+        "thread-9",
+      ]);
     });
 
-    expect(archiveThread).toHaveBeenCalledWith("ws-1", "thread-9");
+    expect(summary).toEqual({
+      allSucceeded: false,
+      okIds: ["thread-8"],
+      failed: [{ threadId: "thread-9", error: "denied" }],
+      total: 2,
+    });
+    expect(archiveThreads).toHaveBeenCalledWith("ws-1", [
+      "thread-8",
+      "thread-9",
+    ]);
     expect(onDebug).toHaveBeenCalledWith(
       expect.objectContaining({
         source: "error",
-        label: "thread/archive error",
-        payload: "nope",
+        label: "thread/archive batch",
+        payload: expect.objectContaining({
+          total: 2,
+          failed: [{ threadId: "thread-9", error: "denied" }],
+        }),
+      }),
+    );
+  });
+
+  it("reports transport errors and marks all targets failed", async () => {
+    vi.mocked(archiveThreads).mockRejectedValue(new Error("nope"));
+    const onDebug = vi.fn();
+    const { result } = renderActions({ onDebug });
+
+    let summary: ThreadArchiveBatchResult | undefined;
+    await act(async () => {
+      summary = await result.current.archiveThreads("ws-1", [
+        "thread-9",
+        "thread-10",
+      ]);
+    });
+
+    expect(summary).toEqual({
+      allSucceeded: false,
+      okIds: [],
+      failed: [
+        { threadId: "thread-9", error: "nope" },
+        { threadId: "thread-10", error: "nope" },
+      ],
+      total: 2,
+    });
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "error",
+        label: "thread/archive batch error",
+      }),
+    );
+  });
+
+  it("keeps single-thread archive API via batch wrapper", async () => {
+    vi.mocked(archiveThreads).mockResolvedValue({
+      allSucceeded: true,
+      okIds: ["thread-9"],
+      failed: [],
+      total: 1,
+    });
+    const { result } = renderActions();
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.archiveThread("ws-1", "thread-9");
+    });
+
+    expect(ok).toBe(true);
+    expect(archiveThreads).toHaveBeenCalledWith("ws-1", ["thread-9"]);
+  });
+
+  it("falls back to single-thread archive when batch method is unsupported", async () => {
+    vi.mocked(archiveThreads).mockRejectedValue(
+      new Error("unsupported method"),
+    );
+    vi.mocked(archiveThread)
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error("denied"));
+    const onDebug = vi.fn();
+    const { result } = renderActions({ onDebug });
+
+    let summary: ThreadArchiveBatchResult | undefined;
+    await act(async () => {
+      summary = await result.current.archiveThreads("ws-1", [
+        "thread-21",
+        "thread-22",
+      ]);
+    });
+
+    expect(archiveThread).toHaveBeenCalledTimes(2);
+    expect(archiveThread).toHaveBeenNthCalledWith(1, "ws-1", "thread-21");
+    expect(archiveThread).toHaveBeenNthCalledWith(2, "ws-1", "thread-22");
+    expect(summary).toEqual({
+      allSucceeded: false,
+      okIds: ["thread-21"],
+      failed: [{ threadId: "thread-22", error: "denied" }],
+      total: 2,
+    });
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "thread/archive batch fallback",
       }),
     );
   });

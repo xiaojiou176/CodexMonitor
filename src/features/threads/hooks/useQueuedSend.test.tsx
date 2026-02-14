@@ -114,6 +114,79 @@ describe("useQueuedSend", () => {
     expect(result.current.activeQueue[0]?.text).toBe("Queued");
   });
 
+  it("queues message for a non-active thread and dispatches via thread sender", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: false },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessageForThread("thread-2", "continue background");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspaceTwo,
+      "thread-2",
+      "continue background",
+      [],
+    );
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.clearActiveImages).not.toHaveBeenCalled();
+  });
+
+  it("ignores queueMessageForThread when thread workspace is unresolved", async () => {
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+      },
+      workspacesById: new Map([["workspace-1", workspace]]),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessageForThread("thread-2", "missing mapping");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
+    expect(result.current.queuedByThread["thread-2"] ?? []).toEqual([]);
+  });
+
   it("does not flush active queue while active turn id exists", async () => {
     const options = makeOptions({
       activeTurnId: "turn-1",
@@ -240,7 +313,7 @@ describe("useQueuedSend", () => {
     expect(result.current.activeQueue).toHaveLength(0);
   });
 
-  it("allows steering queued message when steer mode is disabled", async () => {
+  it("does not steer queued message when steer mode is disabled", async () => {
     const options = makeOptions({
       isProcessing: false,
       steerEnabled: false,
@@ -260,14 +333,11 @@ describe("useQueuedSend", () => {
 
     await act(async () => {
       const ok = await result.current.steerQueuedMessage("thread-1", queued?.id ?? "");
-      expect(ok).toBe(true);
+      expect(ok).toBe(false);
     });
 
-    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
-    expect(options.sendUserMessage).toHaveBeenCalledWith("steer with toggle off", [], {
-      forceSteer: true,
-    });
-    expect(result.current.activeQueue).toHaveLength(0);
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(result.current.activeQueue).toHaveLength(1);
   });
 
   it("queues while processing when steer is enabled and turn id exists", async () => {
@@ -405,7 +475,7 @@ describe("useQueuedSend", () => {
     expect(options.sendUserMessage).toHaveBeenCalledWith("Thread-1", []);
   });
 
-  it("does not drain non-active queue while another thread is globally processing", async () => {
+  it("drains queued thread after global processing clears", async () => {
     const workspaceTwo: WorkspaceInfo = {
       ...workspace,
       id: "workspace-2",
@@ -458,8 +528,9 @@ describe("useQueuedSend", () => {
       "wait until global processing ends",
     ]);
     expect(
-      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1")?.blockedReason,
-    ).toBe("global_processing");
+      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1")
+        ?.queueLength,
+    ).toBe(1);
 
     await act(async () => {
       rerender({
@@ -484,6 +555,11 @@ describe("useQueuedSend", () => {
       "wait until global processing ends",
       [],
     );
+    expect(result.current.queuedByThread["thread-1"] ?? []).toEqual([]);
+    expect(
+      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1")
+        ?.blockedReason,
+    ).toBe("awaiting_turn_start_event");
   });
 
   it("drains active-thread queue even when another thread is globally processing", async () => {
@@ -532,7 +608,7 @@ describe("useQueuedSend", () => {
     expect(options.sendUserMessage).toHaveBeenCalledWith("active thread should still drain", []);
   });
 
-  it("drains queued messages for non-active thread when workspace mapping is available", async () => {
+  it("dispatches non-active queued message when workspace mapping is available", async () => {
     const workspaceTwo: WorkspaceInfo = {
       ...workspace,
       id: "workspace-2",
@@ -585,10 +661,11 @@ describe("useQueuedSend", () => {
       "Thread-1 background drain",
       [],
     );
+    expect(result.current.queuedByThread["thread-1"] ?? []).toEqual([]);
     expect(options.sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("blocks non-active queued thread while another thread is globally processing", async () => {
+  it("waits for global processing before dispatching non-active queued thread", async () => {
     const workspaceTwo: WorkspaceInfo = {
       ...workspace,
       id: "workspace-2",
@@ -695,9 +772,10 @@ describe("useQueuedSend", () => {
       "thread-2 waits for global processing",
       [],
     );
+    expect(result.current.queuedByThread["thread-2"] ?? []).toEqual([]);
   });
 
-  it("drains non-active queued thread using queued workspace id fallback", async () => {
+  it("dispatches non-active queued thread using queued workspace id fallback", async () => {
     const workspaceTwo: WorkspaceInfo = {
       ...workspace,
       id: "workspace-2",
@@ -743,15 +821,17 @@ describe("useQueuedSend", () => {
       await Promise.resolve();
     });
 
+    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
     expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
       workspace,
       "thread-1",
       "Thread-1 queued while active",
       [],
     );
+    expect(result.current.queuedByThread["thread-1"] ?? []).toEqual([]);
   });
 
-  it("continues background drain when status events are missing", async () => {
+  it("keeps background queue serial when switching threads", async () => {
     const workspaceTwo: WorkspaceInfo = {
       ...workspace,
       id: "workspace-2",
@@ -802,7 +882,7 @@ describe("useQueuedSend", () => {
       await Promise.resolve();
     });
 
-    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(2);
+    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
     expect(options.sendUserMessageToThread).toHaveBeenNthCalledWith(
       1,
       workspace,
@@ -810,13 +890,13 @@ describe("useQueuedSend", () => {
       "Background first",
       [],
     );
-    expect(options.sendUserMessageToThread).toHaveBeenNthCalledWith(
-      2,
-      workspace,
-      "thread-1",
+    expect(result.current.queuedByThread["thread-1"]?.map((item) => item.text)).toEqual([
       "Background second",
-      [],
-    );
+    ]);
+    expect(
+      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1")
+        ?.blockedReason,
+    ).toBe("awaiting_turn_start_event");
   });
 
   it("connects workspace before sending when disconnected", async () => {

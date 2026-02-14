@@ -185,6 +185,26 @@ pub(crate) async fn archive_thread(
 }
 
 #[tauri::command]
+pub(crate) async fn archive_threads(
+    workspace_id: String,
+    thread_ids: Vec<String>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "archive_threads",
+            json!({ "workspaceId": workspace_id, "threadIds": thread_ids }),
+        )
+        .await;
+    }
+
+    codex_core::archive_threads_core(&state.sessions, workspace_id, thread_ids).await
+}
+
+#[tauri::command]
 pub(crate) async fn compact_thread(
     workspace_id: String,
     thread_id: String,

@@ -3,6 +3,8 @@ export type WorkspaceSettings = {
   sortOrder?: number | null;
   groupId?: string | null;
   gitRoot?: string | null;
+  displayName?: string | null;
+  threadDisplayNames?: Record<string, string> | null;
   codexHome?: string | null;
   codexArgs?: string | null;
   launchScript?: string | null;
@@ -105,6 +107,18 @@ export type ThreadSummary = {
   updatedAt: number;
 };
 
+export type ThreadArchiveFailure = {
+  threadId: string;
+  error: string;
+};
+
+export type ThreadArchiveBatchResult = {
+  allSucceeded: boolean;
+  okIds: string[];
+  failed: ThreadArchiveFailure[];
+  total: number;
+};
+
 export type ThreadListSortKey = "created_at" | "updated_at";
 
 export type ReviewTarget =
@@ -196,6 +210,8 @@ export type AppSettings = {
   collaborationModesEnabled: boolean;
   steerEnabled: boolean;
   unifiedExecEnabled: boolean;
+  autoArchiveSubAgentThreadsEnabled: boolean;
+  autoArchiveSubAgentThreadsMaxAgeMinutes: number;
   experimentalAppsEnabled: boolean;
   personality: PersonalityPreference;
   dictationEnabled: boolean;

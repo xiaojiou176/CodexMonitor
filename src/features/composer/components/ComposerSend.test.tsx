@@ -33,6 +33,10 @@ type HarnessProps = {
   sendLabel?: string;
   messageFontSize?: number;
   onMessageFontSizeChange?: (next: number) => void;
+  continueModeEnabled?: boolean;
+  onContinueModeEnabledChange?: (next: boolean) => void;
+  continuePrompt?: string;
+  onContinuePromptChange?: (next: string) => void;
   files?: string[];
 };
 
@@ -46,6 +50,10 @@ function ComposerHarness({
   sendLabel = "发送",
   messageFontSize = 13,
   onMessageFontSizeChange,
+  continueModeEnabled = false,
+  onContinueModeEnabledChange,
+  continuePrompt = "",
+  onContinuePromptChange,
   files = [],
 }: HarnessProps) {
   const [draftText, setDraftText] = useState("");
@@ -81,6 +89,10 @@ function ComposerHarness({
       dictationEnabled={false}
       messageFontSize={messageFontSize}
       onMessageFontSizeChange={onMessageFontSizeChange}
+      continueModeEnabled={continueModeEnabled}
+      onContinueModeEnabledChange={onContinueModeEnabledChange}
+      continuePrompt={continuePrompt}
+      onContinuePromptChange={onContinuePromptChange}
     />
   );
 }
@@ -96,7 +108,7 @@ describe("Composer send triggers", () => {
     const onSend = vi.fn();
     render(<ComposerHarness onSend={onSend} />);
 
-    const textarea = screen.getByRole("textbox");
+    const textarea = screen.getAllByRole("textbox")[0];
     fireEvent.change(textarea, { target: { value: "hello world" } });
     fireEvent.keyDown(textarea, { key: "Enter" });
 
@@ -113,7 +125,7 @@ describe("Composer send triggers", () => {
 
     render(<ComposerHarness onSend={onSend} />);
 
-    const textarea = screen.getByRole("textbox");
+    const textarea = screen.getAllByRole("textbox")[0];
     fireEvent.change(textarea, { target: { value: longText } });
     fireEvent.keyDown(textarea, { key: "Enter" });
 
@@ -126,7 +138,7 @@ describe("Composer send triggers", () => {
     const onSend = vi.fn();
     render(<ComposerHarness onSend={onSend} />);
 
-    const textarea = screen.getByRole("textbox");
+    const textarea = screen.getAllByRole("textbox")[0];
     fireEvent.change(textarea, { target: { value: "from button" } });
     fireEvent.click(screen.getByLabelText("发送"));
 
@@ -140,7 +152,7 @@ describe("Composer send triggers", () => {
     const blurSpy = vi.spyOn(HTMLTextAreaElement.prototype, "blur");
     render(<ComposerHarness onSend={onSend} />);
 
-    const textarea = screen.getByRole("textbox");
+    const textarea = screen.getAllByRole("textbox")[0];
     fireEvent.change(textarea, { target: { value: "dismiss keyboard" } });
     fireEvent.keyDown(textarea, { key: "Enter" });
 
@@ -153,7 +165,7 @@ describe("Composer send triggers", () => {
     const onSend = vi.fn();
     render(<ComposerHarness onSend={onSend} files={[]} />);
 
-    const textarea = screen.getByRole("textbox");
+    const textarea = screen.getAllByRole("textbox")[0];
     fireEvent.change(textarea, { target: { value: "@missing-path" } });
     fireEvent.keyDown(textarea, { key: "Enter" });
 
@@ -175,7 +187,7 @@ describe("Composer send triggers", () => {
       />,
     );
 
-    const textarea = screen.getByRole("textbox");
+    const textarea = screen.getAllByRole("textbox")[0];
     fireEvent.change(textarea, { target: { value: "queued while processing" } });
     fireEvent.click(screen.getByLabelText("Queue"));
 
@@ -198,7 +210,7 @@ describe("Composer send triggers", () => {
       />,
     );
 
-    const textarea = screen.getByRole("textbox");
+    const textarea = screen.getAllByRole("textbox")[0];
     fireEvent.change(textarea, { target: { value: "queue in steer mode" } });
     fireEvent.click(screen.getByLabelText("Queue"));
 
@@ -222,5 +234,29 @@ describe("Composer send triggers", () => {
     fireEvent.change(slider, { target: { value: "15" } });
 
     expect(onMessageFontSizeChange).toHaveBeenCalledWith(15);
+  });
+
+  it("changes continue mode and prompt from composer footer controls", () => {
+    const onSend = vi.fn();
+    const onContinueModeEnabledChange = vi.fn();
+    const onContinuePromptChange = vi.fn();
+
+    render(
+      <ComposerHarness
+        onSend={onSend}
+        continueModeEnabled={false}
+        onContinueModeEnabledChange={onContinueModeEnabledChange}
+        continuePrompt="请继续完成我和你讨论的Plan！"
+        onContinuePromptChange={onContinuePromptChange}
+      />,
+    );
+
+    const toggle = screen.getByLabelText("Continue 模式");
+    fireEvent.click(toggle);
+    expect(onContinueModeEnabledChange).toHaveBeenCalledWith(true);
+
+    const prompt = screen.getByLabelText("Continue 提示词");
+    fireEvent.change(prompt, { target: { value: "继续执行当前任务计划" } });
+    expect(onContinuePromptChange).toHaveBeenCalledWith("继续执行当前任务计划");
   });
 });

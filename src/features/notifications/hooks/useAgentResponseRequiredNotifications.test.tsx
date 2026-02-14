@@ -246,6 +246,59 @@ describe("useAgentResponseRequiredNotifications", () => {
     });
   });
 
+  it("suppresses response-required notifications for sub-agent threads", async () => {
+    renderHook(() =>
+      useAgentResponseRequiredNotifications({
+        enabled: true,
+        isWindowFocused: false,
+        approvals: [],
+        userInputRequests: [
+          {
+            workspace_id: "ws-1",
+            request_id: 1,
+            params: {
+              thread_id: "thread-sub",
+              turn_id: "turn-1",
+              item_id: "item-1",
+              questions: [{ id: "q-1", header: "Sub question", question: "Choose one" }],
+            },
+          },
+        ],
+        isSubAgentThread: (_workspaceId, threadId) => threadId === "thread-sub",
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(sendNotification).not.toHaveBeenCalled();
+
+    const lastCall = useAppServerEventsMock.mock.calls[
+      useAppServerEventsMock.mock.calls.length - 1
+    ];
+    const handlers = lastCall?.[0] as {
+      onItemCompleted?: (
+        workspaceId: string,
+        threadId: string,
+        item: Record<string, unknown>,
+      ) => void;
+    };
+
+    act(() => {
+      handlers.onItemCompleted?.("ws-1", "thread-sub", {
+        id: "plan-sub-1",
+        type: "plan",
+        status: "completed",
+        text: "Sub plan",
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
   it("notifies again when an approval request ID is reused after resolution", async () => {
     const firstApproval: ApprovalRequest = {
       workspace_id: "ws-1",

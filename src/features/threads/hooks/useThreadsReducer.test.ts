@@ -543,6 +543,30 @@ describe("threadReducer", () => {
     expect(next.turnDiffByThread["thread-1"]).toBeUndefined();
   });
 
+  it("moves active thread to the next available thread after removal", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [
+          { id: "thread-1", name: "Agent 1", updatedAt: 3 },
+          { id: "thread-2", name: "Agent 2", updatedAt: 2 },
+        ],
+      },
+      activeThreadIdByWorkspace: { "ws-1": "thread-1" },
+    };
+
+    const next = threadReducer(base, {
+      type: "removeThread",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toEqual([
+      "thread-2",
+    ]);
+    expect(next.activeThreadIdByWorkspace["ws-1"]).toBe("thread-2");
+  });
+
   it("applies bulk last-agent updates with timestamp guard", () => {
     const base: ThreadState = {
       ...initialState,

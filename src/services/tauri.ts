@@ -13,6 +13,7 @@ import type {
   OrbitRunnerStatus,
   OrbitSignInPollResult,
   OrbitSignOutResult,
+  ThreadArchiveBatchResult,
   TcpDaemonStatus,
   TailscaleDaemonCommandPreview,
   TailscaleStatus,
@@ -833,6 +834,21 @@ export async function resumeThread(workspaceId: string, threadId: string) {
 
 export async function archiveThread(workspaceId: string, threadId: string) {
   return invoke<any>("archive_thread", { workspaceId, threadId });
+}
+
+export async function archiveThreads(
+  workspaceId: string,
+  threadIds: string[],
+): Promise<ThreadArchiveBatchResult> {
+  if (threadIds.length === 0) {
+    return {
+      allSucceeded: true,
+      okIds: [],
+      failed: [],
+      total: 0,
+    };
+  }
+  return invoke<ThreadArchiveBatchResult>("archive_threads", { workspaceId, threadIds });
 }
 
 export async function setThreadName(

@@ -931,15 +931,47 @@ describe("Sidebar", () => {
     expect(onReorderWorkspaceGroup).toHaveBeenCalledWith(null, ["ws-2", "ws-1"]);
   });
 
-  it("uses custom workspace alias from localStorage", () => {
-    window.localStorage.setItem(
-      "codexmonitor.workspaceAliasesById",
-      JSON.stringify({ "ws-1": "Design System" }),
+  it("uses persisted workspace displayName from settings", () => {
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[
+          {
+            id: "ws-1",
+            name: "Workspace",
+            path: "/tmp/workspace",
+            connected: true,
+            settings: { sidebarCollapsed: false, displayName: "Design System" },
+          },
+        ]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [
+              {
+                id: "ws-1",
+                name: "Workspace",
+                path: "/tmp/workspace",
+                connected: true,
+                settings: { sidebarCollapsed: false, displayName: "Design System" },
+              },
+            ],
+          },
+        ]}
+      />,
     );
+
+    expect(screen.getByText("Design System")).toBeTruthy();
+  });
+
+  it("submits workspace custom name through callback", () => {
+    const onUpdateWorkspaceDisplayName = vi.fn();
 
     render(
       <Sidebar
         {...baseProps}
+        onUpdateWorkspaceDisplayName={onUpdateWorkspaceDisplayName}
         workspaces={[
           {
             id: "ws-1",
@@ -967,7 +999,13 @@ describe("Sidebar", () => {
       />,
     );
 
-    expect(screen.getByText("Design System")).toBeTruthy();
+    fireEvent.doubleClick(screen.getByText("Workspace"));
+
+    const input = screen.getByLabelText("工作区自定义名称");
+    fireEvent.change(input, { target: { value: "Design System" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(onUpdateWorkspaceDisplayName).toHaveBeenCalledWith("ws-1", "Design System");
   });
 
 });

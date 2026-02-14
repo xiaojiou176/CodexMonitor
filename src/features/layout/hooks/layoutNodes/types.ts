@@ -142,10 +142,15 @@ export type LayoutNodesOptions = {
   onAddWorktreeAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onAddCloneAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
+  onUpdateWorkspaceDisplayName?: (
+    workspaceId: string,
+    displayName: string | null,
+  ) => void | Promise<void>;
   onSelectThread: (workspaceId: string, threadId: string) => void;
   onOpenThreadLink: (threadId: string) => void;
   onReachMessagesTop?: () => boolean | void | Promise<boolean | void>;
   onDeleteThread: (workspaceId: string, threadId: string) => void;
+  onDeleteThreads?: (workspaceId: string, threadIds: string[]) => void;
   pinThread: (workspaceId: string, threadId: string) => boolean;
   unpinThread: (workspaceId: string, threadId: string) => void;
   isThreadPinned: (workspaceId: string, threadId: string) => boolean;
@@ -391,9 +396,7 @@ export type LayoutNodesOptions = {
   onEditQueued: (item: QueuedMessage) => void;
   onDeleteQueued: (id: string) => void;
   onSteerQueued: (id: string) => Promise<boolean> | boolean;
-  onSelectQueuedThread: (threadId: string) => void;
   onRetryQueuedThread: (threadId: string) => void;
-  onClearQueuedThread: (threadId: string) => void;
   onMigrateLegacyQueueWorkspaceIds: () => {
     migratedMessages: number;
     migratedThreads: number;
@@ -409,6 +412,10 @@ export type LayoutNodesOptions = {
   selectedEffort: string | null;
   onSelectEffort: (effort: string | null) => void;
   reasoningSupported: boolean;
+  continueModeEnabled: boolean;
+  onContinueModeEnabledChange: (next: boolean) => void;
+  continuePrompt: string;
+  onContinuePromptChange: (next: string) => void;
   backendMode: BackendMode;
   skills: SkillOption[];
   appsEnabled: boolean;

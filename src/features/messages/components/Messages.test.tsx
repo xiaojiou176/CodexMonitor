@@ -825,9 +825,9 @@ describe("Messages", () => {
   });
 
   it("renders absolute file references as workspace-relative paths", () => {
-    const workspacePath = "/Users/dimillian/Documents/Dev/CodexMonitor";
+    const workspacePath = "/tmp/CodexMonitorWorkspace";
     const absolutePath =
-      "/Users/dimillian/Documents/Dev/CodexMonitor/src/features/messages/components/Markdown.tsx:244";
+      "/tmp/CodexMonitorWorkspace/src/features/messages/components/Markdown.tsx:244";
     const items: ConversationItem[] = [
       {
         id: "msg-file-link-absolute-inside",
@@ -863,8 +863,8 @@ describe("Messages", () => {
   });
 
   it("renders absolute file references outside workspace using dotdot-relative paths", () => {
-    const workspacePath = "/Users/dimillian/Documents/Dev/CodexMonitor";
-    const absolutePath = "/Users/dimillian/Documents/Other/IceCubesApp/file.rs:123";
+    const workspacePath = "/tmp/CodexMonitorWorkspace";
+    const absolutePath = "/tmp/Other/IceCubesApp/file.rs:123";
     const items: ConversationItem[] = [
       {
         id: "msg-file-link-absolute-outside",
@@ -891,7 +891,7 @@ describe("Messages", () => {
     expect(container.textContent ?? "").not.toContain("../../Other/IceCubesApp");
 
     const fileLink = container.querySelector(".message-file-link");
-    expect(fileLink?.getAttribute("title")).toBe("file.rs · L123 · ../../Other/IceCubesApp");
+    expect(fileLink?.getAttribute("title")).toBe("file.rs · L123 · ../Other/IceCubesApp");
     expect(fileLink).toBeTruthy();
     fireEvent.click(fileLink as Element);
     expect(openFileLinkMock).toHaveBeenCalledWith(absolutePath);

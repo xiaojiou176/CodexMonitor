@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct GitFileStatus {
@@ -398,6 +399,10 @@ pub(crate) struct WorkspaceSettings {
     pub(crate) group_id: Option<String>,
     #[serde(default, rename = "gitRoot")]
     pub(crate) git_root: Option<String>,
+    #[serde(default, rename = "displayName")]
+    pub(crate) display_name: Option<String>,
+    #[serde(default, rename = "threadDisplayNames")]
+    pub(crate) thread_display_names: Option<HashMap<String, String>>,
     #[serde(default, rename = "codexHome")]
     pub(crate) codex_home: Option<String>,
     #[serde(default, rename = "codexArgs")]
@@ -630,6 +635,16 @@ pub(crate) struct AppSettings {
         alias = "experimentalUnifiedExecEnabled"
     )]
     pub(crate) unified_exec_enabled: bool,
+    #[serde(
+        default = "default_auto_archive_sub_agent_threads_enabled",
+        rename = "autoArchiveSubAgentThreadsEnabled"
+    )]
+    pub(crate) auto_archive_sub_agent_threads_enabled: bool,
+    #[serde(
+        default = "default_auto_archive_sub_agent_threads_max_age_minutes",
+        rename = "autoArchiveSubAgentThreadsMaxAgeMinutes"
+    )]
+    pub(crate) auto_archive_sub_agent_threads_max_age_minutes: u16,
     #[serde(
         default = "default_experimental_apps_enabled",
         rename = "experimentalAppsEnabled"
@@ -965,6 +980,14 @@ fn default_unified_exec_enabled() -> bool {
     true
 }
 
+fn default_auto_archive_sub_agent_threads_enabled() -> bool {
+    true
+}
+
+fn default_auto_archive_sub_agent_threads_max_age_minutes() -> u16 {
+    30
+}
+
 fn default_experimental_apps_enabled() -> bool {
     false
 }
@@ -1201,6 +1224,9 @@ impl Default for AppSettings {
             collaboration_modes_enabled: true,
             steer_enabled: true,
             unified_exec_enabled: true,
+            auto_archive_sub_agent_threads_enabled: default_auto_archive_sub_agent_threads_enabled(),
+            auto_archive_sub_agent_threads_max_age_minutes:
+                default_auto_archive_sub_agent_threads_max_age_minutes(),
             experimental_apps_enabled: false,
             personality: default_personality(),
             dictation_enabled: false,
@@ -1363,6 +1389,8 @@ mod tests {
         assert!(settings.collaboration_modes_enabled);
         assert!(settings.steer_enabled);
         assert!(settings.unified_exec_enabled);
+        assert!(settings.auto_archive_sub_agent_threads_enabled);
+        assert_eq!(settings.auto_archive_sub_agent_threads_max_age_minutes, 30);
         assert!(!settings.experimental_apps_enabled);
         assert_eq!(settings.personality, "friendly");
         assert!(!settings.dictation_enabled);
@@ -1435,5 +1463,7 @@ mod tests {
         assert!(settings.sort_order.is_none());
         assert!(settings.group_id.is_none());
         assert!(settings.git_root.is_none());
+        assert!(settings.display_name.is_none());
+        assert!(settings.thread_display_names.is_none());
     }
 }

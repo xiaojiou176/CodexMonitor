@@ -14,6 +14,7 @@ type Params = {
   notificationSoundsEnabled: boolean;
   systemNotificationsEnabled: boolean;
   getWorkspaceName?: (workspaceId: string) => string | undefined;
+  isSubAgentThread?: (workspaceId: string, threadId: string) => boolean;
   onThreadNotificationSent?: (workspaceId: string, threadId: string) => void;
   onDebug: (entry: DebugEntry) => void;
   successSoundUrl: string;
@@ -25,6 +26,7 @@ export function useUpdaterController({
   notificationSoundsEnabled,
   systemNotificationsEnabled,
   getWorkspaceName,
+  isSubAgentThread,
   onThreadNotificationSent,
   onDebug,
   successSoundUrl,
@@ -64,12 +66,14 @@ export function useUpdaterController({
   useAgentSoundNotifications({
     enabled: notificationSoundsEnabled,
     isWindowFocused,
+    isSubAgentThread,
     onDebug,
   });
 
   useAgentSystemNotifications({
     enabled: systemNotificationsEnabled,
     isWindowFocused,
+    isSubAgentThread,
     getWorkspaceName,
     onThreadNotificationSent,
     onDebug,

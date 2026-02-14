@@ -676,6 +676,14 @@ impl DaemonState {
         codex_core::archive_thread_core(&self.sessions, workspace_id, thread_id).await
     }
 
+    async fn archive_threads(
+        &self,
+        workspace_id: String,
+        thread_ids: Vec<String>,
+    ) -> Result<Value, String> {
+        codex_core::archive_threads_core(&self.sessions, workspace_id, thread_ids).await
+    }
+
     async fn compact_thread(
         &self,
         workspace_id: String,

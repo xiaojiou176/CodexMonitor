@@ -1,5 +1,5 @@
 use serde_json::{json, Map, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -153,6 +153,60 @@ pub(crate) async fn archive_thread_core(
     let session = get_session_clone(sessions, &workspace_id).await?;
     let params = json!({ "threadId": thread_id });
     session.send_request("thread/archive", params).await
+}
+
+fn build_archive_threads_result(ok_ids: Vec<String>, failed: Vec<(String, String)>) -> Value {
+    let total = ok_ids.len() + failed.len();
+    let failed = failed
+        .into_iter()
+        .map(|(thread_id, error)| json!({ "threadId": thread_id, "error": error }))
+        .collect::<Vec<_>>();
+
+    json!({
+        "allSucceeded": failed.is_empty(),
+        "okIds": ok_ids,
+        "failed": failed,
+        "total": total,
+    })
+}
+
+pub(crate) async fn archive_threads_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    workspace_id: String,
+    thread_ids: Vec<String>,
+) -> Result<Value, String> {
+    let session = get_session_clone(sessions, &workspace_id).await?;
+    let mut seen_thread_ids = HashSet::new();
+    let normalized_thread_ids = thread_ids
+        .into_iter()
+        .filter_map(|thread_id| {
+            let normalized = thread_id.trim();
+            if normalized.is_empty() {
+                return None;
+            }
+            if !seen_thread_ids.insert(normalized.to_string()) {
+                return None;
+            }
+            Some(normalized.to_string())
+        })
+        .collect::<Vec<_>>();
+
+    if normalized_thread_ids.is_empty() {
+        return Ok(build_archive_threads_result(Vec::new(), Vec::new()));
+    }
+
+    let mut ok_ids = Vec::new();
+    let mut failed = Vec::new();
+
+    for thread_id in normalized_thread_ids {
+        let params = json!({ "threadId": thread_id.clone() });
+        match session.send_request("thread/archive", params).await {
+            Ok(_) => ok_ids.push(thread_id),
+            Err(error) => failed.push((thread_id, error)),
+        }
+    }
+
+    Ok(build_archive_threads_result(ok_ids, failed))
 }
 
 pub(crate) async fn compact_thread_core(
@@ -543,4 +597,48 @@ pub(crate) async fn get_config_model_core(
     let codex_home = resolve_codex_home_for_workspace_core(workspaces, &workspace_id).await?;
     let model = codex_config::read_config_model(Some(codex_home))?;
     Ok(json!({ "model": model }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_archive_threads_result;
+    use serde_json::json;
+
+    #[test]
+    fn build_archive_threads_result_all_success() {
+        let result = build_archive_threads_result(
+            vec!["thread-1".to_string(), "thread-2".to_string()],
+            vec![],
+        );
+
+        assert_eq!(
+            result,
+            json!({
+                "allSucceeded": true,
+                "okIds": ["thread-1", "thread-2"],
+                "failed": [],
+                "total": 2
+            })
+        );
+    }
+
+    #[test]
+    fn build_archive_threads_result_partial_failure() {
+        let result = build_archive_threads_result(
+            vec!["thread-ok".to_string()],
+            vec![("thread-bad".to_string(), "archive failed".to_string())],
+        );
+
+        assert_eq!(
+            result,
+            json!({
+                "allSucceeded": false,
+                "okIds": ["thread-ok"],
+                "failed": [
+                    { "threadId": "thread-bad", "error": "archive failed" }
+                ],
+                "total": 2
+            })
+        );
+    }
 }

@@ -37,7 +37,7 @@ export function useThreadStorage(): UseThreadStorageResult {
   const threadActivityRef = useRef<ThreadActivityMap>(loadThreadActivity());
   const pinnedThreadsRef = useRef<PinnedThreadsMap>(loadPinnedThreads());
   const [pinnedThreadsVersion, setPinnedThreadsVersion] = useState(0);
-  const customNamesRef = useRef<CustomNamesMap>({});
+  const customNamesRef = useRef<CustomNamesMap>(loadCustomNames());
 
   useEffect(() => {
     if (typeof window === "undefined") {

@@ -30,6 +30,24 @@ function buildPlanKey(workspaceId: string, threadId: string, itemId: string) {
   return `${workspaceId}:${threadId}:${itemId}`;
 }
 
+function asNonEmptyString(value: unknown): string | null {
+  const normalized = String(value ?? "").trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function getApprovalThreadId(approval: ApprovalRequest): string | null {
+  const params = approval.params as Record<string, unknown>;
+  const direct = asNonEmptyString(params.threadId ?? params.thread_id);
+  if (direct) {
+    return direct;
+  }
+  const turn =
+    params.turn && typeof params.turn === "object"
+      ? (params.turn as Record<string, unknown>)
+      : null;
+  return asNonEmptyString(turn?.threadId ?? turn?.thread_id);
+}
+
 function isCompletedStatus(status: unknown) {
   const normalized = String(status ?? "").toLowerCase();
   if (!normalized) {
@@ -48,6 +66,7 @@ type ResponseRequiredNotificationOptions = {
   isWindowFocused: boolean;
   approvals: ApprovalRequest[];
   userInputRequests: RequestUserInputRequest[];
+  isSubAgentThread?: (workspaceId: string, threadId: string) => boolean;
   getWorkspaceName?: (workspaceId: string) => string | undefined;
   onDebug?: (entry: DebugEntry) => void;
 };
@@ -63,6 +82,7 @@ export function useAgentResponseRequiredNotifications({
   isWindowFocused,
   approvals,
   userInputRequests,
+  isSubAgentThread,
   getWorkspaceName,
   onDebug,
 }: ResponseRequiredNotificationOptions) {
@@ -177,6 +197,10 @@ export function useAgentResponseRequiredNotifications({
       if (!approval) {
         continue;
       }
+      const threadId = getApprovalThreadId(approval);
+      if (threadId && isSubAgentThread?.(approval.workspace_id, threadId)) {
+        continue;
+      }
       const key = buildApprovalKey(approval.workspace_id, approval.request_id);
       if (!notifiedApprovalsRef.current.has(key)) {
         return approval;
@@ -205,6 +229,7 @@ export function useAgentResponseRequiredNotifications({
       ? `Approval needed — ${workspaceName}`
       : "Approval needed";
     const commandInfo = getApprovalCommandInfo(latestUnnotifiedApproval.params ?? {});
+    const threadId = getApprovalThreadId(latestUnnotifiedApproval);
     const body = commandInfo?.preview
       ? truncateText(commandInfo.preview, MAX_BODY_LENGTH)
       : truncateText(latestUnnotifiedApproval.method, MAX_BODY_LENGTH);
@@ -214,11 +239,13 @@ export function useAgentResponseRequiredNotifications({
       type: "approval",
       workspaceId: latestUnnotifiedApproval.workspace_id,
       requestId: latestUnnotifiedApproval.request_id,
+      threadId,
     });
     scheduleRetry();
   }, [
     canNotifyNow,
     getWorkspaceName,
+    isSubAgentThread,
     latestUnnotifiedApproval,
     notify,
     retrySignal,
@@ -229,6 +256,10 @@ export function useAgentResponseRequiredNotifications({
     for (let index = userInputRequests.length - 1; index >= 0; index -= 1) {
       const request = userInputRequests[index];
       if (!request) {
+        continue;
+      }
+      const threadId = request.params.thread_id.trim();
+      if (threadId && isSubAgentThread?.(request.workspace_id, threadId)) {
         continue;
       }
       const key = buildUserInputKey(request.workspace_id, request.request_id);
@@ -273,6 +304,7 @@ export function useAgentResponseRequiredNotifications({
   }, [
     canNotifyNow,
     getWorkspaceName,
+    isSubAgentThread,
     latestUnnotifiedQuestion,
     notify,
     retrySignal,
@@ -305,6 +337,9 @@ export function useAgentResponseRequiredNotifications({
 
   const onItemCompleted = useCallback(
     (workspaceId: string, threadId: string, item: Record<string, unknown>) => {
+      if (isSubAgentThread?.(workspaceId, threadId)) {
+        return;
+      }
       const type = String(item.type ?? "");
       if (type !== "plan") {
         return;
@@ -346,7 +381,7 @@ export function useAgentResponseRequiredNotifications({
 
       void notify(title, body, extra);
     },
-    [canNotifyNow, getWorkspaceName, notify, scheduleRetry],
+    [canNotifyNow, getWorkspaceName, isSubAgentThread, notify, scheduleRetry],
   );
 
   useAppServerEvents(

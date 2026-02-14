@@ -6,6 +6,7 @@ type Params = {
   systemNotificationsEnabled: boolean;
   approvals: ApprovalRequest[];
   userInputRequests: RequestUserInputRequest[];
+  isSubAgentThread?: (workspaceId: string, threadId: string) => boolean;
   getWorkspaceName?: (workspaceId: string) => string | undefined;
   onDebug?: (entry: DebugEntry) => void;
 };
@@ -14,6 +15,7 @@ export function useResponseRequiredNotificationsController({
   systemNotificationsEnabled,
   approvals,
   userInputRequests,
+  isSubAgentThread,
   getWorkspaceName,
   onDebug,
 }: Params) {
@@ -24,8 +26,8 @@ export function useResponseRequiredNotificationsController({
     isWindowFocused,
     approvals,
     userInputRequests,
+    isSubAgentThread,
     getWorkspaceName,
     onDebug,
   });
 }
-

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { createEvent, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ThreadSummary } from "../../../types";
 import { ThreadList } from "./ThreadList";
 
@@ -43,6 +43,10 @@ const baseProps = {
 };
 
 describe("ThreadList", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("renders active row and handles click/context menu", () => {
     const onSelectThread = vi.fn();
     const onShowThreadMenu = vi.fn();
@@ -73,6 +77,83 @@ describe("ThreadList", () => {
       "thread-1",
       true,
     );
+  });
+
+  it("emits single/cmd/ctrl+shift selection intents", () => {
+    const onThreadSelectionChange = vi.fn();
+    render(
+      <ThreadList
+        {...baseProps}
+        unpinnedRows={[
+          { thread: { ...thread, id: "thread-1", name: "Alpha" }, depth: 0 },
+          {
+            thread: { id: "thread-3", name: "Beta", updatedAt: 1100 },
+            depth: 0,
+          },
+        ]}
+        onThreadSelectionChange={onThreadSelectionChange}
+      />,
+    );
+
+    const alphaRow = screen.getByText("Alpha").closest(".thread-row");
+    const betaRow = screen.getByText("Beta").closest(".thread-row");
+    if (!alphaRow || !betaRow) {
+      throw new Error("Missing rows for selection intent test");
+    }
+
+    fireEvent.click(alphaRow);
+    fireEvent.click(betaRow, { metaKey: true });
+    fireEvent.click(betaRow, { ctrlKey: true, shiftKey: true });
+
+    expect(onThreadSelectionChange).toHaveBeenNthCalledWith(1, {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      orderedThreadIds: ["thread-1", "thread-3"],
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+    });
+    expect(onThreadSelectionChange).toHaveBeenNthCalledWith(2, {
+      workspaceId: "ws-1",
+      threadId: "thread-3",
+      orderedThreadIds: ["thread-1", "thread-3"],
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+    });
+    expect(onThreadSelectionChange).toHaveBeenNthCalledWith(3, {
+      workspaceId: "ws-1",
+      threadId: "thread-3",
+      orderedThreadIds: ["thread-1", "thread-3"],
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: true,
+    });
+  });
+
+  it("marks selected rows as visible active state", () => {
+    render(
+      <ThreadList
+        {...baseProps}
+        activeThreadId={null}
+        unpinnedRows={[
+          { thread: { ...thread, id: "thread-1", name: "Alpha" }, depth: 0 },
+          {
+            thread: { id: "thread-3", name: "Beta", updatedAt: 1100 },
+            depth: 0,
+          },
+        ]}
+        selectedThreadIds={new Set(["thread-3"])}
+      />,
+    );
+
+    const betaRow = screen.getByText("Beta").closest(".thread-row");
+    expect(betaRow).toBeTruthy();
+    if (!betaRow) {
+      throw new Error("Missing selected row");
+    }
+    expect(betaRow.classList.contains("thread-row-selected")).toBe(true);
+    expect(betaRow.classList.contains("active")).toBe(true);
   });
 
   it("shows the more button and toggles expanded", () => {

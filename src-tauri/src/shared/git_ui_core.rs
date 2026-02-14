@@ -122,7 +122,7 @@ fn action_paths_for_file(repo_root: &Path, path: &str) -> Vec<String> {
     let mut status_options = StatusOptions::new();
     status_options
         .include_untracked(true)
-        .recurse_untracked_dirs(true)
+        .recurse_untracked_dirs(false) // Avoid recursing into large ignored dirs like node_modules
         .renames_head_to_index(true)
         .renames_index_to_workdir(true)
         .include_ignored(false);
@@ -362,7 +362,7 @@ fn collect_workspace_diff(repo_root: &Path) -> Result<String, String> {
     let mut options = DiffOptions::new();
     options
         .include_untracked(true)
-        .recurse_untracked_dirs(true)
+        .recurse_untracked_dirs(false) // Avoid recursing into large ignored dirs like node_modules
         .show_untracked_content(true);
     let diff = match head_tree.as_ref() {
         Some(tree) => repo
@@ -522,7 +522,7 @@ async fn get_git_status_inner(
     let mut status_options = StatusOptions::new();
     status_options
         .include_untracked(true)
-        .recurse_untracked_dirs(true)
+        .recurse_untracked_dirs(false) // Avoid recursing into large ignored dirs like node_modules
         .renames_head_to_index(true)
         .renames_index_to_workdir(true)
         .include_ignored(false);
@@ -775,7 +775,7 @@ async fn get_git_diffs_inner(
         let mut options = DiffOptions::new();
         options
             .include_untracked(true)
-            .recurse_untracked_dirs(true)
+            .recurse_untracked_dirs(false) // Avoid recursing into large ignored dirs like node_modules
             .show_untracked_content(true);
         options.ignore_whitespace_change(ignore_whitespace_changes);
 

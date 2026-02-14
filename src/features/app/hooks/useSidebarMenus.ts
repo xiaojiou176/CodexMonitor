@@ -9,6 +9,8 @@ import { fileManagerName } from "../../../utils/platformPaths";
 
 type SidebarMenuHandlers = {
   onDeleteThread: (workspaceId: string, threadId: string) => void;
+  onDeleteThreads?: (workspaceId: string, threadIds: string[]) => void;
+  getSelectedThreadIds?: (workspaceId: string) => string[];
   onPinThread: (workspaceId: string, threadId: string) => void;
   onUnpinThread: (workspaceId: string, threadId: string) => void;
   isThreadPinned: (workspaceId: string, threadId: string) => boolean;
@@ -21,6 +23,8 @@ type SidebarMenuHandlers = {
 
 export function useSidebarMenus({
   onDeleteThread,
+  onDeleteThreads,
+  getSelectedThreadIds,
   onPinThread,
   onUnpinThread,
   isThreadPinned,
@@ -39,13 +43,35 @@ export function useSidebarMenus({
     ) => {
       event.preventDefault();
       event.stopPropagation();
+      const selectedThreadIds = Array.from(
+        new Set(getSelectedThreadIds?.(workspaceId) ?? []),
+      );
+      const shouldArchiveSelection =
+        selectedThreadIds.length > 1 && selectedThreadIds.includes(threadId);
+      const archiveTargetIds = shouldArchiveSelection
+        ? selectedThreadIds
+        : [threadId];
       const renameItem = await MenuItem.new({
         text: "重命名",
         action: () => onRenameThread(workspaceId, threadId),
       });
       const archiveItem = await MenuItem.new({
-        text: "归档",
-        action: () => onDeleteThread(workspaceId, threadId),
+        text: shouldArchiveSelection
+          ? `归档所选 (${archiveTargetIds.length})`
+          : "归档",
+        action: () => {
+          if (!shouldArchiveSelection) {
+            onDeleteThread(workspaceId, threadId);
+            return;
+          }
+          if (onDeleteThreads) {
+            onDeleteThreads(workspaceId, archiveTargetIds);
+            return;
+          }
+          archiveTargetIds.forEach((targetThreadId) => {
+            onDeleteThread(workspaceId, targetThreadId);
+          });
+        },
       });
       const copyItem = await MenuItem.new({
         text: "复制 ID",
@@ -82,6 +108,8 @@ export function useSidebarMenus({
     [
       isThreadPinned,
       onDeleteThread,
+      onDeleteThreads,
+      getSelectedThreadIds,
       onPinThread,
       onRenameThread,
       onUnpinThread,

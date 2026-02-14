@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import * as Sentry from "@sentry/react";
 import type {
   CustomPromptOption,
@@ -22,9 +22,26 @@ import { useThreadUserInput } from "./useThreadUserInput";
 import { useThreadTitleAutogeneration } from "./useThreadTitleAutogeneration";
 import { useThreadStaleGuard } from "./useThreadStaleGuard";
 import { setThreadName as setThreadNameService } from "../../../services/tauri";
-import { makeCustomNameKey, saveCustomName } from "../utils/threadStorage";
+import { pushErrorToast } from "../../../services/toasts";
+import { makeCustomNameKey, saveCustomName, saveCustomNames } from "../utils/threadStorage";
+
+const SUB_AGENT_AUTO_ARCHIVE_DEFAULT_MAX_AGE_MINUTES = 30;
+const SUB_AGENT_AUTO_ARCHIVE_MIN_AGE_MINUTES = 5;
+const SUB_AGENT_AUTO_ARCHIVE_MAX_AGE_MINUTES = 240;
+const SUB_AGENT_AUTO_ARCHIVE_CHECK_INTERVAL_MS = 60 * 1000;
+
+function clampSubAgentAutoArchiveMinutes(value: number): number {
+  if (!Number.isFinite(value)) {
+    return SUB_AGENT_AUTO_ARCHIVE_DEFAULT_MAX_AGE_MINUTES;
+  }
+  return Math.min(
+    SUB_AGENT_AUTO_ARCHIVE_MAX_AGE_MINUTES,
+    Math.max(SUB_AGENT_AUTO_ARCHIVE_MIN_AGE_MINUTES, Math.round(value)),
+  );
+}
 
 type UseThreadsOptions = {
+  workspaces?: WorkspaceInfo[];
   activeWorkspace: WorkspaceInfo | null;
   onWorkspaceConnected: (id: string) => void;
   onDebug?: (entry: DebugEntry) => void;
@@ -33,13 +50,21 @@ type UseThreadsOptions = {
   collaborationMode?: Record<string, unknown> | null;
   reviewDeliveryMode?: "inline" | "detached";
   steerEnabled?: boolean;
+  autoArchiveSubAgentThreadsEnabled?: boolean;
+  autoArchiveSubAgentThreadsMaxAgeMinutes?: number;
   threadTitleAutogenerationEnabled?: boolean;
   customPrompts?: CustomPromptOption[];
   onMessageActivity?: () => void;
   threadSortKey?: ThreadListSortKey;
+  persistThreadDisplayName?: (
+    workspaceId: string,
+    threadId: string,
+    displayName: string | null,
+  ) => void | Promise<void>;
 };
 
 export function useThreads({
+  workspaces = [],
   activeWorkspace,
   onWorkspaceConnected,
   onDebug,
@@ -48,10 +73,14 @@ export function useThreads({
   collaborationMode,
   reviewDeliveryMode = "inline",
   steerEnabled = false,
+  autoArchiveSubAgentThreadsEnabled = true,
+  autoArchiveSubAgentThreadsMaxAgeMinutes =
+    SUB_AGENT_AUTO_ARCHIVE_DEFAULT_MAX_AGE_MINUTES,
   threadTitleAutogenerationEnabled = false,
   customPrompts = [],
   onMessageActivity,
   threadSortKey = "updated_at",
+  persistThreadDisplayName,
 }: UseThreadsOptions) {
   const [state, dispatch] = useReducer(threadReducer, initialState);
   const loadedThreadsRef = useRef<Record<string, boolean>>({});
@@ -61,6 +90,9 @@ export function useThreads({
   const itemsByThreadRef = useRef(state.itemsByThread);
   const threadsByWorkspaceRef = useRef(state.threadsByWorkspace);
   const detachedReviewNoticeRef = useRef<Set<string>>(new Set());
+  const subAgentThreadIdsRef = useRef<Record<string, true>>({});
+  const threadCreatedAtByIdRef = useRef<Record<string, number>>({});
+  const autoArchiveInFlightRef = useRef<Set<string>>(new Set());
   planByThreadRef.current = state.planByThread;
   itemsByThreadRef.current = state.itemsByThread;
   threadsByWorkspaceRef.current = state.threadsByWorkspace;
@@ -79,6 +111,68 @@ export function useThreads({
     getPinTimestamp,
   } = useThreadStorage();
   void pinnedThreadsVersion;
+
+  useEffect(() => {
+    if (!workspaces.length) {
+      return;
+    }
+    const nextCustomNames = { ...customNamesRef.current };
+    let didChange = false;
+    workspaces.forEach((workspace) => {
+      const names = workspace.settings.threadDisplayNames ?? {};
+      Object.entries(names).forEach(([threadId, rawName]) => {
+        if (typeof rawName !== "string") {
+          return;
+        }
+        const normalized = rawName.trim();
+        if (!normalized) {
+          return;
+        }
+        const key = makeCustomNameKey(workspace.id, threadId);
+        if (nextCustomNames[key] === normalized) {
+          return;
+        }
+        nextCustomNames[key] = normalized;
+        didChange = true;
+      });
+    });
+    if (!didChange) {
+      return;
+    }
+    customNamesRef.current = nextCustomNames;
+    saveCustomNames(nextCustomNames);
+  }, [customNamesRef, workspaces]);
+
+  const persistedThreadDisplayNamesByWorkspace = useMemo(() => {
+    const next: Record<string, Record<string, string>> = {};
+    workspaces.forEach((workspace) => {
+      const names = workspace.settings.threadDisplayNames;
+      if (!names || typeof names !== "object") {
+        return;
+      }
+      const normalizedNames: Record<string, string> = {};
+      Object.entries(names).forEach(([threadId, rawName]) => {
+        if (typeof rawName !== "string") {
+          return;
+        }
+        const normalized = rawName.trim();
+        if (!normalized) {
+          return;
+        }
+        normalizedNames[threadId] = normalized;
+      });
+      if (Object.keys(normalizedNames).length > 0) {
+        next[workspace.id] = normalizedNames;
+      }
+    });
+    return next;
+  }, [workspaces]);
+
+  const getPersistedThreadDisplayName = useCallback(
+    (workspaceId: string, threadId: string) =>
+      persistedThreadDisplayNamesByWorkspace[workspaceId]?.[threadId],
+    [persistedThreadDisplayNamesByWorkspace],
+  );
 
   const activeWorkspaceId = activeWorkspace?.id ?? null;
   const { activeThreadId, activeItems } = useThreadSelectors({
@@ -138,12 +232,27 @@ export function useThreads({
 
   const renameThread = useCallback(
     (workspaceId: string, threadId: string, newName: string) => {
-      saveCustomName(workspaceId, threadId, newName);
+      const normalizedName = newName.trim();
+      if (!normalizedName) {
+        return;
+      }
+      saveCustomName(workspaceId, threadId, normalizedName);
       const key = makeCustomNameKey(workspaceId, threadId);
-      customNamesRef.current[key] = newName;
-      dispatch({ type: "setThreadName", workspaceId, threadId, name: newName });
+      customNamesRef.current[key] = normalizedName;
+      dispatch({ type: "setThreadName", workspaceId, threadId, name: normalizedName });
       void Promise.resolve(
-        setThreadNameService(workspaceId, threadId, newName),
+        persistThreadDisplayName?.(workspaceId, threadId, normalizedName),
+      ).catch((error) => {
+        onDebug?.({
+          id: `${Date.now()}-client-thread-display-name-persist-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "workspace/settings threadDisplayNames error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      });
+      void Promise.resolve(
+        setThreadNameService(workspaceId, threadId, normalizedName),
       ).catch((error) => {
         onDebug?.({
           id: `${Date.now()}-client-thread-rename-error`,
@@ -154,7 +263,7 @@ export function useThreads({
         });
       });
     },
-    [customNamesRef, dispatch, onDebug],
+    [customNamesRef, dispatch, onDebug, persistThreadDisplayName],
   );
 
   const { applyCollabThreadLinks, applyCollabThreadLinksFromThread, updateThreadParent } =
@@ -287,6 +396,24 @@ export function useThreads({
 
   useAppServerEvents(handlers);
 
+  const markSubAgentThread = useCallback((threadId: string) => {
+    if (!threadId) {
+      return;
+    }
+    subAgentThreadIdsRef.current[threadId] = true;
+  }, []);
+
+  const recordThreadCreatedAt = useCallback((threadId: string, createdAt: number) => {
+    if (!threadId || !Number.isFinite(createdAt) || createdAt <= 0) {
+      return;
+    }
+    const current = threadCreatedAtByIdRef.current[threadId];
+    if (typeof current === "number" && current > 0 && current <= createdAt) {
+      return;
+    }
+    threadCreatedAtByIdRef.current[threadId] = createdAt;
+  }, []);
+
   const {
     startThreadForWorkspace,
     forkThreadForWorkspace,
@@ -296,7 +423,7 @@ export function useThreads({
     resetWorkspaceThreads,
     listThreadsForWorkspace,
     loadOlderThreadsForWorkspace,
-    archiveThread,
+    archiveThreads,
   } = useThreadActions({
     dispatch,
     itemsByThread: state.itemsByThread,
@@ -307,12 +434,156 @@ export function useThreads({
     threadSortKey,
     onDebug,
     getCustomName,
+    getPersistedThreadDisplayName,
     threadActivityRef,
     loadedThreadsRef,
     replaceOnResumeRef,
     applyCollabThreadLinksFromThread,
     updateThreadParent,
+    markSubAgentThread,
+    recordThreadCreatedAt,
   });
+
+  const cleanupThreadRefs = useCallback((threadId: string) => {
+    delete loadedThreadsRef.current[threadId];
+    delete replaceOnResumeRef.current[threadId];
+    delete subAgentThreadIdsRef.current[threadId];
+    delete threadCreatedAtByIdRef.current[threadId];
+    pendingInterruptsRef.current.delete(threadId);
+    detachedReviewNoticeRef.current.delete(threadId);
+  }, []);
+
+  const removeThreads = useCallback(
+    async (workspaceId: string, threadIds: string[]) => {
+      const normalizedThreadIds = Array.from(
+        new Set(
+          threadIds
+            .map((threadId) => threadId.trim())
+            .filter((threadId) => threadId.length > 0),
+        ),
+      );
+      if (!workspaceId || normalizedThreadIds.length === 0) {
+        return {
+          allSucceeded: true,
+          okIds: [],
+          failed: [],
+          total: 0,
+        };
+      }
+
+      const result = await archiveThreads(workspaceId, normalizedThreadIds);
+      result.okIds.forEach((threadId) => {
+        unpinThread(workspaceId, threadId);
+        cleanupThreadRefs(threadId);
+        dispatch({ type: "removeThread", workspaceId, threadId });
+      });
+      onDebug?.({
+        id: `${Date.now()}-client-thread-remove-batch`,
+        timestamp: Date.now(),
+        source: result.allSucceeded ? "client" : "error",
+        label: "thread/remove batch",
+        payload: {
+          workspaceId,
+          allSucceeded: result.allSucceeded,
+          total: result.total,
+          okIds: result.okIds,
+          failed: result.failed,
+        },
+      });
+      if (result.failed.length > 0) {
+        const failureSummary = result.failed
+          .slice(0, 3)
+          .map(({ threadId, error }) => `${threadId}: ${error}`)
+          .join("\n");
+        pushErrorToast({
+          title: `归档部分失败（成功 ${result.okIds.length}/${result.total}）`,
+          message:
+            result.failed.length > 3
+              ? `${failureSummary}\n… 另有 ${result.failed.length - 3} 条失败`
+              : failureSummary,
+        });
+      }
+      return result;
+    },
+    [archiveThreads, cleanupThreadRefs, dispatch, onDebug, unpinThread],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+    if (!autoArchiveSubAgentThreadsEnabled) {
+      return undefined;
+    }
+    const autoArchiveMaxAgeMs =
+      clampSubAgentAutoArchiveMinutes(autoArchiveSubAgentThreadsMaxAgeMinutes)
+      * 60
+      * 1000;
+    const scanAndArchive = () => {
+      const now = Date.now();
+      const candidates: Array<{ workspaceId: string; threadId: string; ageMs: number }> = [];
+      Object.entries(state.threadsByWorkspace).forEach(([workspaceId, threads]) => {
+        const activeThreadForWorkspace =
+          state.activeThreadIdByWorkspace[workspaceId] ?? null;
+        threads.forEach((thread) => {
+          const threadId = thread.id;
+          if (!threadId || !subAgentThreadIdsRef.current[threadId]) {
+            return;
+          }
+          const createdAt = threadCreatedAtByIdRef.current[threadId];
+          if (!createdAt || now - createdAt < autoArchiveMaxAgeMs) {
+            return;
+          }
+          const status = state.threadStatusById[threadId];
+          if (status?.isProcessing || status?.isReviewing || status?.hasUnread) {
+            return;
+          }
+          if (activeThreadForWorkspace === threadId) {
+            return;
+          }
+          if (isThreadPinned(workspaceId, threadId)) {
+            return;
+          }
+          candidates.push({ workspaceId, threadId, ageMs: now - createdAt });
+        });
+      });
+
+      candidates.forEach(({ workspaceId, threadId, ageMs }) => {
+        const requestKey = `${workspaceId}:${threadId}`;
+        if (autoArchiveInFlightRef.current.has(requestKey)) {
+          return;
+        }
+        autoArchiveInFlightRef.current.add(requestKey);
+        onDebug?.({
+          id: `${Date.now()}-client-thread-auto-archive`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "thread/auto-archive",
+          payload: { workspaceId, threadId, ageMs },
+        });
+        void removeThreads(workspaceId, [threadId])
+          .finally(() => {
+            autoArchiveInFlightRef.current.delete(requestKey);
+          });
+      });
+    };
+
+    scanAndArchive();
+    const timer = window.setInterval(
+      scanAndArchive,
+      SUB_AGENT_AUTO_ARCHIVE_CHECK_INTERVAL_MS,
+    );
+    return () => window.clearInterval(timer);
+  }, [
+    removeThreads,
+    autoArchiveSubAgentThreadsEnabled,
+    autoArchiveSubAgentThreadsMaxAgeMinutes,
+    isThreadPinned,
+    onDebug,
+    state.activeThreadIdByWorkspace,
+    state.threadStatusById,
+    state.threadsByWorkspace,
+  ]);
 
   const startThread = useCallback(async () => {
     if (!activeWorkspaceId) {
@@ -468,12 +739,15 @@ export function useThreads({
   );
 
   const removeThread = useCallback(
-    (workspaceId: string, threadId: string) => {
-      unpinThread(workspaceId, threadId);
-      dispatch({ type: "removeThread", workspaceId, threadId });
-      void archiveThread(workspaceId, threadId);
-    },
-    [archiveThread, unpinThread],
+    (workspaceId: string, threadId: string) =>
+      removeThreads(workspaceId, [threadId]),
+    [removeThreads],
+  );
+
+  const isSubAgentThread = useCallback(
+    (_workspaceId: string, threadId: string) =>
+      Boolean(subAgentThreadIdsRef.current[threadId]),
+    [],
   );
 
   return {
@@ -500,9 +774,11 @@ export function useThreads({
     refreshAccountInfo,
     interruptTurn,
     removeThread,
+    removeThreads,
     pinThread,
     unpinThread,
     isThreadPinned,
+    isSubAgentThread,
     getPinTimestamp,
     renameThread,
     startThread,

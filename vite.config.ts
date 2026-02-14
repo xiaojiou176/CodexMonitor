@@ -4,6 +4,10 @@ import react from "@vitejs/plugin-react";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+// @ts-expect-error process is a nodejs global
+const devPort = Number(process.env.TAURI_DEV_PORT ?? "1420");
+// @ts-expect-error process is a nodejs global
+const devHmrPort = Number(process.env.TAURI_DEV_HMR_PORT ?? "1421");
 
 const packageJson = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
@@ -42,16 +46,16 @@ export default defineConfig(async () => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
+  // 2. tauri expects a known port, provided by script or defaults
   server: {
-    port: 1420,
+    port: Number.isFinite(devPort) ? devPort : 1420,
     strictPort: true,
     host: host || false,
     hmr: host
       ? {
           protocol: "ws",
           host,
-          port: 1421,
+          port: Number.isFinite(devHmrPort) ? devHmrPort : 1421,
         }
       : undefined,
     watch: {

@@ -75,8 +75,10 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onAddWorktreeAgent={options.onAddWorktreeAgent}
       onAddCloneAgent={options.onAddCloneAgent}
       onToggleWorkspaceCollapse={options.onToggleWorkspaceCollapse}
+      onUpdateWorkspaceDisplayName={options.onUpdateWorkspaceDisplayName}
       onSelectThread={options.onSelectThread}
       onDeleteThread={options.onDeleteThread}
+      onDeleteThreads={options.onDeleteThreads}
       pinThread={options.pinThread}
       unpinThread={options.unpinThread}
       isThreadPinned={options.isThreadPinned}
@@ -157,9 +159,7 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onEditQueued={options.onEditQueued}
       onDeleteQueued={options.onDeleteQueued}
       onSteerQueued={options.onSteerQueued}
-      onSelectQueuedThread={options.onSelectQueuedThread}
       onRetryQueuedThread={options.onRetryQueuedThread}
-      onClearQueuedThread={options.onClearQueuedThread}
       onMigrateLegacyQueue={options.onMigrateLegacyQueueWorkspaceIds}
       canSteerQueued={options.canSteerQueued}
       collaborationModes={options.collaborationModes}
@@ -172,6 +172,10 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       selectedEffort={options.selectedEffort}
       onSelectEffort={options.onSelectEffort}
       reasoningSupported={options.reasoningSupported}
+      continueModeEnabled={options.continueModeEnabled}
+      onContinueModeEnabledChange={options.onContinueModeEnabledChange}
+      continuePrompt={options.continuePrompt}
+      onContinuePromptChange={options.onContinuePromptChange}
       skills={options.skills}
       appsEnabled={options.appsEnabled}
       apps={options.apps}

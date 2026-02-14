@@ -152,6 +152,12 @@ const MESSAGE_FONT_SIZE_STORAGE_KEY = "codexmonitor.messageFontSize";
 const MESSAGE_FONT_SIZE_MIN = 11;
 const MESSAGE_FONT_SIZE_MAX = 16;
 const MESSAGE_FONT_SIZE_DEFAULT = 13;
+const CONTINUE_PROMPT_DEFAULT = "请继续完成我和你讨论的Plan！";
+
+type ContinueThreadConfig = {
+  enabled: boolean;
+  prompt: string;
+};
 
 function clampMessageFontSize(value: number): number {
   if (!Number.isFinite(value)) {
@@ -218,6 +224,12 @@ function MainApp() {
   useLiquidGlassEffect({ reduceTransparency: shouldReduceTransparency, onDebug: addDebugEntry });
   const { threadListSortKey, setThreadListSortKey } = useThreadListSortKey();
   const [messageFontSize, setMessageFontSize] = useState<number>(() => loadMessageFontSize());
+  const [continueConfigByThread, setContinueConfigByThread] = useState<
+    Record<string, ContinueThreadConfig>
+  >({});
+  const continuePendingImmediateByThreadRef = useRef<Record<string, boolean>>({});
+  const continueLastHandledByThreadRef = useRef<Record<string, number>>({});
+  const continueTriggeringByThreadRef = useRef<Record<string, boolean>>({});
   const handleMessageFontSizeChange = useCallback((next: number) => {
     const clamped = clampMessageFontSize(next);
     setMessageFontSize(clamped);
@@ -283,6 +295,56 @@ function MainApp() {
     () => new Map(workspaces.map((workspace) => [workspace.id, workspace])),
     [workspaces],
   );
+  const persistWorkspaceDisplayName = useCallback(
+    async (workspaceId: string, displayName: string | null) => {
+      const workspace = workspacesById.get(workspaceId);
+      if (!workspace) {
+        return;
+      }
+      const normalized = displayName?.trim() ?? "";
+      const nextDisplayName =
+        normalized && normalized !== workspace.name ? normalized : null;
+      if ((workspace.settings.displayName ?? null) === nextDisplayName) {
+        return;
+      }
+      await updateWorkspaceSettings(workspaceId, {
+        displayName: nextDisplayName,
+      });
+    },
+    [updateWorkspaceSettings, workspacesById],
+  );
+  const persistThreadDisplayName = useCallback(
+    async (workspaceId: string, threadId: string, displayName: string | null) => {
+      const workspace = workspacesById.get(workspaceId);
+      if (!workspace) {
+        return;
+      }
+      const current = workspace.settings.threadDisplayNames ?? {};
+      const next = { ...current };
+      const normalized = displayName?.trim() ?? "";
+      if (!normalized) {
+        delete next[threadId];
+      } else {
+        next[threadId] = normalized;
+      }
+      const hasEntries = Object.keys(next).length > 0;
+      const nextThreadDisplayNames = hasEntries ? next : null;
+      const currentThreadDisplayNames = workspace.settings.threadDisplayNames ?? null;
+      if (
+        JSON.stringify(currentThreadDisplayNames ?? {}) ===
+        JSON.stringify(nextThreadDisplayNames ?? {})
+      ) {
+        return;
+      }
+      await updateWorkspaceSettings(workspaceId, {
+        threadDisplayNames: nextThreadDisplayNames,
+      });
+    },
+    [updateWorkspaceSettings, workspacesById],
+  );
+  const isSubAgentThreadRef = useRef<
+    (workspaceId: string, threadId: string) => boolean
+  >(() => false);
   const {
     sidebarWidth,
     rightPanelWidth,
@@ -363,6 +425,8 @@ function MainApp() {
     notificationSoundsEnabled: appSettings.notificationSoundsEnabled,
     systemNotificationsEnabled: appSettings.systemNotificationsEnabled,
     getWorkspaceName,
+    isSubAgentThread: (workspaceId, threadId) =>
+      isSubAgentThreadRef.current(workspaceId, threadId),
     onThreadNotificationSent: (workspaceId, threadId) =>
       recordPendingThreadLinkRef.current(workspaceId, threadId),
     onDebug: addDebugEntry,
@@ -683,10 +747,11 @@ function MainApp() {
     planByThread,
     lastAgentMessageByThread,
     interruptTurn,
-    removeThread,
+    removeThreads,
     pinThread,
     unpinThread,
     isThreadPinned,
+    isSubAgentThread,
     getPinTimestamp,
     renameThread,
     startThreadForWorkspace,
@@ -730,6 +795,7 @@ function MainApp() {
     refreshAccountRateLimits,
     resetThreadRuntimeState,
   } = useThreads({
+    workspaces,
     activeWorkspace,
     onWorkspaceConnected: markWorkspaceConnected,
     onDebug: addDebugEntry,
@@ -738,11 +804,20 @@ function MainApp() {
     collaborationMode: collaborationModePayload,
     reviewDeliveryMode: appSettings.reviewDeliveryMode,
     steerEnabled: appSettings.steerEnabled,
+    autoArchiveSubAgentThreadsEnabled:
+      appSettings.autoArchiveSubAgentThreadsEnabled,
+    autoArchiveSubAgentThreadsMaxAgeMinutes:
+      appSettings.autoArchiveSubAgentThreadsMaxAgeMinutes,
     threadTitleAutogenerationEnabled: appSettings.threadTitleAutogenerationEnabled,
     customPrompts: prompts,
     onMessageActivity: queueGitStatusRefresh,
     threadSortKey: threadListSortKey,
+    persistThreadDisplayName,
   });
+
+  useEffect(() => {
+    isSubAgentThreadRef.current = isSubAgentThread;
+  }, [isSubAgentThread]);
 
   const threadWorkspaceById = useMemo(() => {
     const result: Record<string, string> = {};
@@ -768,6 +843,7 @@ function MainApp() {
     systemNotificationsEnabled: appSettings.systemNotificationsEnabled,
     approvals,
     userInputRequests,
+    isSubAgentThread,
     getWorkspaceName,
     onDebug: addDebugEntry,
   });
@@ -1194,9 +1270,9 @@ function MainApp() {
     legacyQueueMessageCount,
     handleSend,
     queueMessage,
+    queueMessageForThread,
     migrateLegacyQueueWorkspaceIds,
     retryQueuedThread,
-    clearQueuedThread,
     prefillDraft,
     setPrefillDraft,
     composerInsert,
@@ -1238,6 +1314,143 @@ function MainApp() {
     () => (activeThreadId ? queueHealthEntries.filter((entry) => entry.threadId === activeThreadId) : []),
     [activeThreadId, queueHealthEntries],
   );
+  const queueArtifactsByThread = useMemo(() => {
+    const byThread: Record<string, { queueLength: number; inFlight: boolean }> = {};
+    queueHealthEntries.forEach((entry) => {
+      byThread[entry.threadId] = {
+        queueLength: entry.queueLength,
+        inFlight: entry.inFlight,
+      };
+    });
+    return byThread;
+  }, [queueHealthEntries]);
+  const activeContinueConfig = activeThreadId
+    ? continueConfigByThread[activeThreadId] ?? { enabled: false, prompt: CONTINUE_PROMPT_DEFAULT }
+    : { enabled: false, prompt: CONTINUE_PROMPT_DEFAULT };
+  const activeContinueEnabled = activeContinueConfig.enabled;
+  const activeContinuePrompt = activeContinueConfig.prompt;
+
+  const handleContinueModeEnabledChange = useCallback(
+    (next: boolean) => {
+      if (!activeThreadId) {
+        return;
+      }
+      setContinueConfigByThread((prev) => ({
+        ...prev,
+        [activeThreadId]: {
+          enabled: next,
+          prompt: prev[activeThreadId]?.prompt ?? CONTINUE_PROMPT_DEFAULT,
+        },
+      }));
+      if (next) {
+        continuePendingImmediateByThreadRef.current[activeThreadId] = true;
+        continueLastHandledByThreadRef.current[activeThreadId] = 0;
+      } else {
+        continuePendingImmediateByThreadRef.current[activeThreadId] = false;
+        continueTriggeringByThreadRef.current[activeThreadId] = false;
+      }
+    },
+    [activeThreadId],
+  );
+
+  const handleContinuePromptChange = useCallback(
+    (next: string) => {
+      if (!activeThreadId) {
+        return;
+      }
+      setContinueConfigByThread((prev) => ({
+        ...prev,
+        [activeThreadId]: {
+          enabled: prev[activeThreadId]?.enabled ?? false,
+          prompt: next,
+        },
+      }));
+    },
+    [activeThreadId],
+  );
+
+  useEffect(() => {
+    const enabledEntries = Object.entries(continueConfigByThread).filter(
+      ([, config]) => config.enabled,
+    );
+    if (enabledEntries.length === 0) {
+      return;
+    }
+
+    enabledEntries.forEach(([threadId, config]) => {
+      const prompt = config.prompt.trim();
+      if (!prompt) {
+        return;
+      }
+
+      const status = threadStatusById[threadId];
+      const isThreadProcessing =
+        threadId === activeThreadId
+          ? isProcessing
+          : Boolean(status?.isProcessing);
+      const isThreadReviewing =
+        threadId === activeThreadId
+          ? isReviewing
+          : Boolean(status?.isReviewing);
+      const hasActiveTurn = Boolean(activeTurnIdByThread[threadId]);
+      const threadQueueArtifacts = queueArtifactsByThread[threadId];
+      const hasQueueOrInFlight =
+        (threadQueueArtifacts?.queueLength ?? 0) > 0
+        || Boolean(threadQueueArtifacts?.inFlight);
+
+      if (isThreadProcessing || isThreadReviewing || hasActiveTurn || hasQueueOrInFlight) {
+        return;
+      }
+
+      const completionTimestamp = lastAgentMessageByThread[threadId]?.timestamp ?? 0;
+      const isImmediatePending =
+        continuePendingImmediateByThreadRef.current[threadId] === true;
+      const lastHandledTimestamp =
+        continueLastHandledByThreadRef.current[threadId] ?? 0;
+
+      if (
+        !isImmediatePending
+        && (!completionTimestamp || completionTimestamp <= lastHandledTimestamp)
+      ) {
+        return;
+      }
+
+      if (continueTriggeringByThreadRef.current[threadId]) {
+        return;
+      }
+
+      continueTriggeringByThreadRef.current[threadId] = true;
+      const markHandledTimestamp =
+        completionTimestamp > 0 ? completionTimestamp : Date.now();
+
+      void (async () => {
+        try {
+          await queueMessageForThread(threadId, prompt, []);
+        } catch {
+          try {
+            await queueMessageForThread(threadId, prompt, []);
+          } catch {
+            // Continue mode adopts "retry once" and then waits for next completion.
+          }
+        } finally {
+          continuePendingImmediateByThreadRef.current[threadId] = false;
+          continueLastHandledByThreadRef.current[threadId] =
+            markHandledTimestamp;
+          continueTriggeringByThreadRef.current[threadId] = false;
+        }
+      })();
+    });
+  }, [
+    activeThreadId,
+    activeTurnIdByThread,
+    continueConfigByThread,
+    isProcessing,
+    isReviewing,
+    lastAgentMessageByThread,
+    queueArtifactsByThread,
+    queueMessageForThread,
+    threadStatusById,
+  ]);
 
   const {
     runs: workspaceRuns,
@@ -1558,15 +1771,18 @@ function MainApp() {
     if (!activeWorkspaceId || !activeThreadId) {
       return;
     }
-    removeThread(activeWorkspaceId, activeThreadId);
-    clearDraftForThread(activeThreadId);
-    removeImagesForThread(activeThreadId);
+    void removeThreads(activeWorkspaceId, [activeThreadId]).then((result) => {
+      result.okIds.forEach((threadId) => {
+        clearDraftForThread(threadId);
+        removeImagesForThread(threadId);
+      });
+    });
   }, [
     activeThreadId,
     activeWorkspaceId,
     clearDraftForThread,
+    removeThreads,
     removeImagesForThread,
-    removeThread,
   ]);
 
   useInterruptShortcut({
@@ -1998,6 +2214,9 @@ function MainApp() {
         sidebarCollapsed: collapsed,
       });
     },
+    onUpdateWorkspaceDisplayName: (workspaceId, displayName) => {
+      void persistWorkspaceDisplayName(workspaceId, displayName);
+    },
     onSelectThread: (workspaceId, threadId) => {
       exitDiffView();
       resetPullRequestSelection();
@@ -2007,9 +2226,20 @@ function MainApp() {
     },
     onOpenThreadLink: handleOpenThreadLink,
     onDeleteThread: (workspaceId, threadId) => {
-      removeThread(workspaceId, threadId);
-      clearDraftForThread(threadId);
-      removeImagesForThread(threadId);
+      void removeThreads(workspaceId, [threadId]).then((result) => {
+        result.okIds.forEach((okId) => {
+          clearDraftForThread(okId);
+          removeImagesForThread(okId);
+        });
+      });
+    },
+    onDeleteThreads: (workspaceId, threadIds) => {
+      void removeThreads(workspaceId, threadIds).then((result) => {
+        result.okIds.forEach((okId) => {
+          clearDraftForThread(okId);
+          removeImagesForThread(okId);
+        });
+      });
     },
     pinThread,
     unpinThread,
@@ -2281,27 +2511,11 @@ function MainApp() {
     onEditQueued: handleEditQueued,
     onDeleteQueued: handleDeleteQueued,
     onSteerQueued: handleSteerQueued,
-    onSelectQueuedThread: (threadId) => {
-      const workspaceId = threadWorkspaceById[threadId];
-      if (!workspaceId) {
-        return;
-      }
-      exitDiffView();
-      clearDraftStateOnNavigation();
-      selectWorkspace(workspaceId);
-      setActiveThreadId(threadId, workspaceId);
-      if (isCompact) {
-        setActiveTab("codex");
-      }
-    },
     onRetryQueuedThread: (threadId) => {
       retryQueuedThread(threadId);
     },
-    onClearQueuedThread: (threadId) => {
-      clearQueuedThread(threadId);
-    },
     onMigrateLegacyQueueWorkspaceIds: migrateLegacyQueueWorkspaceIds,
-    canSteerQueued: Boolean(activeThreadId),
+    canSteerQueued: Boolean(activeThreadId) && appSettings.steerEnabled,
     collaborationModes,
     selectedCollaborationModeId,
     onSelectCollaborationMode: setSelectedCollaborationModeId,
@@ -2312,6 +2526,10 @@ function MainApp() {
     selectedEffort,
     onSelectEffort: setSelectedEffort,
     reasoningSupported,
+    continueModeEnabled: Boolean(activeThreadId) && activeContinueEnabled,
+    onContinueModeEnabledChange: handleContinueModeEnabledChange,
+    continuePrompt: activeContinuePrompt,
+    onContinuePromptChange: handleContinuePromptChange,
     backendMode: appSettings.backendMode,
     skills,
     appsEnabled: appSettings.experimentalAppsEnabled,

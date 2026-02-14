@@ -1,6 +1,22 @@
 import type { AppSettings } from "../../../../types";
 import { fileManagerName, openInFileManagerLabel } from "../../../../utils/platformPaths";
 
+const AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MIN = 5;
+const AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MAX = 240;
+
+function clampAutoArchiveSubAgentThreadsMinutes(value: number): number {
+  if (!Number.isFinite(value)) {
+    return AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MIN;
+  }
+  return Math.min(
+    AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MAX,
+    Math.max(
+      AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MIN,
+      Math.round(value),
+    ),
+  );
+}
+
 type SettingsFeaturesSectionProps = {
   appSettings: AppSettings;
   hasCodexHomeOverrides: boolean;
@@ -128,6 +144,55 @@ export function SettingsFeaturesSection({
         >
           <span className="settings-toggle-knob" />
         </button>
+      </div>
+      <div className="settings-toggle-row">
+        <div>
+          <div className="settings-toggle-title">自动归档子代理线程</div>
+          <div className="settings-toggle-subtitle">
+            自动归档创建时间超过阈值且处于不活跃状态的子代理线程。
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`settings-toggle ${appSettings.autoArchiveSubAgentThreadsEnabled ? "on" : ""}`}
+          onClick={() =>
+            void onUpdateAppSettings({
+              ...appSettings,
+              autoArchiveSubAgentThreadsEnabled:
+                !appSettings.autoArchiveSubAgentThreadsEnabled,
+            })
+          }
+          aria-pressed={appSettings.autoArchiveSubAgentThreadsEnabled}
+        >
+          <span className="settings-toggle-knob" />
+        </button>
+      </div>
+      <div className="settings-toggle-row">
+        <div>
+          <div className="settings-toggle-title">自动归档阈值（分钟）</div>
+          <div className="settings-toggle-subtitle">
+            支持 5–240 分钟。超过该时长且不活跃时，线程会被自动归档。
+          </div>
+        </div>
+        <input
+          type="number"
+          className="settings-input settings-input--compact"
+          min={AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MIN}
+          max={AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MAX}
+          step={5}
+          value={appSettings.autoArchiveSubAgentThreadsMaxAgeMinutes}
+          onChange={(event) =>
+            void onUpdateAppSettings({
+              ...appSettings,
+              autoArchiveSubAgentThreadsMaxAgeMinutes:
+                clampAutoArchiveSubAgentThreadsMinutes(
+                  Number(event.target.value),
+                ),
+            })
+          }
+          disabled={!appSettings.autoArchiveSubAgentThreadsEnabled}
+          aria-label="自动归档分钟数"
+        />
       </div>
       <div className="settings-subsection-title">实验功能</div>
       <div className="settings-subsection-subtitle">

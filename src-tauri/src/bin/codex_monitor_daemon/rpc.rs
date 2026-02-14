@@ -348,6 +348,11 @@ pub(super) async fn handle_rpc_request(
             let thread_id = parse_string(&params, "threadId")?;
             state.archive_thread(workspace_id, thread_id).await
         }
+        "archive_threads" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let thread_ids = parse_string_array(&params, "threadIds")?;
+            state.archive_threads(workspace_id, thread_ids).await
+        }
         "compact_thread" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let thread_id = parse_string(&params, "threadId")?;
@@ -782,4 +787,30 @@ pub(super) fn spawn_rpc_response_task(
             let _ = out_tx.send(response);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_string_array;
+    use serde_json::json;
+
+    #[test]
+    fn parse_string_array_success() {
+        let params = json!({
+            "threadIds": ["thread-1", "thread-2"]
+        });
+
+        let parsed = parse_string_array(&params, "threadIds").expect("threadIds should parse");
+        assert_eq!(parsed, vec!["thread-1".to_string(), "thread-2".to_string()]);
+    }
+
+    #[test]
+    fn parse_string_array_missing_key() {
+        let params = json!({
+            "workspaceId": "ws-1"
+        });
+
+        let err = parse_string_array(&params, "threadIds").expect_err("missing key should fail");
+        assert_eq!(err, "missing `threadIds`");
+    }
 }

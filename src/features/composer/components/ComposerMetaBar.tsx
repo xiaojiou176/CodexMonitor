@@ -29,6 +29,10 @@ type ComposerMetaBarProps = {
   contextUsage?: ThreadTokenUsage | null;
   messageFontSize?: number;
   onMessageFontSizeChange?: (next: number) => void;
+  continueModeEnabled?: boolean;
+  onContinueModeEnabledChange?: (next: boolean) => void;
+  continuePrompt?: string;
+  onContinuePromptChange?: (next: string) => void;
 };
 
 export function ComposerMetaBar({
@@ -46,6 +50,10 @@ export function ComposerMetaBar({
   contextUsage = null,
   messageFontSize = 13,
   onMessageFontSizeChange,
+  continueModeEnabled = false,
+  onContinueModeEnabledChange,
+  continuePrompt = "",
+  onContinuePromptChange,
 }: ComposerMetaBarProps) {
   const contextWindow = contextUsage?.modelContextWindow ?? null;
   const lastTurn = contextUsage?.last ?? null;
@@ -234,6 +242,29 @@ export function ComposerMetaBar({
           />
           <span className="composer-font-size-value">{messageFontSize}px</span>
         </div>
+      </div>
+      <div className="composer-continue-control">
+        <label className="composer-continue-toggle" htmlFor="composer-continue-mode">
+          <input
+            id="composer-continue-mode"
+            className="composer-continue-toggle-input"
+            type="checkbox"
+            checked={continueModeEnabled}
+            onChange={(event) => onContinueModeEnabledChange?.(event.target.checked)}
+            aria-label="Continue 模式"
+            disabled={disabled}
+          />
+          <span className="composer-continue-toggle-label">Continue</span>
+        </label>
+        <input
+          className="composer-continue-input"
+          type="text"
+          value={continuePrompt}
+          onChange={(event) => onContinuePromptChange?.(event.target.value)}
+          placeholder="请继续完成我和你讨论的Plan！"
+          aria-label="Continue 提示词"
+          disabled={disabled || !continueModeEnabled}
+        />
       </div>
       <div
         className="composer-context-meter"

@@ -11,9 +11,7 @@ type ComposerQueueProps = {
   onEditQueued?: (item: QueuedMessage) => void;
   onDeleteQueued?: (id: string) => void;
   onSteerQueued?: (id: string) => Promise<boolean> | boolean;
-  onSelectQueuedThread?: (threadId: string) => void;
   onRetryQueuedThread?: (threadId: string) => void;
-  onClearQueuedThread?: (threadId: string) => void;
   onMigrateLegacyQueue?: () => void;
   canSteerQueued?: boolean;
 };
@@ -81,7 +79,7 @@ export function ComposerQueue({
   onSteerQueued,
   onRetryQueuedThread,
   onMigrateLegacyQueue,
-  canSteerQueued: _canSteerQueued = false,
+  canSteerQueued = false,
 }: ComposerQueueProps) {
   const [isQueueCollapsed, setIsQueueCollapsed] = useState(false);
   const [steeringById, setSteeringById] = useState<Record<string, boolean>>({});
@@ -225,7 +223,11 @@ export function ComposerQueue({
                       onClick={() => {
                         void handleSteerItem(item);
                       }}
-                      disabled={!onSteerQueued || Boolean(steeringById[item.id])}
+                      disabled={
+                        !onSteerQueued
+                        || !canSteerQueued
+                        || Boolean(steeringById[item.id])
+                      }
                       aria-label="Steer"
                     >
                       Steer

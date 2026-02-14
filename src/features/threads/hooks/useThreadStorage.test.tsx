@@ -40,6 +40,7 @@ describe("useThreadStorage", () => {
     vi
       .mocked(loadCustomNames)
       .mockReturnValueOnce({ "ws-1:thread-1": "Custom" })
+      .mockReturnValueOnce({ "ws-1:thread-1": "Custom" })
       .mockReturnValueOnce({ "ws-1:thread-1": "Updated" });
 
     const { result } = renderHook(() => useThreadStorage());

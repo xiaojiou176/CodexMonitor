@@ -11,6 +11,7 @@ type SoundNotificationOptions = {
   enabled: boolean;
   isWindowFocused: boolean;
   minDurationMs?: number;
+  isSubAgentThread?: (workspaceId: string, threadId: string) => boolean;
   onDebug?: (entry: DebugEntry) => void;
 };
 
@@ -26,6 +27,7 @@ export function useAgentSoundNotifications({
   enabled,
   isWindowFocused,
   minDurationMs = DEFAULT_MIN_DURATION_MS,
+  isSubAgentThread,
   onDebug,
 }: SoundNotificationOptions) {
   const turnStartById = useRef(new Map<string, number>());
@@ -100,6 +102,9 @@ export function useAgentSoundNotifications({
 
   const handleTurnStarted = useCallback(
     (workspaceId: string, threadId: string, turnId: string) => {
+      if (isSubAgentThread?.(workspaceId, threadId)) {
+        return;
+      }
       const startedAt = Date.now();
       turnStartByThread.current.set(
         buildThreadKey(workspaceId, threadId),
@@ -109,11 +114,14 @@ export function useAgentSoundNotifications({
         turnStartById.current.set(buildTurnKey(workspaceId, turnId), startedAt);
       }
     },
-    [],
+    [isSubAgentThread],
   );
 
   const handleTurnCompleted = useCallback(
     (workspaceId: string, threadId: string, turnId: string) => {
+      if (isSubAgentThread?.(workspaceId, threadId)) {
+        return;
+      }
       const durationMs = consumeDuration(workspaceId, threadId, turnId);
       const threadKey = buildThreadKey(workspaceId, threadId);
       if (!shouldPlaySound(durationMs, threadKey)) {
@@ -121,7 +129,7 @@ export function useAgentSoundNotifications({
       }
       playSound(successSoundUrl, "success");
     },
-    [consumeDuration, playSound, shouldPlaySound],
+    [consumeDuration, isSubAgentThread, playSound, shouldPlaySound],
   );
 
   const handleTurnError = useCallback(
@@ -131,6 +139,9 @@ export function useAgentSoundNotifications({
       turnId: string,
       payload: { message: string; willRetry: boolean },
     ) => {
+      if (isSubAgentThread?.(workspaceId, threadId)) {
+        return;
+      }
       if (payload.willRetry) {
         return;
       }
@@ -141,25 +152,34 @@ export function useAgentSoundNotifications({
       }
       playSound(errorSoundUrl, "error");
     },
-    [consumeDuration, playSound, shouldPlaySound],
+    [consumeDuration, isSubAgentThread, playSound, shouldPlaySound],
   );
 
   const handleItemStarted = useCallback(
     (workspaceId: string, threadId: string) => {
+      if (isSubAgentThread?.(workspaceId, threadId)) {
+        return;
+      }
       recordStartIfMissing(workspaceId, threadId);
     },
-    [recordStartIfMissing],
+    [isSubAgentThread, recordStartIfMissing],
   );
 
   const handleAgentMessageDelta = useCallback(
     (event: { workspaceId: string; threadId: string }) => {
+      if (isSubAgentThread?.(event.workspaceId, event.threadId)) {
+        return;
+      }
       recordStartIfMissing(event.workspaceId, event.threadId);
     },
-    [recordStartIfMissing],
+    [isSubAgentThread, recordStartIfMissing],
   );
 
   const handleAgentMessageCompleted = useCallback(
     (event: { workspaceId: string; threadId: string }) => {
+      if (isSubAgentThread?.(event.workspaceId, event.threadId)) {
+        return;
+      }
       const durationMs = consumeDuration(event.workspaceId, event.threadId, "");
       const threadKey = buildThreadKey(event.workspaceId, event.threadId);
       if (!shouldPlaySound(durationMs, threadKey)) {
@@ -167,7 +187,7 @@ export function useAgentSoundNotifications({
       }
       playSound(successSoundUrl, "success");
     },
-    [consumeDuration, playSound, shouldPlaySound],
+    [consumeDuration, isSubAgentThread, playSound, shouldPlaySound],
   );
 
   const handlers = useMemo(

@@ -3,12 +3,14 @@ import type { Dispatch, MutableRefObject } from "react";
 import type {
   ConversationItem,
   DebugEntry,
+  ThreadArchiveBatchResult,
   ThreadListSortKey,
   ThreadSummary,
   WorkspaceInfo,
 } from "../../../types";
 import {
   archiveThread as archiveThreadService,
+  archiveThreads as archiveThreadsService,
   forkThread as forkThreadService,
   listThreads as listThreadsService,
   resumeThread as resumeThreadService,
@@ -34,6 +36,36 @@ const THREAD_LIST_PAGE_SIZE = 100;
 const THREAD_LIST_MAX_PAGES_WITH_ACTIVITY = 8;
 const THREAD_LIST_MAX_PAGES_WITHOUT_ACTIVITY = 3;
 const THREAD_LIST_MAX_PAGES_OLDER = 6;
+
+function resolveThreadDisplayName(
+  thread: Record<string, unknown>,
+  index: number,
+  workspaceId: string,
+  getCustomName: (workspaceId: string, threadId: string) => string | undefined,
+  getPersistedThreadDisplayName?: (
+    workspaceId: string,
+    threadId: string,
+  ) => string | undefined,
+): string {
+  const id = String(thread.id ?? "");
+  const customName = getCustomName(workspaceId, id)?.trim();
+  if (customName) {
+    return customName;
+  }
+  const persistedName = getPersistedThreadDisplayName?.(workspaceId, id)?.trim();
+  if (persistedName) {
+    return persistedName;
+  }
+  const serverName = asString(thread.name ?? thread.thread_name ?? "").trim();
+  if (serverName) {
+    return serverName;
+  }
+  const preview = asString(thread.preview ?? "").trim();
+  if (preview.length > 0) {
+    return preview.length > 38 ? `${preview.slice(0, 38)}…` : preview;
+  }
+  return `Agent ${index + 1}`;
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") {
@@ -97,6 +129,90 @@ function getResumedActiveTurnId(thread: Record<string, unknown>): string | null 
   return null;
 }
 
+function normalizeArchiveThreadsResult(
+  threadIds: string[],
+  response: unknown,
+): ThreadArchiveBatchResult {
+  const requestedIds = Array.from(
+    new Set(
+      threadIds
+        .map((threadId) => threadId.trim())
+        .filter((threadId) => threadId.length > 0),
+    ),
+  );
+  if (requestedIds.length === 0) {
+    return {
+      allSucceeded: true,
+      okIds: [],
+      failed: [],
+      total: 0,
+    };
+  }
+
+  const requestedIdSet = new Set(requestedIds);
+  const responseRecord = asRecord(response);
+  const payloadRecord = asRecord(responseRecord?.result) ?? responseRecord;
+  const okIdsRaw = Array.isArray(payloadRecord?.okIds)
+    ? payloadRecord?.okIds
+    : [];
+  const okIds = Array.from(
+    new Set(
+      okIdsRaw
+        .map((value) => asString(value).trim())
+        .filter((threadId) => threadId.length > 0 && requestedIdSet.has(threadId)),
+    ),
+  );
+  const okIdSet = new Set(okIds);
+  const failedRaw = Array.isArray(payloadRecord?.failed)
+    ? payloadRecord?.failed
+    : [];
+  const failedByThreadId = new Map<string, string>();
+  failedRaw.forEach((entry) => {
+    const failedEntry = asRecord(entry);
+    if (!failedEntry) {
+      return;
+    }
+    const threadId = asString(failedEntry.threadId ?? failedEntry.thread_id).trim();
+    if (!threadId || !requestedIdSet.has(threadId) || okIdSet.has(threadId)) {
+      return;
+    }
+    const error = asString(failedEntry.error).trim() || "archive_failed";
+    failedByThreadId.set(threadId, error);
+  });
+  requestedIds.forEach((threadId) => {
+    if (okIdSet.has(threadId) || failedByThreadId.has(threadId)) {
+      return;
+    }
+    failedByThreadId.set(threadId, "archive_failed");
+  });
+
+  const failed = Array.from(failedByThreadId.entries()).map(
+    ([threadId, error]) => ({
+      threadId,
+      error,
+    }),
+  );
+  return {
+    allSucceeded: failed.length === 0,
+    okIds,
+    failed,
+    total: requestedIds.length,
+  };
+}
+
+function shouldFallbackToSingleArchive(errorMessage: string): boolean {
+  const message = errorMessage.toLowerCase();
+  const methodUnsupported =
+    message.includes("unsupported method")
+    || message.includes("method not found")
+    || message.includes("missing method")
+    || message.includes("unknown method");
+  const threadIdsMismatch =
+    message.includes("threadids")
+    && (message.includes("missing") || message.includes("invalid"));
+  return methodUnsupported || threadIdsMismatch;
+}
+
 type UseThreadActionsOptions = {
   dispatch: Dispatch<ThreadAction>;
   itemsByThread: ThreadState["itemsByThread"];
@@ -107,6 +223,10 @@ type UseThreadActionsOptions = {
   threadSortKey: ThreadListSortKey;
   onDebug?: (entry: DebugEntry) => void;
   getCustomName: (workspaceId: string, threadId: string) => string | undefined;
+  getPersistedThreadDisplayName?: (
+    workspaceId: string,
+    threadId: string,
+  ) => string | undefined;
   threadActivityRef: MutableRefObject<Record<string, Record<string, number>>>;
   loadedThreadsRef: MutableRefObject<Record<string, boolean>>;
   replaceOnResumeRef: MutableRefObject<Record<string, boolean>>;
@@ -115,6 +235,8 @@ type UseThreadActionsOptions = {
     thread: Record<string, unknown>,
   ) => void;
   updateThreadParent: (parentId: string, childIds: string[]) => void;
+  markSubAgentThread?: (threadId: string) => void;
+  recordThreadCreatedAt?: (threadId: string, createdAt: number) => void;
 };
 
 export function useThreadActions({
@@ -127,11 +249,14 @@ export function useThreadActions({
   threadSortKey,
   onDebug,
   getCustomName,
+  getPersistedThreadDisplayName,
   threadActivityRef,
   loadedThreadsRef,
   replaceOnResumeRef,
   applyCollabThreadLinksFromThread,
   updateThreadParent,
+  markSubAgentThread,
+  recordThreadCreatedAt,
 }: UseThreadActionsOptions) {
   const resumeInFlightByThreadRef = useRef<Record<string, number>>({});
 
@@ -245,7 +370,9 @@ export function useThreadActions({
           const sourceParentId = getParentThreadIdFromSource(thread.source);
           if (sourceParentId) {
             updateThreadParent(sourceParentId, [threadId]);
+            markSubAgentThread?.(threadId);
           }
+          recordThreadCreatedAt?.(threadId, getThreadCreatedTimestamp(thread));
           const items = buildItemsFromThread(thread);
           const localItems = itemsByThread[threadId] ?? [];
           const shouldReplace =
@@ -353,6 +480,8 @@ export function useThreadActions({
       replaceOnResumeRef,
       threadStatusById,
       updateThreadParent,
+      markSubAgentThread,
+      recordThreadCreatedAt,
     ],
   );
 
@@ -536,7 +665,9 @@ export function useThreadActions({
           const sourceParentId = getParentThreadIdFromSource(thread.source);
           if (sourceParentId) {
             updateThreadParent(sourceParentId, [threadId]);
+            markSubAgentThread?.(threadId);
           }
+          recordThreadCreatedAt?.(threadId, getThreadCreatedTimestamp(thread));
           const timestamp = getThreadTimestamp(thread);
           if (timestamp > (nextActivityByThread[threadId] ?? 0)) {
             nextActivityByThread[threadId] = timestamp;
@@ -576,16 +707,13 @@ export function useThreadActions({
           .slice(0, THREAD_LIST_TARGET_COUNT)
           .map((thread, index) => {
             const id = String(thread?.id ?? "");
-            const preview = asString(thread?.preview ?? "").trim();
-            const customName = getCustomName(workspace.id, id);
-            const fallbackName = `Agent ${index + 1}`;
-            const name = customName
-              ? customName
-              : preview.length > 0
-                ? preview.length > 38
-                  ? `${preview.slice(0, 38)}…`
-                  : preview
-                : fallbackName;
+            const name = resolveThreadDisplayName(
+              thread,
+              index,
+              workspace.id,
+              getCustomName,
+              getPersistedThreadDisplayName,
+            );
             return {
               id,
               name,
@@ -650,10 +778,13 @@ export function useThreadActions({
     [
       dispatch,
       getCustomName,
+      getPersistedThreadDisplayName,
       onDebug,
       threadActivityRef,
       threadSortKey,
       updateThreadParent,
+      markSubAgentThread,
+      recordThreadCreatedAt,
     ],
   );
 
@@ -730,17 +861,16 @@ export function useThreadActions({
           const sourceParentId = getParentThreadIdFromSource(thread.source);
           if (sourceParentId) {
             updateThreadParent(sourceParentId, [id]);
+            markSubAgentThread?.(id);
           }
-          const preview = asString(thread?.preview ?? "").trim();
-          const customName = getCustomName(workspace.id, id);
-          const fallbackName = `Agent ${existing.length + additions.length + 1}`;
-          const name = customName
-            ? customName
-            : preview.length > 0
-              ? preview.length > 38
-                ? `${preview.slice(0, 38)}…`
-                : preview
-              : fallbackName;
+          recordThreadCreatedAt?.(id, getThreadCreatedTimestamp(thread));
+          const name = resolveThreadDisplayName(
+            thread,
+            existing.length + additions.length,
+            workspace.id,
+            getCustomName,
+            getPersistedThreadDisplayName,
+          );
           additions.push({ id, name, updatedAt: getThreadTimestamp(thread) });
           existingIds.add(id);
         });
@@ -802,29 +932,127 @@ export function useThreadActions({
     [
       dispatch,
       getCustomName,
+      getPersistedThreadDisplayName,
       onDebug,
       threadListCursorByWorkspace,
       threadsByWorkspace,
       threadSortKey,
       updateThreadParent,
+      markSubAgentThread,
+      recordThreadCreatedAt,
     ],
+  );
+
+  const archiveThreads = useCallback(
+    async (
+      workspaceId: string,
+      threadIds: string[],
+    ): Promise<ThreadArchiveBatchResult> => {
+      const normalizedThreadIds = Array.from(
+        new Set(
+          threadIds
+            .map((threadId) => threadId.trim())
+            .filter((threadId) => threadId.length > 0),
+        ),
+      );
+      if (normalizedThreadIds.length === 0) {
+        return {
+          allSucceeded: true,
+          okIds: [],
+          failed: [],
+          total: 0,
+        };
+      }
+      try {
+        const response = await archiveThreadsService(workspaceId, normalizedThreadIds);
+        const result = normalizeArchiveThreadsResult(normalizedThreadIds, response);
+        onDebug?.({
+          id: `${Date.now()}-client-thread-archive-batch`,
+          timestamp: Date.now(),
+          source: result.allSucceeded ? "server" : "error",
+          label: "thread/archive batch",
+          payload: {
+            workspaceId,
+            total: result.total,
+            okIds: result.okIds,
+            failed: result.failed,
+            allSucceeded: result.allSucceeded,
+          },
+        });
+        return result;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (shouldFallbackToSingleArchive(message)) {
+          const okIds: string[] = [];
+          const failed: Array<{ threadId: string; error: string }> = [];
+          for (const threadId of normalizedThreadIds) {
+            try {
+              await archiveThreadService(workspaceId, threadId);
+              okIds.push(threadId);
+            } catch (singleError) {
+              failed.push({
+                threadId,
+                error:
+                  singleError instanceof Error
+                    ? singleError.message
+                    : String(singleError),
+              });
+            }
+          }
+          const result: ThreadArchiveBatchResult = {
+            allSucceeded: failed.length === 0,
+            okIds,
+            failed,
+            total: normalizedThreadIds.length,
+          };
+          onDebug?.({
+            id: `${Date.now()}-client-thread-archive-batch-fallback`,
+            timestamp: Date.now(),
+            source: result.allSucceeded ? "server" : "error",
+            label: "thread/archive batch fallback",
+            payload: {
+              workspaceId,
+              reason: message,
+              total: result.total,
+              okIds: result.okIds,
+              failed: result.failed,
+              allSucceeded: result.allSucceeded,
+            },
+          });
+          return result;
+        }
+        const result: ThreadArchiveBatchResult = {
+          allSucceeded: false,
+          okIds: [],
+          failed: normalizedThreadIds.map((threadId) => ({
+            threadId,
+            error: message,
+          })),
+          total: normalizedThreadIds.length,
+        };
+        onDebug?.({
+          id: `${Date.now()}-client-thread-archive-batch-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/archive batch error",
+          payload: {
+            workspaceId,
+            total: result.total,
+            failed: result.failed,
+          },
+        });
+        return result;
+      }
+    },
+    [onDebug],
   );
 
   const archiveThread = useCallback(
     async (workspaceId: string, threadId: string) => {
-      try {
-        await archiveThreadService(workspaceId, threadId);
-      } catch (error) {
-        onDebug?.({
-          id: `${Date.now()}-client-thread-archive-error`,
-          timestamp: Date.now(),
-          source: "error",
-          label: "thread/archive error",
-          payload: error instanceof Error ? error.message : String(error),
-        });
-      }
+      const result = await archiveThreads(workspaceId, [threadId]);
+      return result.allSucceeded;
     },
-    [onDebug],
+    [archiveThreads],
   );
 
   return {
@@ -836,6 +1064,7 @@ export function useThreadActions({
     resetWorkspaceThreads,
     listThreadsForWorkspace,
     loadOlderThreadsForWorkspace,
+    archiveThreads,
     archiveThread,
   };
 }

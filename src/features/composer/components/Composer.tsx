@@ -69,9 +69,7 @@ type ComposerProps = {
   onEditQueued?: (item: QueuedMessage) => void;
   onDeleteQueued?: (id: string) => void;
   onSteerQueued?: (id: string) => Promise<boolean> | boolean;
-  onSelectQueuedThread?: (threadId: string) => void;
   onRetryQueuedThread?: (threadId: string) => void;
-  onClearQueuedThread?: (threadId: string) => void;
   onMigrateLegacyQueue?: () => void;
   canSteerQueued?: boolean;
   sendLabel?: string;
@@ -129,6 +127,10 @@ type ComposerProps = {
   onFileAutocompleteActiveChange?: (active: boolean) => void;
   messageFontSize?: number;
   onMessageFontSizeChange?: (next: number) => void;
+  continueModeEnabled?: boolean;
+  onContinueModeEnabledChange?: (next: boolean) => void;
+  continuePrompt?: string;
+  onContinuePromptChange?: (next: string) => void;
 };
 
 const DEFAULT_EDITOR_SETTINGS: ComposerEditorSettings = {
@@ -172,9 +174,7 @@ export const Composer = memo(function Composer({
   onEditQueued,
   onDeleteQueued,
   onSteerQueued,
-  onSelectQueuedThread,
   onRetryQueuedThread,
-  onClearQueuedThread,
   onMigrateLegacyQueue,
   canSteerQueued = false,
   sendLabel = "发送",
@@ -226,6 +226,10 @@ export const Composer = memo(function Composer({
   onFileAutocompleteActiveChange,
   messageFontSize = 13,
   onMessageFontSizeChange,
+  continueModeEnabled = false,
+  onContinueModeEnabledChange,
+  continuePrompt = "",
+  onContinuePromptChange,
 }: ComposerProps) {
   const [text, setText] = useState(draftText);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
@@ -574,9 +578,7 @@ export const Composer = memo(function Composer({
         onEditQueued={onEditQueued}
         onDeleteQueued={onDeleteQueued}
         onSteerQueued={onSteerQueued}
-        onSelectQueuedThread={onSelectQueuedThread}
         onRetryQueuedThread={onRetryQueuedThread}
-        onClearQueuedThread={onClearQueuedThread}
         onMigrateLegacyQueue={onMigrateLegacyQueue}
         canSteerQueued={canSteerQueued}
       />
@@ -752,6 +754,10 @@ export const Composer = memo(function Composer({
         contextUsage={contextUsage}
         messageFontSize={messageFontSize}
         onMessageFontSizeChange={onMessageFontSizeChange}
+        continueModeEnabled={continueModeEnabled}
+        onContinueModeEnabledChange={onContinueModeEnabledChange}
+        continuePrompt={continuePrompt}
+        onContinuePromptChange={onContinuePromptChange}
       />
     </footer>
   );

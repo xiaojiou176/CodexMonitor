@@ -91,7 +91,29 @@ describe("ComposerQueue", () => {
     expect(onRetryQueuedThread).toHaveBeenNthCalledWith(2, "thread-b");
   });
 
-  it("allows clicking steer button when steer callback is provided", async () => {
+  it("allows clicking steer button when steer is enabled", async () => {
+    const onSteerQueued = vi.fn().mockResolvedValue(true);
+
+    render(
+      <ComposerQueue
+        queuedMessages={[
+          { id: "queued-1", text: "queued message 1", createdAt: Date.now(), images: [] },
+        ]}
+        onSteerQueued={onSteerQueued}
+        canSteerQueued
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Steer" }));
+      await Promise.resolve();
+    });
+
+    expect(onSteerQueued).toHaveBeenCalledTimes(1);
+    expect(onSteerQueued).toHaveBeenCalledWith("queued-1");
+  });
+
+  it("disables steer button when steer is disabled", () => {
     const onSteerQueued = vi.fn().mockResolvedValue(true);
 
     render(
@@ -104,13 +126,8 @@ describe("ComposerQueue", () => {
       />,
     );
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Steer" }));
-      await Promise.resolve();
-    });
-
-    expect(onSteerQueued).toHaveBeenCalledTimes(1);
-    expect(onSteerQueued).toHaveBeenCalledWith("queued-1");
+    const button = screen.getByRole("button", { name: "Steer" });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("deletes a queue item from row action", () => {

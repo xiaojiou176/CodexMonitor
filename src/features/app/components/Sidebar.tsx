@@ -36,14 +36,12 @@ import { setWorkspaceReorderDragging } from "../../../services/dragDrop";
 const COLLAPSED_GROUPS_STORAGE_KEY = "codexmonitor.collapsedGroups";
 const THREAD_ORDER_STORAGE_KEY = "codexmonitor.threadOrderByWorkspace";
 const WORKSPACE_ORDER_STORAGE_KEY = "codexmonitor.workspaceOrderByGroup";
-const WORKSPACE_ALIAS_STORAGE_KEY = "codexmonitor.workspaceAliasesById";
 const UNGROUPED_COLLAPSE_ID = "__ungrouped__";
 const UNGROUPED_WORKSPACE_GROUP_KEY = "__ungrouped_workspace_group__";
 const ADD_MENU_WIDTH = 200;
 
 type ThreadOrderByWorkspace = Record<string, string[]>;
 type WorkspaceOrderByGroup = Record<string, string[]>;
-type WorkspaceAliasesById = Record<string, string>;
 type WorkspaceDropPosition = "before" | "after";
 type WorkspacePointerDragContext = {
   sourceWorkspaceId: string;
@@ -52,6 +50,36 @@ type WorkspacePointerDragContext = {
   startY: number;
   isActive: boolean;
 };
+
+type ThreadSelectionState = {
+  workspaceId: string | null;
+  threadIds: Set<string>;
+  anchorThreadId: string | null;
+};
+
+type ThreadSelectionChange = {
+  workspaceId: string;
+  threadId: string;
+  orderedThreadIds: string[];
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+};
+
+function areThreadIdSetsEqual(
+  left: ReadonlySet<string>,
+  right: ReadonlySet<string>,
+): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 function loadThreadOrderByWorkspace(): ThreadOrderByWorkspace {
   if (typeof window === "undefined") {
@@ -135,46 +163,6 @@ function saveWorkspaceOrderByGroup(orderByGroup: WorkspaceOrderByGroup): void {
   }
   try {
     window.localStorage.setItem(WORKSPACE_ORDER_STORAGE_KEY, JSON.stringify(orderByGroup));
-  } catch {
-    // Best-effort persistence.
-  }
-}
-
-function loadWorkspaceAliasesById(): WorkspaceAliasesById {
-  if (typeof window === "undefined") {
-    return {};
-  }
-  try {
-    const raw = window.localStorage.getItem(WORKSPACE_ALIAS_STORAGE_KEY);
-    if (!raw) {
-      return {};
-    }
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== "object") {
-      return {};
-    }
-    const next: WorkspaceAliasesById = {};
-    Object.entries(parsed).forEach(([workspaceId, value]) => {
-      if (typeof value !== "string") {
-        return;
-      }
-      const trimmed = value.trim();
-      if (trimmed.length > 0) {
-        next[workspaceId] = trimmed;
-      }
-    });
-    return next;
-  } catch {
-    return {};
-  }
-}
-
-function saveWorkspaceAliasesById(aliasesById: WorkspaceAliasesById): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.setItem(WORKSPACE_ALIAS_STORAGE_KEY, JSON.stringify(aliasesById));
   } catch {
     // Best-effort persistence.
   }
@@ -343,8 +331,13 @@ type SidebarProps = {
   onAddWorktreeAgent: (workspace: WorkspaceInfo) => void;
   onAddCloneAgent: (workspace: WorkspaceInfo) => void;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
+  onUpdateWorkspaceDisplayName?: (
+    workspaceId: string,
+    displayName: string | null,
+  ) => void | Promise<void>;
   onSelectThread: (workspaceId: string, threadId: string) => void;
   onDeleteThread: (workspaceId: string, threadId: string) => void;
+  onDeleteThreads?: (workspaceId: string, threadIds: string[]) => void;
   pinThread: (workspaceId: string, threadId: string) => boolean;
   unpinThread: (workspaceId: string, threadId: string) => void;
   isThreadPinned: (workspaceId: string, threadId: string) => boolean;
@@ -400,8 +393,10 @@ export const Sidebar = memo(function Sidebar({
   onAddWorktreeAgent,
   onAddCloneAgent,
   onToggleWorkspaceCollapse,
+  onUpdateWorkspaceDisplayName,
   onSelectThread,
   onDeleteThread,
+  onDeleteThreads,
   pinThread,
   unpinThread,
   isThreadPinned,
@@ -427,8 +422,6 @@ export const Sidebar = memo(function Sidebar({
     useState<ThreadOrderByWorkspace>(() => loadThreadOrderByWorkspace());
   const [workspaceOrderByGroup, setWorkspaceOrderByGroup] =
     useState<WorkspaceOrderByGroup>(() => loadWorkspaceOrderByGroup());
-  const [workspaceAliasesById, setWorkspaceAliasesById] =
-    useState<WorkspaceAliasesById>(() => loadWorkspaceAliasesById());
   const [editingWorkspaceAliasId, setEditingWorkspaceAliasId] = useState<string | null>(null);
   const [workspaceAliasDraft, setWorkspaceAliasDraft] = useState("");
   const [draggingWorkspaceId, setDraggingWorkspaceId] = useState<string | null>(null);
@@ -449,6 +442,11 @@ export const Sidebar = memo(function Sidebar({
     width: number;
   } | null>(null);
   const addMenuRef = useRef<HTMLDivElement | null>(null);
+  const [threadSelection, setThreadSelection] = useState<ThreadSelectionState>({
+    workspaceId: null,
+    threadIds: new Set<string>(),
+    anchorThreadId: null,
+  });
   const { collapsedGroups, toggleGroupCollapse } = useCollapsedGroups(
     COLLAPSED_GROUPS_STORAGE_KEY,
   );
@@ -459,11 +457,11 @@ export const Sidebar = memo(function Sidebar({
       if (!workspace) {
         return;
       }
-      const currentAlias = workspaceAliasesById[workspaceId] ?? workspace.name;
+      const currentAlias = workspace.settings.displayName?.trim() || workspace.name;
       setEditingWorkspaceAliasId(workspaceId);
       setWorkspaceAliasDraft(currentAlias);
     },
-    [workspaceAliasesById, workspaces],
+    [workspaces],
   );
 
   const commitWorkspaceAlias = useCallback(
@@ -475,20 +473,15 @@ export const Sidebar = memo(function Sidebar({
         return;
       }
       const nextAlias = workspaceAliasDraft.trim();
-      setWorkspaceAliasesById((previous) => {
-        const next = { ...previous };
-        if (!nextAlias || nextAlias === workspace.name) {
-          delete next[workspaceId];
-        } else {
-          next[workspaceId] = nextAlias;
-        }
-        saveWorkspaceAliasesById(next);
-        return next;
-      });
+      const nextDisplayName =
+        nextAlias && nextAlias !== workspace.name ? nextAlias : null;
+      void Promise.resolve(
+        onUpdateWorkspaceDisplayName?.(workspaceId, nextDisplayName),
+      );
       setEditingWorkspaceAliasId(null);
       setWorkspaceAliasDraft("");
     },
-    [workspaceAliasDraft, workspaces],
+    [onUpdateWorkspaceDisplayName, workspaceAliasDraft, workspaces],
   );
 
   const cancelWorkspaceAliasEdit = useCallback(() => {
@@ -498,12 +491,108 @@ export const Sidebar = memo(function Sidebar({
 
   const getWorkspaceDisplayName = useCallback(
     (workspace: WorkspaceInfo) =>
-      workspaceAliasesById[workspace.id]?.trim() || workspace.name,
-    [workspaceAliasesById],
+      workspace.settings.displayName?.trim() || workspace.name,
+    [],
+  );
+  const handleThreadSelectionChange = useCallback(
+    ({
+      workspaceId,
+      threadId,
+      orderedThreadIds,
+      metaKey,
+      ctrlKey,
+      shiftKey,
+    }: ThreadSelectionChange) => {
+      const hasToggleModifier = metaKey || ctrlKey;
+      const effectiveOrder = orderedThreadIds.length > 0 ? orderedThreadIds : [threadId];
+
+      setThreadSelection((previous) => {
+        const sameWorkspace = previous.workspaceId === workspaceId;
+        const previousSelected = sameWorkspace
+          ? new Set(previous.threadIds)
+          : new Set<string>();
+        const previousAnchor =
+          sameWorkspace &&
+          previous.anchorThreadId &&
+          effectiveOrder.includes(previous.anchorThreadId)
+            ? previous.anchorThreadId
+            : null;
+
+        let nextThreadIds: Set<string>;
+        let nextAnchorThreadId: string | null;
+
+        if (shiftKey && previousAnchor) {
+          const anchorIndex = effectiveOrder.indexOf(previousAnchor);
+          const targetIndex = effectiveOrder.indexOf(threadId);
+
+          if (anchorIndex >= 0 && targetIndex >= 0) {
+            const start = Math.min(anchorIndex, targetIndex);
+            const end = Math.max(anchorIndex, targetIndex);
+            const rangeIds = effectiveOrder.slice(start, end + 1);
+
+            if (hasToggleModifier) {
+              nextThreadIds = new Set(previousSelected);
+              rangeIds.forEach((id) => {
+                if (nextThreadIds.has(id)) {
+                  nextThreadIds.delete(id);
+                } else {
+                  nextThreadIds.add(id);
+                }
+              });
+            } else {
+              nextThreadIds = new Set(rangeIds);
+            }
+            nextAnchorThreadId = previousAnchor;
+          } else {
+            nextThreadIds = new Set([threadId]);
+            nextAnchorThreadId = threadId;
+          }
+        } else if (hasToggleModifier && sameWorkspace) {
+          nextThreadIds = new Set(previousSelected);
+          if (nextThreadIds.has(threadId)) {
+            nextThreadIds.delete(threadId);
+          } else {
+            nextThreadIds.add(threadId);
+          }
+          nextAnchorThreadId = threadId;
+        } else {
+          nextThreadIds = new Set([threadId]);
+          nextAnchorThreadId = threadId;
+        }
+
+        const normalizedAnchor =
+          nextThreadIds.size > 0 ? nextAnchorThreadId : null;
+        if (
+          previous.workspaceId === workspaceId &&
+          previous.anchorThreadId === normalizedAnchor &&
+          areThreadIdSetsEqual(previous.threadIds, nextThreadIds)
+        ) {
+          return previous;
+        }
+
+        return {
+          workspaceId,
+          threadIds: nextThreadIds,
+          anchorThreadId: normalizedAnchor,
+        };
+      });
+    },
+    [],
+  );
+  const getSelectedThreadIds = useCallback(
+    (workspaceId: string): string[] => {
+      if (threadSelection.workspaceId !== workspaceId) {
+        return [];
+      }
+      return Array.from(threadSelection.threadIds);
+    },
+    [threadSelection],
   );
   const { showThreadMenu, showWorkspaceMenu, showWorktreeMenu } =
     useSidebarMenus({
       onDeleteThread,
+      onDeleteThreads,
+      getSelectedThreadIds,
       onPinThread: pinThread,
       onUnpinThread: unpinThread,
       isThreadPinned,
@@ -528,6 +617,41 @@ export const Sidebar = memo(function Sidebar({
     });
     return next;
   }, [threadOrderByWorkspace, threadParentById, threadsByWorkspace]);
+
+  useEffect(() => {
+    setThreadSelection((previous) => {
+      if (!previous.workspaceId || previous.threadIds.size === 0) {
+        return previous;
+      }
+      const visibleThreadIds = new Set(
+        (orderedThreadsByWorkspace[previous.workspaceId] ?? []).map(
+          (thread) => thread.id,
+        ),
+      );
+      const nextThreadIds = new Set(
+        Array.from(previous.threadIds).filter((threadId) =>
+          visibleThreadIds.has(threadId),
+        ),
+      );
+      const nextAnchorThreadId =
+        previous.anchorThreadId && nextThreadIds.has(previous.anchorThreadId)
+          ? previous.anchorThreadId
+          : (nextThreadIds.values().next().value ?? null);
+
+      if (
+        previous.anchorThreadId === nextAnchorThreadId &&
+        areThreadIdSetsEqual(previous.threadIds, nextThreadIds)
+      ) {
+        return previous;
+      }
+
+      return {
+        workspaceId: previous.workspaceId,
+        threadIds: nextThreadIds,
+        anchorThreadId: nextAnchorThreadId,
+      };
+    });
+  }, [orderedThreadsByWorkspace]);
 
   const handleReorderThreads = useCallback(
     (
@@ -1361,10 +1485,13 @@ export const Sidebar = memo(function Sidebar({
                 rows={pinnedThreadRows}
                 activeWorkspaceId={activeWorkspaceId}
                 activeThreadId={activeThreadId}
+                selectedWorkspaceId={threadSelection.workspaceId}
+                selectedThreadIds={threadSelection.threadIds}
                 threadStatusById={threadStatusById}
                 getThreadTime={getThreadTime}
                 isThreadPinned={isThreadPinned}
                 onSelectThread={onSelectThread}
+                onThreadSelectionChange={handleThreadSelectionChange}
                 onShowThreadMenu={showThreadMenu}
               />
             </div>
@@ -1580,12 +1707,18 @@ export const Sidebar = memo(function Sidebar({
                           isPaging={isPaging}
                           activeWorkspaceId={activeWorkspaceId}
                           activeThreadId={activeThreadId}
+                          selectedThreadIds={
+                            threadSelection.workspaceId === entry.id
+                              ? threadSelection.threadIds
+                              : undefined
+                          }
                           threadStatusById={threadStatusById}
                           getThreadTime={getThreadTime}
                           isThreadPinned={isThreadPinned}
                           onToggleExpanded={handleToggleExpanded}
                           onLoadOlderThreads={onLoadOlderThreads}
                           onSelectThread={onSelectThread}
+                          onThreadSelectionChange={handleThreadSelectionChange}
                           onShowThreadMenu={showThreadMenu}
                           onReorderThreads={handleReorderThreads}
                         />

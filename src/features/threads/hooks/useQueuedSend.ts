@@ -162,6 +162,11 @@ type UseQueuedSendResult = {
   queueHealthEntries: QueueHealthEntry[];
   handleSend: (text: string, images?: string[]) => Promise<void>;
   queueMessage: (text: string, images?: string[]) => Promise<void>;
+  queueMessageForThread: (
+    threadId: string,
+    text: string,
+    images?: string[],
+  ) => Promise<void>;
   removeQueuedMessage: (threadId: string, messageId: string) => void;
   steerQueuedMessage: (threadId: string, messageId: string) => Promise<boolean>;
   retryThreadQueue: (threadId: string) => void;
@@ -215,7 +220,7 @@ export function useQueuedSend({
   threadStatusById,
   threadWorkspaceById,
   workspacesById,
-  steerEnabled: _steerEnabled,
+  steerEnabled,
   appsEnabled,
   activeWorkspace,
   connectWorkspace,
@@ -763,18 +768,23 @@ export function useQueuedSend({
     ],
   );
 
-  const queueMessage = useCallback(
-    async (text: string, images: string[] = []) => {
+  const queueMessageForThread = useCallback(
+    async (threadId: string, text: string, images: string[] = []) => {
       const trimmed = text.trim();
       const command = parseSlashCommand(trimmed, appsEnabled);
       const nextImages = command ? [] : images;
       if (!trimmed && nextImages.length === 0) {
         return;
       }
-      if (activeThreadId && isReviewing) {
+      if (!threadId) {
         return;
       }
-      if (!activeThreadId) {
+      const status = getThreadStatus(threadId);
+      if (status.isReviewing) {
+        return;
+      }
+      const workspaceResolution = resolveWorkspaceForThread(threadId);
+      if (threadId !== activeThreadId && !workspaceResolution.resolved) {
         return;
       }
       const item: QueuedMessage = {
@@ -782,17 +792,42 @@ export function useQueuedSend({
         text: trimmed,
         createdAt: Date.now(),
         images: nextImages,
-        workspaceId: activeWorkspace?.id,
+        workspaceId:
+          workspaceResolution.workspaceId
+          ?? (threadId === activeThreadId ? activeWorkspace?.id : undefined),
       };
-      enqueueMessage(activeThreadId, item);
-      clearActiveImages();
+      enqueueMessage(threadId, item);
+      if (threadId === activeThreadId) {
+        clearActiveImages();
+      }
     },
-    [activeThreadId, activeWorkspace, appsEnabled, clearActiveImages, enqueueMessage, isReviewing],
+    [
+      activeThreadId,
+      activeWorkspace,
+      appsEnabled,
+      clearActiveImages,
+      enqueueMessage,
+      getThreadStatus,
+      resolveWorkspaceForThread,
+    ],
+  );
+
+  const queueMessage = useCallback(
+    async (text: string, images: string[] = []) => {
+      if (!activeThreadId) {
+        return;
+      }
+      await queueMessageForThread(activeThreadId, text, images);
+    },
+    [activeThreadId, queueMessageForThread],
   );
 
   const steerQueuedMessage = useCallback(
     async (threadId: string, messageId: string): Promise<boolean> => {
       if (!threadId || !messageId) {
+        return false;
+      }
+      if (!steerEnabled) {
         return false;
       }
 
@@ -838,6 +873,7 @@ export function useQueuedSend({
       prependQueuedMessage,
       queuedByThread,
       sendUserMessage,
+      steerEnabled,
     ],
   );
 
@@ -1089,7 +1125,6 @@ export function useQueuedSend({
             nextItem.text,
             nextItem.images ?? [],
           );
-          setHasStartedByThread((prev) => ({ ...prev, [threadId]: true }));
         }
         setLastFailureByThread((prev) => ({ ...prev, [threadId]: null }));
         setLastFailureAtByThread((prev) => ({ ...prev, [threadId]: null }));
@@ -1139,6 +1174,7 @@ export function useQueuedSend({
     queueHealthEntries,
     handleSend,
     queueMessage,
+    queueMessageForThread,
     removeQueuedMessage,
     steerQueuedMessage,
     retryThreadQueue,

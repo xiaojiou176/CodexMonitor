@@ -5,6 +5,7 @@ import type { WorkspaceInfo } from "../../../types";
 import type { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
 import { useThreadRows } from "../../app/hooks/useThreadRows";
 import {
+  archiveThreads,
   interruptTurn,
   listThreads,
   resumeThread,
@@ -32,7 +33,7 @@ vi.mock("../../../services/tauri", () => ({
   startThread: vi.fn(),
   listThreads: vi.fn(),
   resumeThread: vi.fn(),
-  archiveThread: vi.fn(),
+  archiveThreads: vi.fn(),
   setThreadName: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAccountInfo: vi.fn(),
@@ -644,6 +645,367 @@ describe("useThreads UX integration", () => {
     });
 
     expect(result.current.threadParentById["thread-parent"]).toBeUndefined();
+  });
+
+  it("auto archives inactive sub-agent threads older than 30 minutes", async () => {
+    now = 2_000_000;
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "thread-parent",
+            preview: "Parent",
+            cwd: workspace.path,
+            created_at: 1_200_000,
+            updated_at: 1_900_000,
+            source: "vscode",
+          },
+          {
+            id: "thread-child",
+            preview: "Child",
+            cwd: workspace.path,
+            created_at: 1,
+            updated_at: 1_500_000,
+            source: {
+              subAgent: {
+                thread_spawn: {
+                  parent_thread_id: "thread-parent",
+                  depth: 1,
+                },
+              },
+            },
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(archiveThreads).mockResolvedValue({
+      allSucceeded: true,
+      okIds: ["thread-child"],
+      failed: [],
+      total: 1,
+    });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    await waitFor(() => {
+      expect(vi.mocked(archiveThreads)).toHaveBeenCalledWith("ws-1", [
+        "thread-child",
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toEqual([
+        "thread-parent",
+      ]);
+    });
+  });
+
+  it("does not auto archive when sub-agent auto-archive is disabled", async () => {
+    now = 2_000_000;
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "thread-parent",
+            preview: "Parent",
+            cwd: workspace.path,
+            created_at: 1_200_000,
+            updated_at: 1_900_000,
+            source: "vscode",
+          },
+          {
+            id: "thread-child",
+            preview: "Child",
+            cwd: workspace.path,
+            created_at: 1,
+            updated_at: 1_500_000,
+            source: {
+              subAgent: {
+                thread_spawn: {
+                  parent_thread_id: "thread-parent",
+                  depth: 1,
+                },
+              },
+            },
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(archiveThreads).mockResolvedValue({
+      allSucceeded: true,
+      okIds: ["thread-child"],
+      failed: [],
+      total: 1,
+    });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+        autoArchiveSubAgentThreadsEnabled: false,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(vi.mocked(archiveThreads)).not.toHaveBeenCalled();
+  });
+
+  it("respects configured auto-archive age threshold", async () => {
+    now = 4_000_000;
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "thread-parent",
+            preview: "Parent",
+            cwd: workspace.path,
+            created_at: 1_200_000,
+            updated_at: 1_900_000,
+            source: "vscode",
+          },
+          {
+            id: "thread-child",
+            preview: "Child",
+            cwd: workspace.path,
+            created_at: 700,
+            updated_at: 1_500_000,
+            source: {
+              subAgent: {
+                thread_spawn: {
+                  parent_thread_id: "thread-parent",
+                  depth: 1,
+                },
+              },
+            },
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(archiveThreads).mockResolvedValue({
+      allSucceeded: true,
+      okIds: ["thread-child"],
+      failed: [],
+      total: 1,
+    });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+        autoArchiveSubAgentThreadsEnabled: true,
+        autoArchiveSubAgentThreadsMaxAgeMinutes: 60,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(vi.mocked(archiveThreads)).not.toHaveBeenCalled();
+  });
+
+  it("removes only archived threads on partial failure and migrates active thread", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "thread-a",
+            preview: "A",
+            updated_at: 3000,
+            cwd: workspace.path,
+          },
+          {
+            id: "thread-b",
+            preview: "B",
+            updated_at: 2000,
+            cwd: workspace.path,
+          },
+          {
+            id: "thread-c",
+            preview: "C",
+            updated_at: 1000,
+            cwd: workspace.path,
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(archiveThreads).mockResolvedValue({
+      allSucceeded: false,
+      okIds: ["thread-a"],
+      failed: [{ threadId: "thread-b", error: "locked" }],
+      total: 2,
+    });
+    const onDebug = vi.fn();
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+        onDebug,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+    act(() => {
+      result.current.setActiveThreadId("thread-a");
+    });
+
+    await act(async () => {
+      await result.current.removeThreads("ws-1", ["thread-a", "thread-b"]);
+    });
+
+    expect(vi.mocked(archiveThreads)).toHaveBeenCalledWith("ws-1", [
+      "thread-a",
+      "thread-b",
+    ]);
+    expect(result.current.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toEqual([
+      "thread-b",
+      "thread-c",
+    ]);
+    expect(result.current.activeThreadId).toBe("thread-b");
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "error",
+        label: "thread/remove batch",
+        payload: expect.objectContaining({
+          okIds: ["thread-a"],
+          failed: [{ threadId: "thread-b", error: "locked" }],
+        }),
+      }),
+    );
+  });
+
+  it("removes all requested threads when batch archive fully succeeds", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "thread-a",
+            preview: "A",
+            updated_at: 3000,
+            cwd: workspace.path,
+          },
+          {
+            id: "thread-b",
+            preview: "B",
+            updated_at: 2000,
+            cwd: workspace.path,
+          },
+          {
+            id: "thread-c",
+            preview: "C",
+            updated_at: 1000,
+            cwd: workspace.path,
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(archiveThreads).mockResolvedValue({
+      allSucceeded: true,
+      okIds: ["thread-a", "thread-b"],
+      failed: [],
+      total: 2,
+    });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+    act(() => {
+      result.current.setActiveThreadId("thread-a");
+    });
+
+    await act(async () => {
+      await result.current.removeThreads("ws-1", ["thread-a", "thread-b"]);
+    });
+
+    expect(result.current.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toEqual([
+      "thread-c",
+    ]);
+    expect(result.current.activeThreadId).toBe("thread-c");
+  });
+
+  it("does not remove thread when single remove fails archive", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "thread-a",
+            preview: "A",
+            updated_at: 3000,
+            cwd: workspace.path,
+          },
+          {
+            id: "thread-b",
+            preview: "B",
+            updated_at: 2000,
+            cwd: workspace.path,
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(archiveThreads).mockResolvedValue({
+      allSucceeded: false,
+      okIds: [],
+      failed: [{ threadId: "thread-a", error: "denied" }],
+      total: 1,
+    });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+    act(() => {
+      result.current.setActiveThreadId("thread-a");
+    });
+
+    await act(async () => {
+      await result.current.removeThread("ws-1", "thread-a");
+    });
+
+    expect(result.current.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toEqual([
+      "thread-a",
+      "thread-b",
+    ]);
+    expect(result.current.activeThreadId).toBe("thread-a");
   });
 
   it("orders thread lists, applies custom names, and keeps pin ordering stable", async () => {

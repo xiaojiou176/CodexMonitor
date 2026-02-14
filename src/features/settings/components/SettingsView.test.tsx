@@ -73,6 +73,8 @@ const baseSettings: AppSettings = {
   collaborationModesEnabled: true,
   steerEnabled: true,
   unifiedExecEnabled: true,
+  autoArchiveSubAgentThreadsEnabled: true,
+  autoArchiveSubAgentThreadsMaxAgeMinutes: 30,
   experimentalAppsEnabled: false,
   personality: "friendly",
   dictationEnabled: false,
@@ -1270,6 +1272,48 @@ describe("SettingsView Features", () => {
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ unifiedExecEnabled: false }),
+      );
+    });
+  });
+
+  it("toggles auto-archive for sub-agent threads", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderFeaturesSection({
+      onUpdateAppSettings,
+      appSettings: { autoArchiveSubAgentThreadsEnabled: true },
+    });
+
+    const toggleTitle = screen.getByText("自动归档子代理线程");
+    const toggleRow = toggleTitle.closest(".settings-toggle-row");
+    expect(toggleRow).not.toBeNull();
+
+    const toggle = within(toggleRow as HTMLElement).getByRole("button");
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ autoArchiveSubAgentThreadsEnabled: false }),
+      );
+    });
+  });
+
+  it("updates auto-archive max age with clamped minutes", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderFeaturesSection({
+      onUpdateAppSettings,
+      appSettings: {
+        autoArchiveSubAgentThreadsEnabled: true,
+        autoArchiveSubAgentThreadsMaxAgeMinutes: 30,
+      },
+    });
+
+    fireEvent.change(screen.getByLabelText("自动归档分钟数"), {
+      target: { value: "999" },
+    });
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ autoArchiveSubAgentThreadsMaxAgeMinutes: 240 }),
       );
     });
   });

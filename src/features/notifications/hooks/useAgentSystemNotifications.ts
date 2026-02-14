@@ -11,6 +11,7 @@ type SystemNotificationOptions = {
   isWindowFocused: boolean;
   minDurationMs?: number;
   getWorkspaceName?: (workspaceId: string) => string | undefined;
+  isSubAgentThread?: (workspaceId: string, threadId: string) => boolean;
   onThreadNotificationSent?: (workspaceId: string, threadId: string) => void;
   onDebug?: (entry: DebugEntry) => void;
 };
@@ -35,6 +36,7 @@ export function useAgentSystemNotifications({
   isWindowFocused,
   minDurationMs = DEFAULT_MIN_DURATION_MS,
   getWorkspaceName,
+  isSubAgentThread,
   onThreadNotificationSent,
   onDebug,
 }: SystemNotificationOptions) {
@@ -149,6 +151,9 @@ export function useAgentSystemNotifications({
 
   const handleTurnStarted = useCallback(
     (workspaceId: string, threadId: string, turnId: string) => {
+      if (isSubAgentThread?.(workspaceId, threadId)) {
+        return;
+      }
       const startedAt = Date.now();
       const threadKey = buildThreadKey(workspaceId, threadId);
       turnStartByThread.current.set(threadKey, startedAt);
@@ -157,11 +162,14 @@ export function useAgentSystemNotifications({
         turnStartById.current.set(buildTurnKey(workspaceId, turnId), startedAt);
       }
     },
-    [],
+    [isSubAgentThread],
   );
 
   const handleTurnCompleted = useCallback(
     (workspaceId: string, threadId: string, turnId: string) => {
+      if (isSubAgentThread?.(workspaceId, threadId)) {
+        return;
+      }
       const durationMs = consumeDuration(workspaceId, threadId, turnId);
       const threadKey = buildThreadKey(workspaceId, threadId);
       if (!shouldNotify(durationMs, threadKey)) {
@@ -180,7 +188,14 @@ export function useAgentSystemNotifications({
       });
       lastMessageByThread.current.delete(threadKey);
     },
-    [consumeDuration, getNotificationContent, notify, onThreadNotificationSent, shouldNotify],
+    [
+      consumeDuration,
+      getNotificationContent,
+      isSubAgentThread,
+      notify,
+      onThreadNotificationSent,
+      shouldNotify,
+    ],
   );
 
   const handleTurnError = useCallback(
@@ -190,6 +205,9 @@ export function useAgentSystemNotifications({
       turnId: string,
       payload: { message: string; willRetry: boolean },
     ) => {
+      if (isSubAgentThread?.(workspaceId, threadId)) {
+        return;
+      }
       if (payload.willRetry) {
         return;
       }
@@ -208,25 +226,41 @@ export function useAgentSystemNotifications({
       });
       lastMessageByThread.current.delete(threadKey);
     },
-    [consumeDuration, getWorkspaceName, notify, onThreadNotificationSent, shouldNotify],
+    [
+      consumeDuration,
+      getWorkspaceName,
+      isSubAgentThread,
+      notify,
+      onThreadNotificationSent,
+      shouldNotify,
+    ],
   );
 
   const handleItemStarted = useCallback(
     (workspaceId: string, threadId: string) => {
+      if (isSubAgentThread?.(workspaceId, threadId)) {
+        return;
+      }
       recordStartIfMissing(workspaceId, threadId);
     },
-    [recordStartIfMissing],
+    [isSubAgentThread, recordStartIfMissing],
   );
 
   const handleAgentMessageDelta = useCallback(
     (event: { workspaceId: string; threadId: string }) => {
+      if (isSubAgentThread?.(event.workspaceId, event.threadId)) {
+        return;
+      }
       recordStartIfMissing(event.workspaceId, event.threadId);
     },
-    [recordStartIfMissing],
+    [isSubAgentThread, recordStartIfMissing],
   );
 
   const handleAgentMessageCompleted = useCallback(
     (event: { workspaceId: string; threadId: string; text: string }) => {
+      if (isSubAgentThread?.(event.workspaceId, event.threadId)) {
+        return;
+      }
       const threadKey = buildThreadKey(event.workspaceId, event.threadId);
       // Store the message text for use in turn completion notification
       if (event.text) {
@@ -249,7 +283,14 @@ export function useAgentSystemNotifications({
       });
       lastMessageByThread.current.delete(threadKey);
     },
-    [consumeDuration, getNotificationContent, notify, onThreadNotificationSent, shouldNotify],
+    [
+      consumeDuration,
+      getNotificationContent,
+      isSubAgentThread,
+      notify,
+      onThreadNotificationSent,
+      shouldNotify,
+    ],
   );
 
   const handlers = useMemo(

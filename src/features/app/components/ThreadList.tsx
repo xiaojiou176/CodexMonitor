@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent, MouseEvent } from "react";
 
 import type { ThreadSummary } from "../../../types";
@@ -31,6 +31,15 @@ type ThreadListProps = {
   onToggleExpanded: (workspaceId: string) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
   onSelectThread: (workspaceId: string, threadId: string) => void;
+  onThreadSelectionChange?: (selection: {
+    workspaceId: string;
+    threadId: string;
+    orderedThreadIds: string[];
+    metaKey: boolean;
+    ctrlKey: boolean;
+    shiftKey: boolean;
+  }) => void;
+  selectedThreadIds?: ReadonlySet<string>;
   onShowThreadMenu: (
     event: MouseEvent,
     workspaceId: string,
@@ -63,6 +72,8 @@ export function ThreadList({
   onToggleExpanded,
   onLoadOlderThreads,
   onSelectThread,
+  onThreadSelectionChange,
+  selectedThreadIds,
   onShowThreadMenu,
   onReorderThreads,
 }: ThreadListProps) {
@@ -73,6 +84,24 @@ export function ThreadList({
   >(null);
   const draggingRootIdRef = useRef<string | null>(null);
   const indentUnit = nested ? 10 : 14;
+  const orderedThreadIds = useMemo(
+    () => [...pinnedRows, ...unpinnedRows].map((row) => row.thread.id),
+    [pinnedRows, unpinnedRows],
+  );
+
+  const emitThreadSelection = useCallback(
+    (threadId: string, metaKey: boolean, ctrlKey: boolean, shiftKey: boolean) => {
+      onThreadSelectionChange?.({
+        workspaceId,
+        threadId,
+        orderedThreadIds,
+        metaKey,
+        ctrlKey,
+        shiftKey,
+      });
+    },
+    [onThreadSelectionChange, orderedThreadIds, workspaceId],
+  );
 
   const resetDragState = useCallback(() => {
     draggingRootIdRef.current = null;
@@ -183,21 +212,32 @@ export function ThreadList({
       draggingRootId !== thread.id;
     const isDropTargetBefore = isDropTarget && dropTargetPosition === "before";
     const isDropTargetAfter = isDropTarget && dropTargetPosition === "after";
+    const isSelected = selectedThreadIds?.has(thread.id) ?? false;
+    const isActive =
+      workspaceId === activeWorkspaceId && thread.id === activeThreadId;
 
     return (
       <div
         key={thread.id}
         className={`thread-row ${
-          workspaceId === activeWorkspaceId && thread.id === activeThreadId
-            ? "active"
-            : ""
-        }${isReorderableRoot ? " thread-row-draggable" : ""}${
-          isDragging ? " thread-row-dragging" : ""
-        }${isDropTarget ? " thread-row-drop-target" : ""}${
+          isActive || isSelected ? "active" : ""
+        }${isSelected ? " thread-row-selected" : ""}${
+          isReorderableRoot ? " thread-row-draggable" : ""
+        }${isDragging ? " thread-row-dragging" : ""}${
+          isDropTarget ? " thread-row-drop-target" : ""
+        }${
           isDropTargetBefore ? " thread-row-drop-target-before" : ""
         }${isDropTargetAfter ? " thread-row-drop-target-after" : ""}`}
         style={indentStyle}
-        onClick={() => onSelectThread(workspaceId, thread.id)}
+        onClick={(event) => {
+          emitThreadSelection(
+            thread.id,
+            event.metaKey,
+            event.ctrlKey,
+            event.shiftKey,
+          );
+          onSelectThread(workspaceId, thread.id);
+        }}
         onContextMenu={(event) =>
           onShowThreadMenu(event, workspaceId, thread.id, canPin)
         }
@@ -215,6 +255,7 @@ export function ThreadList({
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
+            emitThreadSelection(thread.id, false, false, false);
             onSelectThread(workspaceId, thread.id);
           }
         }}

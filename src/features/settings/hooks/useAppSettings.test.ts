@@ -41,6 +41,8 @@ describe("useAppSettings", () => {
         uiFontFamily: "",
         codeFontFamily: "  ",
         codeFontSize: 25,
+        autoArchiveSubAgentThreadsEnabled: "nope" as unknown as boolean,
+        autoArchiveSubAgentThreadsMaxAgeMinutes: 999,
       } as unknown) as AppSettings,
     );
 
@@ -53,6 +55,8 @@ describe("useAppSettings", () => {
     expect(result.current.settings.uiFontFamily).toContain("system-ui");
     expect(result.current.settings.codeFontFamily).toContain("ui-monospace");
     expect(result.current.settings.codeFontSize).toBe(16);
+    expect(result.current.settings.autoArchiveSubAgentThreadsEnabled).toBe(true);
+    expect(result.current.settings.autoArchiveSubAgentThreadsMaxAgeMinutes).toBe(240);
     expect(result.current.settings.personality).toBe("friendly");
     expect(result.current.settings.threadScrollRestoreMode).toBe("latest");
     expect(result.current.settings.backendMode).toBe("remote");
@@ -89,6 +93,7 @@ describe("useAppSettings", () => {
       uiFontFamily: "",
       codeFontFamily: "  ",
       codeFontSize: 2,
+      autoArchiveSubAgentThreadsMaxAgeMinutes: 999,
       notificationSoundsEnabled: false,
     };
     const saved: AppSettings = {
@@ -99,6 +104,8 @@ describe("useAppSettings", () => {
       uiFontFamily: "Avenir, sans-serif",
       codeFontFamily: "JetBrains Mono, monospace",
       codeFontSize: 13,
+      autoArchiveSubAgentThreadsEnabled: false,
+      autoArchiveSubAgentThreadsMaxAgeMinutes: 999,
       notificationSoundsEnabled: false,
     };
     updateAppSettingsMock.mockResolvedValue(saved);
@@ -115,12 +122,15 @@ describe("useAppSettings", () => {
         uiFontFamily: expect.stringContaining("system-ui"),
         codeFontFamily: expect.stringContaining("ui-monospace"),
         codeFontSize: 9,
+        autoArchiveSubAgentThreadsMaxAgeMinutes: 240,
         notificationSoundsEnabled: false,
       }),
     );
     expect(returned).toEqual(saved);
     expect(result.current.settings.theme).toBe("dark");
     expect(result.current.settings.uiScale).toBe(2.4);
+    expect(result.current.settings.autoArchiveSubAgentThreadsEnabled).toBe(false);
+    expect(result.current.settings.autoArchiveSubAgentThreadsMaxAgeMinutes).toBe(240);
   });
 
   it("surfaces doctor errors", async () => {

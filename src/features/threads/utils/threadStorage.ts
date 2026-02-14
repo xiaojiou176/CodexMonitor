@@ -80,6 +80,20 @@ export function saveCustomName(workspaceId: string, threadId: string, name: stri
   }
 }
 
+export function saveCustomNames(customNames: CustomNamesMap): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEY_CUSTOM_NAMES,
+      JSON.stringify(customNames),
+    );
+  } catch {
+    // Best-effort persistence.
+  }
+}
+
 export function makePinKey(workspaceId: string, threadId: string): string {
   return `${workspaceId}:${threadId}`;
 }
