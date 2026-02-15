@@ -403,9 +403,6 @@ export const WorkingIndicator = memo(function WorkingIndicator({
     return () => window.clearInterval(interval);
   }, [isThinking, processingStartedAt]);
 
-<<<<<<< HEAD
-  const phase = deriveStreamingPhase(isThinking, hasItems, isStreaming, elapsedMs);
-=======
   useEffect(() => {
     if (!showPollingFetchStatus || isThinking) {
       return undefined;
@@ -421,7 +418,8 @@ export const WorkingIndicator = memo(function WorkingIndicator({
       window.clearInterval(timer);
     };
   }, [isThinking, pollingIntervalMs, showPollingFetchStatus]);
->>>>>>> origin/main
+
+  const phase = deriveStreamingPhase(isThinking, hasItems, isStreaming, elapsedMs);
 
   return (
     <>
@@ -443,13 +441,9 @@ export const WorkingIndicator = memo(function WorkingIndicator({
         <div className="turn-complete working-phase-done" aria-live="polite">
           <span className="turn-complete-line" aria-hidden />
           <span className="turn-complete-label">
-<<<<<<< HEAD
-            Worked for {formatDurationMs(lastDurationMs)}
-=======
             {showPollingFetchStatus
               ? `New message will be fetched in ${pollCountdownSeconds} seconds`
-              : `Done in ${formatDurationMs(lastDurationMs)}`}
->>>>>>> origin/main
+              : `Worked for ${formatDurationMs(lastDurationMs)}`}
           </span>
           <span className="turn-complete-line" aria-hidden />
         </div>

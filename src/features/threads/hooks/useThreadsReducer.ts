@@ -8,7 +8,6 @@ import type {
   ThreadSummary,
   ThreadTokenUsage,
   TurnPlan,
-<<<<<<< HEAD
 } from "../../../types";
 import {
   normalizeItem,
@@ -114,15 +113,6 @@ function maybeRenameThreadFromAgent({
     ? { ...threadsByWorkspace, [workspaceId]: nextThreads }
     : threadsByWorkspace;
 }
-=======
-} from "@/types";
-import { CHAT_SCROLLBACK_DEFAULT } from "@utils/chatScrollback";
-import { reduceThreadItems } from "./threadReducer/threadItemsSlice";
-import { reduceThreadLifecycle } from "./threadReducer/threadLifecycleSlice";
-import { reduceThreadConfig } from "./threadReducer/threadConfigSlice";
-import { reduceThreadQueue } from "./threadReducer/threadQueueSlice";
-import { reduceThreadSnapshots } from "./threadReducer/threadSnapshotSlice";
->>>>>>> origin/main
 
 type ThreadActivityStatus = {
   isProcessing: boolean;
@@ -338,9 +328,31 @@ export const initialState: ThreadState = {
   lastAgentMessageByThread: {},
 };
 
-type ThreadSliceReducer = (state: ThreadState, action: ThreadAction) => ThreadState;
+function mergeStreamingText(existing: string, delta: string) {
+  if (!delta) {
+    return existing;
+  }
+  if (!existing) {
+    return delta;
+  }
+  if (delta === existing) {
+    return existing;
+  }
+  if (delta.startsWith(existing)) {
+    return delta;
+  }
+  if (existing.startsWith(delta)) {
+    return existing;
+  }
+  const maxOverlap = Math.min(existing.length, delta.length);
+  for (let length = maxOverlap; length > 0; length -= 1) {
+    if (existing.endsWith(delta.slice(0, length))) {
+      return `${existing}${delta.slice(length)}`;
+    }
+  }
+  return `${existing}${delta}`;
+}
 
-<<<<<<< HEAD
 function normalizeNonEmptyString(value: string | null | undefined) {
   if (typeof value !== "string") {
     return null;
@@ -1629,21 +1641,5 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       };
     default:
       return state;
-=======
-const threadSliceReducers: ThreadSliceReducer[] = [
-  reduceThreadLifecycle,
-  reduceThreadConfig,
-  reduceThreadItems,
-  reduceThreadQueue,
-  reduceThreadSnapshots,
-];
-
-export function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
-  for (const reduceSlice of threadSliceReducers) {
-    const nextState = reduceSlice(state, action);
-    if (nextState !== state) {
-      return nextState;
-    }
->>>>>>> origin/main
   }
 }
