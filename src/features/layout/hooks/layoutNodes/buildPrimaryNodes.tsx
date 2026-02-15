@@ -125,6 +125,8 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       }
       processingStartedAt={activeThreadStatus?.processingStartedAt ?? null}
       lastDurationMs={activeThreadStatus?.lastDurationMs ?? null}
+      showPollingFetchStatus={options.showPollingFetchStatus}
+      pollingIntervalMs={options.pollingIntervalMs}
     />
   );
 

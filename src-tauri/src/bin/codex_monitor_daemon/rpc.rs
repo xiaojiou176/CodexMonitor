@@ -374,6 +374,16 @@ pub(super) async fn handle_rpc_request(
             let thread_id = parse_string(&params, "threadId")?;
             state.compact_thread(workspace_id, thread_id).await
         }
+        "thread_live_subscribe" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let thread_id = parse_string(&params, "threadId")?;
+            state.thread_live_subscribe(workspace_id, thread_id).await
+        }
+        "thread_live_unsubscribe" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let thread_id = parse_string(&params, "threadId")?;
+            state.thread_live_unsubscribe(workspace_id, thread_id).await
+        }
         "set_thread_name" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let thread_id = parse_string(&params, "threadId")?;

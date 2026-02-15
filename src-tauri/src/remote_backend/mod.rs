@@ -149,6 +149,8 @@ fn can_retry_after_disconnect(method: &str) -> bool {
             | "model_list"
             | "read_workspace_file"
             | "resume_thread"
+            | "thread_live_subscribe"
+            | "thread_live_unsubscribe"
             | "skills_list"
             | "worktree_setup_status"
     )
@@ -255,6 +257,8 @@ mod tests {
         assert!(can_retry_after_disconnect("resume_thread"));
         assert!(can_retry_after_disconnect("list_threads"));
         assert!(can_retry_after_disconnect("local_usage_snapshot"));
+        assert!(can_retry_after_disconnect("thread_live_subscribe"));
+        assert!(can_retry_after_disconnect("thread_live_unsubscribe"));
         assert!(!can_retry_after_disconnect("send_user_message"));
         assert!(!can_retry_after_disconnect("start_thread"));
         assert!(!can_retry_after_disconnect("remove_workspace"));

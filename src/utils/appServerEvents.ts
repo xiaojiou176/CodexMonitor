@@ -21,6 +21,9 @@ export const SUPPORTED_APP_SERVER_METHODS = [
   "item/started",
   "item/tool/requestUserInput",
   "thread/name/updated",
+  "thread/live_attached",
+  "thread/live_detached",
+  "thread/live_heartbeat",
   "thread/started",
   "thread/tokenUsage/updated",
   "turn/completed",
@@ -33,6 +36,9 @@ export type SupportedAppServerMethod = (typeof SUPPORTED_APP_SERVER_METHODS)[num
 
 export const METHODS_HANDLED_OUTSIDE_USE_APP_SERVER_EVENTS = [
   "codex/event/skills_update_available",
+  "thread/live_attached",
+  "thread/live_detached",
+  "thread/live_heartbeat",
 ] as const satisfies readonly SupportedAppServerMethod[];
 
 const SUPPORTED_METHOD_SET = new Set<string>(SUPPORTED_APP_SERVER_METHODS);

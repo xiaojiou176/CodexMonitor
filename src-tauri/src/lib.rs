@@ -238,6 +238,8 @@ pub fn run() {
             codex::archive_thread,
             codex::archive_threads,
             codex::compact_thread,
+            codex::thread_live_subscribe,
+            codex::thread_live_unsubscribe,
             codex::set_thread_name,
             codex::collaboration_mode_list,
             workspaces::connect_workspace,

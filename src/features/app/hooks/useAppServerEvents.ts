@@ -264,6 +264,10 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
   }, [handlers]);
 
   useEffect(() => {
+    const pendingTurnCompletionFallbackTimers = pendingTurnCompletionFallbackTimersRef.current;
+    const pendingItemIdsByThread = pendingItemIdsByThreadRef.current;
+    const lastThreadEventAt = lastThreadEventAtRef.current;
+
     const flushAgentMessageDeltas = () => {
       if (pendingAgentDeltaFlushTimerRef.current !== null) {
         window.clearTimeout(pendingAgentDeltaFlushTimerRef.current);
@@ -883,12 +887,12 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
 
     return () => {
       flushAgentMessageDeltas();
-      for (const timer of pendingTurnCompletionFallbackTimersRef.current.values()) {
+      for (const timer of pendingTurnCompletionFallbackTimers.values()) {
         window.clearTimeout(timer.timerId);
       }
-      pendingTurnCompletionFallbackTimersRef.current.clear();
-      pendingItemIdsByThreadRef.current.clear();
-      lastThreadEventAtRef.current.clear();
+      pendingTurnCompletionFallbackTimers.clear();
+      pendingItemIdsByThread.clear();
+      lastThreadEventAt.clear();
       unlisten();
     };
   }, []);

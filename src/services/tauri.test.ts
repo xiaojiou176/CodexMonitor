@@ -31,6 +31,8 @@ import {
   sendNotification,
   startReview,
   setThreadName,
+  threadLiveSubscribe,
+  threadLiveUnsubscribe,
   tailscaleDaemonStart,
   tailscaleDaemonCommandPreview,
   tailscaleDaemonStatus,
@@ -155,6 +157,30 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("compact_thread", {
       workspaceId: "ws-10",
       threadId: "thread-10",
+    });
+  });
+
+  it("maps workspaceId and threadId for thread_live_subscribe", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await threadLiveSubscribe("ws-11", "thread-11");
+
+    expect(invokeMock).toHaveBeenCalledWith("thread_live_subscribe", {
+      workspaceId: "ws-11",
+      threadId: "thread-11",
+    });
+  });
+
+  it("maps workspaceId and threadId for thread_live_unsubscribe", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await threadLiveUnsubscribe("ws-12", "thread-12");
+
+    expect(invokeMock).toHaveBeenCalledWith("thread_live_unsubscribe", {
+      workspaceId: "ws-12",
+      threadId: "thread-12",
     });
   });
 

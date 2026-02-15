@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useCallback, useState } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem } from "../../../types";
 import { Messages } from "./Messages";
@@ -2425,5 +2425,70 @@ describe("Messages", () => {
 
     expect(screen.getByText("需要你的输入")).toBeTruthy();
     expect(screen.queryByText("方案就绪")).toBeNull();
+  });
+
+  it("shows polling fetch countdown when requested", () => {
+    vi.useFakeTimers();
+    try {
+      const items: ConversationItem[] = [
+        {
+          id: "assistant-msg-done",
+          kind: "message",
+          role: "assistant",
+          text: "Completed response",
+        },
+      ];
+
+      render(
+        <Messages
+          items={items}
+          threadId="thread-1"
+          workspaceId="ws-1"
+          isThinking={false}
+          lastDurationMs={4_000}
+          showPollingFetchStatus
+          pollingIntervalMs={12_000}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
+
+      expect(
+        screen.getByText("New message will be fetched in 12 seconds"),
+      ).toBeTruthy();
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(
+        screen.getByText("New message will be fetched in 11 seconds"),
+      ).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps default done duration text when polling countdown is disabled", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "assistant-msg-done-default",
+        kind: "message",
+        role: "assistant",
+        text: "Completed response",
+      },
+    ];
+
+    render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        lastDurationMs={4_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("Worked for 4s")).toBeTruthy();
   });
 });

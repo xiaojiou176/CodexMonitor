@@ -264,6 +264,14 @@ export async function compactThread(workspaceId: string, threadId: string) {
   return invoke<any>("compact_thread", { workspaceId, threadId });
 }
 
+export async function threadLiveSubscribe(workspaceId: string, threadId: string) {
+  return invoke<any>("thread_live_subscribe", { workspaceId, threadId });
+}
+
+export async function threadLiveUnsubscribe(workspaceId: string, threadId: string) {
+  return invoke<any>("thread_live_unsubscribe", { workspaceId, threadId });
+}
+
 export async function sendUserMessage(
   workspaceId: string,
   threadId: string,

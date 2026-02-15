@@ -104,6 +104,8 @@ export type LayoutNodesOptions = {
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   activeItems: ConversationItem[];
+  showPollingFetchStatus?: boolean;
+  pollingIntervalMs?: number;
   accountInfo: AccountSnapshot | null;
   onSwitchAccount: () => void;
   onCancelSwitchAccount: () => void;
