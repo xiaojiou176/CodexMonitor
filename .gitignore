@@ -32,6 +32,7 @@ CodexMonitor.zip
 .codex-memory.jsonl
 .runtime-cache/
 public/assets/material-icons/
+第三方Repo参考/
 
 # Nix
 result
