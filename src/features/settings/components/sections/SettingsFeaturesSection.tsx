@@ -1,5 +1,6 @@
-import type { AppSettings } from "../../../../types";
-import { fileManagerName, openInFileManagerLabel } from "../../../../utils/platformPaths";
+import type { CodexFeature } from "@/types";
+import type { SettingsFeaturesSectionProps } from "@settings/hooks/useSettingsFeaturesSection";
+import { fileManagerName, openInFileManagerLabel } from "@utils/platformPaths";
 
 const AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MIN = 5;
 const AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MAX = 240;
@@ -25,11 +26,51 @@ type SettingsFeaturesSectionProps = {
   onUpdateAppSettings: (next: AppSettings) => Promise<void>;
 };
 
+function formatFeatureLabel(feature: CodexFeature): string {
+  const displayName = feature.displayName?.trim();
+  if (displayName) {
+    return displayName;
+  }
+  return feature.name
+    .split("_")
+    .filter((part) => part.length > 0)
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function featureSubtitle(feature: CodexFeature): string {
+  if (feature.description?.trim()) {
+    return feature.description;
+  }
+  if (feature.announcement?.trim()) {
+    return feature.announcement;
+  }
+  const fallbackDescription = FEATURE_DESCRIPTION_FALLBACKS[feature.name];
+  if (fallbackDescription) {
+    return fallbackDescription;
+  }
+  if (feature.stage === "deprecated") {
+    return "Deprecated feature flag.";
+  }
+  if (feature.stage === "removed") {
+    return "Legacy feature flag kept for backward compatibility.";
+  }
+  return `Feature key: features.${feature.name}`;
+}
+
 export function SettingsFeaturesSection({
   appSettings,
+  hasFeatureWorkspace,
   hasCodexHomeOverrides,
   openConfigError,
+  featureError,
+  featuresLoading,
+  featureUpdatingKey,
+  stableFeatures,
+  experimentalFeatures,
+  hasDynamicFeatureRows,
   onOpenConfig,
+  onToggleCodexFeature,
   onUpdateAppSettings,
 }: SettingsFeaturesSectionProps) {
   return (
@@ -94,7 +135,7 @@ export function SettingsFeaturesSection({
           onChange={(event) =>
             void onUpdateAppSettings({
               ...appSettings,
-              personality: event.target.value as AppSettings["personality"],
+              personality: event.target.value as (typeof appSettings)["personality"],
             })
           }
           aria-label="回复风格"
@@ -112,14 +153,15 @@ export function SettingsFeaturesSection({
         </div>
         <button
           type="button"
-          className={`settings-toggle ${appSettings.steerEnabled ? "on" : ""}`}
+          className={`settings-toggle ${appSettings.pauseQueuedMessagesWhenResponseRequired ? "on" : ""}`}
           onClick={() =>
             void onUpdateAppSettings({
               ...appSettings,
-              steerEnabled: !appSettings.steerEnabled,
+              pauseQueuedMessagesWhenResponseRequired:
+                !appSettings.pauseQueuedMessagesWhenResponseRequired,
             })
           }
-          aria-pressed={appSettings.steerEnabled}
+          aria-pressed={appSettings.pauseQueuedMessagesWhenResponseRequired}
         >
           <span className="settings-toggle-knob" />
         </button>
@@ -130,6 +172,15 @@ export function SettingsFeaturesSection({
           <div className="settings-toggle-subtitle">
             允许 Codex 将耗时较长的终端命令（如编译、测试）放到后台执行，不阻塞对话。
           </div>
+          <button
+            type="button"
+            className={`settings-toggle ${feature.enabled ? "on" : ""}`}
+            onClick={() => onToggleCodexFeature(feature)}
+            aria-pressed={feature.enabled}
+            disabled={featureUpdatingKey === feature.name}
+          >
+            <span className="settings-toggle-knob" />
+          </button>
         </div>
         <button
           type="button"
@@ -204,6 +255,15 @@ export function SettingsFeaturesSection({
           <div className="settings-toggle-subtitle">
             允许 Codex 调用多个 Agent 并行处理子任务，适用于大型重构等复杂场景。
           </div>
+          <button
+            type="button"
+            className={`settings-toggle ${feature.enabled ? "on" : ""}`}
+            onClick={() => onToggleCodexFeature(feature)}
+            aria-pressed={feature.enabled}
+            disabled={featureUpdatingKey === feature.name}
+          >
+            <span className="settings-toggle-knob" />
+          </button>
         </div>
         <button
           type="button"
@@ -225,21 +285,16 @@ export function SettingsFeaturesSection({
           <div className="settings-toggle-subtitle">
             启用 ChatGPT 应用/连接器，可通过 <code>/apps</code> 命令调用外部服务。
           </div>
+        )}
+      {featuresLoading && (
+        <div className="settings-help">Loading Codex feature flags...</div>
+      )}
+      {!hasFeatureWorkspace && !featuresLoading && (
+        <div className="settings-help">
+          Connect a workspace to load Codex feature flags.
         </div>
-        <button
-          type="button"
-          className={`settings-toggle ${appSettings.experimentalAppsEnabled ? "on" : ""}`}
-          onClick={() =>
-            void onUpdateAppSettings({
-              ...appSettings,
-              experimentalAppsEnabled: !appSettings.experimentalAppsEnabled,
-            })
-          }
-          aria-pressed={appSettings.experimentalAppsEnabled}
-        >
-          <span className="settings-toggle-knob" />
-        </button>
-      </div>
+      )}
+      {featureError && <div className="settings-help">{featureError}</div>}
     </section>
   );
 }

@@ -210,12 +210,15 @@ export type AppSettings = {
   codeFontSize: number;
   notificationSoundsEnabled: boolean;
   systemNotificationsEnabled: boolean;
+  subagentSystemNotificationsEnabled: boolean;
+  splitChatDiffView: boolean;
   preloadGitDiffs: boolean;
   gitDiffIgnoreWhitespaceChanges: boolean;
   commitMessagePrompt: string;
   experimentalCollabEnabled: boolean;
   collaborationModesEnabled: boolean;
   steerEnabled: boolean;
+  pauseQueuedMessagesWhenResponseRequired: boolean;
   unifiedExecEnabled: boolean;
   autoArchiveSubAgentThreadsEnabled: boolean;
   autoArchiveSubAgentThreadsMaxAgeMinutes: number;
@@ -244,6 +247,23 @@ export type OrbitConnectTestResult = {
   latencyMs: number | null;
   message: string;
   details?: string | null;
+};
+
+export type CodexFeatureStage =
+  | "under_development"
+  | "beta"
+  | "stable"
+  | "deprecated"
+  | "removed";
+
+export type CodexFeature = {
+  name: string;
+  stage: CodexFeatureStage;
+  enabled: boolean;
+  defaultEnabled: boolean;
+  displayName: string | null;
+  description: string | null;
+  announcement: string | null;
 };
 
 export type OrbitDeviceCodeStart = {

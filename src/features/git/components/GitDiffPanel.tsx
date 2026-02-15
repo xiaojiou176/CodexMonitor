@@ -26,6 +26,7 @@ import {
   GitIssuesModeContent,
   type DiffReviewScope,
   GitLogModeContent,
+  GitPerFileModeContent,
   GitPanelModeStatus,
   GitPullRequestsModeContent,
   GitRootCurrentPath,
@@ -46,12 +47,14 @@ import {
   resolveRootPath,
 } from "./GitDiffPanel.utils";
 import { useDiffFileSelection } from "../hooks/useDiffFileSelection";
+import type { GitPanelMode } from "../types";
+import type { PerFileDiffGroup } from "../utils/perFileThreadDiffs";
 
 type GitDiffPanelProps = {
   workspaceId?: string | null;
   workspacePath?: string | null;
-  mode: "diff" | "log" | "issues" | "prs";
-  onModeChange: (mode: "diff" | "log" | "issues" | "prs") => void;
+  mode: GitPanelMode;
+  onModeChange: (mode: GitPanelMode) => void;
   filePanelMode: PanelTabId;
   onFilePanelModeChange: (mode: PanelTabId) => void;
   worktreeApplyLabel?: string;
@@ -65,6 +68,7 @@ type GitDiffPanelProps = {
   totalAdditions: number;
   totalDeletions: number;
   fileStatus: string;
+  perFileDiffGroups?: PerFileDiffGroup[];
   error?: string | null;
   logError?: string | null;
   logLoading?: boolean;
@@ -96,6 +100,8 @@ type GitDiffPanelProps = {
   onSelectGitRoot?: (path: string) => void;
   onClearGitRoot?: () => void;
   onPickGitRoot?: () => void | Promise<void>;
+  onInitGitRepo?: () => void | Promise<void>;
+  initGitRepoLoading?: boolean;
   selectedPath?: string | null;
   onSelectFile?: (path: string) => void;
   stagedFiles: {
@@ -161,6 +167,7 @@ export function GitDiffPanel({
   totalAdditions,
   totalDeletions,
   fileStatus,
+  perFileDiffGroups = [],
   error,
   logError,
   logLoading = false,
@@ -203,6 +210,8 @@ export function GitDiffPanel({
   onSelectGitRoot,
   onClearGitRoot,
   onPickGitRoot,
+  onInitGitRepo,
+  initGitRepoLoading = false,
   commitMessage = "",
   commitMessageLoading = false,
   commitMessageError = null,
@@ -549,6 +558,11 @@ export function GitDiffPanel({
   const showAheadSection = Boolean(logUpstream && logAhead > 0);
   const showBehindSection = Boolean(logUpstream && logBehind > 0);
   const hasDiffTotals = totalAdditions > 0 || totalDeletions > 0;
+  const perFileEditCount = perFileDiffGroups.reduce(
+    (total, group) => total + group.edits.length,
+    0,
+  );
+  const perFileDiffStatusLabel = `${perFileDiffGroups.length} files · ${perFileEditCount} edits`;
   const diffTotalsLabel = `+${totalAdditions} / -${totalDeletions}`;
   const diffStatusLabel = hasDiffTotals
     ? [logUpstream ? logSyncLabel : null, diffTotalsLabel].filter(Boolean).join(" · ")
@@ -576,7 +590,7 @@ export function GitDiffPanel({
       message: string | null | undefined;
       action?: SidebarErrorAction;
     }> =
-      mode === "diff"
+      mode === "diff" || mode === "perFile"
         ? [
             { key: "push", message: pushErrorMessage, action: pushErrorAction ?? undefined },
             { key: "pull", message: pullError },
@@ -685,6 +699,7 @@ export function GitDiffPanel({
       <GitPanelModeStatus
         mode={mode}
         diffStatusLabel={diffStatusLabel}
+        perFileDiffStatusLabel={perFileDiffStatusLabel}
         logCountLabel={logCountLabel}
         logSyncLabel={logSyncLabel}
         logUpstreamLabel={logUpstreamLabel}
@@ -718,6 +733,8 @@ export function GitDiffPanel({
           gitRootScanDepth={gitRootScanDepth}
           onGitRootScanDepthChange={onGitRootScanDepthChange}
           onPickGitRoot={onPickGitRoot}
+          onInitGitRepo={onInitGitRepo}
+          initGitRepoLoading={initGitRepoLoading}
           hasGitRoot={hasGitRoot}
           onClearGitRoot={onClearGitRoot}
           gitRootScanError={gitRootScanError}
@@ -756,6 +773,12 @@ export function GitDiffPanel({
           onFileClick={handleFileClick}
           onShowFileMenu={showFileMenu}
           onDiffListClick={handleDiffListClick}
+        />
+      ) : mode === "perFile" ? (
+        <GitPerFileModeContent
+          groups={perFileDiffGroups}
+          selectedPath={selectedPath}
+          onSelectFile={onSelectFile}
         />
       ) : mode === "log" ? (
         <GitLogModeContent

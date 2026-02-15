@@ -1,23 +1,13 @@
 use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
-use git2::{BranchType, DiffOptions, Repository, Sort, Status, StatusOptions};
-use serde_json::{json, Value};
+use serde_json::Value;
 use tokio::sync::Mutex;
 
-use crate::git_utils::{
-    checkout_branch, commit_to_entry, diff_patch_to_string, diff_stats_for_path, image_mime_type,
-    list_git_roots as scan_git_roots, parse_github_repo, resolve_git_root,
-};
-use crate::shared::process_core::tokio_command;
 use crate::types::{
-    AppSettings, BranchInfo, GitCommitDiff, GitFileDiff, GitFileStatus, GitHubIssue,
-    GitHubIssuesResponse, GitHubPullRequest, GitHubPullRequestComment, GitHubPullRequestDiff,
-    GitHubPullRequestsResponse, GitLogResponse, WorkspaceEntry,
+    AppSettings, GitCommitDiff, GitFileDiff, GitHubIssuesResponse, GitHubPullRequestComment,
+    GitHubPullRequestDiff, GitHubPullRequestsResponse, GitLogResponse, WorkspaceEntry,
 };
-use crate::utils::{git_env_path, normalize_git_path, resolve_git_binary};
 
 const INDEX_SKIP_WORKTREE_FLAG: u16 = 0x4000;
 const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
@@ -1414,18 +1404,37 @@ pub(crate) async fn resolve_repo_root_for_workspace_core(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<PathBuf, String> {
-    resolve_repo_root_for_workspace(workspaces, workspace_id).await
+    context::resolve_repo_root_for_workspace(workspaces, workspace_id).await
 }
 
 pub(crate) fn collect_workspace_diff_core(repo_root: &Path) -> Result<String, String> {
-    collect_workspace_diff(repo_root)
+    diff::collect_workspace_diff(repo_root)
 }
 
 pub(crate) async fn get_git_status_core(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<Value, String> {
-    get_git_status_inner(workspaces, workspace_id).await
+    diff::get_git_status_inner(workspaces, workspace_id).await
+}
+
+pub(crate) async fn init_git_repo_core(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    workspace_id: String,
+    branch: String,
+    force: bool,
+) -> Result<Value, String> {
+    commands::init_git_repo_inner(workspaces, workspace_id, branch, force).await
+}
+
+pub(crate) async fn create_github_repo_core(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    workspace_id: String,
+    repo: String,
+    visibility: String,
+    branch: Option<String>,
+) -> Result<Value, String> {
+    commands::create_github_repo_inner(workspaces, workspace_id, repo, visibility, branch).await
 }
 
 pub(crate) async fn list_git_roots_core(
@@ -1433,7 +1442,7 @@ pub(crate) async fn list_git_roots_core(
     workspace_id: String,
     depth: Option<usize>,
 ) -> Result<Vec<String>, String> {
-    list_git_roots_inner(workspaces, workspace_id, depth).await
+    commands::list_git_roots_inner(workspaces, workspace_id, depth).await
 }
 
 pub(crate) async fn get_git_diffs_core(
@@ -1441,7 +1450,7 @@ pub(crate) async fn get_git_diffs_core(
     app_settings: &Mutex<AppSettings>,
     workspace_id: String,
 ) -> Result<Vec<GitFileDiff>, String> {
-    get_git_diffs_inner(workspaces, app_settings, workspace_id).await
+    diff::get_git_diffs_inner(workspaces, app_settings, workspace_id).await
 }
 
 pub(crate) async fn get_git_log_core(
@@ -1449,7 +1458,7 @@ pub(crate) async fn get_git_log_core(
     workspace_id: String,
     limit: Option<usize>,
 ) -> Result<GitLogResponse, String> {
-    get_git_log_inner(workspaces, workspace_id, limit).await
+    log::get_git_log_inner(workspaces, workspace_id, limit).await
 }
 
 pub(crate) async fn get_git_commit_diff_core(
@@ -1458,14 +1467,14 @@ pub(crate) async fn get_git_commit_diff_core(
     workspace_id: String,
     sha: String,
 ) -> Result<Vec<GitCommitDiff>, String> {
-    get_git_commit_diff_inner(workspaces, app_settings, workspace_id, sha).await
+    diff::get_git_commit_diff_inner(workspaces, app_settings, workspace_id, sha).await
 }
 
 pub(crate) async fn get_git_remote_core(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<Option<String>, String> {
-    get_git_remote_inner(workspaces, workspace_id).await
+    log::get_git_remote_inner(workspaces, workspace_id).await
 }
 
 pub(crate) async fn stage_git_file_core(
@@ -1473,14 +1482,14 @@ pub(crate) async fn stage_git_file_core(
     workspace_id: String,
     path: String,
 ) -> Result<(), String> {
-    stage_git_file_inner(workspaces, workspace_id, path).await
+    commands::stage_git_file_inner(workspaces, workspace_id, path).await
 }
 
 pub(crate) async fn stage_git_all_core(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<(), String> {
-    stage_git_all_inner(workspaces, workspace_id).await
+    commands::stage_git_all_inner(workspaces, workspace_id).await
 }
 
 pub(crate) async fn unstage_git_file_core(
@@ -1488,7 +1497,7 @@ pub(crate) async fn unstage_git_file_core(
     workspace_id: String,
     path: String,
 ) -> Result<(), String> {
-    unstage_git_file_inner(workspaces, workspace_id, path).await
+    commands::unstage_git_file_inner(workspaces, workspace_id, path).await
 }
 
 pub(crate) async fn revert_git_file_core(
@@ -1496,14 +1505,14 @@ pub(crate) async fn revert_git_file_core(
     workspace_id: String,
     path: String,
 ) -> Result<(), String> {
-    revert_git_file_inner(workspaces, workspace_id, path).await
+    commands::revert_git_file_inner(workspaces, workspace_id, path).await
 }
 
 pub(crate) async fn revert_git_all_core(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<(), String> {
-    revert_git_all_inner(workspaces, workspace_id).await
+    commands::revert_git_all_inner(workspaces, workspace_id).await
 }
 
 pub(crate) async fn commit_git_core(
@@ -1511,49 +1520,49 @@ pub(crate) async fn commit_git_core(
     workspace_id: String,
     message: String,
 ) -> Result<(), String> {
-    commit_git_inner(workspaces, workspace_id, message).await
+    commands::commit_git_inner(workspaces, workspace_id, message).await
 }
 
 pub(crate) async fn push_git_core(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<(), String> {
-    push_git_inner(workspaces, workspace_id).await
+    commands::push_git_inner(workspaces, workspace_id).await
 }
 
 pub(crate) async fn pull_git_core(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<(), String> {
-    pull_git_inner(workspaces, workspace_id).await
+    commands::pull_git_inner(workspaces, workspace_id).await
 }
 
 pub(crate) async fn fetch_git_core(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<(), String> {
-    fetch_git_inner(workspaces, workspace_id).await
+    commands::fetch_git_inner(workspaces, workspace_id).await
 }
 
 pub(crate) async fn sync_git_core(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<(), String> {
-    sync_git_inner(workspaces, workspace_id).await
+    commands::sync_git_inner(workspaces, workspace_id).await
 }
 
 pub(crate) async fn get_github_issues_core(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<GitHubIssuesResponse, String> {
-    get_github_issues_inner(workspaces, workspace_id).await
+    github::get_github_issues_inner(workspaces, workspace_id).await
 }
 
 pub(crate) async fn get_github_pull_requests_core(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<GitHubPullRequestsResponse, String> {
-    get_github_pull_requests_inner(workspaces, workspace_id).await
+    github::get_github_pull_requests_inner(workspaces, workspace_id).await
 }
 
 pub(crate) async fn get_github_pull_request_diff_core(
@@ -1561,7 +1570,7 @@ pub(crate) async fn get_github_pull_request_diff_core(
     workspace_id: String,
     pr_number: u64,
 ) -> Result<Vec<GitHubPullRequestDiff>, String> {
-    get_github_pull_request_diff_inner(workspaces, workspace_id, pr_number).await
+    github::get_github_pull_request_diff_inner(workspaces, workspace_id, pr_number).await
 }
 
 pub(crate) async fn get_github_pull_request_comments_core(
@@ -1569,14 +1578,22 @@ pub(crate) async fn get_github_pull_request_comments_core(
     workspace_id: String,
     pr_number: u64,
 ) -> Result<Vec<GitHubPullRequestComment>, String> {
-    get_github_pull_request_comments_inner(workspaces, workspace_id, pr_number).await
+    github::get_github_pull_request_comments_inner(workspaces, workspace_id, pr_number).await
+}
+
+pub(crate) async fn checkout_github_pull_request_core(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    workspace_id: String,
+    pr_number: u64,
+) -> Result<(), String> {
+    github::checkout_github_pull_request_inner(workspaces, workspace_id, pr_number).await
 }
 
 pub(crate) async fn list_git_branches_core(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<Value, String> {
-    list_git_branches_inner(workspaces, workspace_id).await
+    commands::list_git_branches_inner(workspaces, workspace_id).await
 }
 
 pub(crate) async fn checkout_git_branch_core(
@@ -1584,7 +1601,7 @@ pub(crate) async fn checkout_git_branch_core(
     workspace_id: String,
     name: String,
 ) -> Result<(), String> {
-    checkout_git_branch_inner(workspaces, workspace_id, name).await
+    commands::checkout_git_branch_inner(workspaces, workspace_id, name).await
 }
 
 pub(crate) async fn create_git_branch_core(
@@ -1592,71 +1609,5 @@ pub(crate) async fn create_git_branch_core(
     workspace_id: String,
     name: String,
 ) -> Result<(), String> {
-    create_git_branch_inner(workspaces, workspace_id, name).await
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use std::path::Path;
-
-    fn create_temp_repo() -> (PathBuf, Repository) {
-        let root =
-            std::env::temp_dir().join(format!("codex-monitor-test-{}", uuid::Uuid::new_v4()));
-        fs::create_dir_all(&root).expect("create temp repo root");
-        let repo = Repository::init(&root).expect("init repo");
-        (root, repo)
-    }
-
-    #[test]
-    fn collect_workspace_diff_prefers_staged_changes() {
-        let (root, repo) = create_temp_repo();
-        let file_path = root.join("staged.txt");
-        fs::write(&file_path, "staged\n").expect("write staged file");
-        let mut index = repo.index().expect("index");
-        index.add_path(Path::new("staged.txt")).expect("add path");
-        index.write().expect("write index");
-
-        let diff = collect_workspace_diff(&root).expect("collect diff");
-        assert!(diff.contains("staged.txt"));
-        assert!(diff.contains("staged"));
-    }
-
-    #[test]
-    fn collect_workspace_diff_falls_back_to_workdir() {
-        let (root, _repo) = create_temp_repo();
-        let file_path = root.join("unstaged.txt");
-        fs::write(&file_path, "unstaged\n").expect("write unstaged file");
-
-        let diff = collect_workspace_diff(&root).expect("collect diff");
-        assert!(diff.contains("unstaged.txt"));
-        assert!(diff.contains("unstaged"));
-    }
-
-    #[test]
-    fn action_paths_for_file_expands_renames() {
-        let (root, repo) = create_temp_repo();
-        fs::write(root.join("a.txt"), "hello\n").expect("write file");
-
-        let mut index = repo.index().expect("repo index");
-        index.add_path(Path::new("a.txt")).expect("add path");
-        let tree_id = index.write_tree().expect("write tree");
-        let tree = repo.find_tree(tree_id).expect("find tree");
-        let sig = git2::Signature::now("Test", "test@example.com").expect("signature");
-        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
-            .expect("commit");
-
-        fs::rename(root.join("a.txt"), root.join("b.txt")).expect("rename file");
-
-        let mut index = repo.index().expect("repo index");
-        index
-            .remove_path(Path::new("a.txt"))
-            .expect("remove old path");
-        index.add_path(Path::new("b.txt")).expect("add new path");
-        index.write().expect("write index");
-
-        let paths = action_paths_for_file(&root, "b.txt");
-        assert_eq!(paths, vec!["a.txt".to_string(), "b.txt".to_string()]);
-    }
+    commands::create_git_branch_inner(workspaces, workspace_id, name).await
 }

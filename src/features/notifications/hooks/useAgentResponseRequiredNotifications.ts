@@ -155,6 +155,17 @@ export function useAgentResponseRequiredNotifications({
     [onDebug],
   );
 
+  const shouldMuteSubagentThread = useCallback(
+    (workspaceId: string, threadId: string | null | undefined) => {
+      const normalizedThreadId = String(threadId ?? "").trim();
+      if (subagentNotificationsEnabled || !normalizedThreadId) {
+        return false;
+      }
+      return isSubagentThread?.(workspaceId, normalizedThreadId) ?? false;
+    },
+    [isSubagentThread, subagentNotificationsEnabled],
+  );
+
   useEffect(
     () => () => {
       if (retryTimeoutRef.current) {
@@ -202,9 +213,16 @@ export function useAgentResponseRequiredNotifications({
         continue;
       }
       const key = buildApprovalKey(approval.workspace_id, approval.request_id);
-      if (!notifiedApprovalsRef.current.has(key)) {
-        return approval;
+      if (notifiedApprovalsRef.current.has(key)) {
+        continue;
       }
+      const threadId = String(
+        approval.params?.threadId ?? approval.params?.thread_id ?? "",
+      ).trim();
+      if (shouldMuteSubagentThread(approval.workspace_id, threadId)) {
+        continue;
+      }
+      return approval;
     }
     return null;
   })();
@@ -263,9 +281,15 @@ export function useAgentResponseRequiredNotifications({
         continue;
       }
       const key = buildUserInputKey(request.workspace_id, request.request_id);
-      if (!notifiedUserInputsRef.current.has(key)) {
-        return request;
+      if (notifiedUserInputsRef.current.has(key)) {
+        continue;
       }
+      if (
+        shouldMuteSubagentThread(request.workspace_id, request.params.thread_id)
+      ) {
+        continue;
+      }
+      return request;
     }
     return null;
   })();

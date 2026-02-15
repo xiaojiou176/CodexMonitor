@@ -7,7 +7,7 @@ import FileText from "lucide-react/dist/esm/icons/file-text";
 import FlaskConical from "lucide-react/dist/esm/icons/flask-conical";
 import Layers from "lucide-react/dist/esm/icons/layers";
 import ServerCog from "lucide-react/dist/esm/icons/server-cog";
-import { PanelNavItem, PanelNavList } from "../../design-system/components/panel/PanelPrimitives";
+import { PanelNavItem, PanelNavList } from "@/features/design-system/components/panel/PanelPrimitives";
 import type { CodexSection } from "./settingsTypes";
 import {
   SETTINGS_SECTION_GROUPS,

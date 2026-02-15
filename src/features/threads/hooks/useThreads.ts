@@ -5,8 +5,9 @@ import type {
   DebugEntry,
   ThreadListSortKey,
   WorkspaceInfo,
-} from "../../../types";
-import { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
+} from "@/types";
+import { CHAT_SCROLLBACK_DEFAULT } from "@utils/chatScrollback";
+import { useAppServerEvents } from "@app/hooks/useAppServerEvents";
 import { initialState, threadReducer } from "./useThreadsReducer";
 import { useThreadStorage } from "./useThreadStorage";
 import { useThreadLinking } from "./useThreadLinking";
@@ -53,6 +54,7 @@ type UseThreadsOptions = {
   autoArchiveSubAgentThreadsEnabled?: boolean;
   autoArchiveSubAgentThreadsMaxAgeMinutes?: number;
   threadTitleAutogenerationEnabled?: boolean;
+  chatHistoryScrollbackItems?: number | null;
   customPrompts?: CustomPromptOption[];
   onMessageActivity?: () => void;
   threadSortKey?: ThreadListSortKey;
@@ -62,6 +64,10 @@ type UseThreadsOptions = {
     displayName: string | null,
   ) => void | Promise<void>;
 };
+
+function buildWorkspaceThreadKey(workspaceId: string, threadId: string) {
+  return `${workspaceId}:${threadId}`;
+}
 
 export function useThreads({
   workspaces = [],
@@ -77,12 +83,28 @@ export function useThreads({
   autoArchiveSubAgentThreadsMaxAgeMinutes =
     SUB_AGENT_AUTO_ARCHIVE_DEFAULT_MAX_AGE_MINUTES,
   threadTitleAutogenerationEnabled = false,
+  chatHistoryScrollbackItems,
   customPrompts = [],
   onMessageActivity,
   threadSortKey = "updated_at",
   persistThreadDisplayName,
 }: UseThreadsOptions) {
-  const [state, dispatch] = useReducer(threadReducer, initialState);
+  const maxItemsPerThread =
+    chatHistoryScrollbackItems === undefined
+      ? CHAT_SCROLLBACK_DEFAULT
+      : chatHistoryScrollbackItems;
+
+  const [state, dispatch] = useReducer(
+    threadReducer,
+    maxItemsPerThread,
+    (initialMaxItemsPerThread) => ({
+      ...initialState,
+      maxItemsPerThread: initialMaxItemsPerThread,
+    }),
+  );
+  useEffect(() => {
+    dispatch({ type: "setMaxItemsPerThread", maxItemsPerThread });
+  }, [dispatch, maxItemsPerThread]);
   const loadedThreadsRef = useRef<Record<string, boolean>>({});
   const replaceOnResumeRef = useRef<Record<string, boolean>>({});
   const pendingInterruptsRef = useRef<Set<string>>(new Set());
@@ -96,6 +118,7 @@ export function useThreads({
   planByThreadRef.current = state.planByThread;
   itemsByThreadRef.current = state.itemsByThread;
   threadsByWorkspaceRef.current = state.threadsByWorkspace;
+  activeTurnIdByThreadRef.current = state.activeTurnIdByThread;
   const { approvalAllowlistRef, handleApprovalDecision, handleApprovalRemember } =
     useThreadApprovals({ dispatch, onDebug });
   const { handleUserInputSubmit } = useThreadUserInput({ dispatch });
@@ -110,7 +133,6 @@ export function useThreads({
     isThreadPinned,
     getPinTimestamp,
   } = useThreadStorage();
-  void pinnedThreadsVersion;
 
   useEffect(() => {
     if (!workspaces.length) {
@@ -272,10 +294,33 @@ export function useThreads({
     [customNamesRef, dispatch, onDebug, persistThreadDisplayName],
   );
 
+  const onSubagentThreadDetected = useCallback(
+    (workspaceId: string, threadId: string) => {
+      if (!workspaceId || !threadId) {
+        return;
+      }
+      subagentThreadByWorkspaceThreadRef.current[
+        buildWorkspaceThreadKey(workspaceId, threadId)
+      ] = true;
+    },
+    [],
+  );
+
+  const isSubagentThread = useCallback(
+    (workspaceId: string, threadId: string) =>
+      Boolean(
+        subagentThreadByWorkspaceThreadRef.current[
+          buildWorkspaceThreadKey(workspaceId, threadId)
+        ],
+      ),
+    [],
+  );
+
   const { applyCollabThreadLinks, applyCollabThreadLinksFromThread, updateThreadParent } =
     useThreadLinking({
       dispatch,
       threadParentById: state.threadParentById,
+      onSubagentThreadDetected,
     });
 
   const handleWorkspaceConnected = useCallback(
@@ -301,20 +346,88 @@ export function useThreads({
     [state.hiddenThreadIdsByWorkspace],
   );
 
-  const handleReviewExited = useCallback(
-    (workspaceId: string, threadId: string) => {
-      const parentId = state.threadParentById[threadId];
-      if (!parentId || parentId === threadId) {
+  const getActiveTurnId = useCallback(
+    (threadId: string) => activeTurnIdByThreadRef.current[threadId] ?? null,
+    [],
+  );
+
+  const registerDetachedReviewChild = useCallback(
+    (workspaceId: string, parentId: string, childId: string) => {
+      if (!workspaceId || !parentId || !childId || parentId === childId) {
         return;
       }
-      const parentStatus = state.threadStatusById[parentId];
-      if (!parentStatus?.isReviewing) {
-        return;
+      detachedReviewParentByChildRef.current[childId] = parentId;
+      const existingWorkspaceLinks =
+        detachedReviewLinksByWorkspaceRef.current[workspaceId] ?? {};
+      if (existingWorkspaceLinks[childId] !== parentId) {
+        const nextLinksByWorkspace = {
+          ...detachedReviewLinksByWorkspaceRef.current,
+          [workspaceId]: {
+            ...existingWorkspaceLinks,
+            [childId]: parentId,
+          },
+        };
+        detachedReviewLinksByWorkspaceRef.current = nextLinksByWorkspace;
+        saveDetachedReviewLinks(nextLinksByWorkspace);
       }
 
-      markReviewing(parentId, false);
-      markProcessing(parentId, false);
-      setActiveTurnId(parentId, null);
+      const timestamp = Date.now();
+      recordThreadActivity(workspaceId, parentId, timestamp);
+      dispatch({
+        type: "setThreadTimestamp",
+        workspaceId,
+        threadId: parentId,
+        timestamp,
+      });
+
+      const noticeKey = `${parentId}->${childId}`;
+      if (!detachedReviewStartedNoticeRef.current.has(noticeKey)) {
+        detachedReviewStartedNoticeRef.current.add(noticeKey);
+        dispatch({
+          type: "addAssistantMessage",
+          threadId: parentId,
+          text: `Detached review started. [Open review thread](/thread/${childId})`,
+        });
+      }
+
+      if (parentId !== activeThreadId) {
+        dispatch({ type: "markUnread", threadId: parentId, hasUnread: true });
+      }
+      safeMessageActivity();
+    },
+    [activeThreadId, dispatch, recordThreadActivity, safeMessageActivity],
+  );
+
+  useEffect(() => {
+    const linksByWorkspace = detachedReviewLinksByWorkspaceRef.current;
+    Object.entries(state.threadsByWorkspace).forEach(([workspaceId, threads]) => {
+      const workspaceLinks = linksByWorkspace[workspaceId];
+      if (!workspaceLinks) {
+        return;
+      }
+      const threadIds = new Set(threads.map((thread) => thread.id));
+      Object.entries(workspaceLinks).forEach(([childId, parentId]) => {
+        if (!childId || !parentId || childId === parentId) {
+          return;
+        }
+        if (!threadIds.has(childId) || !threadIds.has(parentId)) {
+          return;
+        }
+        if (state.threadParentById[childId]) {
+          return;
+        }
+        updateThreadParent(parentId, [childId]);
+      });
+    });
+  }, [state.threadParentById, state.threadsByWorkspace, updateThreadParent]);
+
+  const handleReviewExited = useCallback(
+    (workspaceId: string, threadId: string) => {
+      const parentId = detachedReviewParentByChildRef.current[threadId];
+      if (!parentId) {
+        return;
+      }
+      delete detachedReviewParentByChildRef.current[threadId];
 
       const timestamp = Date.now();
       recordThreadActivity(workspaceId, parentId, timestamp);
@@ -325,9 +438,9 @@ export function useThreads({
         timestamp,
       });
       const noticeKey = `${parentId}->${threadId}`;
-      const alreadyNotified = detachedReviewNoticeRef.current.has(noticeKey);
+      const alreadyNotified = detachedReviewCompletedNoticeRef.current.has(noticeKey);
       if (!alreadyNotified) {
-        detachedReviewNoticeRef.current.add(noticeKey);
+        detachedReviewCompletedNoticeRef.current.add(noticeKey);
         dispatch({
           type: "addAssistantMessage",
           threadId: parentId,
@@ -342,13 +455,8 @@ export function useThreads({
     [
       activeThreadId,
       dispatch,
-      markProcessing,
-      markReviewing,
       recordThreadActivity,
       safeMessageActivity,
-      setActiveTurnId,
-      state.threadParentById,
-      state.threadStatusById,
     ],
   );
 
@@ -379,6 +487,7 @@ export function useThreads({
     markReviewing,
     markThreadError,
     setActiveTurnId,
+    getActiveTurnId,
     safeMessageActivity,
     recordThreadActivity,
     onUserMessageCreated,
@@ -399,9 +508,27 @@ export function useThreads({
     [handleAccountUpdated],
   );
 
+  const handleThreadStarted = useCallback(
+    (workspaceId: string, thread: Record<string, unknown>) => {
+      threadHandlers.onThreadStarted(workspaceId, thread);
+      const threadId = String(thread.id ?? "").trim();
+      if (!threadId) {
+        return;
+      }
+      const sourceParentId = getParentThreadIdFromSource(thread.source);
+      if (!sourceParentId) {
+        return;
+      }
+      updateThreadParent(sourceParentId, [threadId]);
+      onSubagentThreadDetected(workspaceId, threadId);
+    },
+    [onSubagentThreadDetected, threadHandlers, updateThreadParent],
+  );
+
   const handlers = useMemo(
     () => ({
       ...threadHandlers,
+      onThreadStarted: handleThreadStarted,
       onAccountUpdated: handleAccountUpdated,
       onAccountLoginCompleted: handleAccountLoginCompleted,
       onWorkspaceDisconnected: handleDisconnected,
@@ -445,6 +572,7 @@ export function useThreads({
     itemsByThread: state.itemsByThread,
     threadsByWorkspace: state.threadsByWorkspace,
     activeThreadIdByWorkspace: state.activeThreadIdByWorkspace,
+    activeTurnIdByThread: state.activeTurnIdByThread,
     threadListCursorByWorkspace: state.threadListCursorByWorkspace,
     threadStatusById: state.threadStatusById,
     threadSortKey,
@@ -728,6 +856,7 @@ export function useThreads({
     refreshThread,
     forkThreadForWorkspace,
     updateThreadParent,
+    registerDetachedReviewChild,
   });
 
   const setActiveThreadId = useCallback(
@@ -774,6 +903,7 @@ export function useThreads({
     userInputRequests: state.userInputRequests,
     threadsByWorkspace: state.threadsByWorkspace,
     threadParentById: state.threadParentById,
+    isSubagentThread,
     threadStatusById: state.threadStatusById,
     threadResumeLoadingById: state.threadResumeLoadingById,
     threadListLoadingByWorkspace: state.threadListLoadingByWorkspace,
@@ -786,6 +916,7 @@ export function useThreads({
     accountByWorkspace: state.accountByWorkspace,
     planByThread: state.planByThread,
     lastAgentMessageByThread: state.lastAgentMessageByThread,
+    pinnedThreadsVersion,
     refreshAccountRateLimits,
     refreshAccountInfo,
     interruptTurn,

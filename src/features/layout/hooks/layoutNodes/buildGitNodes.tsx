@@ -17,6 +17,22 @@ const GitDiffViewer = lazy(async () => {
 
 type GitLayoutNodes = Pick<LayoutNodesResult, "gitDiffPanelNode" | "gitDiffViewerNode">;
 
+function resolveGitDiffStyle({
+  isPhone,
+  splitChatDiffView,
+  centerMode,
+  userPreference,
+}: {
+  isPhone: boolean;
+  splitChatDiffView: boolean;
+  centerMode: LayoutNodesOptions["centerMode"];
+  userPreference: LayoutNodesOptions["gitDiffViewStyle"];
+}): LayoutNodesOptions["gitDiffViewStyle"] {
+  const shouldForceSingleColumn =
+    isPhone || (splitChatDiffView && centerMode === "chat");
+  return shouldForceSingleColumn ? "unified" : userPreference;
+}
+
 export function buildGitNodes(options: LayoutNodesOptions): GitLayoutNodes {
   const sidebarSelectedDiffPath =
     options.centerMode === "diff" ? options.selectedDiffPath : null;

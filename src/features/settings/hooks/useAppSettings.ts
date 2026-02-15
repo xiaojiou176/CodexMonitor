@@ -1,23 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { AppSettings } from "../../../types";
-import { getAppSettings, runCodexDoctor, updateAppSettings } from "../../../services/tauri";
-import { clampUiScale, UI_SCALE_DEFAULT } from "../../../utils/uiScale";
+import type { AppSettings } from "@/types";
+import { getAppSettings, runCodexDoctor, updateAppSettings } from "@services/tauri";
+import { clampUiScale, UI_SCALE_DEFAULT } from "@utils/uiScale";
+import { CHAT_SCROLLBACK_DEFAULT, normalizeChatHistoryScrollbackItems } from "@utils/chatScrollback";
 import {
   DEFAULT_CODE_FONT_FAMILY,
   DEFAULT_UI_FONT_FAMILY,
   CODE_FONT_SIZE_DEFAULT,
   clampCodeFontSize,
   normalizeFontFamily,
-} from "../../../utils/fonts";
+} from "@utils/fonts";
 import {
   DEFAULT_OPEN_APP_ID,
   DEFAULT_OPEN_APP_TARGETS,
   OPEN_APP_STORAGE_KEY,
-} from "../../app/constants";
-import { normalizeOpenAppTargets } from "../../app/utils/openApp";
-import { getDefaultInterruptShortcut, isMacPlatform } from "../../../utils/shortcuts";
-import { isMobilePlatform } from "../../../utils/platformPaths";
-import { DEFAULT_COMMIT_MESSAGE_PROMPT } from "../../../utils/commitMessagePrompt";
+} from "@app/constants";
+import { normalizeOpenAppTargets } from "@app/utils/openApp";
+import { getDefaultInterruptShortcut, isMacPlatform } from "@utils/shortcuts";
+import { isMobilePlatform } from "@utils/platformPaths";
+import { DEFAULT_COMMIT_MESSAGE_PROMPT } from "@utils/commitMessagePrompt";
 
 const allowedThemes = new Set(["system", "light", "dark", "dim"]);
 const allowedPersonality = new Set(["friendly", "pragmatic"]);
@@ -38,6 +39,7 @@ function clampAutoArchiveSubAgentThreadsMinutes(value: number): number {
     ),
   );
 }
+
 
 function buildDefaultSettings(): AppSettings {
   const isMac = isMacPlatform();
@@ -93,6 +95,7 @@ function buildDefaultSettings(): AppSettings {
     experimentalCollabEnabled: false,
     collaborationModesEnabled: true,
     steerEnabled: true,
+    pauseQueuedMessagesWhenResponseRequired: true,
     unifiedExecEnabled: true,
     autoArchiveSubAgentThreadsEnabled: true,
     autoArchiveSubAgentThreadsMaxAgeMinutes:
@@ -143,6 +146,9 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
     settings.commitMessagePrompt && settings.commitMessagePrompt.trim().length > 0
       ? settings.commitMessagePrompt
       : DEFAULT_COMMIT_MESSAGE_PROMPT;
+  const chatHistoryScrollbackItems = normalizeChatHistoryScrollbackItems(
+    settings.chatHistoryScrollbackItems,
+  );
   return {
     ...settings,
     codexBin: settings.codexBin?.trim() ? settings.codexBin.trim() : null,

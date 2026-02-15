@@ -39,6 +39,7 @@ type ThreadListProps = {
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   threadStatusById: ThreadStatusMap;
+  pendingUserInputKeys?: Set<string>;
   getThreadTime: (thread: ThreadSummary) => string | null;
   isThreadPinned: (workspaceId: string, threadId: string) => boolean;
   onToggleExpanded: (workspaceId: string) => void;
@@ -80,6 +81,7 @@ export function ThreadList({
   activeWorkspaceId,
   activeThreadId,
   threadStatusById,
+  pendingUserInputKeys,
   getThreadTime,
   isThreadPinned,
   onToggleExpanded,

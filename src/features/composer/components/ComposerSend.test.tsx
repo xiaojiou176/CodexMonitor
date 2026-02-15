@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isMobilePlatform } from "../../../utils/platformPaths";
 import { Composer } from "./Composer";
+import type { AppOption, AppMention } from "../../../types";
 
 vi.mock("../../../services/dragDrop", () => ({
   subscribeWindowDragDrop: vi.fn(() => () => {}),
@@ -79,7 +80,7 @@ function ComposerHarness({
       onSelectEffort={() => {}}
       reasoningSupported={false}
       skills={[]}
-      apps={[]}
+      apps={apps}
       prompts={[]}
       files={files}
       sendLabel={sendLabel}

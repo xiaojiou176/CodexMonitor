@@ -1,4 +1,5 @@
 import type { ConversationItem } from "../types";
+import { CHAT_SCROLLBACK_DEFAULT } from "./chatScrollback";
 
 // 0 disables client-side item capping so full thread history remains scrollable.
 const MAX_ITEMS_PER_THREAD = 0;
@@ -6,7 +7,7 @@ const MAX_ITEM_TEXT = 20000;
 // 0 disables message-text truncation; keep full assistant/user messages.
 const MAX_MESSAGE_TEXT = 0;
 const TOOL_OUTPUT_RECENT_ITEMS = 40;
-const NO_TRUNCATE_TOOL_TYPES = new Set(["fileChange", "commandExecution"]);
+const LARGE_TOOL_TYPES = new Set(["fileChange", "commandExecution"]);
 const READ_COMMANDS = new Set(["cat", "sed", "head", "tail", "less", "more", "nl"]);
 const LIST_COMMANDS = new Set(["ls", "tree", "find", "fd"]);
 const SEARCH_COMMANDS = new Set(["rg", "grep", "ripgrep", "findstr"]);
@@ -90,6 +91,13 @@ function truncateText(text: string, maxLength = MAX_ITEM_TEXT) {
   }
   const sliceLength = Math.max(0, maxLength - 3);
   return `${text.slice(0, sliceLength)}...`;
+}
+
+function truncateToolText(toolType: string, text: string) {
+  const maxLength = LARGE_TOOL_TYPES.has(toolType)
+    ? MAX_LARGE_TOOL_TEXT
+    : MAX_ITEM_TEXT;
+  return truncateText(text, maxLength);
 }
 
 function normalizeStringList(value: unknown) {
@@ -523,7 +531,7 @@ function summarizeExploration(items: ConversationItem[]) {
   return result;
 }
 
-export function prepareThreadItems(items: ConversationItem[]) {
+export function prepareThreadItems(items: ConversationItem[], options?: PrepareThreadItemsOptions) {
   const filtered: ConversationItem[] = [];
   for (const item of items) {
     const last = filtered[filtered.length - 1];
@@ -539,6 +547,15 @@ export function prepareThreadItems(items: ConversationItem[]) {
     filtered.push(item);
   }
   const normalized = filtered.map((item) => normalizeItem(item));
+  const maxItemsPerThreadRaw = options?.maxItemsPerThread;
+  const maxItemsPerThread =
+    maxItemsPerThreadRaw === null
+      ? null
+      : typeof maxItemsPerThreadRaw === "number" &&
+          Number.isFinite(maxItemsPerThreadRaw) &&
+          maxItemsPerThreadRaw > 0
+        ? Math.floor(maxItemsPerThreadRaw)
+        : DEFAULT_MAX_ITEMS_PER_THREAD;
   const limited =
     MAX_ITEMS_PER_THREAD > 0 && normalized.length > MAX_ITEMS_PER_THREAD
       ? normalized.slice(-MAX_ITEMS_PER_THREAD)

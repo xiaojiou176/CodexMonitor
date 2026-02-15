@@ -768,10 +768,15 @@ export function useQueuedSend({
   );
 
   const handleSend = useCallback(
-    async (text: string, images: string[] = []) => {
+    async (
+      text: string,
+      images: string[] = [],
+      appMentions: AppMention[] = [],
+    ) => {
       const trimmed = text.trim();
       const command = parseSlashCommand(trimmed, appsEnabled);
       const nextImages = command ? [] : images;
+      const nextMentions = command ? [] : appMentions;
       if (!trimmed && nextImages.length === 0) {
         return;
       }
@@ -845,6 +850,7 @@ export function useQueuedSend({
       const trimmed = text.trim();
       const command = parseSlashCommand(trimmed, appsEnabled);
       const nextImages = command ? [] : images;
+      const nextMentions = command ? [] : appMentions;
       if (!trimmed && nextImages.length === 0) {
         return;
       }

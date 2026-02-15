@@ -1,27 +1,39 @@
 import type { GitHubIssue, GitHubPullRequest, GitLogEntry } from "../../../types";
 import type { MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import ArrowLeftRight from "lucide-react/dist/esm/icons/arrow-left-right";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import Download from "lucide-react/dist/esm/icons/download";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import RotateCw from "lucide-react/dist/esm/icons/rotate-cw";
 import Upload from "lucide-react/dist/esm/icons/upload";
 import { formatRelativeTime } from "../../../utils/time";
+import type { GitPanelMode } from "../types";
+import type { PerFileDiffGroup } from "../utils/perFileThreadDiffs";
 import {
   CommitButton,
   DiffSection,
   type DiffFile,
   GitLogEntryRow,
 } from "./GitDiffPanelShared";
-import { DEPTH_OPTIONS, normalizeRootPath } from "./GitDiffPanel.utils";
+import {
+  DEPTH_OPTIONS,
+  isGitRootNotFound,
+  isMissingRepo,
+  normalizeRootPath,
+  splitPath,
+} from "./GitDiffPanel.utils";
 
-type GitMode = "diff" | "log" | "issues" | "prs";
+type GitMode = GitPanelMode;
 
 export type DiffReviewScope = "uncommitted" | "staged" | "unstaged";
 
 type GitPanelModeStatusProps = {
   mode: GitMode;
   diffStatusLabel: string;
+  perFileDiffStatusLabel: string;
   logCountLabel: string;
   logSyncLabel: string;
   logUpstreamLabel: string;
@@ -34,6 +46,7 @@ type GitPanelModeStatusProps = {
 export function GitPanelModeStatus({
   mode,
   diffStatusLabel,
+  perFileDiffStatusLabel,
   logCountLabel,
   logSyncLabel,
   logUpstreamLabel,
@@ -44,6 +57,10 @@ export function GitPanelModeStatus({
 }: GitPanelModeStatusProps) {
   if (mode === "diff") {
     return <div className="diff-status">{diffStatusLabel}</div>;
+  }
+
+  if (mode === "perFile") {
+    return <div className="diff-status">{perFileDiffStatusLabel}</div>;
   }
 
   if (mode === "log") {
@@ -98,7 +115,7 @@ type GitBranchRowProps = {
 };
 
 export function GitBranchRow({ mode, branchName, onFetch, fetchLoading }: GitBranchRowProps) {
-  if (mode !== "diff" && mode !== "log") {
+  if (mode !== "diff" && mode !== "perFile" && mode !== "log") {
     return null;
   }
 
@@ -124,22 +141,98 @@ export function GitBranchRow({ mode, branchName, onFetch, fetchLoading }: GitBra
 }
 
 type GitRootCurrentPathProps = {
-  mode: GitMode;
-  hasGitRoot: boolean;
-  gitRoot: string | null;
-  onScanGitRoots?: () => void;
-  gitRootScanLoading: boolean;
+    mode: GitMode;
+    hasGitRoot: boolean;
+    gitRoot: string | null;
+    onScanGitRoots?: () => void;
+    gitRootScanLoading: boolean;
 };
 
 export function GitRootCurrentPath({
-  mode,
-  hasGitRoot,
-  gitRoot,
-  onScanGitRoots,
-  gitRootScanLoading,
+    mode,
+    hasGitRoot,
+    gitRoot,
+    onScanGitRoots,
+    gitRootScanLoading,
 }: GitRootCurrentPathProps) {
-  if (mode === "issues" || !hasGitRoot) {
-    return null;
+    if (mode === "issues" || !hasGitRoot) {
+        return null;
+    }
+
+    return (
+        <div className="git-root-current">
+            <span className="git-root-label">Path:</span>
+            <span className="git-root-path" title={gitRoot ?? ""}>
+                {gitRoot}
+            </span>
+            {onScanGitRoots && (
+                <button
+                    type="button"
+                    className="ghost git-root-button git-root-button--icon"
+                    onClick={onScanGitRoots}
+                    disabled={gitRootScanLoading}
+                >
+                    <ArrowLeftRight className="git-root-button-icon" aria-hidden />
+                    Change
+                </button>
+            )}
+        </div>
+    );
+}
+
+type GitPerFileModeContentProps = {
+  groups: PerFileDiffGroup[];
+  selectedPath: string | null;
+  onSelectFile?: (path: string) => void;
+};
+
+export function GitPerFileModeContent({
+  groups,
+  selectedPath,
+  onSelectFile,
+}: GitPerFileModeContentProps) {
+  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setCollapsedPaths((previous) => {
+      if (previous.size === 0) {
+        return previous;
+      }
+
+      const activePaths = new Set(groups.map((group) => group.path));
+      let changed = false;
+      const next = new Set<string>();
+
+      for (const path of previous) {
+        if (activePaths.has(path)) {
+          next.add(path);
+        } else {
+          changed = true;
+        }
+      }
+
+      if (!changed && next.size === previous.size) {
+        return previous;
+      }
+
+      return next;
+    });
+  }, [groups]);
+
+  const toggleGroup = useCallback((path: string) => {
+    setCollapsedPaths((previous) => {
+      const next = new Set(previous);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
+
+  if (groups.length === 0) {
+    return <div className="diff-empty">No agent edits in this thread yet.</div>;
   }
 
   return (
@@ -593,16 +686,16 @@ type GitLogModeContentProps = {
 };
 
 export function GitLogModeContent({
-  logError,
-  logLoading,
-  logEntries,
-  showAheadSection,
-  showBehindSection,
-  logAheadEntries,
-  logBehindEntries,
-  selectedCommitSha,
-  onSelectCommit,
-  onShowLogMenu,
+    logError,
+    logLoading,
+    logEntries,
+    showAheadSection,
+    showBehindSection,
+    logAheadEntries,
+    logBehindEntries,
+    selectedCommitSha,
+    onSelectCommit,
+    onShowLogMenu,
 }: GitLogModeContentProps) {
   return (
     <div className="git-log-list">
@@ -676,15 +769,15 @@ export function GitLogModeContent({
 }
 
 type GitIssuesModeContentProps = {
-  issuesError: string | null | undefined;
-  issuesLoading: boolean;
-  issues: GitHubIssue[];
+    issuesError: string | null | undefined;
+    issuesLoading: boolean;
+    issues: GitHubIssue[];
 };
 
 export function GitIssuesModeContent({
-  issuesError,
-  issuesLoading,
-  issues,
+    issuesError,
+    issuesLoading,
+    issues,
 }: GitIssuesModeContentProps) {
   return (
     <div className="git-issues-list">
@@ -729,12 +822,12 @@ type GitPullRequestsModeContentProps = {
 };
 
 export function GitPullRequestsModeContent({
-  pullRequestsError,
-  pullRequestsLoading,
-  pullRequests,
-  selectedPullRequest,
-  onSelectPullRequest,
-  onShowPullRequestMenu,
+    pullRequestsError,
+    pullRequestsLoading,
+    pullRequests,
+    selectedPullRequest,
+    onSelectPullRequest,
+    onShowPullRequestMenu,
 }: GitPullRequestsModeContentProps) {
   return (
     <div className="git-pr-list">

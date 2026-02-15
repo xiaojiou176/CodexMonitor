@@ -18,6 +18,7 @@ import type {
   TailscaleDaemonCommandPreview,
   TailscaleStatus,
   WorkspaceInfo,
+  AppMention,
   WorkspaceSettings,
 } from "../types";
 import type {
@@ -46,6 +47,14 @@ export async function pickWorkspacePath(): Promise<string | null> {
     return null;
   }
   return selection;
+}
+
+export async function pickWorkspacePaths(): Promise<string[]> {
+  const selection = await open({ directory: true, multiple: true });
+  if (!selection) {
+    return [];
+  }
+  return Array.isArray(selection) ? selection : [selection];
 }
 
 export async function pickImageFiles(): Promise<string[]> {
@@ -273,6 +282,7 @@ export async function sendUserMessage(
     effort?: string | null;
     images?: string[];
     collaborationMode?: Record<string, unknown> | null;
+    appMentions?: AppMention[];
   },
 ) {
   const payload: Record<string, unknown> = {
@@ -286,6 +296,9 @@ export async function sendUserMessage(
   };
   if (options?.collaborationMode) {
     payload.collaborationMode = options.collaborationMode;
+  }
+  if (options?.appMentions && options.appMentions.length > 0) {
+    payload.appMentions = options.appMentions;
   }
   return invoke("send_user_message", payload);
 }
@@ -304,14 +317,19 @@ export async function steerTurn(
   turnId: string,
   text: string,
   images?: string[],
+  appMentions?: AppMention[],
 ) {
-  return invoke("turn_steer", {
+  const payload: Record<string, unknown> = {
     workspaceId,
     threadId,
     turnId,
     text,
     images: images ?? null,
-  });
+  };
+  if (appMentions && appMentions.length > 0) {
+    payload.appMentions = appMentions;
+  }
+  return invoke("turn_steer", payload);
 }
 
 export async function startReview(
@@ -367,6 +385,43 @@ export async function getGitStatus(workspace_id: string): Promise<{
   totalDeletions: number;
 }> {
   return invoke("get_git_status", { workspaceId: workspace_id });
+}
+
+export type InitGitRepoResponse =
+  | { status: "initialized"; commitError?: string }
+  | { status: "already_initialized" }
+  | { status: "needs_confirmation"; entryCount: number };
+
+export async function initGitRepo(
+  workspaceId: string,
+  branch: string,
+  force = false,
+): Promise<InitGitRepoResponse> {
+  return invoke<InitGitRepoResponse>("init_git_repo", { workspaceId, branch, force });
+}
+
+export type CreateGitHubRepoResponse =
+  | { status: "ok"; repo: string; remoteUrl?: string | null }
+  | {
+      status: "partial";
+      repo: string;
+      remoteUrl?: string | null;
+      pushError?: string | null;
+      defaultBranchError?: string | null;
+    };
+
+export async function createGitHubRepo(
+  workspaceId: string,
+  repo: string,
+  visibility: "private" | "public",
+  branch?: string | null,
+): Promise<CreateGitHubRepoResponse> {
+  return invoke<CreateGitHubRepoResponse>("create_github_repo", {
+    workspaceId,
+    repo,
+    visibility,
+    branch,
+  });
 }
 
 export async function listGitRoots(
@@ -475,6 +530,16 @@ export async function getGitHubPullRequestComments(
   });
 }
 
+export async function checkoutGitHubPullRequest(
+  workspace_id: string,
+  prNumber: number,
+): Promise<void> {
+  return invoke("checkout_github_pull_request", {
+    workspaceId: workspace_id,
+    prNumber,
+  });
+}
+
 export async function localUsageSnapshot(
   days?: number,
   workspacePath?: string | null,
@@ -488,6 +553,21 @@ export async function localUsageSnapshot(
 
 export async function getModelList(workspaceId: string) {
   return invoke<any>("model_list", { workspaceId });
+}
+
+export async function getExperimentalFeatureList(
+  workspaceId: string,
+  cursor?: string | null,
+  limit?: number | null,
+) {
+  return invoke<any>("experimental_feature_list", { workspaceId, cursor, limit });
+}
+
+export async function setCodexFeatureFlag(
+  featureKey: string,
+  enabled: boolean,
+): Promise<void> {
+  return invoke("set_codex_feature_flag", { featureKey, enabled });
 }
 
 export async function generateRunMetadata(workspaceId: string, prompt: string) {
@@ -530,8 +610,9 @@ export async function getAppsList(
   workspaceId: string,
   cursor?: string | null,
   limit?: number | null,
+  threadId?: string | null,
 ) {
-  return invoke<any>("apps_list", { workspaceId, cursor, limit });
+  return invoke<any>("apps_list", { workspaceId, cursor, limit, threadId });
 }
 
 export async function getPromptsList(workspaceId: string) {
@@ -830,6 +911,14 @@ export async function listMcpServerStatus(
 
 export async function resumeThread(workspaceId: string, threadId: string) {
   return invoke<any>("resume_thread", { workspaceId, threadId });
+}
+
+export async function threadLiveSubscribe(workspaceId: string, threadId: string) {
+  return invoke<any>("thread_live_subscribe", { workspaceId, threadId });
+}
+
+export async function threadLiveUnsubscribe(workspaceId: string, threadId: string) {
+  return invoke<any>("thread_live_unsubscribe", { workspaceId, threadId });
 }
 
 export async function archiveThread(workspaceId: string, threadId: string) {

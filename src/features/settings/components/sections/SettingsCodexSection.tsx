@@ -1,16 +1,23 @@
+import { useEffect, useMemo, useRef } from "react";
 import Stethoscope from "lucide-react/dist/esm/icons/stethoscope";
 import type { Dispatch, SetStateAction } from "react";
 import type {
   AppSettings,
   CodexDoctorResult,
   CodexUpdateResult,
+  ModelOption,
   WorkspaceInfo,
-} from "../../../../types";
-import { FileEditorCard } from "../../../shared/components/FileEditorCard";
+} from "@/types";
+import { FileEditorCard } from "@/features/shared/components/FileEditorCard";
 
 type SettingsCodexSectionProps = {
   appSettings: AppSettings;
   onUpdateAppSettings: (next: AppSettings) => Promise<void>;
+  defaultModels: ModelOption[];
+  defaultModelsLoading: boolean;
+  defaultModelsError: string | null;
+  defaultModelsConnectedWorkspaceCount: number;
+  onRefreshDefaultModels: () => void;
   codexPathDraft: string;
   codexArgsDraft: string;
   codexDirty: boolean;
@@ -68,9 +75,58 @@ const normalizeOverrideValue = (value: string): string | null => {
   return trimmed ? trimmed : null;
 };
 
+const DEFAULT_REASONING_EFFORT = "medium";
+
+const normalizeEffortValue = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed.toLowerCase() : null;
+};
+
+function coerceSavedModelSlug(value: string | null, models: ModelOption[]): string | null {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) {
+    return null;
+  }
+  const bySlug = models.find((model) => model.model === trimmed);
+  if (bySlug) {
+    return bySlug.model;
+  }
+  const byId = models.find((model) => model.id === trimmed);
+  return byId ? byId.model : null;
+}
+
+const getReasoningSupport = (model: ModelOption | null): boolean => {
+  if (!model) {
+    return false;
+  }
+  return model.supportedReasoningEfforts.length > 0 || model.defaultReasoningEffort !== null;
+};
+
+const getReasoningOptions = (model: ModelOption | null): string[] => {
+  if (!model) {
+    return [];
+  }
+  const supported = model.supportedReasoningEfforts
+    .map((effort) => normalizeEffortValue(effort.reasoningEffort))
+    .filter((effort): effort is string => Boolean(effort));
+  if (supported.length > 0) {
+    return Array.from(new Set(supported));
+  }
+  const fallback = normalizeEffortValue(model.defaultReasoningEffort);
+  return fallback ? [fallback] : [];
+};
+
 export function SettingsCodexSection({
   appSettings,
   onUpdateAppSettings,
+  defaultModels,
+  defaultModelsLoading,
+  defaultModelsError,
+  defaultModelsConnectedWorkspaceCount,
+  onRefreshDefaultModels,
   codexPathDraft,
   codexArgsDraft,
   codexDirty,
@@ -113,6 +169,87 @@ export function SettingsCodexSection({
   onUpdateWorkspaceCodexBin,
   onUpdateWorkspaceSettings,
 }: SettingsCodexSectionProps) {
+  const latestModelSlug = defaultModels[0]?.model ?? null;
+  const savedModelSlug = useMemo(
+    () => coerceSavedModelSlug(appSettings.lastComposerModelId, defaultModels),
+    [appSettings.lastComposerModelId, defaultModels],
+  );
+  const selectedModelSlug = savedModelSlug ?? latestModelSlug ?? "";
+  const selectedModel = useMemo(
+    () => defaultModels.find((model) => model.model === selectedModelSlug) ?? null,
+    [defaultModels, selectedModelSlug],
+  );
+  const reasoningSupported = useMemo(
+    () => getReasoningSupport(selectedModel),
+    [selectedModel],
+  );
+  const reasoningOptions = useMemo(
+    () => getReasoningOptions(selectedModel),
+    [selectedModel],
+  );
+  const savedEffort = useMemo(
+    () => normalizeEffortValue(appSettings.lastComposerReasoningEffort),
+    [appSettings.lastComposerReasoningEffort],
+  );
+  const selectedEffort = useMemo(() => {
+    if (!reasoningSupported) {
+      return "";
+    }
+    if (savedEffort && reasoningOptions.includes(savedEffort)) {
+      return savedEffort;
+    }
+    if (reasoningOptions.includes(DEFAULT_REASONING_EFFORT)) {
+      return DEFAULT_REASONING_EFFORT;
+    }
+    const fallback = normalizeEffortValue(selectedModel?.defaultReasoningEffort);
+    if (fallback && reasoningOptions.includes(fallback)) {
+      return fallback;
+    }
+    return reasoningOptions[0] ?? "";
+  }, [reasoningOptions, reasoningSupported, savedEffort, selectedModel]);
+
+  const didNormalizeDefaultsRef = useRef(false);
+  useEffect(() => {
+    if (didNormalizeDefaultsRef.current) {
+      return;
+    }
+    if (!defaultModels.length) {
+      return;
+    }
+    const savedRawModel = (appSettings.lastComposerModelId ?? "").trim();
+    const savedRawEffort = (appSettings.lastComposerReasoningEffort ?? "").trim();
+    const shouldNormalizeModel = savedRawModel.length === 0 || savedModelSlug === null;
+    const shouldNormalizeEffort =
+      reasoningSupported &&
+      (savedRawEffort.length === 0 ||
+        savedEffort === null ||
+        !reasoningOptions.includes(savedEffort));
+    if (!shouldNormalizeModel && !shouldNormalizeEffort) {
+      didNormalizeDefaultsRef.current = true;
+      return;
+    }
+
+    const next: AppSettings = {
+      ...appSettings,
+      lastComposerModelId: shouldNormalizeModel ? selectedModelSlug : appSettings.lastComposerModelId,
+      lastComposerReasoningEffort: shouldNormalizeEffort
+        ? selectedEffort
+        : appSettings.lastComposerReasoningEffort,
+    };
+    didNormalizeDefaultsRef.current = true;
+    void onUpdateAppSettings(next);
+  }, [
+    appSettings,
+    defaultModels.length,
+    onUpdateAppSettings,
+    reasoningOptions,
+    reasoningSupported,
+    savedEffort,
+    savedModelSlug,
+    selectedModelSlug,
+    selectedEffort,
+  ]);
+
   return (
     <section className="settings-section">
       <div className="settings-section-title">Codex</div>

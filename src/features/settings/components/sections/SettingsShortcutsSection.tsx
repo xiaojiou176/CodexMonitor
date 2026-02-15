@@ -5,7 +5,7 @@ import type {
   ShortcutDraftKey,
   ShortcutDrafts,
   ShortcutSettingKey,
-} from "../settingsTypes";
+} from "@settings/components/settingsTypes";
 
 type ShortcutItem = {
   label: string;
@@ -281,6 +281,11 @@ export function SettingsShortcutsSection({
           ))}
         </div>
       ))}
+      {filteredGroups.length === 0 && (
+        <div className="settings-empty">
+          No shortcuts match {normalizedSearchQuery ? `"${searchQuery.trim()}"` : "your search"}.
+        </div>
+      )}
     </section>
   );
 }

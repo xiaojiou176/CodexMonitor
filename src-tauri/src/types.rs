@@ -596,6 +596,11 @@ pub(crate) struct AppSettings {
         rename = "notificationSoundsEnabled"
     )]
     pub(crate) notification_sounds_enabled: bool,
+    #[serde(
+        default = "default_split_chat_diff_view",
+        rename = "splitChatDiffView"
+    )]
+    pub(crate) split_chat_diff_view: bool,
     #[serde(default = "default_preload_git_diffs", rename = "preloadGitDiffs")]
     pub(crate) preload_git_diffs: bool,
     #[serde(
@@ -614,6 +619,11 @@ pub(crate) struct AppSettings {
     )]
     pub(crate) system_notifications_enabled: bool,
     #[serde(
+        default = "default_subagent_system_notifications_enabled",
+        rename = "subagentSystemNotificationsEnabled"
+    )]
+    pub(crate) subagent_system_notifications_enabled: bool,
+    #[serde(
         default = "default_experimental_collab_enabled",
         rename = "experimentalCollabEnabled"
     )]
@@ -629,6 +639,11 @@ pub(crate) struct AppSettings {
         alias = "experimentalSteerEnabled"
     )]
     pub(crate) steer_enabled: bool,
+    #[serde(
+        default = "default_pause_queued_messages_when_response_required",
+        rename = "pauseQueuedMessagesWhenResponseRequired"
+    )]
+    pub(crate) pause_queued_messages_when_response_required: bool,
     #[serde(
         default = "default_unified_exec_enabled",
         rename = "unifiedExecEnabled",
@@ -947,6 +962,14 @@ fn default_system_notifications_enabled() -> bool {
     true
 }
 
+fn default_subagent_system_notifications_enabled() -> bool {
+    true
+}
+
+fn default_split_chat_diff_view() -> bool {
+    false
+}
+
 fn default_preload_git_diffs() -> bool {
     true
 }
@@ -973,6 +996,10 @@ fn default_collaboration_modes_enabled() -> bool {
 }
 
 fn default_steer_enabled() -> bool {
+    true
+}
+
+fn default_pause_queued_messages_when_response_required() -> bool {
     true
 }
 
@@ -1217,12 +1244,16 @@ impl Default for AppSettings {
             code_font_size: default_code_font_size(),
             notification_sounds_enabled: true,
             system_notifications_enabled: true,
+            subagent_system_notifications_enabled: true,
+            split_chat_diff_view: default_split_chat_diff_view(),
             preload_git_diffs: default_preload_git_diffs(),
             git_diff_ignore_whitespace_changes: default_git_diff_ignore_whitespace_changes(),
             commit_message_prompt: default_commit_message_prompt(),
             experimental_collab_enabled: false,
             collaboration_modes_enabled: true,
             steer_enabled: true,
+            pause_queued_messages_when_response_required:
+                default_pause_queued_messages_when_response_required(),
             unified_exec_enabled: true,
             auto_archive_sub_agent_threads_enabled: default_auto_archive_sub_agent_threads_enabled(),
             auto_archive_sub_agent_threads_max_age_minutes:
@@ -1383,11 +1414,14 @@ mod tests {
         assert_eq!(settings.code_font_size, 11);
         assert!(settings.notification_sounds_enabled);
         assert!(settings.system_notifications_enabled);
+        assert!(settings.subagent_system_notifications_enabled);
+        assert!(!settings.split_chat_diff_view);
         assert!(settings.preload_git_diffs);
         assert!(!settings.git_diff_ignore_whitespace_changes);
         assert!(settings.commit_message_prompt.contains("{diff}"));
         assert!(settings.collaboration_modes_enabled);
         assert!(settings.steer_enabled);
+        assert!(settings.pause_queued_messages_when_response_required);
         assert!(settings.unified_exec_enabled);
         assert!(settings.auto_archive_sub_agent_threads_enabled);
         assert_eq!(settings.auto_archive_sub_agent_threads_max_age_minutes, 30);

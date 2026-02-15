@@ -135,6 +135,7 @@ type ThreadTurnRuntimeMeta = {
 export type ThreadState = {
   activeThreadIdByWorkspace: Record<string, string | null>;
   itemsByThread: Record<string, ConversationItem[]>;
+  maxItemsPerThread: number | null;
   threadsByWorkspace: Record<string, ThreadSummary[]>;
   hiddenThreadIdsByWorkspace: Record<string, Record<string, true>>;
   threadParentById: Record<string, string>;
@@ -159,6 +160,7 @@ export type ThreadState = {
 
 export type ThreadAction =
   | { type: "setActiveThreadId"; workspaceId: string; threadId: string | null }
+  | { type: "setMaxItemsPerThread"; maxItemsPerThread: number | null }
   | { type: "ensureThread"; workspaceId: string; threadId: string }
   | { type: "hideThread"; workspaceId: string; threadId: string }
   | { type: "removeThread"; workspaceId: string; threadId: string }
@@ -306,6 +308,7 @@ const emptyItems: Record<string, ConversationItem[]> = {};
 export const initialState: ThreadState = {
   activeThreadIdByWorkspace: {},
   itemsByThread: emptyItems,
+  maxItemsPerThread: CHAT_SCROLLBACK_DEFAULT,
   threadsByWorkspace: {},
   hiddenThreadIdsByWorkspace: {},
   threadParentById: {},
@@ -328,30 +331,7 @@ export const initialState: ThreadState = {
   lastAgentMessageByThread: {},
 };
 
-function mergeStreamingText(existing: string, delta: string) {
-  if (!delta) {
-    return existing;
-  }
-  if (!existing) {
-    return delta;
-  }
-  if (delta === existing) {
-    return existing;
-  }
-  if (delta.startsWith(existing)) {
-    return delta;
-  }
-  if (existing.startsWith(delta)) {
-    return existing;
-  }
-  const maxOverlap = Math.min(existing.length, delta.length);
-  for (let length = maxOverlap; length > 0; length -= 1) {
-    if (existing.endsWith(delta.slice(0, length))) {
-      return `${existing}${delta.slice(length)}`;
-    }
-  }
-  return `${existing}${delta}`;
-}
+type ThreadSliceReducer = (state: ThreadState, action: ThreadAction) => ThreadState;
 
 function normalizeNonEmptyString(value: string | null | undefined) {
   if (typeof value !== "string") {
@@ -1642,4 +1622,5 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     default:
       return state;
   }
+  return state;
 }

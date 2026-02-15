@@ -320,6 +320,7 @@ type SidebarProps = {
   threadListLoadingByWorkspace: Record<string, boolean>;
   threadListPagingByWorkspace: Record<string, boolean>;
   threadListCursorByWorkspace: Record<string, string | null>;
+  pinnedThreadsVersion: number;
   threadListSortKey: ThreadListSortKey;
   onSetThreadListSortKey: (sortKey: ThreadListSortKey) => void;
   onRefreshAllThreads: () => void;
@@ -382,6 +383,7 @@ export const Sidebar = memo(function Sidebar({
   threadListLoadingByWorkspace,
   threadListPagingByWorkspace,
   threadListCursorByWorkspace,
+  pinnedThreadsVersion,
   threadListSortKey,
   onSetThreadListSortKey,
   onRefreshAllThreads,
@@ -613,6 +615,19 @@ export const Sidebar = memo(function Sidebar({
     });
   const debouncedQuery = useDebouncedValue(searchQuery, 150);
   const normalizedQuery = debouncedQuery.trim().toLowerCase();
+  const pendingUserInputKeys = useMemo(
+    () =>
+      new Set(
+        userInputRequests
+          .map((request) => {
+            const workspaceId = request.workspace_id.trim();
+            const threadId = request.params.thread_id.trim();
+            return workspaceId && threadId ? `${workspaceId}:${threadId}` : "";
+          })
+          .filter(Boolean),
+      ),
+    [userInputRequests],
+  );
 
   const orderedThreadsByWorkspace = useMemo(() => {
     const next: Record<string, ThreadSummary[]> = {};
@@ -795,6 +810,7 @@ export const Sidebar = memo(function Sidebar({
         true,
         workspace.id,
         getPinTimestamp,
+        pinnedThreadsVersion,
       );
       if (!pinnedRows.length) {
         return;
@@ -840,6 +856,7 @@ export const Sidebar = memo(function Sidebar({
     orderedThreadsByWorkspace,
     getThreadRows,
     getPinTimestamp,
+    pinnedThreadsVersion,
     isWorkspaceMatch,
   ]);
 
@@ -1517,6 +1534,7 @@ export const Sidebar = memo(function Sidebar({
                 selectedWorkspaceId={threadSelection.workspaceId}
                 selectedThreadIds={threadSelection.threadIds}
                 threadStatusById={threadStatusById}
+                pendingUserInputKeys={pendingUserInputKeys}
                 getThreadTime={getThreadTime}
                 isThreadPinned={isThreadPinned}
                 onSelectThread={onSelectThread}
@@ -1567,6 +1585,7 @@ export const Sidebar = memo(function Sidebar({
                     isExpanded,
                     entry.id,
                     getPinTimestamp,
+                    pinnedThreadsVersion,
                   );
                   const nextCursor =
                     threadListCursorByWorkspace[entry.id] ?? null;
@@ -1699,10 +1718,12 @@ export const Sidebar = memo(function Sidebar({
                           expandedWorkspaces={expandedWorkspaces}
                           activeWorkspaceId={activeWorkspaceId}
                           activeThreadId={activeThreadId}
+                          pendingUserInputKeys={pendingUserInputKeys}
                           getThreadRows={getThreadRows}
                           getThreadTime={getThreadTime}
                           isThreadPinned={isThreadPinned}
                           getPinTimestamp={getPinTimestamp}
+                          pinnedThreadsVersion={pinnedThreadsVersion}
                           onSelectWorkspace={onSelectWorkspace}
                           onConnectWorkspace={onConnectWorkspace}
                           onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
@@ -1730,6 +1751,7 @@ export const Sidebar = memo(function Sidebar({
                               : undefined
                           }
                           threadStatusById={threadStatusById}
+                          pendingUserInputKeys={pendingUserInputKeys}
                           getThreadTime={getThreadTime}
                           isThreadPinned={isThreadPinned}
                           onToggleExpanded={handleToggleExpanded}

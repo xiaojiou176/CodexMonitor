@@ -7,6 +7,7 @@ import type {
 } from "../hooks/useWorkspaceHome";
 import { FileEditorCard } from "../../shared/components/FileEditorCard";
 import { WorkspaceHomeHistory } from "./WorkspaceHomeHistory";
+import { WorkspaceHomeGitInitBanner } from "./WorkspaceHomeGitInitBanner";
 import { buildIconPath } from "./workspaceHomeHelpers";
 
 type ThreadStatus = {
@@ -16,6 +17,9 @@ type ThreadStatus = {
 
 type WorkspaceHomeProps = {
   workspace: WorkspaceInfo;
+  showGitInitBanner: boolean;
+  initGitRepoLoading: boolean;
+  onInitGitRepo: () => void | Promise<void>;
   runs: WorkspaceHomeRun[];
   recentThreadInstances: WorkspaceHomeRunInstance[];
   recentThreadsUpdatedAt: number | null;
@@ -37,6 +41,9 @@ type WorkspaceHomeProps = {
 
 export function WorkspaceHome({
   workspace,
+  showGitInitBanner,
+  initGitRepoLoading,
+  onInitGitRepo,
   runs,
   recentThreadInstances,
   recentThreadsUpdatedAt,

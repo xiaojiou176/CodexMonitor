@@ -10,8 +10,8 @@ import {
   getAppsList as getAppsListService,
   listMcpServerStatus as listMcpServerStatusService,
   compactThread as compactThreadService,
-} from "../../../services/tauri";
-import type { WorkspaceInfo } from "../../../types";
+} from "@services/tauri";
+import type { WorkspaceInfo } from "@/types";
 import { useThreadMessaging } from "./useThreadMessaging";
 
 vi.mock("@sentry/react", () => ({
@@ -20,7 +20,7 @@ vi.mock("@sentry/react", () => ({
   },
 }));
 
-vi.mock("../../../services/tauri", () => ({
+vi.mock("@services/tauri", () => ({
   sendUserMessage: vi.fn(),
   steerTurn: vi.fn(),
   startReview: vi.fn(),
@@ -153,7 +153,57 @@ describe("useThreadMessaging telemetry", () => {
     );
   });
 
+  it("forwards explicit app mentions to turn/start", async () => {
+    const { result } = renderHook(() =>
+      useThreadMessaging({
+        activeWorkspace: workspace,
+        activeThreadId: "thread-1",
+        accessMode: "current",
+        model: null,
+        effort: null,
+        collaborationMode: null,
+        reviewDeliveryMode: "inline",
+        steerEnabled: false,
+        customPrompts: [],
+        threadStatusById: {},
+        activeTurnIdByThread: {},
+        rateLimitsByWorkspace: {},
+        pendingInterruptsRef: { current: new Set<string>() },
+        dispatch: vi.fn(),
+        getCustomName: vi.fn(() => undefined),
+        markProcessing: vi.fn(),
+        markReviewing: vi.fn(),
+        setActiveTurnId: vi.fn(),
+        recordThreadActivity: vi.fn(),
+        safeMessageActivity: vi.fn(),
+        onDebug: vi.fn(),
+        pushThreadErrorMessage: vi.fn(),
+        ensureThreadForActiveWorkspace: vi.fn(async () => "thread-1"),
+        ensureThreadForWorkspace: vi.fn(async () => "thread-1"),
+        refreshThread: vi.fn(async () => null),
+        forkThreadForWorkspace: vi.fn(async () => null),
+        updateThreadParent: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.sendUserMessage("hello $calendar", [], [
+        { name: "Calendar App", path: "app://connector_calendar" },
+      ]);
+    });
+
+    expect(sendUserMessageService).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "hello $calendar",
+      expect.objectContaining({
+        appMentions: [{ name: "Calendar App", path: "app://connector_calendar" }],
+      }),
+    );
+  });
+
   it("uses turn/steer when steer mode is enabled and an active turn is present", async () => {
+    const dispatch = vi.fn();
     const { result } = renderHook(() =>
       useThreadMessaging({
         activeWorkspace: workspace,
@@ -178,7 +228,7 @@ describe("useThreadMessaging telemetry", () => {
         },
         rateLimitsByWorkspace: {},
         pendingInterruptsRef: { current: new Set<string>() },
-        dispatch: vi.fn(),
+        dispatch,
         getCustomName: vi.fn(() => undefined),
         markProcessing: vi.fn(),
         markReviewing: vi.fn(),
@@ -212,6 +262,9 @@ describe("useThreadMessaging telemetry", () => {
       [],
     );
     expect(sendUserMessageService).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "upsertItem" }),
+    );
   });
 
   it("enforces sub-agent model inheritance in collaboration settings", async () => {
@@ -280,10 +333,7 @@ describe("useThreadMessaging telemetry", () => {
 
   it("falls back to turn/start when turn/steer is unsupported and remembers fallback", async () => {
     vi.mocked(steerTurnService).mockResolvedValueOnce({
-      error: {
-        message:
-          "Invalid request: unknown variant `turn/steer`, expected one of `turn/start`, `turn/interrupt`",
-      },
+      error: { message: "no active turn to steer" },
     } as unknown as Awaited<ReturnType<typeof steerTurnService>>);
 
     const { result } = renderHook(() =>
@@ -318,7 +368,7 @@ describe("useThreadMessaging telemetry", () => {
         recordThreadActivity: vi.fn(),
         safeMessageActivity: vi.fn(),
         onDebug: vi.fn(),
-        pushThreadErrorMessage: vi.fn(),
+        pushThreadErrorMessage,
         ensureThreadForActiveWorkspace: vi.fn(async () => "thread-1"),
         ensureThreadForWorkspace: vi.fn(async () => "thread-1"),
         refreshThread: vi.fn(async () => null),
@@ -331,24 +381,14 @@ describe("useThreadMessaging telemetry", () => {
       await result.current.sendUserMessageToThread(
         workspace,
         "thread-1",
-        "fallback once",
-        [],
-      );
-    });
-    await act(async () => {
-      await result.current.sendUserMessageToThread(
-        workspace,
-        "thread-1",
-        "fallback twice",
+        "steer should fail",
         [],
       );
     });
 
     expect(steerTurnService).toHaveBeenCalledTimes(1);
-    expect(sendUserMessageService).toHaveBeenCalledTimes(2);
-    expect(sendUserMessageService).toHaveBeenNthCalledWith(
-      1,
-      "ws-1",
+    expect(sendUserMessageService).not.toHaveBeenCalled();
+    expect(pushThreadErrorMessage).toHaveBeenCalledWith(
       "thread-1",
       "fallback once",
       expect.any(Object),

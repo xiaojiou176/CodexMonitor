@@ -1,5 +1,18 @@
 use super::*;
 
+#[path = "rpc/codex.rs"]
+mod codex;
+#[path = "rpc/daemon.rs"]
+mod daemon;
+#[path = "rpc/dispatcher.rs"]
+mod dispatcher;
+#[path = "rpc/git.rs"]
+mod git;
+#[path = "rpc/prompts.rs"]
+mod prompts;
+#[path = "rpc/workspace.rs"]
+mod workspace;
+
 pub(super) fn build_error_response(id: Option<u64>, message: &str) -> Option<String> {
     let id = id?;
     Some(
@@ -67,7 +80,7 @@ pub(super) fn parse_auth_token(params: &Value) -> Option<String> {
     }
 }
 
-fn parse_string(value: &Value, key: &str) -> Result<String, String> {
+pub(super) fn parse_string(value: &Value, key: &str) -> Result<String, String> {
     match value {
         Value::Object(map) => map
             .get(key)
@@ -78,7 +91,7 @@ fn parse_string(value: &Value, key: &str) -> Result<String, String> {
     }
 }
 
-fn parse_optional_string(value: &Value, key: &str) -> Option<String> {
+pub(super) fn parse_optional_string(value: &Value, key: &str) -> Option<String> {
     match value {
         Value::Object(map) => map
             .get(key)
@@ -88,7 +101,7 @@ fn parse_optional_string(value: &Value, key: &str) -> Option<String> {
     }
 }
 
-fn parse_optional_u32(value: &Value, key: &str) -> Option<u32> {
+pub(super) fn parse_optional_u32(value: &Value, key: &str) -> Option<u32> {
     match value {
         Value::Object(map) => map.get(key).and_then(|value| value.as_u64()).and_then(|v| {
             if v > u32::MAX as u64 {
@@ -101,14 +114,14 @@ fn parse_optional_u32(value: &Value, key: &str) -> Option<u32> {
     }
 }
 
-fn parse_optional_bool(value: &Value, key: &str) -> Option<bool> {
+pub(super) fn parse_optional_bool(value: &Value, key: &str) -> Option<bool> {
     match value {
         Value::Object(map) => map.get(key).and_then(|value| value.as_bool()),
         _ => None,
     }
 }
 
-fn parse_optional_string_array(value: &Value, key: &str) -> Option<Vec<String>> {
+pub(super) fn parse_optional_string_array(value: &Value, key: &str) -> Option<Vec<String>> {
     match value {
         Value::Object(map) => map
             .get(key)
@@ -123,40 +136,15 @@ fn parse_optional_string_array(value: &Value, key: &str) -> Option<Vec<String>> 
     }
 }
 
-fn parse_string_array(value: &Value, key: &str) -> Result<Vec<String>, String> {
+pub(super) fn parse_string_array(value: &Value, key: &str) -> Result<Vec<String>, String> {
     parse_optional_string_array(value, key).ok_or_else(|| format!("missing `{key}`"))
 }
 
-fn parse_optional_value(value: &Value, key: &str) -> Option<Value> {
+pub(super) fn parse_optional_value(value: &Value, key: &str) -> Option<Value> {
     match value {
         Value::Object(map) => map.get(key).cloned(),
         _ => None,
     }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FileReadRequest {
-    scope: file_policy::FileScope,
-    kind: file_policy::FileKind,
-    workspace_id: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FileWriteRequest {
-    scope: file_policy::FileScope,
-    kind: file_policy::FileKind,
-    workspace_id: Option<String>,
-    content: String,
-}
-
-fn parse_file_read_request(params: &Value) -> Result<FileReadRequest, String> {
-    serde_json::from_value(params.clone()).map_err(|err| err.to_string())
-}
-
-fn parse_file_write_request(params: &Value) -> Result<FileWriteRequest, String> {
-    serde_json::from_value(params.clone()).map_err(|err| err.to_string())
 }
 
 pub(super) async fn handle_rpc_request(

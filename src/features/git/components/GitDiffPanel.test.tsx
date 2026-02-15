@@ -68,6 +68,33 @@ const baseProps = {
 };
 
 describe("GitDiffPanel", () => {
+  it("shows an initialize git button when the repo is missing", () => {
+    const onInitGitRepo = vi.fn();
+    const { container } = render(
+      <GitDiffPanel
+        {...baseProps}
+        error="not a git repository"
+        onInitGitRepo={onInitGitRepo}
+      />,
+    );
+
+    const initButton = within(container).getByRole("button", { name: "Initialize Git" });
+    fireEvent.click(initButton);
+    expect(onInitGitRepo).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not show initialize git when the git root path is invalid", () => {
+    const { container } = render(
+      <GitDiffPanel
+        {...baseProps}
+        error="Git root not found: apps"
+        onInitGitRepo={vi.fn()}
+      />,
+    );
+
+    expect(within(container).queryByRole("button", { name: "Initialize Git" })).toBeNull();
+  });
+
   it("enables commit when message exists and only unstaged changes", () => {
     const onCommit = vi.fn();
     render(

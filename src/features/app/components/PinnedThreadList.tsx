@@ -34,6 +34,7 @@ type PinnedThreadListProps = {
   selectedWorkspaceId?: string | null;
   selectedThreadIds?: ReadonlySet<string>;
   threadStatusById: ThreadStatusMap;
+  pendingUserInputKeys?: Set<string>;
   getThreadTime: (thread: ThreadSummary) => string | null;
   isThreadPinned: (workspaceId: string, threadId: string) => boolean;
   onSelectThread: (workspaceId: string, threadId: string) => void;
@@ -60,6 +61,7 @@ export function PinnedThreadList({
   selectedWorkspaceId = null,
   selectedThreadIds,
   threadStatusById,
+  pendingUserInputKeys,
   getThreadTime,
   isThreadPinned,
   onSelectThread,

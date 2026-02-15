@@ -37,6 +37,8 @@ type WorkingIndicatorProps = {
   lastDurationMs?: number | null;
   hasItems: boolean;
   reasoningLabel?: string | null;
+  showPollingFetchStatus?: boolean;
+  pollingIntervalMs?: number;
 };
 
 type MessageRowProps = MarkdownFileLinkProps & {
@@ -381,8 +383,13 @@ export const WorkingIndicator = memo(function WorkingIndicator({
   lastDurationMs = null,
   hasItems,
   reasoningLabel = null,
+  showPollingFetchStatus = false,
+  pollingIntervalMs = 12000,
 }: WorkingIndicatorProps) {
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [pollCountdownSeconds, setPollCountdownSeconds] = useState(() =>
+    Math.max(1, Math.ceil(pollingIntervalMs / 1000)),
+  );
 
   useEffect(() => {
     if (!isThinking || !processingStartedAt) {

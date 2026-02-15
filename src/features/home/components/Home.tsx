@@ -1,4 +1,4 @@
-import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
+import Settings from "lucide-react/dist/esm/icons/settings";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 import type { LocalUsageSnapshot } from "../../../types";
@@ -23,7 +23,7 @@ type UsageWorkspaceOption = {
 };
 
 type HomeProps = {
-  onOpenProject: () => void;
+  onOpenSettings: () => void;
   onAddWorkspace: () => void;
   latestAgentRuns: LatestAgentRun[];
   isLoadingLatestAgents: boolean;
@@ -40,7 +40,7 @@ type HomeProps = {
 };
 
 export function Home({
-  onOpenProject,
+  onOpenSettings,
   onAddWorkspace,
   latestAgentRuns,
   isLoadingLatestAgents,

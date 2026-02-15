@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import type { Dispatch, MutableRefObject } from "react";
 import * as Sentry from "@sentry/react";
 import type {
@@ -7,7 +7,7 @@ import type {
   DebugEntry,
   ReviewTarget,
   WorkspaceInfo,
-} from "../../../types";
+} from "@/types";
 import {
   compactThread as compactThreadService,
   sendUserMessage as sendUserMessageService,
@@ -16,17 +16,17 @@ import {
   interruptTurn as interruptTurnService,
   getAppsList as getAppsListService,
   listMcpServerStatus as listMcpServerStatusService,
-} from "../../../services/tauri";
-import { expandCustomPromptText } from "../../../utils/customPrompts";
+} from "@services/tauri";
+import { expandCustomPromptText } from "@utils/customPrompts";
 import {
   asString,
   extractReviewThreadId,
   extractRpcErrorMessage,
   parseReviewTarget,
-} from "../utils/threadNormalize";
+} from "@threads/utils/threadNormalize";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 import { useReviewPrompt } from "./useReviewPrompt";
-import { formatRelativeTime } from "../../../utils/time";
+import { formatRelativeTime } from "@utils/time";
 
 type SendMessageOptions = {
   skipPromptExpansion?: boolean;
@@ -65,8 +65,17 @@ type UseThreadMessagingOptions = {
   ensureThreadForActiveWorkspace: () => Promise<string | null>;
   ensureThreadForWorkspace: (workspaceId: string) => Promise<string | null>;
   refreshThread: (workspaceId: string, threadId: string) => Promise<string | null>;
-  forkThreadForWorkspace: (workspaceId: string, threadId: string) => Promise<string | null>;
+  forkThreadForWorkspace: (
+    workspaceId: string,
+    threadId: string,
+    options?: { activate?: boolean },
+  ) => Promise<string | null>;
   updateThreadParent: (parentId: string, childIds: string[]) => void;
+  registerDetachedReviewChild?: (
+    workspaceId: string,
+    parentId: string,
+    childId: string,
+  ) => void;
 };
 
 const SUBAGENT_MODEL_POLICY_MARKER = "[codexmonitor-subagent-model-inherit-v1]";
@@ -153,9 +162,8 @@ export function useThreadMessaging({
   refreshThread,
   forkThreadForWorkspace,
   updateThreadParent,
+  registerDetachedReviewChild,
 }: UseThreadMessagingOptions) {
-  const steerSupportedByWorkspaceRef = useRef<Record<string, boolean>>({});
-
   const sendMessageToThread = useCallback(
     async (
       workspace: WorkspaceInfo,
@@ -259,7 +267,7 @@ export function useThreadMessaging({
           collaborationMode: sanitizedCollaborationMode,
         },
       });
-      let requestMode: "start" | "steer" = shouldSteer ? "steer" : "start";
+      const requestMode: "start" | "steer" = shouldSteer ? "steer" : "start";
       try {
         if (options?.forceSteer && isProcessing && !activeTurnId) {
           try {
@@ -278,43 +286,38 @@ export function useThreadMessaging({
             effort: resolvedEffort,
             collaborationMode: sanitizedCollaborationMode,
             images,
-          },
-        );
+          };
+          if (appMentions.length > 0) {
+            payload.appMentions = appMentions;
+          }
+          return sendUserMessageService(
+            workspace.id,
+            threadId,
+            finalText,
+            payload,
+          );
+        };
 
-        let response: Record<string, unknown>;
-        if (shouldSteer) {
-          try {
-            response = (await steerTurnService(
+        const response: Record<string, unknown> = shouldSteer
+          ? (await (appMentions.length > 0
+            ? steerTurnService(
               workspace.id,
               threadId,
               activeTurnId ?? "",
               finalText,
               images,
-            )) as Record<string, unknown>;
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            if (!isUnsupportedTurnSteerError(message)) {
-              throw error;
-            }
-            steerSupportedByWorkspaceRef.current[workspace.id] = false;
-            requestMode = "start";
-            response = (await startTurn()) as Record<string, unknown>;
-          }
-        } else {
-          response = (await startTurn()) as Record<string, unknown>;
-        }
+              appMentions,
+            )
+            : steerTurnService(
+              workspace.id,
+              threadId,
+              activeTurnId ?? "",
+              finalText,
+              images,
+            ))) as Record<string, unknown>
+          : (await startTurn()) as Record<string, unknown>;
 
-        let rpcError = extractRpcErrorMessage(response);
-        if (
-          rpcError
-          && requestMode === "steer"
-          && isUnsupportedTurnSteerError(rpcError)
-        ) {
-          steerSupportedByWorkspaceRef.current[workspace.id] = false;
-          requestMode = "start";
-          response = (await startTurn()) as Record<string, unknown>;
-          rpcError = extractRpcErrorMessage(response);
-        }
+        const rpcError = extractRpcErrorMessage(response);
 
         // When turn/start fails with "not found", force-refresh the thread
         // via thread/resume so the app-server re-registers it, then retry once.
@@ -559,9 +562,12 @@ export function useThreadMessaging({
         return false;
       }
 
-      markProcessing(threadId, true);
-      markReviewing(threadId, true);
-      safeMessageActivity();
+      const lockParentThread = reviewDeliveryMode !== "detached";
+      if (lockParentThread) {
+        markProcessing(threadId, true);
+        markReviewing(threadId, true);
+        safeMessageActivity();
+      }
       onDebug?.({
         id: `${Date.now()}-client-review-start`,
         timestamp: Date.now(),
@@ -589,9 +595,11 @@ export function useThreadMessaging({
         });
         const rpcError = extractRpcErrorMessage(response);
         if (rpcError) {
-          markProcessing(threadId, false);
-          markReviewing(threadId, false);
-          setActiveTurnId(threadId, null);
+          if (lockParentThread) {
+            markProcessing(threadId, false);
+            markReviewing(threadId, false);
+            setActiveTurnId(threadId, null);
+          }
           pushThreadErrorMessage(threadId, `Review failed to start: ${rpcError}`);
           safeMessageActivity();
           return false;
@@ -599,11 +607,16 @@ export function useThreadMessaging({
         const reviewThreadId = extractReviewThreadId(response);
         if (reviewThreadId && reviewThreadId !== threadId) {
           updateThreadParent(threadId, [reviewThreadId]);
+          if (reviewDeliveryMode === "detached") {
+            registerDetachedReviewChild?.(workspaceId, threadId, reviewThreadId);
+          }
         }
         return true;
       } catch (error) {
-        markProcessing(threadId, false);
-        markReviewing(threadId, false);
+        if (lockParentThread) {
+          markProcessing(threadId, false);
+          markReviewing(threadId, false);
+        }
         onDebug?.({
           id: `${Date.now()}-client-review-start-error`,
           timestamp: Date.now(),
@@ -630,6 +643,7 @@ export function useThreadMessaging({
       safeMessageActivity,
       setActiveTurnId,
       reviewDeliveryMode,
+      registerDetachedReviewChild,
       updateThreadParent,
     ],
   );
@@ -895,6 +909,7 @@ export function useThreadMessaging({
           activeWorkspace.id,
           null,
           100,
+          threadId,
         )) as Record<string, unknown> | null;
         const result = (response?.result ?? response) as
           | Record<string, unknown>
