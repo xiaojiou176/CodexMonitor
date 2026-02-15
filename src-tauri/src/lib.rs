@@ -76,6 +76,17 @@ pub fn run() {
         if std::env::var_os("__NV_PRIME_RENDER_OFFLOAD").is_none() {
             std::env::set_var("__NV_PRIME_RENDER_OFFLOAD", "1");
         }
+        let is_wayland = std::env::var("XDG_SESSION_TYPE")
+            .map(|session| session.eq_ignore_ascii_case("wayland"))
+            .unwrap_or(false)
+            || std::env::var_os("WAYLAND_DISPLAY").is_some();
+        let has_nvidia = std::path::Path::new("/proc/driver/nvidia/version").exists();
+        if is_wayland
+            && has_nvidia
+            && std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none()
+        {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
         // Work around sporadic blank WebKitGTK renders on X11 by disabling compositing mode.
         if std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
             std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
@@ -232,6 +243,8 @@ pub fn run() {
             codex::generate_commit_message,
             codex::generate_run_metadata,
             codex::resume_thread,
+            codex::thread_live_subscribe,
+            codex::thread_live_unsubscribe,
             codex::fork_thread,
             codex::list_threads,
             codex::list_mcp_server_status,
@@ -242,6 +255,8 @@ pub fn run() {
             codex::collaboration_mode_list,
             workspaces::connect_workspace,
             git::get_git_status,
+            git::init_git_repo,
+            git::create_github_repo,
             git::list_git_roots,
             git::get_git_diffs,
             git::get_git_log,
@@ -261,6 +276,7 @@ pub fn run() {
             git::get_github_pull_requests,
             git::get_github_pull_request_diff,
             git::get_github_pull_request_comments,
+            git::checkout_github_pull_request,
             workspaces::list_workspace_files,
             workspaces::read_workspace_file,
             workspaces::open_workspace_in,
@@ -269,6 +285,8 @@ pub fn run() {
             git::checkout_git_branch,
             git::create_git_branch,
             codex::model_list,
+            codex::experimental_feature_list,
+            codex::set_codex_feature_flag,
             codex::account_rate_limits,
             codex::account_read,
             codex::codex_login,

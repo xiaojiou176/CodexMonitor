@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import * as notification from "@tauri-apps/plugin-notification";
 import {
   addWorkspace,
   compactThread,
+  createGitHubRepo,
   fetchGit,
   forkThread,
+  getAppsList,
+  getExperimentalFeatureList,
   getGitHubIssues,
   getGitLog,
   getGitStatus,
@@ -29,6 +33,7 @@ import {
   sendUserMessage,
   steerTurn,
   sendNotification,
+  setCodexFeatureFlag,
   startReview,
   setThreadName,
   tailscaleDaemonStart,
@@ -36,6 +41,7 @@ import {
   tailscaleDaemonStatus,
   tailscaleDaemonStop,
   tailscaleStatus,
+  pickWorkspacePaths,
   writeGlobalAgentsMd,
   writeGlobalCodexConfigToml,
   writeAgentMd,
@@ -43,6 +49,10 @@ import {
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-notification", () => ({
@@ -75,6 +85,27 @@ describe("tauri invoke wrappers", () => {
     });
   });
 
+  it("returns an empty list when workspace picker is cancelled", async () => {
+    const openMock = vi.mocked(open);
+    openMock.mockResolvedValueOnce(null);
+
+    await expect(pickWorkspacePaths()).resolves.toEqual([]);
+  });
+
+  it("wraps a single workspace selection in an array", async () => {
+    const openMock = vi.mocked(open);
+    openMock.mockResolvedValueOnce("/tmp/project");
+
+    await expect(pickWorkspacePaths()).resolves.toEqual(["/tmp/project"]);
+  });
+
+  it("returns multiple workspace selections as-is", async () => {
+    const openMock = vi.mocked(open);
+    openMock.mockResolvedValueOnce(["/tmp/one", "/tmp/two"]);
+
+    await expect(pickWorkspacePaths()).resolves.toEqual(["/tmp/one", "/tmp/two"]);
+  });
+
   it("maps workspace_id to workspaceId for git status", async () => {
     const invokeMock = vi.mocked(invoke);
     invokeMock.mockResolvedValueOnce({
@@ -90,6 +121,20 @@ describe("tauri invoke wrappers", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("get_git_status", {
       workspaceId: "ws-1",
+    });
+  });
+
+  it("maps args for createGitHubRepo", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ status: "ok", repo: "me/repo" });
+
+    await createGitHubRepo("ws-77", "me/repo", "private", "main");
+
+    expect(invokeMock).toHaveBeenCalledWith("create_github_repo", {
+      workspaceId: "ws-77",
+      repo: "me/repo",
+      visibility: "private",
+      branch: "main",
     });
   });
 
@@ -181,6 +226,45 @@ describe("tauri invoke wrappers", () => {
       workspaceId: "ws-10",
       cursor: "cursor-1",
       limit: 25,
+    });
+  });
+
+  it("maps workspaceId/cursor/limit/threadId for apps_list", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await getAppsList("ws-11", "cursor-1", 25, "thread-11");
+
+    expect(invokeMock).toHaveBeenCalledWith("apps_list", {
+      workspaceId: "ws-11",
+      cursor: "cursor-1",
+      limit: 25,
+      threadId: "thread-11",
+    });
+  });
+
+  it("maps workspaceId/cursor/limit for experimental_feature_list", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await getExperimentalFeatureList("ws-11", "cursor-2", 50);
+
+    expect(invokeMock).toHaveBeenCalledWith("experimental_feature_list", {
+      workspaceId: "ws-11",
+      cursor: "cursor-2",
+      limit: 50,
+    });
+  });
+
+  it("maps feature key and enabled for set_codex_feature_flag", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await setCodexFeatureFlag("collab", true);
+
+    expect(invokeMock).toHaveBeenCalledWith("set_codex_feature_flag", {
+      featureKey: "collab",
+      enabled: true,
     });
   });
 
@@ -371,6 +455,26 @@ describe("tauri invoke wrappers", () => {
       effort: null,
       accessMode: null,
       images: ["image.png"],
+    });
+  });
+
+  it("includes app mentions when sending a message", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await sendUserMessage("ws-4", "thread-1", "hello $calendar", {
+      appMentions: [{ name: "Calendar", path: "app://connector_calendar" }],
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("send_user_message", {
+      workspaceId: "ws-4",
+      threadId: "thread-1",
+      text: "hello $calendar",
+      model: null,
+      effort: null,
+      accessMode: null,
+      images: null,
+      appMentions: [{ name: "Calendar", path: "app://connector_calendar" }],
     });
   });
 

@@ -1,6 +1,8 @@
-import type { AppSettings } from "../../../../types";
-import { fileManagerName, openInFileManagerLabel } from "../../../../utils/platformPaths";
+import type { CodexFeature } from "@/types";
+import type { SettingsFeaturesSectionProps } from "@settings/hooks/useSettingsFeaturesSection";
+import { fileManagerName, openInFileManagerLabel } from "@utils/platformPaths";
 
+<<<<<<< HEAD
 const AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MIN = 5;
 const AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MAX = 240;
 
@@ -23,13 +25,93 @@ type SettingsFeaturesSectionProps = {
   openConfigError: string | null;
   onOpenConfig: () => void;
   onUpdateAppSettings: (next: AppSettings) => Promise<void>;
+=======
+const FEATURE_DESCRIPTION_FALLBACKS: Record<string, string> = {
+  undo: "Create a ghost commit at each turn.",
+  shell_tool: "Enable the default shell tool.",
+  unified_exec: "Use the single unified PTY-backed exec tool.",
+  shell_snapshot: "Enable shell snapshotting.",
+  js_repl: "Enable JavaScript REPL tools backed by a persistent Node kernel.",
+  js_repl_tools_only: "Only expose js_repl tools directly to the model.",
+  web_search_request: "Deprecated. Use top-level web_search instead.",
+  web_search_cached: "Deprecated. Use top-level web_search instead.",
+  search_tool: "Removed legacy search flag kept for backward compatibility.",
+  runtime_metrics: "Enable runtime metrics snapshots via a manual reader.",
+  sqlite: "Persist rollout metadata to a local SQLite database.",
+  memory_tool: "Enable startup memory extraction and memory consolidation.",
+  child_agents_md: "Append additional AGENTS.md guidance to user instructions.",
+  apply_patch_freeform: "Include the freeform apply_patch tool.",
+  use_linux_sandbox_bwrap: "Use the bubblewrap-based Linux sandbox pipeline.",
+  request_rule: "Allow approval requests and exec rule proposals.",
+  experimental_windows_sandbox:
+    "Removed Windows sandbox flag kept for backward compatibility.",
+  elevated_windows_sandbox:
+    "Removed elevated Windows sandbox flag kept for backward compatibility.",
+  remote_models: "Refresh remote models before AppReady.",
+  powershell_utf8: "Enforce UTF-8 output in PowerShell.",
+  enable_request_compression:
+    "Compress streaming request bodies sent to codex-backend.",
+  collab: "Enable sub-agent collaboration tools.",
+  apps: "Enable ChatGPT Apps integration.",
+  apps_mcp_gateway: "Route Apps MCP calls through the configured gateway.",
+  skill_mcp_dependency_install:
+    "Allow prompting and installing missing MCP dependencies.",
+  skill_env_var_dependency_prompt:
+    "Prompt for missing skill environment variable dependencies.",
+  steer: "Enter submits immediately instead of queueing.",
+  collaboration_modes: "Enable collaboration mode presets.",
+  personality: "Enable personality selection.",
+  responses_websockets:
+    "Use Responses API WebSocket transport for OpenAI by default.",
+  responses_websockets_v2: "Enable Responses API WebSocket v2 mode.",
+>>>>>>> origin/main
 };
+
+function formatFeatureLabel(feature: CodexFeature): string {
+  const displayName = feature.displayName?.trim();
+  if (displayName) {
+    return displayName;
+  }
+  return feature.name
+    .split("_")
+    .filter((part) => part.length > 0)
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function featureSubtitle(feature: CodexFeature): string {
+  if (feature.description?.trim()) {
+    return feature.description;
+  }
+  if (feature.announcement?.trim()) {
+    return feature.announcement;
+  }
+  const fallbackDescription = FEATURE_DESCRIPTION_FALLBACKS[feature.name];
+  if (fallbackDescription) {
+    return fallbackDescription;
+  }
+  if (feature.stage === "deprecated") {
+    return "Deprecated feature flag.";
+  }
+  if (feature.stage === "removed") {
+    return "Legacy feature flag kept for backward compatibility.";
+  }
+  return `Feature key: features.${feature.name}`;
+}
 
 export function SettingsFeaturesSection({
   appSettings,
+  hasFeatureWorkspace,
   hasCodexHomeOverrides,
   openConfigError,
+  featureError,
+  featuresLoading,
+  featureUpdatingKey,
+  stableFeatures,
+  experimentalFeatures,
+  hasDynamicFeatureRows,
   onOpenConfig,
+  onToggleCodexFeature,
   onUpdateAppSettings,
 }: SettingsFeaturesSectionProps) {
   return (
@@ -61,6 +143,7 @@ export function SettingsFeaturesSection({
       </div>
       <div className="settings-toggle-row">
         <div>
+<<<<<<< HEAD
           <div className="settings-toggle-title">协作模式</div>
           <div className="settings-toggle-subtitle">
             启用 Code（编码）和 Plan（规划）两种协作模式预设。
@@ -83,6 +166,9 @@ export function SettingsFeaturesSection({
       <div className="settings-toggle-row">
         <div>
           <div className="settings-toggle-title">回复风格</div>
+=======
+          <div className="settings-toggle-title">Personality</div>
+>>>>>>> origin/main
           <div className="settings-toggle-subtitle">
             设置 Codex Agent 的沟通语气。
           </div>
@@ -94,7 +180,7 @@ export function SettingsFeaturesSection({
           onChange={(event) =>
             void onUpdateAppSettings({
               ...appSettings,
-              personality: event.target.value as AppSettings["personality"],
+              personality: event.target.value as (typeof appSettings)["personality"],
             })
           }
           aria-label="回复风格"
@@ -105,32 +191,60 @@ export function SettingsFeaturesSection({
       </div>
       <div className="settings-toggle-row">
         <div>
+<<<<<<< HEAD
           <div className="settings-toggle-title">即时发送（Steer）</div>
           <div className="settings-toggle-subtitle">
             消息输入即发送，无需等待当前任务完成。运行中可按 Tab 排队追加指令。
+=======
+          <div className="settings-toggle-title">
+            Pause queued messages when a response is required
+          </div>
+          <div className="settings-toggle-subtitle">
+            Keep queued messages paused while Codex is waiting for plan accept/changes
+            or your answers.
+>>>>>>> origin/main
           </div>
         </div>
         <button
           type="button"
-          className={`settings-toggle ${appSettings.steerEnabled ? "on" : ""}`}
+          className={`settings-toggle ${appSettings.pauseQueuedMessagesWhenResponseRequired ? "on" : ""}`}
           onClick={() =>
             void onUpdateAppSettings({
               ...appSettings,
-              steerEnabled: !appSettings.steerEnabled,
+              pauseQueuedMessagesWhenResponseRequired:
+                !appSettings.pauseQueuedMessagesWhenResponseRequired,
             })
           }
-          aria-pressed={appSettings.steerEnabled}
+          aria-pressed={appSettings.pauseQueuedMessagesWhenResponseRequired}
         >
           <span className="settings-toggle-knob" />
         </button>
       </div>
+<<<<<<< HEAD
       <div className="settings-toggle-row">
         <div>
           <div className="settings-toggle-title">后台终端</div>
           <div className="settings-toggle-subtitle">
             允许 Codex 将耗时较长的终端命令（如编译、测试）放到后台执行，不阻塞对话。
+=======
+      {stableFeatures.map((feature) => (
+        <div className="settings-toggle-row" key={feature.name}>
+          <div>
+            <div className="settings-toggle-title">{formatFeatureLabel(feature)}</div>
+            <div className="settings-toggle-subtitle">{featureSubtitle(feature)}</div>
+>>>>>>> origin/main
           </div>
+          <button
+            type="button"
+            className={`settings-toggle ${feature.enabled ? "on" : ""}`}
+            onClick={() => onToggleCodexFeature(feature)}
+            aria-pressed={feature.enabled}
+            disabled={featureUpdatingKey === feature.name}
+          >
+            <span className="settings-toggle-knob" />
+          </button>
         </div>
+<<<<<<< HEAD
         <button
           type="button"
           className={`settings-toggle ${appSettings.unifiedExecEnabled ? "on" : ""}`}
@@ -203,8 +317,36 @@ export function SettingsFeaturesSection({
           <div className="settings-toggle-title">多 Agent 协作</div>
           <div className="settings-toggle-subtitle">
             允许 Codex 调用多个 Agent 并行处理子任务，适用于大型重构等复杂场景。
+=======
+      ))}
+      {hasFeatureWorkspace &&
+        !featuresLoading &&
+        !featureError &&
+        stableFeatures.length === 0 && (
+        <div className="settings-help">No stable feature flags returned by Codex.</div>
+      )}
+      <div className="settings-subsection-title">Experimental Features</div>
+      <div className="settings-subsection-subtitle">
+        Preview and under-development features.
+      </div>
+      {experimentalFeatures.map((feature) => (
+        <div className="settings-toggle-row" key={feature.name}>
+          <div>
+            <div className="settings-toggle-title">{formatFeatureLabel(feature)}</div>
+            <div className="settings-toggle-subtitle">{featureSubtitle(feature)}</div>
+>>>>>>> origin/main
           </div>
+          <button
+            type="button"
+            className={`settings-toggle ${feature.enabled ? "on" : ""}`}
+            onClick={() => onToggleCodexFeature(feature)}
+            aria-pressed={feature.enabled}
+            disabled={featureUpdatingKey === feature.name}
+          >
+            <span className="settings-toggle-knob" />
+          </button>
         </div>
+<<<<<<< HEAD
         <button
           type="button"
           className={`settings-toggle ${appSettings.experimentalCollabEnabled ? "on" : ""}`}
@@ -224,22 +366,27 @@ export function SettingsFeaturesSection({
           <div className="settings-toggle-title">应用连接器</div>
           <div className="settings-toggle-subtitle">
             启用 ChatGPT 应用/连接器，可通过 <code>/apps</code> 命令调用外部服务。
+=======
+      ))}
+      {hasFeatureWorkspace &&
+        !featuresLoading &&
+        !featureError &&
+        hasDynamicFeatureRows &&
+        experimentalFeatures.length === 0 && (
+          <div className="settings-help">
+            No preview or under-development feature flags returned by Codex.
+>>>>>>> origin/main
           </div>
+        )}
+      {featuresLoading && (
+        <div className="settings-help">Loading Codex feature flags...</div>
+      )}
+      {!hasFeatureWorkspace && !featuresLoading && (
+        <div className="settings-help">
+          Connect a workspace to load Codex feature flags.
         </div>
-        <button
-          type="button"
-          className={`settings-toggle ${appSettings.experimentalAppsEnabled ? "on" : ""}`}
-          onClick={() =>
-            void onUpdateAppSettings({
-              ...appSettings,
-              experimentalAppsEnabled: !appSettings.experimentalAppsEnabled,
-            })
-          }
-          aria-pressed={appSettings.experimentalAppsEnabled}
-        >
-          <span className="settings-toggle-knob" />
-        </button>
-      </div>
+      )}
+      {featureError && <div className="settings-help">{featureError}</div>}
     </section>
   );
 }

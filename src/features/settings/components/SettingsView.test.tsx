@@ -10,14 +10,29 @@ import {
 } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { AppSettings, WorkspaceInfo } from "../../../types";
-import { DEFAULT_COMMIT_MESSAGE_PROMPT } from "../../../utils/commitMessagePrompt";
+import type { AppSettings, WorkspaceInfo } from "@/types";
+import { getExperimentalFeatureList, getModelList } from "@services/tauri";
+import { DEFAULT_COMMIT_MESSAGE_PROMPT } from "@utils/commitMessagePrompt";
 import { SettingsView } from "./SettingsView";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   ask: vi.fn(),
   open: vi.fn(),
 }));
+
+vi.mock("@services/tauri", async () => {
+  const actual = await vi.importActual<typeof import("@services/tauri")>(
+    "@services/tauri",
+  );
+  return {
+    ...actual,
+    getModelList: vi.fn(),
+    getExperimentalFeatureList: vi.fn(),
+  };
+});
+
+const getModelListMock = vi.mocked(getModelList);
+const getExperimentalFeatureListMock = vi.mocked(getExperimentalFeatureList);
 
 const baseSettings: AppSettings = {
   codexBin: null,
@@ -57,7 +72,11 @@ const baseSettings: AppSettings = {
   uiScale: 1,
   theme: "system",
   showMessageFilePath: true,
+<<<<<<< HEAD
   threadScrollRestoreMode: "latest",
+=======
+  chatHistoryScrollbackItems: 200,
+>>>>>>> origin/main
   threadTitleAutogenerationEnabled: false,
   uiFontFamily:
     'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -66,12 +85,15 @@ const baseSettings: AppSettings = {
   codeFontSize: 11,
   notificationSoundsEnabled: true,
   systemNotificationsEnabled: true,
+  subagentSystemNotificationsEnabled: true,
+  splitChatDiffView: false,
   preloadGitDiffs: true,
   gitDiffIgnoreWhitespaceChanges: false,
   commitMessagePrompt: DEFAULT_COMMIT_MESSAGE_PROMPT,
   experimentalCollabEnabled: false,
   collaborationModesEnabled: true,
   steerEnabled: true,
+  pauseQueuedMessagesWhenResponseRequired: true,
   unifiedExecEnabled: true,
   autoArchiveSubAgentThreadsEnabled: true,
   autoArchiveSubAgentThreadsMaxAgeMinutes: 30,
@@ -179,11 +201,38 @@ const renderFeaturesSection = (
   options: {
     appSettings?: Partial<AppSettings>;
     onUpdateAppSettings?: ComponentProps<typeof SettingsView>["onUpdateAppSettings"];
+    experimentalFeaturesResponse?: unknown;
   } = {},
 ) => {
   cleanup();
   const onUpdateAppSettings =
     options.onUpdateAppSettings ?? vi.fn().mockResolvedValue(undefined);
+  getExperimentalFeatureListMock.mockResolvedValue(
+    (options.experimentalFeaturesResponse as Record<string, unknown>) ?? {
+      data: [
+        {
+          name: "steer",
+          stage: "stable",
+          enabled: true,
+          defaultEnabled: true,
+          displayName: "Steer mode",
+          description:
+            "Send messages immediately. Use Tab to queue while a run is active.",
+          announcement: null,
+        },
+        {
+          name: "unified_exec",
+          stage: "stable",
+          enabled: true,
+          defaultEnabled: true,
+          displayName: "Background terminal",
+          description: "Run long-running terminal commands in the background.",
+          announcement: null,
+        },
+      ],
+      nextCursor: null,
+    },
+  );
   const props: ComponentProps<typeof SettingsView> = {
     reduceTransparency: false,
     onToggleTransparency: vi.fn(),
@@ -191,7 +240,13 @@ const renderFeaturesSection = (
     openAppIconById: {},
     onUpdateAppSettings,
     workspaceGroups: [],
-    groupedWorkspaces: [],
+    groupedWorkspaces: [
+      {
+        id: null,
+        name: "Ungrouped",
+        workspaces: [workspace({ id: "w-features", name: "Features Workspace", connected: true })],
+      },
+    ],
     ungroupedLabel: "Ungrouped",
     onClose: vi.fn(),
     onMoveWorkspace: vi.fn(),
@@ -363,6 +418,29 @@ describe("SettingsView Display", () => {
     });
   });
 
+  it("toggles split chat and diff center panes", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({ onUpdateAppSettings });
+
+    const row = screen
+      .getByText("Split chat and diff center panes")
+      .closest(".settings-toggle-row") as HTMLElement | null;
+    if (!row) {
+      throw new Error("Expected split center panes row");
+    }
+    const toggle = row.querySelector("button.settings-toggle") as HTMLButtonElement | null;
+    if (!toggle) {
+      throw new Error("Expected split center panes toggle");
+    }
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ splitChatDiffView: true }),
+      );
+    });
+  });
+
   it("toggles reduce transparency", async () => {
     const onToggleTransparency = vi.fn();
     renderDisplaySection({ onToggleTransparency, reduceTransparency: false });
@@ -492,6 +570,28 @@ describe("SettingsView Display", () => {
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ notificationSoundsEnabled: true }),
+      );
+    });
+  });
+
+  it("toggles sub-agent system notifications", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({
+      onUpdateAppSettings,
+      appSettings: { subagentSystemNotificationsEnabled: false },
+    });
+
+    const row = screen
+      .getByText("Sub-agent notifications")
+      .closest(".settings-toggle-row") as HTMLElement | null;
+    if (!row) {
+      throw new Error("Expected sub-agent notifications row");
+    }
+    fireEvent.click(within(row).getByRole("button"));
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ subagentSystemNotificationsEnabled: true }),
       );
     });
   });
@@ -1218,6 +1318,216 @@ describe("SettingsView Codex overrides", () => {
   });
 });
 
+describe("SettingsView Codex defaults", () => {
+  const createModelListResponse = (models: Array<Record<string, unknown>>) => ({
+    result: { data: models },
+  });
+
+  it("uses the latest model and medium effort by default (no Default option)", async () => {
+    cleanup();
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    getModelListMock.mockResolvedValue(
+      createModelListResponse([
+        {
+          id: "gpt-4.1",
+          model: "gpt-4.1",
+          displayName: "GPT-4.1",
+          description: "",
+          supportedReasoningEfforts: [
+            { reasoningEffort: "low", description: "" },
+            { reasoningEffort: "medium", description: "" },
+            { reasoningEffort: "high", description: "" },
+          ],
+          defaultReasoningEffort: "medium",
+          isDefault: false,
+        },
+        {
+          id: "gpt-5.1",
+          model: "gpt-5.1",
+          displayName: "GPT-5.1",
+          description: "",
+          supportedReasoningEfforts: [
+            { reasoningEffort: "low", description: "" },
+            { reasoningEffort: "medium", description: "" },
+            { reasoningEffort: "high", description: "" },
+          ],
+          defaultReasoningEffort: "medium",
+          isDefault: false,
+        },
+      ]),
+    );
+
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Ungrouped",
+            workspaces: [workspace({ id: "w1", name: "Workspace", connected: true })],
+          },
+        ]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={onUpdateAppSettings}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onRunCodexUpdate={vi.fn().mockResolvedValue(createUpdateResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="codex"
+      />,
+    );
+
+    const modelSelect = screen.getByLabelText("Model") as HTMLSelectElement;
+    const effortSelect = screen.getByLabelText(
+      "Reasoning effort",
+    ) as HTMLSelectElement;
+
+    await waitFor(() => {
+      expect(getModelListMock).toHaveBeenCalledWith("w1");
+      expect(modelSelect.value).toBe("gpt-5.1");
+    });
+
+    expect(within(modelSelect).queryByRole("option", { name: /default/i })).toBeNull();
+    expect(within(effortSelect).queryByRole("option", { name: /default/i })).toBeNull();
+    expect(effortSelect.value).toBe("medium");
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          lastComposerModelId: "gpt-5.1",
+          lastComposerReasoningEffort: "medium",
+        }),
+      );
+    });
+  });
+
+  it("updates model and effort when the user changes the selects", async () => {
+    cleanup();
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    getModelListMock.mockResolvedValue(
+      createModelListResponse([
+        {
+          id: "gpt-4.1",
+          model: "gpt-4.1",
+          displayName: "GPT-4.1",
+          description: "",
+          supportedReasoningEfforts: [
+            { reasoningEffort: "low", description: "" },
+            { reasoningEffort: "medium", description: "" },
+            { reasoningEffort: "high", description: "" },
+          ],
+          defaultReasoningEffort: "medium",
+          isDefault: false,
+        },
+        {
+          id: "gpt-5.1",
+          model: "gpt-5.1",
+          displayName: "GPT-5.1",
+          description: "",
+          supportedReasoningEfforts: [
+            { reasoningEffort: "low", description: "" },
+            { reasoningEffort: "medium", description: "" },
+            { reasoningEffort: "high", description: "" },
+          ],
+          defaultReasoningEffort: "medium",
+          isDefault: false,
+        },
+      ]),
+    );
+
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Ungrouped",
+            workspaces: [workspace({ id: "w1", name: "Workspace", connected: true })],
+          },
+        ]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={onUpdateAppSettings}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onRunCodexUpdate={vi.fn().mockResolvedValue(createUpdateResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="codex"
+      />,
+    );
+
+    const modelSelect = screen.getByLabelText("Model") as HTMLSelectElement;
+    const effortSelect = screen.getByLabelText(
+      "Reasoning effort",
+    ) as HTMLSelectElement;
+
+    await waitFor(() => {
+      expect(modelSelect.disabled).toBe(false);
+      expect(modelSelect.value).toBe("gpt-5.1");
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ lastComposerModelId: "gpt-5.1" }),
+      );
+    });
+
+    onUpdateAppSettings.mockClear();
+    fireEvent.change(modelSelect, { target: { value: "gpt-4.1" } });
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ lastComposerModelId: "gpt-4.1" }),
+      );
+    });
+
+    onUpdateAppSettings.mockClear();
+    fireEvent.change(effortSelect, { target: { value: "high" } });
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ lastComposerReasoningEffort: "high" }),
+      );
+    });
+  });
+});
+
 describe("SettingsView Features", () => {
   it("updates personality selection", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
@@ -1241,7 +1551,11 @@ describe("SettingsView Features", () => {
       appSettings: { steerEnabled: true },
     });
 
+<<<<<<< HEAD
     const steerTitle = screen.getByText("即时发送（Steer）");
+=======
+    const steerTitle = await screen.findByText("Steer mode");
+>>>>>>> origin/main
     const steerRow = steerTitle.closest(".settings-toggle-row");
     expect(steerRow).not.toBeNull();
 
@@ -1262,7 +1576,11 @@ describe("SettingsView Features", () => {
       appSettings: { unifiedExecEnabled: true },
     });
 
+<<<<<<< HEAD
     const terminalTitle = screen.getByText("后台终端");
+=======
+    const terminalTitle = await screen.findByText("Background terminal");
+>>>>>>> origin/main
     const terminalRow = terminalTitle.closest(".settings-toggle-row");
     expect(terminalRow).not.toBeNull();
 
@@ -1276,6 +1594,7 @@ describe("SettingsView Features", () => {
     });
   });
 
+<<<<<<< HEAD
   it("toggles auto-archive for sub-agent threads", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderFeaturesSection({
@@ -1316,6 +1635,29 @@ describe("SettingsView Features", () => {
         expect.objectContaining({ autoArchiveSubAgentThreadsMaxAgeMinutes: 240 }),
       );
     });
+=======
+  it("shows fallback description when Codex omits feature description", async () => {
+    renderFeaturesSection({
+      experimentalFeaturesResponse: {
+        data: [
+          {
+            name: "responses_websockets",
+            stage: "underDevelopment",
+            enabled: false,
+            defaultEnabled: false,
+            displayName: null,
+            description: null,
+            announcement: null,
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+
+    await screen.findByText(
+      "Use Responses API WebSocket transport for OpenAI by default.",
+    );
+>>>>>>> origin/main
   });
 });
 
@@ -1600,6 +1942,84 @@ describe("SettingsView Shortcuts", () => {
     });
     await waitFor(() => {
       expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("filters shortcuts by search query", async () => {
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="shortcuts"
+      />,
+    );
+
+    const searchInput = screen.getByLabelText("Search shortcuts");
+    expect(screen.getByText("Toggle terminal panel")).toBeTruthy();
+    expect(screen.getByText("Cycle model")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: "navigation" } });
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Next workspace")).toBeTruthy();
+      expect(screen.queryByText("Toggle terminal panel")).toBeNull();
+    });
+
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: "sidebars" } });
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Toggle projects sidebar")).toBeTruthy();
+      expect(screen.queryByText("Next workspace")).toBeNull();
+    });
+
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: "new shortcut while focused" } });
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Cycle model")).toBeTruthy();
+      expect(screen.queryByText("Toggle terminal panel")).toBeNull();
+    });
+
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: "no-such-shortcut" } });
+    });
+    await waitFor(() => {
+      expect(screen.getByText('No shortcuts match "no-such-shortcut".')).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Toggle terminal panel")).toBeTruthy();
+      expect(screen.queryByText('No shortcuts match "no-such-shortcut".')).toBeNull();
     });
   });
 });

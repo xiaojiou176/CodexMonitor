@@ -1,6 +1,7 @@
 import type { AppServerEvent } from "../types";
 
 export const SUPPORTED_APP_SERVER_METHODS = [
+  "app/list/updated",
   "account/login/completed",
   "account/rateLimits/updated",
   "account/updated",
@@ -32,6 +33,7 @@ export const SUPPORTED_APP_SERVER_METHODS = [
 export type SupportedAppServerMethod = (typeof SUPPORTED_APP_SERVER_METHODS)[number];
 
 export const METHODS_HANDLED_OUTSIDE_USE_APP_SERVER_EVENTS = [
+  "app/list/updated",
   "codex/event/skills_update_available",
 ] as const satisfies readonly SupportedAppServerMethod[];
 
@@ -122,4 +124,8 @@ export function isApprovalRequestMethod(method: string): boolean {
 
 export function isSkillsUpdateAvailableEvent(event: AppServerEvent): boolean {
   return getAppServerRawMethod(event) === "codex/event/skills_update_available";
+}
+
+export function isAppListUpdatedEvent(event: AppServerEvent): boolean {
+  return getAppServerRawMethod(event) === "app/list/updated";
 }

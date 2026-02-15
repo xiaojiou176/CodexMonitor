@@ -1,6 +1,3 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ask, open } from "@tauri-apps/plugin-dialog";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
 import X from "lucide-react/dist/esm/icons/x";
 import type {
@@ -8,44 +5,17 @@ import type {
   CodexDoctorResult,
   CodexUpdateResult,
   DictationModelStatus,
-  TcpDaemonStatus,
-  TailscaleDaemonCommandPreview,
-  TailscaleStatus,
   WorkspaceSettings,
   WorkspaceGroup,
   WorkspaceInfo,
-} from "../../../types";
-import {
-  getCodexConfigPath,
-  listWorkspaces,
-  tailscaleDaemonStart,
-  tailscaleDaemonStatus,
-  tailscaleDaemonStop,
-  tailscaleDaemonCommandPreview as fetchTailscaleDaemonCommandPreview,
-  tailscaleStatus as fetchTailscaleStatus,
-} from "../../../services/tauri";
-import {
-  isMacPlatform,
-  isMobilePlatform,
-  isWindowsPlatform,
-} from "../../../utils/platformPaths";
-import { clampUiScale } from "../../../utils/uiScale";
-import {
-  DEFAULT_CODE_FONT_FAMILY,
-  DEFAULT_UI_FONT_FAMILY,
-  clampCodeFontSize,
-  normalizeFontFamily,
-} from "../../../utils/fonts";
-import { DEFAULT_COMMIT_MESSAGE_PROMPT } from "../../../utils/commitMessagePrompt";
-import { useGlobalAgentsMd } from "../hooks/useGlobalAgentsMd";
-import { useGlobalCodexConfigToml } from "../hooks/useGlobalCodexConfigToml";
-import { useSettingsOpenAppDrafts } from "../hooks/useSettingsOpenAppDrafts";
-import { useSettingsShortcutDrafts } from "../hooks/useSettingsShortcutDrafts";
-import { useSettingsViewCloseShortcuts } from "../hooks/useSettingsViewCloseShortcuts";
-import { useSettingsViewNavigation } from "../hooks/useSettingsViewNavigation";
-import { ModalShell } from "../../design-system/components/modal/ModalShell";
+} from "@/types";
+import { useSettingsViewCloseShortcuts } from "@settings/hooks/useSettingsViewCloseShortcuts";
+import { useSettingsViewNavigation } from "@settings/hooks/useSettingsViewNavigation";
+import { useSettingsViewOrchestration } from "@settings/hooks/useSettingsViewOrchestration";
+import { ModalShell } from "@/features/design-system/components/modal/ModalShell";
 import { SettingsNav } from "./SettingsNav";
 import type { CodexSection, OrbitServiceClient } from "./settingsTypes";
+<<<<<<< HEAD
 import { SettingsProjectsSection } from "./sections/SettingsProjectsSection";
 import { SettingsEnvironmentsSection } from "./sections/SettingsEnvironmentsSection";
 import { SettingsDisplaySection } from "./sections/SettingsDisplaySection";
@@ -94,6 +64,10 @@ const formatErrorMessage = (error: unknown, fallback: string) => {
   }
   return fallback;
 };
+=======
+import { ORBIT_SERVICES, SETTINGS_SECTION_LABELS } from "./settingsViewConstants";
+import { SettingsSectionContainers } from "./sections/SettingsSectionContainers";
+>>>>>>> origin/main
 
 export type SettingsViewProps = {
   workspaceGroups: WorkspaceGroup[];
@@ -185,95 +159,39 @@ export function SettingsView({
     useMobileMasterDetail,
     handleSelectSection,
   } = useSettingsViewNavigation({ initialSection });
-  const [environmentWorkspaceId, setEnvironmentWorkspaceId] = useState<string | null>(
-    null,
-  );
-  const [environmentDraftScript, setEnvironmentDraftScript] = useState("");
-  const [environmentSavedScript, setEnvironmentSavedScript] = useState<string | null>(
-    null,
-  );
-  const [environmentLoadedWorkspaceId, setEnvironmentLoadedWorkspaceId] = useState<
-    string | null
-  >(null);
-  const [environmentError, setEnvironmentError] = useState<string | null>(null);
-  const [environmentSaving, setEnvironmentSaving] = useState(false);
-  const [codexPathDraft, setCodexPathDraft] = useState(appSettings.codexBin ?? "");
-  const [codexArgsDraft, setCodexArgsDraft] = useState(appSettings.codexArgs ?? "");
-  const [remoteHostDraft, setRemoteHostDraft] = useState(appSettings.remoteBackendHost);
-  const [remoteTokenDraft, setRemoteTokenDraft] = useState(appSettings.remoteBackendToken ?? "");
-  const [orbitWsUrlDraft, setOrbitWsUrlDraft] = useState(appSettings.orbitWsUrl ?? "");
-  const [orbitAuthUrlDraft, setOrbitAuthUrlDraft] = useState(appSettings.orbitAuthUrl ?? "");
-  const [orbitRunnerNameDraft, setOrbitRunnerNameDraft] = useState(
-    appSettings.orbitRunnerName ?? "",
-  );
-  const [orbitAccessClientIdDraft, setOrbitAccessClientIdDraft] = useState(
-    appSettings.orbitAccessClientId ?? "",
-  );
-  const [orbitAccessClientSecretRefDraft, setOrbitAccessClientSecretRefDraft] =
-    useState(appSettings.orbitAccessClientSecretRef ?? "");
-  const [commitMessagePromptDraft, setCommitMessagePromptDraft] = useState(
-    appSettings.commitMessagePrompt,
-  );
-  const [commitMessagePromptSaving, setCommitMessagePromptSaving] = useState(false);
-  const [orbitStatusText, setOrbitStatusText] = useState<string | null>(null);
-  const [orbitAuthCode, setOrbitAuthCode] = useState<string | null>(null);
-  const [orbitVerificationUrl, setOrbitVerificationUrl] = useState<string | null>(
-    null,
-  );
-  const [orbitBusyAction, setOrbitBusyAction] = useState<string | null>(null);
-  const [tailscaleStatus, setTailscaleStatus] = useState<TailscaleStatus | null>(
-    null,
-  );
-  const [tailscaleStatusBusy, setTailscaleStatusBusy] = useState(false);
-  const [tailscaleStatusError, setTailscaleStatusError] = useState<string | null>(null);
-  const [tailscaleCommandPreview, setTailscaleCommandPreview] =
-    useState<TailscaleDaemonCommandPreview | null>(null);
-  const [tailscaleCommandBusy, setTailscaleCommandBusy] = useState(false);
-  const [tailscaleCommandError, setTailscaleCommandError] = useState<string | null>(
-    null,
-  );
-  const [tcpDaemonStatus, setTcpDaemonStatus] = useState<TcpDaemonStatus | null>(null);
-  const [tcpDaemonBusyAction, setTcpDaemonBusyAction] = useState<
-    "start" | "stop" | "status" | null
-  >(null);
-  const [mobileConnectBusy, setMobileConnectBusy] = useState(false);
-  const [mobileConnectStatusText, setMobileConnectStatusText] = useState<string | null>(
-    null,
-  );
-  const [mobileConnectStatusError, setMobileConnectStatusError] = useState(false);
-  const mobilePlatform = useMemo(() => isMobilePlatform(), []);
-  const [scaleDraft, setScaleDraft] = useState(
-    `${Math.round(clampUiScale(appSettings.uiScale) * 100)}%`,
-  );
-  const [uiFontDraft, setUiFontDraft] = useState(appSettings.uiFontFamily);
-  const [codeFontDraft, setCodeFontDraft] = useState(appSettings.codeFontFamily);
-  const [codeFontSizeDraft, setCodeFontSizeDraft] = useState(appSettings.codeFontSize);
-  const [codexBinOverrideDrafts, setCodexBinOverrideDrafts] = useState<
-    Record<string, string>
-  >({});
-  const [codexHomeOverrideDrafts, setCodexHomeOverrideDrafts] = useState<
-    Record<string, string>
-  >({});
-  const [codexArgsOverrideDrafts, setCodexArgsOverrideDrafts] = useState<
-    Record<string, string>
-  >({});
-  const [groupDrafts, setGroupDrafts] = useState<Record<string, string>>({});
-  const [newGroupName, setNewGroupName] = useState("");
-  const [groupError, setGroupError] = useState<string | null>(null);
-  const {
-    openAppDrafts,
-    openAppSelectedId,
-    handleOpenAppDraftChange,
-    handleOpenAppKindChange,
-    handleCommitOpenAppsDrafts,
-    handleMoveOpenApp,
-    handleDeleteOpenApp,
-    handleAddOpenApp,
-    handleSelectOpenAppDefault,
-  } = useSettingsOpenAppDrafts({
+
+  const orchestration = useSettingsViewOrchestration({
+    workspaceGroups,
+    groupedWorkspaces,
+    ungroupedLabel,
+    reduceTransparency,
+    onToggleTransparency,
     appSettings,
+    openAppIconById,
     onUpdateAppSettings,
+    onRunDoctor,
+    onRunCodexUpdate,
+    onUpdateWorkspaceCodexBin,
+    onUpdateWorkspaceSettings,
+    scaleShortcutTitle,
+    scaleShortcutText,
+    onTestNotificationSound,
+    onTestSystemNotification,
+    onMoveWorkspace,
+    onDeleteWorkspace,
+    onCreateWorkspaceGroup,
+    onRenameWorkspaceGroup,
+    onMoveWorkspaceGroup,
+    onDeleteWorkspaceGroup,
+    onAssignWorkspaceGroup,
+    onMobileConnectSuccess,
+    dictationModelStatus,
+    onDownloadDictationModel,
+    onCancelDictationDownload,
+    onRemoveDictationModel,
+    orbitServiceClient,
   });
+<<<<<<< HEAD
   const [doctorState, setDoctorState] = useState<{
     status: "idle" | "running" | "done";
     result: CodexDoctorResult | null;
@@ -1317,6 +1235,11 @@ export function SettingsView({
     }
   };
   const activeSectionGroup = getSettingsSectionGroup(activeSection);
+=======
+
+  useSettingsViewCloseShortcuts(onClose);
+
+>>>>>>> origin/main
   const activeSectionLabel = SETTINGS_SECTION_LABELS[activeSection];
   const settingsBodyClassName = `settings-body${
     useMobileMasterDetail ? " settings-body-mobile-master-detail" : ""
@@ -1365,12 +1288,11 @@ export function SettingsView({
                   <ChevronLeft aria-hidden />
                   分区
                 </button>
-                <div className="settings-mobile-detail-title">
-                  {activeSectionLabel}
-                </div>
+                <div className="settings-mobile-detail-title">{activeSectionLabel}</div>
               </div>
             )}
             <div className="settings-content">
+<<<<<<< HEAD
           {activeSectionGroup.sections.length > 1 && (
             <div className="settings-group-tabs" role="tablist" aria-label={`${activeSectionGroup.label} 子分区`}>
               {activeSectionGroup.sections.map((section) => (
@@ -1633,10 +1555,16 @@ export function SettingsView({
           {activeSection === "cliproxyapi" && (
             <SettingsCLIProxyAPISection />
           )}
+=======
+              <SettingsSectionContainers
+                activeSection={activeSection}
+                orchestration={orchestration}
+              />
+>>>>>>> origin/main
             </div>
           </div>
         )}
-        </div>
+      </div>
     </ModalShell>
   );
 }

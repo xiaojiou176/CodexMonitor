@@ -164,6 +164,10 @@
   color: var(--text-strong);
 }
 
+.settings-field-label--section {
+  margin-bottom: 10px;
+}
+
 .settings-field-row {
   display: flex;
   gap: 8px;
@@ -198,6 +202,10 @@
 
 .settings-help-inline {
   margin-right: 4px;
+}
+
+.settings-shortcuts-search {
+  margin-bottom: 20px;
 }
 
 .settings-command-preview {

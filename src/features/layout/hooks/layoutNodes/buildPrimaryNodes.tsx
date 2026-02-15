@@ -55,11 +55,18 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       threadListLoadingByWorkspace={options.threadListLoadingByWorkspace}
       threadListPagingByWorkspace={options.threadListPagingByWorkspace}
       threadListCursorByWorkspace={options.threadListCursorByWorkspace}
+      pinnedThreadsVersion={options.pinnedThreadsVersion}
       threadListSortKey={options.threadListSortKey}
       onSetThreadListSortKey={options.onSetThreadListSortKey}
       onRefreshAllThreads={options.onRefreshAllThreads}
       activeWorkspaceId={options.activeWorkspaceId}
       activeThreadId={options.activeThreadId}
+<<<<<<< HEAD
+=======
+      userInputRequests={options.userInputRequests}
+      accountRateLimits={options.activeRateLimits}
+      usageShowRemaining={options.usageShowRemaining}
+>>>>>>> origin/main
       accountInfo={options.accountInfo}
       onSwitchAccount={options.onSwitchAccount}
       onCancelSwitchAccount={options.onCancelSwitchAccount}
@@ -125,6 +132,8 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       }
       processingStartedAt={activeThreadStatus?.processingStartedAt ?? null}
       lastDurationMs={activeThreadStatus?.lastDurationMs ?? null}
+      showPollingFetchStatus={options.showPollingFetchStatus}
+      pollingIntervalMs={options.pollingIntervalMs}
     />
   );
 
@@ -138,8 +147,12 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onFileAutocompleteActiveChange={options.onFileAutocompleteActiveChange}
       contextUsage={options.activeTokenUsage}
       queuedMessages={options.activeQueue}
+<<<<<<< HEAD
       queueHealthEntries={options.queueHealthEntries}
       legacyQueueMessageCount={options.legacyQueueMessageCount}
+=======
+      queuePausedReason={options.queuePausedReason}
+>>>>>>> origin/main
       sendLabel={
         options.composerSendLabel ??
         (options.isProcessing ? "Queue" : "Send")
@@ -197,6 +210,7 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onDismissDictationError={options.onDismissDictationError}
       dictationHint={options.dictationHint}
       onDismissDictationHint={options.onDismissDictationHint}
+      contextActions={options.composerContextActions}
       reviewPrompt={options.reviewPrompt}
       onReviewPromptClose={options.onReviewPromptClose}
       onReviewPromptShowPreset={options.onReviewPromptShowPreset}
@@ -244,7 +258,7 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
 
   const homeNode = (
     <Home
-      onOpenProject={options.onAddWorkspace}
+      onOpenSettings={options.onOpenSettings}
       onAddWorkspace={options.onAddWorkspace}
       latestAgentRuns={options.latestAgentRuns}
       isLoadingLatestAgents={options.isLoadingLatestAgents}
@@ -302,9 +316,10 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
     />
   ) : null;
 
+  const showDesktopBackToChat = options.centerMode === "diff";
   const desktopTopbarLeftNode = (
     <>
-      {options.centerMode === "diff" && (
+      {showDesktopBackToChat && (
         <button
           className="icon-button back-button"
           onClick={options.onExitDiff}

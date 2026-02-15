@@ -7,7 +7,7 @@ import type {
   ThreadListSortKey,
   ThreadSummary,
   WorkspaceInfo,
-} from "../../../types";
+} from "@/types";
 import {
   archiveThread as archiveThreadService,
   archiveThreads as archiveThreadsService,
@@ -15,7 +15,7 @@ import {
   listThreads as listThreadsService,
   resumeThread as resumeThreadService,
   startThread as startThreadService,
-} from "../../../services/tauri";
+} from "@services/tauri";
 import {
   buildItemsFromThread,
   getThreadCreatedTimestamp,
@@ -23,12 +23,16 @@ import {
   isReviewingFromThread,
   mergeThreadItems,
   previewThreadName,
-} from "../../../utils/threadItems";
+} from "@utils/threadItems";
 import {
   asString,
   normalizeRootPath,
-} from "../utils/threadNormalize";
-import { saveThreadActivity } from "../utils/threadStorage";
+} from "@threads/utils/threadNormalize";
+import {
+  getParentThreadIdFromSource,
+  getResumedTurnState,
+} from "@threads/utils/threadRpc";
+import { saveThreadActivity } from "@threads/utils/threadStorage";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 
 const THREAD_LIST_TARGET_COUNT = 20;
@@ -37,6 +41,7 @@ const THREAD_LIST_MAX_PAGES_WITH_ACTIVITY = 8;
 const THREAD_LIST_MAX_PAGES_WITHOUT_ACTIVITY = 3;
 const THREAD_LIST_MAX_PAGES_OLDER = 6;
 
+<<<<<<< HEAD
 function resolveThreadDisplayName(
   thread: Record<string, unknown>,
   index: number,
@@ -213,11 +218,14 @@ function shouldFallbackToSingleArchive(errorMessage: string): boolean {
   return methodUnsupported || threadIdsMismatch;
 }
 
+=======
+>>>>>>> origin/main
 type UseThreadActionsOptions = {
   dispatch: Dispatch<ThreadAction>;
   itemsByThread: ThreadState["itemsByThread"];
   threadsByWorkspace: ThreadState["threadsByWorkspace"];
   activeThreadIdByWorkspace: ThreadState["activeThreadIdByWorkspace"];
+  activeTurnIdByThread: ThreadState["activeTurnIdByThread"];
   threadListCursorByWorkspace: ThreadState["threadListCursorByWorkspace"];
   threadStatusById: ThreadState["threadStatusById"];
   threadSortKey: ThreadListSortKey;
@@ -231,12 +239,17 @@ type UseThreadActionsOptions = {
   loadedThreadsRef: MutableRefObject<Record<string, boolean>>;
   replaceOnResumeRef: MutableRefObject<Record<string, boolean>>;
   applyCollabThreadLinksFromThread: (
+    workspaceId: string,
     threadId: string,
     thread: Record<string, unknown>,
   ) => void;
   updateThreadParent: (parentId: string, childIds: string[]) => void;
+<<<<<<< HEAD
   markSubAgentThread?: (threadId: string) => void;
   recordThreadCreatedAt?: (threadId: string, createdAt: number) => void;
+=======
+  onSubagentThreadDetected: (workspaceId: string, threadId: string) => void;
+>>>>>>> origin/main
 };
 
 export function useThreadActions({
@@ -244,6 +257,7 @@ export function useThreadActions({
   itemsByThread,
   threadsByWorkspace,
   activeThreadIdByWorkspace,
+  activeTurnIdByThread,
   threadListCursorByWorkspace,
   threadStatusById,
   threadSortKey,
@@ -255,10 +269,18 @@ export function useThreadActions({
   replaceOnResumeRef,
   applyCollabThreadLinksFromThread,
   updateThreadParent,
+<<<<<<< HEAD
   markSubAgentThread,
   recordThreadCreatedAt,
+=======
+  onSubagentThreadDetected,
+>>>>>>> origin/main
 }: UseThreadActionsOptions) {
   const resumeInFlightByThreadRef = useRef<Record<string, number>>({});
+  const threadStatusByIdRef = useRef(threadStatusById);
+  const activeTurnIdByThreadRef = useRef(activeTurnIdByThread);
+  threadStatusByIdRef.current = threadStatusById;
+  activeTurnIdByThreadRef.current = activeTurnIdByThread;
 
   const extractThreadId = useCallback((response: Record<string, any>) => {
     const thread = response.result?.thread ?? response.thread ?? null;
@@ -322,7 +344,7 @@ export function useThreadActions({
       if (!force && loadedThreadsRef.current[threadId]) {
         return threadId;
       }
-      const status = threadStatusById[threadId];
+      const status = threadStatusByIdRef.current[threadId];
       if (status?.isProcessing && loadedThreadsRef.current[threadId] && !force) {
         onDebug?.({
           id: `${Date.now()}-client-thread-resume-skipped`,
@@ -366,11 +388,15 @@ export function useThreadActions({
           | null;
         if (thread) {
           dispatch({ type: "ensureThread", workspaceId, threadId });
-          applyCollabThreadLinksFromThread(threadId, thread);
+          applyCollabThreadLinksFromThread(workspaceId, threadId, thread);
           const sourceParentId = getParentThreadIdFromSource(thread.source);
           if (sourceParentId) {
             updateThreadParent(sourceParentId, [threadId]);
+<<<<<<< HEAD
             markSubAgentThread?.(threadId);
+=======
+            onSubagentThreadDetected(workspaceId, threadId);
+>>>>>>> origin/main
           }
           recordThreadCreatedAt?.(threadId, getThreadCreatedTimestamp(thread));
           const items = buildItemsFromThread(thread);
@@ -384,12 +410,34 @@ export function useThreadActions({
             loadedThreadsRef.current[threadId] = true;
             return threadId;
           }
-          const resumedActiveTurnId = getResumedActiveTurnId(thread);
+          const resumedTurnState = getResumedTurnState(thread);
+          const localStatus = threadStatusByIdRef.current[threadId];
+          const localActiveTurnId =
+            activeTurnIdByThreadRef.current[threadId] ?? null;
+          const keepLocalProcessing =
+            (localStatus?.isProcessing ?? false) &&
+            !resumedTurnState.activeTurnId &&
+            !resumedTurnState.confidentNoActiveTurn;
+          const resumedActiveTurnId = keepLocalProcessing
+            ? localActiveTurnId
+            : resumedTurnState.activeTurnId;
+          const shouldMarkProcessing = keepLocalProcessing || Boolean(resumedActiveTurnId);
+          const processingTimestamp =
+            resumedTurnState.activeTurnStartedAtMs ?? Date.now();
+          if (keepLocalProcessing) {
+            onDebug?.({
+              id: `${Date.now()}-client-thread-resume-keep-processing`,
+              timestamp: Date.now(),
+              source: "client",
+              label: "thread/resume keep-processing",
+              payload: { workspaceId, threadId },
+            });
+          }
           dispatch({
             type: "markProcessing",
             threadId,
-            isProcessing: Boolean(resumedActiveTurnId),
-            timestamp: Date.now(),
+            isProcessing: shouldMarkProcessing,
+            timestamp: processingTimestamp,
           });
           dispatch({
             type: "setActiveTurnId",
@@ -477,8 +525,8 @@ export function useThreadActions({
       itemsByThread,
       loadedThreadsRef,
       onDebug,
+      onSubagentThreadDetected,
       replaceOnResumeRef,
-      threadStatusById,
       updateThreadParent,
       markSubAgentThread,
       recordThreadCreatedAt,
@@ -486,10 +534,15 @@ export function useThreadActions({
   );
 
   const forkThreadForWorkspace = useCallback(
-    async (workspaceId: string, threadId: string) => {
+    async (
+      workspaceId: string,
+      threadId: string,
+      options?: { activate?: boolean },
+    ) => {
       if (!threadId) {
         return null;
       }
+      const shouldActivate = options?.activate !== false;
       onDebug?.({
         id: `${Date.now()}-client-thread-fork`,
         timestamp: Date.now(),
@@ -511,11 +564,13 @@ export function useThreadActions({
           return null;
         }
         dispatch({ type: "ensureThread", workspaceId, threadId: forkedThreadId });
-        dispatch({
-          type: "setActiveThreadId",
-          workspaceId,
-          threadId: forkedThreadId,
-        });
+        if (shouldActivate) {
+          dispatch({
+            type: "setActiveThreadId",
+            workspaceId,
+            threadId: forkedThreadId,
+          });
+        }
         loadedThreadsRef.current[forkedThreadId] = false;
         await resumeThreadForWorkspace(workspaceId, forkedThreadId, true, true);
         return forkedThreadId;
@@ -530,7 +585,13 @@ export function useThreadActions({
         return null;
       }
     },
-    [dispatch, extractThreadId, loadedThreadsRef, onDebug, resumeThreadForWorkspace],
+    [
+      dispatch,
+      extractThreadId,
+      loadedThreadsRef,
+      onDebug,
+      resumeThreadForWorkspace,
+    ],
   );
 
   const refreshThread = useCallback(
@@ -665,7 +726,11 @@ export function useThreadActions({
           const sourceParentId = getParentThreadIdFromSource(thread.source);
           if (sourceParentId) {
             updateThreadParent(sourceParentId, [threadId]);
+<<<<<<< HEAD
             markSubAgentThread?.(threadId);
+=======
+            onSubagentThreadDetected(workspace.id, threadId);
+>>>>>>> origin/main
           }
           recordThreadCreatedAt?.(threadId, getThreadCreatedTimestamp(thread));
           const timestamp = getThreadTimestamp(thread);
@@ -783,8 +848,12 @@ export function useThreadActions({
       threadActivityRef,
       threadSortKey,
       updateThreadParent,
+<<<<<<< HEAD
       markSubAgentThread,
       recordThreadCreatedAt,
+=======
+      onSubagentThreadDetected,
+>>>>>>> origin/main
     ],
   );
 

@@ -39,6 +39,7 @@ type ThreadListProps = {
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   threadStatusById: ThreadStatusMap;
+  pendingUserInputKeys?: Set<string>;
   getThreadTime: (thread: ThreadSummary) => string | null;
   isThreadPinned: (workspaceId: string, threadId: string) => boolean;
   onToggleExpanded: (workspaceId: string) => void;
@@ -80,6 +81,7 @@ export function ThreadList({
   activeWorkspaceId,
   activeThreadId,
   threadStatusById,
+  pendingUserInputKeys,
   getThreadTime,
   isThreadPinned,
   onToggleExpanded,
@@ -225,10 +227,25 @@ export function ThreadList({
     const indentClass =
       depth > 0 ? ` thread-row-indent-${indentUnit}-${clampedDepth}` : "";
     const status = threadStatusById[thread.id];
+<<<<<<< HEAD
     const visualStatus = deriveThreadVisualStatus(status, nowMs);
     const statusClass = visualStatus;
     const statusLabel = getThreadVisualStatusLabel(visualStatus);
     const statusBadge = getThreadVisualStatusBadge(visualStatus);
+=======
+    const hasPendingUserInput = Boolean(
+      pendingUserInputKeys?.has(`${workspaceId}:${thread.id}`),
+    );
+    const statusClass = hasPendingUserInput
+      ? "unread"
+      : status?.isReviewing
+      ? "reviewing"
+      : status?.isProcessing
+        ? "processing"
+        : status?.hasUnread
+          ? "unread"
+          : "ready";
+>>>>>>> origin/main
     const canPin = depth === 0;
     const isPinned = canPin && isThreadPinned(workspaceId, thread.id);
     const isReorderableRoot =

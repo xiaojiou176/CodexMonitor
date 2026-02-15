@@ -579,10 +579,17 @@ pub(crate) struct AppSettings {
     )]
     pub(crate) show_message_file_path: bool,
     #[serde(
+<<<<<<< HEAD
         default = "default_thread_scroll_restore_mode",
         rename = "threadScrollRestoreMode"
     )]
     pub(crate) thread_scroll_restore_mode: String,
+=======
+        default = "default_chat_history_scrollback_items",
+        rename = "chatHistoryScrollbackItems"
+    )]
+    pub(crate) chat_history_scrollback_items: Option<u32>,
+>>>>>>> origin/main
     #[serde(default, rename = "threadTitleAutogenerationEnabled")]
     pub(crate) thread_title_autogeneration_enabled: bool,
     #[serde(default = "default_ui_font_family", rename = "uiFontFamily")]
@@ -596,6 +603,11 @@ pub(crate) struct AppSettings {
         rename = "notificationSoundsEnabled"
     )]
     pub(crate) notification_sounds_enabled: bool,
+    #[serde(
+        default = "default_split_chat_diff_view",
+        rename = "splitChatDiffView"
+    )]
+    pub(crate) split_chat_diff_view: bool,
     #[serde(default = "default_preload_git_diffs", rename = "preloadGitDiffs")]
     pub(crate) preload_git_diffs: bool,
     #[serde(
@@ -614,6 +626,11 @@ pub(crate) struct AppSettings {
     )]
     pub(crate) system_notifications_enabled: bool,
     #[serde(
+        default = "default_subagent_system_notifications_enabled",
+        rename = "subagentSystemNotificationsEnabled"
+    )]
+    pub(crate) subagent_system_notifications_enabled: bool,
+    #[serde(
         default = "default_experimental_collab_enabled",
         rename = "experimentalCollabEnabled"
     )]
@@ -629,6 +646,11 @@ pub(crate) struct AppSettings {
         alias = "experimentalSteerEnabled"
     )]
     pub(crate) steer_enabled: bool,
+    #[serde(
+        default = "default_pause_queued_messages_when_response_required",
+        rename = "pauseQueuedMessagesWhenResponseRequired"
+    )]
+    pub(crate) pause_queued_messages_when_response_required: bool,
     #[serde(
         default = "default_unified_exec_enabled",
         rename = "unifiedExecEnabled",
@@ -775,8 +797,13 @@ fn default_show_message_file_path() -> bool {
     true
 }
 
+<<<<<<< HEAD
 fn default_thread_scroll_restore_mode() -> String {
     "latest".to_string()
+=======
+fn default_chat_history_scrollback_items() -> Option<u32> {
+    Some(200)
+>>>>>>> origin/main
 }
 
 fn default_ui_font_family() -> String {
@@ -947,6 +974,14 @@ fn default_system_notifications_enabled() -> bool {
     true
 }
 
+fn default_subagent_system_notifications_enabled() -> bool {
+    true
+}
+
+fn default_split_chat_diff_view() -> bool {
+    false
+}
+
 fn default_preload_git_diffs() -> bool {
     true
 }
@@ -973,6 +1008,10 @@ fn default_collaboration_modes_enabled() -> bool {
 }
 
 fn default_steer_enabled() -> bool {
+    true
+}
+
+fn default_pause_queued_messages_when_response_required() -> bool {
     true
 }
 
@@ -1210,19 +1249,27 @@ impl Default for AppSettings {
             theme: default_theme(),
             usage_show_remaining: default_usage_show_remaining(),
             show_message_file_path: default_show_message_file_path(),
+<<<<<<< HEAD
             thread_scroll_restore_mode: default_thread_scroll_restore_mode(),
+=======
+            chat_history_scrollback_items: default_chat_history_scrollback_items(),
+>>>>>>> origin/main
             thread_title_autogeneration_enabled: false,
             ui_font_family: default_ui_font_family(),
             code_font_family: default_code_font_family(),
             code_font_size: default_code_font_size(),
             notification_sounds_enabled: true,
             system_notifications_enabled: true,
+            subagent_system_notifications_enabled: true,
+            split_chat_diff_view: default_split_chat_diff_view(),
             preload_git_diffs: default_preload_git_diffs(),
             git_diff_ignore_whitespace_changes: default_git_diff_ignore_whitespace_changes(),
             commit_message_prompt: default_commit_message_prompt(),
             experimental_collab_enabled: false,
             collaboration_modes_enabled: true,
             steer_enabled: true,
+            pause_queued_messages_when_response_required:
+                default_pause_queued_messages_when_response_required(),
             unified_exec_enabled: true,
             auto_archive_sub_agent_threads_enabled: default_auto_archive_sub_agent_threads_enabled(),
             auto_archive_sub_agent_threads_max_age_minutes:
@@ -1376,18 +1423,25 @@ mod tests {
         assert_eq!(settings.theme, "system");
         assert!(!settings.usage_show_remaining);
         assert!(settings.show_message_file_path);
+<<<<<<< HEAD
         assert_eq!(settings.thread_scroll_restore_mode, "latest");
+=======
+        assert_eq!(settings.chat_history_scrollback_items, Some(200));
+>>>>>>> origin/main
         assert!(!settings.thread_title_autogeneration_enabled);
         assert!(settings.ui_font_family.contains("system-ui"));
         assert!(settings.code_font_family.contains("ui-monospace"));
         assert_eq!(settings.code_font_size, 11);
         assert!(settings.notification_sounds_enabled);
         assert!(settings.system_notifications_enabled);
+        assert!(settings.subagent_system_notifications_enabled);
+        assert!(!settings.split_chat_diff_view);
         assert!(settings.preload_git_diffs);
         assert!(!settings.git_diff_ignore_whitespace_changes);
         assert!(settings.commit_message_prompt.contains("{diff}"));
         assert!(settings.collaboration_modes_enabled);
         assert!(settings.steer_enabled);
+        assert!(settings.pause_queued_messages_when_response_required);
         assert!(settings.unified_exec_enabled);
         assert!(settings.auto_archive_sub_agent_threads_enabled);
         assert_eq!(settings.auto_archive_sub_agent_threads_max_age_minutes, 30);

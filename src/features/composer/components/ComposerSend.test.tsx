@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isMobilePlatform } from "../../../utils/platformPaths";
 import { Composer } from "./Composer";
+import type { AppOption, AppMention } from "../../../types";
 
 vi.mock("../../../services/dragDrop", () => ({
   subscribeWindowDragDrop: vi.fn(() => () => {}),
@@ -24,6 +25,7 @@ vi.mock("../../../utils/platformPaths", async () => {
 });
 
 type HarnessProps = {
+<<<<<<< HEAD
   onSend: (text: string, images: string[]) => void;
   onQueue?: (text: string, images: string[]) => void;
   onStop?: () => void;
@@ -56,6 +58,13 @@ function ComposerHarness({
   onContinuePromptChange,
   files = [],
 }: HarnessProps) {
+=======
+  onSend: (text: string, images: string[], appMentions?: AppMention[]) => void;
+  apps?: AppOption[];
+};
+
+function ComposerHarness({ onSend, apps = [] }: HarnessProps) {
+>>>>>>> origin/main
   const [draftText, setDraftText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -79,7 +88,7 @@ function ComposerHarness({
       onSelectEffort={() => {}}
       reasoningSupported={false}
       skills={[]}
-      apps={[]}
+      apps={apps}
       prompts={[]}
       files={files}
       sendLabel={sendLabel}
@@ -161,6 +170,7 @@ describe("Composer send triggers", () => {
     expect(blurSpy).toHaveBeenCalledTimes(1);
   });
 
+<<<<<<< HEAD
   it("sends on Enter when autocomplete is open but has no matches", () => {
     const onSend = vi.fn();
     render(<ComposerHarness onSend={onSend} files={[]} />);
@@ -258,5 +268,34 @@ describe("Composer send triggers", () => {
     const prompt = screen.getByLabelText("Continue 提示词");
     fireEvent.change(prompt, { target: { value: "继续执行当前任务计划" } });
     expect(onContinuePromptChange).toHaveBeenCalledWith("继续执行当前任务计划");
+=======
+  it("sends explicit app mentions when an app autocomplete item is selected", () => {
+    const onSend = vi.fn();
+    render(
+      <ComposerHarness
+        onSend={onSend}
+        apps={[
+          {
+            id: "connector_calendar",
+            name: "Calendar App",
+            description: "Calendar integration",
+            isAccessible: true,
+          },
+        ]}
+      />,
+    );
+
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "$cal" } });
+    fireEvent.keyDown(textarea, { key: "Tab" });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith(
+      "$calendar-app",
+      [],
+      [{ name: "Calendar App", path: "app://connector_calendar" }],
+    );
+>>>>>>> origin/main
   });
 });

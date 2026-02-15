@@ -12,6 +12,7 @@ type AppLayoutProps = {
   tabletTab: "codex" | "git" | "log";
   centerMode: "chat" | "diff";
   preloadGitDiffs: boolean;
+  splitChatDiffView: boolean;
   hasActivePlan: boolean;
   activeWorkspace: boolean;
   sidebarNode: ReactNode;
@@ -23,6 +24,7 @@ type AppLayoutProps = {
   homeNode: ReactNode;
   mainHeaderNode: ReactNode;
   desktopTopbarLeftNode: ReactNode;
+  codexTopbarActionsNode?: ReactNode;
   tabletNavNode: ReactNode;
   tabBarNode: ReactNode;
   gitDiffPanelNode: ReactNode;
@@ -35,6 +37,7 @@ type AppLayoutProps = {
   compactEmptyGitNode: ReactNode;
   compactGitBackNode: ReactNode;
   onSidebarResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
+  onChatDiffSplitPositionResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
   onRightPanelResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
   onPlanPanelResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
 };
@@ -48,6 +51,7 @@ export const AppLayout = memo(function AppLayout({
   tabletTab,
   centerMode,
   preloadGitDiffs,
+  splitChatDiffView,
   hasActivePlan,
   activeWorkspace,
   sidebarNode,
@@ -59,6 +63,7 @@ export const AppLayout = memo(function AppLayout({
   homeNode,
   mainHeaderNode,
   desktopTopbarLeftNode,
+  codexTopbarActionsNode,
   tabletNavNode,
   tabBarNode,
   gitDiffPanelNode,
@@ -71,6 +76,7 @@ export const AppLayout = memo(function AppLayout({
   compactEmptyGitNode,
   compactGitBackNode,
   onSidebarResizeStart,
+  onChatDiffSplitPositionResizeStart,
   onRightPanelResizeStart,
   onPlanPanelResizeStart,
 }: AppLayoutProps) {
@@ -90,6 +96,7 @@ export const AppLayout = memo(function AppLayout({
         compactEmptyGitNode={compactEmptyGitNode}
         compactGitBackNode={compactGitBackNode}
         topbarLeftNode={mainHeaderNode}
+        codexTopbarActionsNode={codexTopbarActionsNode}
         messagesNode={messagesNode}
         composerNode={composerNode}
         gitDiffPanelNode={gitDiffPanelNode}
@@ -113,6 +120,7 @@ export const AppLayout = memo(function AppLayout({
         tabletTab={tabletTab}
         onSidebarResizeStart={onSidebarResizeStart}
         topbarLeftNode={mainHeaderNode}
+        codexTopbarActionsNode={codexTopbarActionsNode}
         messagesNode={messagesNode}
         composerNode={composerNode}
         gitDiffPanelNode={gitDiffPanelNode}
@@ -134,6 +142,7 @@ export const AppLayout = memo(function AppLayout({
       topbarLeftNode={desktopTopbarLeftNode}
       centerMode={centerMode}
       preloadGitDiffs={preloadGitDiffs}
+      splitChatDiffView={splitChatDiffView}
       messagesNode={messagesNode}
       gitDiffViewerNode={gitDiffViewerNode}
       gitDiffPanelNode={gitDiffPanelNode}
@@ -143,6 +152,7 @@ export const AppLayout = memo(function AppLayout({
       debugPanelNode={debugPanelNode}
       hasActivePlan={hasActivePlan}
       onSidebarResizeStart={onSidebarResizeStart}
+      onChatDiffSplitPositionResizeStart={onChatDiffSplitPositionResizeStart}
       onRightPanelResizeStart={onRightPanelResizeStart}
       onPlanPanelResizeStart={onPlanPanelResizeStart}
     />

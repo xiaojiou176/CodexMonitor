@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildConversationItem } from "../../../utils/threadItems";
+import { buildConversationItem } from "@utils/threadItems";
 import { useThreadItemEvents } from "./useThreadItemEvents";
 
-vi.mock("../../../utils/threadItems", () => ({
+vi.mock("@utils/threadItems", () => ({
   buildConversationItem: vi.fn(),
 }));
 
@@ -84,7 +84,7 @@ describe("useThreadItemEvents", () => {
     });
     expect(markProcessing).toHaveBeenCalledWith("thread-1", true);
     expect(markReviewing).toHaveBeenCalledWith("thread-1", true);
-    expect(applyCollabThreadLinks).toHaveBeenCalledWith("thread-1", item);
+    expect(applyCollabThreadLinks).toHaveBeenCalledWith("ws-1", "thread-1", item);
     expect(dispatch).toHaveBeenCalledWith({
       type: "upsertItem",
       workspaceId: "ws-1",

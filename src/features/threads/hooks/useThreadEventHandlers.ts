@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { Dispatch, MutableRefObject } from "react";
-import type { AppServerEvent, DebugEntry, TurnPlan } from "../../../types";
-import { getAppServerRawMethod } from "../../../utils/appServerEvents";
+import type { AppServerEvent, DebugEntry, TurnPlan } from "@/types";
+import { getAppServerRawMethod } from "@utils/appServerEvents";
 import { useThreadApprovalEvents } from "./useThreadApprovalEvents";
 import { useThreadItemEvents } from "./useThreadItemEvents";
 import { useThreadTurnEvents } from "./useThreadTurnEvents";
@@ -84,6 +84,7 @@ type ThreadEventHandlersOptions = {
   markReviewing: (threadId: string, isReviewing: boolean) => void;
   markThreadError?: (threadId: string, message: string) => void;
   setActiveTurnId: (threadId: string, turnId: string | null) => void;
+  getActiveTurnId: (threadId: string) => string | null;
   safeMessageActivity: () => void;
   recordThreadActivity: (
     workspaceId: string,
@@ -99,6 +100,7 @@ type ThreadEventHandlersOptions = {
   onDebug?: (entry: DebugEntry) => void;
   onWorkspaceConnected: (workspaceId: string) => void;
   applyCollabThreadLinks: (
+    workspaceId: string,
     threadId: string,
     item: Record<string, unknown>,
   ) => void;
@@ -118,6 +120,7 @@ export function useThreadEventHandlers({
   markReviewing,
   markThreadError,
   setActiveTurnId,
+  getActiveTurnId,
   safeMessageActivity,
   recordThreadActivity,
   onUserMessageCreated,
@@ -190,6 +193,7 @@ export function useThreadEventHandlers({
     markReviewing,
     markThreadError,
     setActiveTurnId,
+    getActiveTurnId,
     pendingInterruptsRef,
     pushThreadErrorMessage,
     safeMessageActivity,

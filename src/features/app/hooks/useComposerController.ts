@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import type { QueuedMessage, WorkspaceInfo } from "../../../types";
+import type { AppMention, QueuedMessage, WorkspaceInfo } from "../../../types";
 import { useComposerImages } from "../../composer/hooks/useComposerImages";
 import { useQueuedSend } from "../../threads/hooks/useQueuedSend";
 
@@ -10,9 +10,13 @@ export function useComposerController({
   activeWorkspace,
   isProcessing,
   isReviewing,
+<<<<<<< HEAD
   threadStatusById,
   threadWorkspaceById,
   workspacesById,
+=======
+  queueFlushPaused = false,
+>>>>>>> origin/main
   steerEnabled,
   appsEnabled,
   activeModel,
@@ -37,6 +41,7 @@ export function useComposerController({
   activeWorkspace: WorkspaceInfo | null;
   isProcessing: boolean;
   isReviewing: boolean;
+<<<<<<< HEAD
   threadStatusById: Record<
     string,
     {
@@ -48,6 +53,9 @@ export function useComposerController({
   >;
   threadWorkspaceById: Record<string, string>;
   workspacesById: Map<string, WorkspaceInfo>;
+=======
+  queueFlushPaused?: boolean;
+>>>>>>> origin/main
   steerEnabled: boolean;
   appsEnabled: boolean;
   activeModel: string | null;
@@ -61,12 +69,16 @@ export function useComposerController({
   sendUserMessage: (
     text: string,
     images?: string[],
+<<<<<<< HEAD
     options?: {
       forceSteer?: boolean;
       model?: string | null;
       effort?: string | null;
       collaborationMode?: Record<string, unknown> | null;
     },
+=======
+    appMentions?: AppMention[],
+>>>>>>> origin/main
   ) => Promise<void>;
   sendUserMessageToThread: (
     workspace: WorkspaceInfo,
@@ -122,9 +134,13 @@ export function useComposerController({
     activeTurnId,
     isProcessing,
     isReviewing,
+<<<<<<< HEAD
     threadStatusById,
     threadWorkspaceById,
     workspacesById,
+=======
+    queueFlushPaused,
+>>>>>>> origin/main
     steerEnabled,
     appsEnabled,
     activeModel,
@@ -166,11 +182,11 @@ export function useComposerController({
   );
 
   const handleSendPrompt = useCallback(
-    (text: string) => {
+    (text: string, appMentions?: AppMention[]) => {
       if (!text.trim()) {
         return;
       }
-      void handleSend(text, []);
+      void handleSend(text, [], appMentions);
     },
     [handleSend],
   );

@@ -10,6 +10,8 @@ type SystemNotificationOptions = {
   enabled: boolean;
   isWindowFocused: boolean;
   minDurationMs?: number;
+  subagentNotificationsEnabled?: boolean;
+  isSubagentThread?: (workspaceId: string, threadId: string) => boolean;
   getWorkspaceName?: (workspaceId: string) => string | undefined;
   isSubAgentThread?: (workspaceId: string, threadId: string) => boolean;
   onThreadNotificationSent?: (workspaceId: string, threadId: string) => void;
@@ -35,6 +37,8 @@ export function useAgentSystemNotifications({
   enabled,
   isWindowFocused,
   minDurationMs = DEFAULT_MIN_DURATION_MS,
+  subagentNotificationsEnabled = true,
+  isSubagentThread,
   getWorkspaceName,
   isSubAgentThread,
   onThreadNotificationSent,
@@ -113,11 +117,22 @@ export function useAgentSystemNotifications({
   );
 
   const shouldNotify = useCallback(
-    (durationMs: number | null, threadKey: string) => {
+    (
+      workspaceId: string,
+      threadId: string,
+      durationMs: number | null,
+      threadKey: string,
+    ) => {
       if (durationMs === null) {
         return false;
       }
       if (!enabled) {
+        return false;
+      }
+      if (
+        !subagentNotificationsEnabled &&
+        isSubagentThread?.(workspaceId, threadId)
+      ) {
         return false;
       }
       if (durationMs < minDurationMs) {
@@ -133,7 +148,13 @@ export function useAgentSystemNotifications({
       lastNotifiedAtByThread.current.set(threadKey, Date.now());
       return true;
     },
-    [enabled, isWindowFocused, minDurationMs],
+    [
+      enabled,
+      isSubagentThread,
+      isWindowFocused,
+      minDurationMs,
+      subagentNotificationsEnabled,
+    ],
   );
 
   const getNotificationContent = useCallback(
@@ -172,7 +193,7 @@ export function useAgentSystemNotifications({
       }
       const durationMs = consumeDuration(workspaceId, threadId, turnId);
       const threadKey = buildThreadKey(workspaceId, threadId);
-      if (!shouldNotify(durationMs, threadKey)) {
+      if (!shouldNotify(workspaceId, threadId, durationMs, threadKey)) {
         return;
       }
       const { title, body } = getNotificationContent(
@@ -213,7 +234,7 @@ export function useAgentSystemNotifications({
       }
       const durationMs = consumeDuration(workspaceId, threadId, turnId);
       const threadKey = buildThreadKey(workspaceId, threadId);
-      if (!shouldNotify(durationMs, threadKey)) {
+      if (!shouldNotify(workspaceId, threadId, durationMs, threadKey)) {
         return;
       }
       const title = getWorkspaceName?.(workspaceId) ?? "Agent Error";
@@ -267,7 +288,14 @@ export function useAgentSystemNotifications({
         lastMessageByThread.current.set(threadKey, event.text);
       }
       const durationMs = consumeDuration(event.workspaceId, event.threadId, "");
-      if (!shouldNotify(durationMs, threadKey)) {
+      if (
+        !shouldNotify(
+          event.workspaceId,
+          event.threadId,
+          durationMs,
+          threadKey,
+        )
+      ) {
         return;
       }
       const { title, body } = getNotificationContent(

@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+<<<<<<< HEAD
 import type {
   ConversationItem,
   ThreadArchiveBatchResult,
   WorkspaceInfo,
 } from "../../../types";
+=======
+import type { ConversationItem, WorkspaceInfo } from "@/types";
+>>>>>>> origin/main
 import {
   archiveThread,
   archiveThreads,
@@ -13,7 +17,7 @@ import {
   listThreads,
   resumeThread,
   startThread,
-} from "../../../services/tauri";
+} from "@services/tauri";
 import {
   buildItemsFromThread,
   getThreadCreatedTimestamp,
@@ -21,11 +25,11 @@ import {
   isReviewingFromThread,
   mergeThreadItems,
   previewThreadName,
-} from "../../../utils/threadItems";
-import { saveThreadActivity } from "../utils/threadStorage";
+} from "@utils/threadItems";
+import { saveThreadActivity } from "@threads/utils/threadStorage";
 import { useThreadActions } from "./useThreadActions";
 
-vi.mock("../../../services/tauri", () => ({
+vi.mock("@services/tauri", () => ({
   startThread: vi.fn(),
   forkThread: vi.fn(),
   resumeThread: vi.fn(),
@@ -34,7 +38,7 @@ vi.mock("../../../services/tauri", () => ({
   archiveThreads: vi.fn(),
 }));
 
-vi.mock("../../../utils/threadItems", () => ({
+vi.mock("@utils/threadItems", () => ({
   buildItemsFromThread: vi.fn(),
   getThreadCreatedTimestamp: vi.fn(),
   getThreadTimestamp: vi.fn(),
@@ -43,7 +47,7 @@ vi.mock("../../../utils/threadItems", () => ({
   previewThreadName: vi.fn(),
 }));
 
-vi.mock("../utils/threadStorage", () => ({
+vi.mock("@threads/utils/threadStorage", () => ({
   saveThreadActivity: vi.fn(),
 }));
 
@@ -72,12 +76,14 @@ describe("useThreadActions", () => {
     };
     const applyCollabThreadLinksFromThread = vi.fn();
     const updateThreadParent = vi.fn();
+    const onSubagentThreadDetected = vi.fn();
 
     const args: Parameters<typeof useThreadActions>[0] = {
       dispatch,
       itemsByThread: {},
       threadsByWorkspace: {},
       activeThreadIdByWorkspace: {},
+      activeTurnIdByThread: {},
       threadListCursorByWorkspace: {},
       threadStatusById: {},
       threadSortKey: "updated_at",
@@ -87,18 +93,21 @@ describe("useThreadActions", () => {
       replaceOnResumeRef,
       applyCollabThreadLinksFromThread,
       updateThreadParent,
+      onSubagentThreadDetected,
       ...overrides,
     };
 
     const utils = renderHook(() => useThreadActions(args));
 
     return {
+      args,
       dispatch,
       loadedThreadsRef: args.loadedThreadsRef,
       replaceOnResumeRef: args.replaceOnResumeRef,
       threadActivityRef: args.threadActivityRef,
       applyCollabThreadLinksFromThread: args.applyCollabThreadLinksFromThread,
       updateThreadParent: args.updateThreadParent,
+      onSubagentThreadDetected: args.onSubagentThreadDetected,
       ...utils,
     };
   }
@@ -155,6 +164,32 @@ describe("useThreadActions", () => {
       threadId: "thread-fork-1",
     });
     expect(loadedThreadsRef.current["thread-fork-1"]).toBe(true);
+  });
+
+  it("forks a thread without activating when requested", async () => {
+    vi.mocked(forkThread).mockResolvedValue({
+      result: { thread: { id: "thread-fork-2" } },
+    });
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.forkThreadForWorkspace("ws-1", "thread-1", {
+        activate: false,
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "thread-fork-2",
+    });
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setActiveThreadId",
+        threadId: "thread-fork-2",
+      }),
+    );
   });
 
   it("starts a thread without activating when requested", async () => {
@@ -252,6 +287,7 @@ describe("useThreadActions", () => {
 
     expect(resumeThread).toHaveBeenCalledWith("ws-1", "thread-2");
     expect(applyCollabThreadLinksFromThread).toHaveBeenCalledWith(
+      "ws-1",
       "thread-2",
       expect.objectContaining({ id: "thread-2" }),
     );
@@ -303,13 +339,14 @@ describe("useThreadActions", () => {
     vi.mocked(buildItemsFromThread).mockReturnValue([]);
     vi.mocked(isReviewingFromThread).mockReturnValue(false);
 
-    const { result, updateThreadParent } = renderActions();
+    const { result, updateThreadParent, onSubagentThreadDetected } = renderActions();
 
     await act(async () => {
       await result.current.resumeThreadForWorkspace("ws-1", "child-thread", true);
     });
 
     expect(updateThreadParent).toHaveBeenCalledWith("parent-thread", ["child-thread"]);
+    expect(onSubagentThreadDetected).toHaveBeenCalledWith("ws-1", "child-thread");
   });
 
   it("does not hydrate status from resume when local items are preserved", async () => {
@@ -455,6 +492,117 @@ describe("useThreadActions", () => {
     });
   });
 
+  it("keeps local processing state when resume turn status is ambiguous", async () => {
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          id: "thread-1",
+          preview: "Still running",
+          updated_at: 1000,
+          turns: [{ id: "turn-remote", status: "unknown_state", items: [] }],
+        },
+      },
+    });
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    vi.mocked(isReviewingFromThread).mockReturnValue(false);
+
+    const { result, dispatch } = renderActions({
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          processingStartedAt: 10,
+          lastDurationMs: null,
+        },
+      },
+      activeTurnIdByThread: {
+        "thread-1": "turn-local",
+      },
+    });
+
+    await act(async () => {
+      await result.current.resumeThreadForWorkspace("ws-1", "thread-1", true, true);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "markProcessing",
+      threadId: "thread-1",
+      isProcessing: true,
+      timestamp: expect.any(Number),
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setActiveTurnId",
+      threadId: "thread-1",
+      turnId: "turn-local",
+    });
+  });
+
+  it("uses latest local processing state while resume is in flight", async () => {
+    let resolveResume: ((value: Record<string, unknown>) => void) | null = null;
+    vi.mocked(resumeThread).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveResume = resolve;
+        }),
+    );
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    vi.mocked(isReviewingFromThread).mockReturnValue(false);
+
+    const { args, result, rerender, dispatch } = renderActions({
+      threadStatusById: {},
+      activeTurnIdByThread: {},
+    });
+
+    let resumePromise: Promise<string | null> | null = null;
+    await act(async () => {
+      resumePromise = result.current.resumeThreadForWorkspace(
+        "ws-1",
+        "thread-1",
+        true,
+        true,
+      );
+    });
+
+    args.threadStatusById = {
+      "thread-1": {
+        isProcessing: true,
+        hasUnread: false,
+        isReviewing: false,
+        processingStartedAt: 10,
+        lastDurationMs: null,
+      },
+    };
+    args.activeTurnIdByThread = {
+      "thread-1": "turn-local",
+    };
+    rerender();
+
+    await act(async () => {
+      resolveResume?.({
+        result: {
+          thread: {
+            id: "thread-1",
+            turns: [{ id: "turn-remote", status: "unknown_state", items: [] }],
+          },
+        },
+      });
+      await resumePromise;
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "markProcessing",
+      threadId: "thread-1",
+      isProcessing: true,
+      timestamp: expect.any(Number),
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setActiveTurnId",
+      threadId: "thread-1",
+      turnId: "turn-local",
+    });
+  });
+
   it("hydrates processing state from in-progress turns on resume", async () => {
     vi.mocked(resumeThread).mockResolvedValue({
       result: {
@@ -488,6 +636,41 @@ describe("useThreadActions", () => {
       type: "setActiveTurnId",
       threadId: "thread-3",
       turnId: "turn-2",
+    });
+  });
+
+  it("hydrates processing timestamp from resumed active turn start time", async () => {
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          id: "thread-3",
+          preview: "Working thread",
+          updated_at: 1000,
+          turns: [
+            {
+              id: "turn-2",
+              status: "inProgress",
+              started_at: 1_700_000_000_000,
+              items: [],
+            },
+          ],
+        },
+      },
+    });
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    vi.mocked(isReviewingFromThread).mockReturnValue(false);
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.resumeThreadForWorkspace("ws-1", "thread-3", true);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "markProcessing",
+      threadId: "thread-3",
+      isProcessing: true,
+      timestamp: 1_700_000_000_000,
     });
   });
 
@@ -647,13 +830,54 @@ describe("useThreadActions", () => {
       return value ?? 0;
     });
 
-    const { result, updateThreadParent } = renderActions();
+    const { result, updateThreadParent, onSubagentThreadDetected } = renderActions();
 
     await act(async () => {
       await result.current.listThreadsForWorkspace(workspace);
     });
 
     expect(updateThreadParent).toHaveBeenCalledWith("parent-thread", ["child-thread"]);
+    expect(onSubagentThreadDetected).toHaveBeenCalledWith("ws-1", "child-thread");
+  });
+
+  it("matches thread cwd on Windows paths even when path casing differs", async () => {
+    const windowsWorkspace: WorkspaceInfo = {
+      ...workspace,
+      path: "C:\\Dev\\CodexMon",
+    };
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "thread-win-1",
+            cwd: "c:/dev/codexmon",
+            preview: "Windows thread",
+            updated_at: 5000,
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockReturnValue(5000);
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(windowsWorkspace);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "updated_at",
+      threads: [
+        {
+          id: "thread-win-1",
+          name: "Windows thread",
+          updatedAt: 5000,
+        },
+      ],
+    });
   });
 
   it("preserves list state when requested", async () => {
@@ -747,6 +971,7 @@ describe("useThreadActions", () => {
     });
   });
 
+<<<<<<< HEAD
   it("archives threads in batch and reports partial failure summary", async () => {
     vi.mocked(archiveThreads).mockResolvedValue({
       allSucceeded: false,
@@ -754,6 +979,55 @@ describe("useThreadActions", () => {
       failed: [{ threadId: "thread-9", error: "denied" }],
       total: 2,
     });
+=======
+  it("loads older threads for Windows paths even when path casing differs", async () => {
+    const windowsWorkspace: WorkspaceInfo = {
+      ...workspace,
+      path: "C:\\Dev\\CodexMon",
+    };
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "thread-win-older",
+            cwd: "c:/dev/codexmon",
+            preview: "Older windows preview",
+            updated_at: 4000,
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockImplementation((thread) => {
+      const value = (thread as Record<string, unknown>).updated_at as number;
+      return value ?? 0;
+    });
+
+    const { result, dispatch } = renderActions({
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "Agent 1", updatedAt: 6000 }],
+      },
+      threadListCursorByWorkspace: { "ws-1": "cursor-1" },
+    });
+
+    await act(async () => {
+      await result.current.loadOlderThreadsForWorkspace(windowsWorkspace);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "updated_at",
+      threads: [
+        { id: "thread-1", name: "Agent 1", updatedAt: 6000 },
+        { id: "thread-win-older", name: "Older windows preview", updatedAt: 4000 },
+      ],
+    });
+  });
+
+  it("archives threads and reports errors", async () => {
+    vi.mocked(archiveThread).mockRejectedValue(new Error("nope"));
+>>>>>>> origin/main
     const onDebug = vi.fn();
     const { result } = renderActions({ onDebug });
 

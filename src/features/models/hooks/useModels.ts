@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DebugEntry, ModelOption, WorkspaceInfo } from "../../../types";
 import { getConfigModel, getModelList } from "../../../services/tauri";
+import {
+  normalizeEffortValue,
+  parseModelListResponse,
+} from "../utils/modelListResponse";
 
 type UseModelsOptions = {
   activeWorkspace: WorkspaceInfo | null;
   onDebug?: (entry: DebugEntry) => void;
   preferredModelId?: string | null;
   preferredEffort?: string | null;
+  selectionKey?: string | null;
 };
 
 const CONFIG_MODEL_DESCRIPTION = "Configured in CODEX_HOME/config.toml";
 
+<<<<<<< HEAD
 // ============================================================
 // 🔥 PREMIUM MODELS - Only show the best models
 // ============================================================
@@ -143,6 +149,8 @@ const normalizeEffort = (value: unknown): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+=======
+>>>>>>> origin/main
 const findModelByIdOrModel = (
   models: ModelOption[],
   idOrModel: string | null,
@@ -165,6 +173,7 @@ export function useModels({
   onDebug,
   preferredModelId = null,
   preferredEffort = null,
+  selectionKey = null,
 }: UseModelsOptions) {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [configModel, setConfigModel] = useState<string | null>(null);
@@ -175,9 +184,19 @@ export function useModels({
   const hasUserSelectedModel = useRef(false);
   const hasUserSelectedEffort = useRef(false);
   const lastWorkspaceId = useRef<string | null>(null);
+  const lastSelectionKey = useRef<string | null>(null);
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
+
+  useEffect(() => {
+    if (selectionKey === lastSelectionKey.current) {
+      return;
+    }
+    lastSelectionKey.current = selectionKey;
+    hasUserSelectedModel.current = false;
+    hasUserSelectedEffort.current = false;
+  }, [selectionKey]);
 
   useEffect(() => {
     if (workspaceId === lastWorkspaceId.current) {
@@ -232,7 +251,7 @@ export function useModels({
     if (supported && supported.length > 0) {
       return supported;
     }
-    const defaultEffort = normalizeEffort(selectedModel?.defaultReasoningEffort);
+    const defaultEffort = normalizeEffortValue(selectedModel?.defaultReasoningEffort);
     return defaultEffort ? [defaultEffort] : [];
   }, [selectedModel]);
 
@@ -241,18 +260,18 @@ export function useModels({
       const supportedEfforts = model.supportedReasoningEfforts.map(
         (effort) => effort.reasoningEffort,
       );
-      const currentEffort = normalizeEffort(selectedEffort);
+      const currentEffort = normalizeEffortValue(selectedEffort);
       if (preferCurrent && currentEffort) {
         return currentEffort;
       }
       if (supportedEfforts.length === 0) {
-        return normalizeEffort(preferredEffort);
+        return normalizeEffortValue(preferredEffort);
       }
-      const preferred = normalizeEffort(preferredEffort);
+      const preferred = normalizeEffortValue(preferredEffort);
       if (preferred && supportedEfforts.includes(preferred)) {
         return preferred;
       }
-      return normalizeEffort(model.defaultReasoningEffort);
+      return normalizeEffortValue(model.defaultReasoningEffort);
     },
     [preferredEffort, selectedEffort],
   );
@@ -315,6 +334,7 @@ export function useModels({
         payload: response,
       });
       setConfigModel(configModelFromConfig);
+<<<<<<< HEAD
       const rawData = response?.result?.data ?? response?.data ?? [];
       const dataFromServer: ModelOption[] = rawData.map((item: any) => ({
         id: String(item.id ?? item.model ?? ""),
@@ -343,6 +363,10 @@ export function useModels({
               : null,
       }));
       const dataWithConfig = (() => {
+=======
+      const dataFromServer: ModelOption[] = parseModelListResponse(response);
+      const data = (() => {
+>>>>>>> origin/main
         if (!configModelFromConfig) {
           return dataFromServer;
         }
@@ -419,11 +443,11 @@ export function useModels({
     if (!selectedModel) {
       return;
     }
-    const currentEffort = normalizeEffort(selectedEffort);
+    const currentEffort = normalizeEffortValue(selectedEffort);
     if (currentEffort) {
       return;
     }
-    const nextEffort = normalizeEffort(selectedModel.defaultReasoningEffort);
+    const nextEffort = normalizeEffortValue(selectedModel.defaultReasoningEffort);
     if (nextEffort === null) {
       return;
     }

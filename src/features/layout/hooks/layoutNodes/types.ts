@@ -10,6 +10,7 @@ import type {
   ComposerEditorSettings,
   CustomPromptOption,
   AccountSnapshot,
+  AppMention,
   AppOption,
   DebugEntry,
   DictationSessionState,
@@ -24,6 +25,13 @@ import type {
   OpenAppTarget,
   QueueHealthEntry,
   QueuedMessage,
+<<<<<<< HEAD
+=======
+  PullRequestReviewAction,
+  PullRequestReviewIntent,
+  PullRequestSelectionRange,
+  RateLimitSnapshot,
+>>>>>>> origin/main
   RequestUserInputRequest,
   RequestUserInputResponse,
   SkillOption,
@@ -38,6 +46,8 @@ import type { UpdateState } from "../../../update/hooks/useUpdater";
 import type { TerminalSessionState } from "../../../terminal/hooks/useTerminalSession";
 import type { TerminalTab } from "../../../terminal/hooks/useTerminalTabs";
 import type { ErrorToast } from "../../../../services/toasts";
+import type { GitDiffSource, GitPanelMode } from "../../../git/types";
+import type { PerFileDiffGroup } from "../../../git/utils/perFileThreadDiffs";
 
 export type ThreadActivityStatus = {
   isProcessing: boolean;
@@ -52,6 +62,7 @@ export type ThreadActivityStatus = {
 
 export type GitDiffViewerItem = {
   path: string;
+  displayPath?: string;
   status: string;
   diff: string;
   isImage?: boolean;
@@ -80,6 +91,14 @@ export type WorktreeRenameState = {
   onCommit: () => void;
 };
 
+export type ComposerContextAction = {
+  id: string;
+  label: string;
+  title?: string;
+  disabled?: boolean;
+  onSelect: () => void | Promise<void>;
+};
+
 export type LayoutNodesOptions = {
   workspaces: WorkspaceInfo[];
   groupedWorkspaces: Array<{
@@ -98,12 +117,20 @@ export type LayoutNodesOptions = {
   threadListLoadingByWorkspace: Record<string, boolean>;
   threadListPagingByWorkspace: Record<string, boolean>;
   threadListCursorByWorkspace: Record<string, string | null>;
+  pinnedThreadsVersion: number;
   threadListSortKey: ThreadListSortKey;
   onSetThreadListSortKey: (sortKey: ThreadListSortKey) => void;
   onRefreshAllThreads: () => void;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   activeItems: ConversationItem[];
+<<<<<<< HEAD
+=======
+  showPollingFetchStatus?: boolean;
+  pollingIntervalMs?: number;
+  activeRateLimits: RateLimitSnapshot | null;
+  usageShowRemaining: boolean;
+>>>>>>> origin/main
   accountInfo: AccountSnapshot | null;
   onSwitchAccount: () => void;
   onCancelSwitchAccount: () => void;
@@ -207,6 +234,9 @@ export type LayoutNodesOptions = {
   branchName: string;
   branches: BranchInfo[];
   onCheckoutBranch: (name: string) => Promise<void>;
+  onCheckoutPullRequest: (
+    pullRequest: GitHubPullRequest,
+  ) => Promise<void> | void;
   onCreateBranch: (name: string) => Promise<void>;
   onCopyThread: () => void | Promise<void>;
   onCopyThreadFull: () => void | Promise<void>;
@@ -227,12 +257,13 @@ export type LayoutNodesOptions = {
   launchScriptsState?: WorkspaceLaunchScriptsState;
   mainHeaderActionsNode?: ReactNode;
   centerMode: "chat" | "diff";
+  splitChatDiffView: boolean;
   onExitDiff: () => void;
   activeTab: "home" | "projects" | "codex" | "git" | "log";
   onSelectTab: (tab: "home" | "projects" | "codex" | "git" | "log") => void;
   tabletNavTab: "codex" | "git" | "log";
-  gitPanelMode: "diff" | "log" | "issues" | "prs";
-  onGitPanelModeChange: (mode: "diff" | "log" | "issues" | "prs") => void;
+  gitPanelMode: GitPanelMode;
+  onGitPanelModeChange: (mode: GitPanelMode) => void;
   isPhone: boolean;
   gitDiffViewStyle: "split" | "unified";
   gitDiffIgnoreWhitespaceChanges: boolean;
@@ -255,9 +286,12 @@ export type LayoutNodesOptions = {
     error: string | null;
   };
   fileStatus: string;
+  perFileDiffGroups: PerFileDiffGroup[];
   selectedDiffPath: string | null;
+  hasActiveGitDiffs: boolean;
   diffScrollRequestId: number;
   onSelectDiff: (path: string) => void;
+  onSelectPerFileDiff: (path: string) => void;
   gitLogEntries: GitLogEntry[];
   gitLogTotal: number;
   gitLogAhead: number;
@@ -282,6 +316,15 @@ export type LayoutNodesOptions = {
   selectedPullRequestComments: GitHubPullRequestComment[];
   selectedPullRequestCommentsLoading: boolean;
   selectedPullRequestCommentsError: string | null;
+  pullRequestReviewActions: PullRequestReviewAction[];
+  onRunPullRequestReview: (options: {
+    intent: PullRequestReviewIntent;
+    question?: string;
+    selection?: PullRequestSelectionRange | null;
+    images?: string[];
+  }) => Promise<string | null>;
+  pullRequestReviewLaunching: boolean;
+  pullRequestReviewThreadId: string | null;
   onSelectPullRequest: (pullRequest: GitHubPullRequest) => void;
   gitRemoteUrl: string | null;
   gitRoot: string | null;
@@ -295,12 +338,14 @@ export type LayoutNodesOptions = {
   onSelectGitRoot: (path: string) => void;
   onClearGitRoot: () => void;
   onPickGitRoot: () => void | Promise<void>;
+  onInitGitRepo: () => void | Promise<void>;
+  initGitRepoLoading: boolean;
   onStageGitAll: () => Promise<void>;
   onStageGitFile: (path: string) => Promise<void>;
   onUnstageGitFile: (path: string) => Promise<void>;
   onRevertGitFile: (path: string) => Promise<void>;
   onRevertAllGitChanges: () => Promise<void>;
-  diffSource: "local" | "pr" | "commit";
+  diffSource: GitDiffSource;
   gitDiffs: GitDiffViewerItem[];
   gitDiffLoading: boolean;
   gitDiffError: string | null;
@@ -349,8 +394,16 @@ export type LayoutNodesOptions = {
   onRevealWorkspacePrompts: () => void | Promise<void>;
   onRevealGeneralPrompts: () => void | Promise<void>;
   canRevealGeneralPrompts: boolean;
-  onSend: (text: string, images: string[]) => void | Promise<void>;
-  onQueue: (text: string, images: string[]) => void | Promise<void>;
+  onSend: (
+    text: string,
+    images: string[],
+    appMentions?: AppMention[],
+  ) => void | Promise<void>;
+  onQueue: (
+    text: string,
+    images: string[],
+    appMentions?: AppMention[],
+  ) => void | Promise<void>;
   onStop: () => void;
   canStop: boolean;
   onFileAutocompleteActiveChange?: (active: boolean) => void;
@@ -384,8 +437,12 @@ export type LayoutNodesOptions = {
   onReviewPromptConfirmCustom: () => Promise<void>;
   activeTokenUsage: ThreadTokenUsage | null;
   activeQueue: QueuedMessage[];
+<<<<<<< HEAD
   queueHealthEntries: QueueHealthEntry[];
   legacyQueueMessageCount: number;
+=======
+  queuePausedReason: string | null;
+>>>>>>> origin/main
   draftText: string;
   onDraftChange: (next: string) => void;
   activeImages: string[];
@@ -441,6 +498,7 @@ export type LayoutNodesOptions = {
   onDismissDictationError: () => void;
   dictationHint: string | null;
   onDismissDictationHint: () => void;
+  composerContextActions: ComposerContextAction[];
   showComposer: boolean;
   composerSendLabel?: string;
   plan: TurnPlan | null;

@@ -27,8 +27,8 @@ describe("threadItems", () => {
     }
   });
 
-  it("preserves tool output for fileChange and commandExecution", () => {
-    const output = "x".repeat(21000);
+  it("truncates extremely large tool output for fileChange and commandExecution", () => {
+    const output = "x".repeat(250000);
     const item: ConversationItem = {
       id: "tool-1",
       kind: "tool",
@@ -40,7 +40,9 @@ describe("threadItems", () => {
     const normalized = normalizeItem(item);
     expect(normalized.kind).toBe("tool");
     if (normalized.kind === "tool") {
-      expect(normalized.output).toBe(output);
+      expect(normalized.output).not.toBe(output);
+      expect(normalized.output?.endsWith("...")).toBe(true);
+      expect((normalized.output ?? "").length).toBeLessThan(output.length);
     }
   });
 
@@ -62,6 +64,7 @@ describe("threadItems", () => {
     expect(secondOutput).toBe(output);
   });
 
+<<<<<<< HEAD
   it("keeps full thread history without client-side item cap", () => {
     const items: ConversationItem[] = Array.from({ length: 260 }, (_, index) => ({
       id: `msg-${index}`,
@@ -81,6 +84,30 @@ describe("threadItems", () => {
       expect(first.text).toBe("message-0");
       expect(last.text).toBe("message-259");
     }
+=======
+  it("respects custom max items per thread in prepareThreadItems", () => {
+    const items: ConversationItem[] = Array.from({ length: 5 }, (_, index) => ({
+      id: `msg-${index}`,
+      kind: "message",
+      role: "assistant",
+      text: `message ${index}`,
+    }));
+    const prepared = prepareThreadItems(items, { maxItemsPerThread: 3 });
+    expect(prepared).toHaveLength(3);
+    expect(prepared[0]?.id).toBe("msg-2");
+    expect(prepared[2]?.id).toBe("msg-4");
+  });
+
+  it("supports unlimited max items per thread in prepareThreadItems", () => {
+    const items: ConversationItem[] = Array.from({ length: 5 }, (_, index) => ({
+      id: `msg-${index}`,
+      kind: "message",
+      role: "assistant",
+      text: `message ${index}`,
+    }));
+    const prepared = prepareThreadItems(items, { maxItemsPerThread: null });
+    expect(prepared).toHaveLength(5);
+>>>>>>> origin/main
   });
 
   it("drops assistant review summaries that duplicate completed review items", () => {

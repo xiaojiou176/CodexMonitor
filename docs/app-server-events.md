@@ -1,4 +1,4 @@
-# App-Server Events Reference (Codex `383b45279efda1ef611a4aa286621815fe656b8a`)
+# App-Server Events Reference (Codex `abeafbdca17f6102099ac5b792761b6883c52d35`)
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
@@ -48,9 +48,10 @@ Primary outgoing request layer:
 ## Supported Events (Current)
 
 These are the app-server methods currently supported in
-`src/utils/appServerEvents.ts` (`SUPPORTED_APP_SERVER_METHODS`) and routed in
-`useAppServerEvents.ts`.
+`src/utils/appServerEvents.ts` (`SUPPORTED_APP_SERVER_METHODS`) and then either
+routed in `useAppServerEvents.ts` or handled in feature-specific subscriptions.
 
+- `app/list/updated`
 - `codex/connected`
 - `*requestApproval` methods (matched via
   `isApprovalRequestMethod(method)`; suffix check)
@@ -98,7 +99,6 @@ CodexMonitor status:
 Compared against Codex app-server protocol v2 notifications, the following
 events are currently not routed:
 
-- `app/list/updated`
 - `rawResponseItem/completed`
 - `item/mcpToolCall/progress`
 - `mcpServer/oauthLogin/completed`
@@ -123,6 +123,7 @@ These are v2 request methods CodexMonitor currently sends to Codex app-server:
 - `turn/interrupt`
 - `review/start`
 - `model/list`
+- `experimentalFeature/list`
 - `collaborationMode/list`
 - `mcpServerStatus/list`
 - `account/login/start`
@@ -138,12 +139,12 @@ Compared against Codex v2 request methods, CodexMonitor currently does not send:
 
 - `thread/unarchive`
 - `thread/rollback`
+- `thread/backgroundTerminals/clean`
 - `thread/loaded/list`
 - `thread/read`
 - `skills/remote/read`
 - `skills/remote/write`
 - `skills/config/write`
-- `experimentalFeature/list`
 - `mock/experimentalMethod`
 - `mcpServer/oauth/login`
 - `config/mcpServer/reload`
@@ -248,3 +249,7 @@ Use this when the method list is unchanged but behavior looks off.
   - CodexMonitor attempts `turn/steer` when steering is enabled and an active turn exists.
   - If the server/daemon reports unknown `turn/steer`/`turn_steer`, CodexMonitor
     degrades to `turn/start` and caches that workspace as steer-unsupported.
+- Feature toggles in Settings:
+  - `experimentalFeature/list` is an app-server request.
+  - Toggle writes use local/daemon command surfaces (`set_codex_feature_flag` and app settings update),
+    which write `config.toml`; they are not app-server `ClientRequest` methods.

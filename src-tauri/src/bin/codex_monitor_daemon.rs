@@ -524,6 +524,10 @@ impl DaemonState {
             .await
     }
 
+    async fn set_codex_feature_flag(&self, feature_key: String, enabled: bool) -> Result<(), String> {
+        codex_config::write_feature_enabled(feature_key.as_str(), enabled)
+    }
+
     async fn orbit_connect_test(&self) -> Result<OrbitConnectTestResult, String> {
         let settings = self.app_settings.lock().await.clone();
         let ws_url = shared::orbit_core::orbit_ws_url_from_settings(&settings)?;
@@ -645,6 +649,60 @@ impl DaemonState {
         codex_core::resume_thread_core(&self.sessions, workspace_id, thread_id).await
     }
 
+    async fn thread_live_subscribe(
+        &self,
+        workspace_id: String,
+        thread_id: String,
+    ) -> Result<Value, String> {
+        codex_core::thread_live_subscribe_core(
+            &self.sessions,
+            workspace_id.clone(),
+            thread_id.clone(),
+        )
+        .await?;
+        let subscription_id = format!("{}:{}", workspace_id, thread_id);
+        self.event_sink.emit_app_server_event(AppServerEvent {
+            workspace_id: workspace_id.clone(),
+            message: json!({
+                "method": "thread/live_attached",
+                "params": {
+                    "workspaceId": workspace_id,
+                    "threadId": thread_id,
+                    "subscriptionId": subscription_id,
+                }
+            }),
+        });
+        Ok(json!({
+            "subscriptionId": subscription_id,
+            "state": "live",
+        }))
+    }
+
+    async fn thread_live_unsubscribe(
+        &self,
+        workspace_id: String,
+        thread_id: String,
+    ) -> Result<Value, String> {
+        codex_core::thread_live_unsubscribe_core(
+            &self.sessions,
+            workspace_id.clone(),
+            thread_id.clone(),
+        )
+        .await?;
+        self.event_sink.emit_app_server_event(AppServerEvent {
+            workspace_id: workspace_id.clone(),
+            message: json!({
+                "method": "thread/live_detached",
+                "params": {
+                    "workspaceId": workspace_id,
+                    "threadId": thread_id,
+                    "reason": "manual",
+                }
+            }),
+        });
+        Ok(json!({ "ok": true }))
+    }
+
     async fn fork_thread(&self, workspace_id: String, thread_id: String) -> Result<Value, String> {
         codex_core::fork_thread_core(&self.sessions, workspace_id, thread_id).await
     }
@@ -710,6 +768,7 @@ impl DaemonState {
         effort: Option<String>,
         access_mode: Option<String>,
         images: Option<Vec<String>>,
+        app_mentions: Option<Vec<Value>>,
         collaboration_mode: Option<Value>,
     ) -> Result<Value, String> {
         codex_core::send_user_message_core(
@@ -721,6 +780,7 @@ impl DaemonState {
             effort,
             access_mode,
             images,
+            app_mentions,
             collaboration_mode,
         )
         .await
@@ -733,6 +793,7 @@ impl DaemonState {
         turn_id: String,
         text: String,
         images: Option<Vec<String>>,
+        app_mentions: Option<Vec<Value>>,
     ) -> Result<Value, String> {
         codex_core::turn_steer_core(
             &self.sessions,
@@ -741,6 +802,7 @@ impl DaemonState {
             turn_id,
             text,
             images,
+            app_mentions,
         )
         .await
     }
@@ -767,6 +829,15 @@ impl DaemonState {
 
     async fn model_list(&self, workspace_id: String) -> Result<Value, String> {
         codex_core::model_list_core(&self.sessions, workspace_id).await
+    }
+
+    async fn experimental_feature_list(
+        &self,
+        workspace_id: String,
+        cursor: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Value, String> {
+        codex_core::experimental_feature_list_core(&self.sessions, workspace_id, cursor, limit).await
     }
 
     async fn collaboration_mode_list(&self, workspace_id: String) -> Result<Value, String> {
@@ -799,8 +870,9 @@ impl DaemonState {
         workspace_id: String,
         cursor: Option<String>,
         limit: Option<u32>,
+        thread_id: Option<String>,
     ) -> Result<Value, String> {
-        codex_core::apps_list_core(&self.sessions, workspace_id, cursor, limit).await
+        codex_core::apps_list_core(&self.sessions, workspace_id, cursor, limit, thread_id).await
     }
 
     async fn respond_to_server_request(
@@ -891,6 +963,26 @@ impl DaemonState {
 
     async fn get_git_status(&self, workspace_id: String) -> Result<Value, String> {
         git_ui_core::get_git_status_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn init_git_repo(
+        &self,
+        workspace_id: String,
+        branch: String,
+        force: bool,
+    ) -> Result<Value, String> {
+        git_ui_core::init_git_repo_core(&self.workspaces, workspace_id, branch, force).await
+    }
+
+    async fn create_github_repo(
+        &self,
+        workspace_id: String,
+        repo: String,
+        visibility: String,
+        branch: Option<String>,
+    ) -> Result<Value, String> {
+        git_ui_core::create_github_repo_core(&self.workspaces, workspace_id, repo, visibility, branch)
+            .await
     }
 
     async fn list_git_roots(
@@ -1005,6 +1097,15 @@ impl DaemonState {
             pr_number,
         )
         .await
+    }
+
+    async fn checkout_github_pull_request(
+        &self,
+        workspace_id: String,
+        pr_number: u64,
+    ) -> Result<(), String> {
+        git_ui_core::checkout_github_pull_request_core(&self.workspaces, workspace_id, pr_number)
+            .await
     }
 
     async fn list_git_branches(&self, workspace_id: String) -> Result<Value, String> {
