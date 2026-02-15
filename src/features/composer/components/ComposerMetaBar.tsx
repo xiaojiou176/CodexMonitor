@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { BrainCog } from "lucide-react";
 import type { ThreadTokenUsage } from "../../../types";
 
@@ -77,6 +77,19 @@ export function ComposerMetaBar({
     lastInputTokens > 0
       ? Math.round((lastCachedTokens / lastInputTokens) * 100)
       : null;
+  const contextMeterFillRef = useRef<HTMLDivElement | null>(null);
+  const contextMeterScale =
+    usedPercent === null ? 0 : Math.max(0, Math.min(usedPercent / 100, 1));
+
+  useLayoutEffect(() => {
+    if (!contextMeterFillRef.current) {
+      return;
+    }
+    contextMeterFillRef.current.style.setProperty(
+      "--context-meter-scale",
+      String(contextMeterScale),
+    );
+  }, [contextMeterScale]);
 
   const planMode =
     collaborationModes.find((mode) => mode.id === "plan") ?? null;
@@ -298,7 +311,7 @@ export function ComposerMetaBar({
                       ? " context-meter-fill--warn"
                       : ""
                 }`}
-                style={{ width: `${usedPercent}%` } as CSSProperties}
+                ref={contextMeterFillRef}
               />
             </div>
             <span className="context-meter-label">

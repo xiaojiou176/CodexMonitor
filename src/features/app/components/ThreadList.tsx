@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { CSSProperties, DragEvent, MouseEvent } from "react";
+import type { DragEvent, MouseEvent } from "react";
 
 import type { ThreadSummary } from "../../../types";
 
@@ -111,7 +111,7 @@ export function ThreadList({
   }, []);
 
   const handleDragStart = useCallback(
-    (event: DragEvent<HTMLDivElement>, rootId: string, isReorderableRoot: boolean) => {
+    (event: DragEvent<HTMLElement>, rootId: string, isReorderableRoot: boolean) => {
       if (!isReorderableRoot) {
         return;
       }
@@ -127,7 +127,7 @@ export function ThreadList({
   );
 
   const handleDragOver = useCallback(
-    (event: DragEvent<HTMLDivElement>, targetRootId: string, isReorderableRoot: boolean) => {
+    (event: DragEvent<HTMLElement>, targetRootId: string, isReorderableRoot: boolean) => {
       if (!isReorderableRoot) {
         return;
       }
@@ -154,7 +154,7 @@ export function ThreadList({
   );
 
   const handleDrop = useCallback(
-    (event: DragEvent<HTMLDivElement>, targetRootId: string, isReorderableRoot: boolean) => {
+    (event: DragEvent<HTMLElement>, targetRootId: string, isReorderableRoot: boolean) => {
       if (!isReorderableRoot) {
         return;
       }
@@ -188,10 +188,8 @@ export function ThreadList({
 
   const renderThreadRow = ({ thread, depth }: ThreadRow) => {
     const relativeTime = getThreadTime(thread);
-    const indentStyle =
-      depth > 0
-        ? ({ "--thread-indent": `${depth * indentUnit}px` } as CSSProperties)
-        : undefined;
+    const depthClass =
+      depth > 0 ? ` thread-row-indent-${indentUnit}-${Math.min(depth, 20)}` : "";
     const status = threadStatusById[thread.id];
     const statusClass = status?.isReviewing
       ? "reviewing"
@@ -217,7 +215,8 @@ export function ThreadList({
       workspaceId === activeWorkspaceId && thread.id === activeThreadId;
 
     return (
-      <div
+      <button
+        type="button"
         key={thread.id}
         className={`thread-row ${
           isActive || isSelected ? "active" : ""
@@ -227,8 +226,7 @@ export function ThreadList({
           isDropTarget ? " thread-row-drop-target" : ""
         }${
           isDropTargetBefore ? " thread-row-drop-target-before" : ""
-        }${isDropTargetAfter ? " thread-row-drop-target-after" : ""}`}
-        style={indentStyle}
+        }${isDropTargetAfter ? " thread-row-drop-target-after" : ""}${depthClass}`}
         onClick={(event) => {
           emitThreadSelection(
             thread.id,
@@ -241,8 +239,6 @@ export function ThreadList({
         onContextMenu={(event) =>
           onShowThreadMenu(event, workspaceId, thread.id, canPin)
         }
-        role="button"
-        tabIndex={0}
         draggable={isReorderableRoot}
         onDragStart={(event) =>
           handleDragStart(event, thread.id, isReorderableRoot)
@@ -252,24 +248,17 @@ export function ThreadList({
         }
         onDrop={(event) => handleDrop(event, thread.id, isReorderableRoot)}
         onDragEnd={resetDragState}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            emitThreadSelection(thread.id, false, false, false);
-            onSelectThread(workspaceId, thread.id);
-          }
-        }}
       >
         <span className={`thread-status ${statusClass}`} aria-hidden />
         {isPinned && <span className="thread-pin-icon" aria-label="已置顶">📌</span>}
         <span className="thread-name">{thread.name}</span>
-        <div className="thread-meta">
+        <span className="thread-meta">
           {relativeTime && <span className="thread-time">{relativeTime}</span>}
-          <div className="thread-menu">
-            <div className="thread-menu-trigger" aria-hidden="true" />
-          </div>
-        </div>
-      </div>
+          <span className="thread-menu">
+            <span className="thread-menu-trigger" aria-hidden="true" />
+          </span>
+        </span>
+      </button>
     );
   };
 

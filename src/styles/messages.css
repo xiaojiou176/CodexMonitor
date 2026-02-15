@@ -34,8 +34,19 @@
   position: relative;
 }
 
+.messages-virtual-content.is-virtualized {
+  height: var(--messages-virtual-height, 0px);
+}
+
 .messages-virtual-row {
   width: 100%;
+}
+
+.messages-virtual-row.is-virtualized {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate3d(0, var(--messages-virtual-row-offset, 0px), 0);
 }
 
 .messages-full > .message,
@@ -66,18 +77,18 @@
 .messages-loading-indicator {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .messages-loading-label {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: 0.02em;
 }
 
 .thinking {
   padding: 0 24px;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-fainter);
   margin-bottom: 12px;
 }
@@ -85,11 +96,11 @@
 .working {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 0;
   margin: 4px 24px 12px 0;
   color: var(--text-fainter);
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: 0.02em;
 }
 
@@ -116,9 +127,9 @@
   color: transparent;
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.3),
-    rgba(255, 255, 255, 0.95),
-    rgba(255, 255, 255, 0.3)
+    color-mix(in srgb, var(--text-strong) 30%, transparent),
+    color-mix(in srgb, var(--text-strong) 95%, transparent),
+    color-mix(in srgb, var(--text-strong) 30%, transparent)
   );
   background-size: 200% 100%;
   -webkit-background-clip: text;
@@ -141,10 +152,10 @@
 .turn-complete {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 16px 24px 18px 24px;
+  gap: 12px;
+  margin: 16px 24px 16px 24px;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
@@ -165,11 +176,11 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding: 1px 6px;
+  padding: 4px 8px;
   border-radius: 999px;
   border: 1px solid var(--border-subtle);
   color: var(--text-faint);
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .working-phase-start .working-phase-badge {
@@ -205,12 +216,12 @@
   display: flex;
   width: 100%;
   min-width: 0;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 /* Visual rhythm: extra breathing room between role transitions */
 .message.assistant + .message.user {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .message.user + .message.assistant {
@@ -222,7 +233,7 @@
 .messages-virtual-row.item-message-assistant-divider > .message.assistant {
   border-top: 1px solid var(--border-subtle);
   padding-top: 16px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .message.user {
@@ -366,9 +377,9 @@
 }
 
 .message.assistant .message-image-grid--with-text {
-  margin-bottom: 10px;
-  padding-top: 2px;
-  padding-bottom: 2px;
+  margin-bottom: 12px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 .message.user .message-copy-button {
@@ -404,8 +415,8 @@
   align-self: flex-start;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 11px;
+  padding: 4px 12px;
+  font-size: 14px;
   color: var(--text-muted);
   background: color-mix(in srgb, var(--surface-card) 70%, transparent);
 }
@@ -461,8 +472,8 @@
   aspect-ratio: 1 / 1;
   cursor: zoom-in;
   display: block;
-  box-shadow: none !important;
-  transform: none !important;
+  box-shadow: none;
+  transform: none;
 }
 
 .message-image-thumb img {
@@ -473,8 +484,8 @@
 }
 
 .message-image-thumb:hover {
-  transform: none !important;
-  box-shadow: none !important;
+  transform: none;
+  box-shadow: none;
   outline: 1px solid var(--border-accent);
   outline-offset: 0;
 }
@@ -484,7 +495,7 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(10, 12, 16, 0.7);
+  background: color-mix(in srgb, var(--surface-context-core) 70%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -502,7 +513,7 @@
   max-width: 90vw;
   max-height: 90vh;
   border-radius: 16px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 24px 60px color-mix(in srgb, var(--surface-context-core) 68%, transparent);
 }
 
 .message-image-lightbox-close {
@@ -548,7 +559,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -557,10 +568,10 @@
 }
 
 .review-badge {
-  font-size: 10px;
+  font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  padding: 2px 6px;
+  padding: 4px 6px;
   border-radius: 999px;
   background: var(--surface-card-strong);
   color: var(--text-quiet);
@@ -583,7 +594,7 @@
   justify-content: space-between;
   gap: 8px;
   align-items: center;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -595,7 +606,7 @@
 }
 
 .item-chevron {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-faint);
   transition: transform 0.2s ease;
 }
@@ -610,14 +621,14 @@
 }
 
 .item-title {
-  font-size: 13px;
+  font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .item-subtitle {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
@@ -626,7 +637,7 @@
 }
 
 .item-status {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -637,7 +648,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-muted);
   min-width: 0;
 }
@@ -709,7 +720,7 @@
   background: var(--status-unknown);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-subtle) 80%, transparent);
   flex: 0 0 auto;
-  margin-top: 1px;
+  margin-top: 4px;
 }
 
 .tool-inline-icon {
@@ -852,7 +863,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--text-muted);
 }
@@ -864,7 +875,7 @@
 .explore-inline-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .explore-inline-item {
@@ -909,25 +920,25 @@
 .tool-inline-change-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .tool-inline-change-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-quiet);
 }
 
 .tool-inline-change-kind {
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   color: var(--text-subtle);
 }
 
 .tool-inline-change-path {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-stronger);
 }
 
@@ -935,7 +946,7 @@
   background: var(--surface-command);
   border-radius: 8px;
   padding: 8px;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-quiet);
 }
 
@@ -943,8 +954,8 @@
   background: color-mix(in srgb, var(--surface-control) 36%, var(--surface-messages));
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 92%, transparent);
-  padding: 10px 12px;
-  font-size: var(--code-font-size, 11px);
+  padding: 12px;
+  font-size: var(--code-font-size, 14px);
   color: var(--text-muted);
   font-family: var(--code-font-family);
   font-weight: var(--code-font-weight, 400);
@@ -955,7 +966,7 @@
 }
 
 .tool-inline-terminal-shell {
-  font-size: 12px;
+  font-size: 14px;
   font-family: var(--ui-font-family);
   color: var(--text-subtle);
 }
@@ -980,7 +991,7 @@
   max-height: calc(var(--code-line-height, 1.32) * 7em);
   overflow-y: auto;
   overflow-x: hidden;
-  gap: 3px;
+  gap: 4px;
   scrollbar-width: thin;
 }
 
@@ -992,7 +1003,7 @@
 
 .tool-inline-terminal-status {
   align-self: flex-end;
-  font-size: 12px;
+  font-size: 14px;
   font-family: var(--ui-font-family);
   color: var(--text-subtle);
 }
@@ -1032,7 +1043,7 @@
   padding: 0;
   cursor: pointer;
   text-align: left;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-faint);
   line-height: 1.5;
   letter-spacing: 0;
@@ -1057,7 +1068,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-left: 2px;
+  padding-left: 4px;
 }
 
 .tool-group-body .tool-inline {
@@ -1065,7 +1076,7 @@
 }
 
 .reasoning-inline-detail {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
   color: var(--text-muted);
 }
@@ -1083,7 +1094,7 @@
 }
 
 .tool-label {
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-fainter);
@@ -1093,7 +1104,7 @@
   background: var(--surface-command);
   border-radius: 8px;
   padding: 8px;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-stronger);
   margin: 0;
   max-width: 100%;
@@ -1102,7 +1113,7 @@
 }
 
 .tool-cwd {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-muted);
   word-break: break-all;
 }
@@ -1110,25 +1121,25 @@
 .file-change-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .file-change-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-quiet);
 }
 
 .file-change-kind {
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   color: var(--text-subtle);
 }
 
 .file-change-path {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-stronger);
 }
 
@@ -1136,7 +1147,7 @@
   background: var(--surface-command);
   border-radius: 8px;
   padding: 8px;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-quiet);
   margin: 0;
   max-width: 100%;
@@ -1157,7 +1168,7 @@
 }
 
 .markdown > * + * {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .markdown pre {
@@ -1175,7 +1186,7 @@
   color: color-mix(in srgb, var(--text-stronger) 78%, var(--message-link-color));
   background: transparent;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 86%, transparent);
-  padding: 0 5px;
+  padding: 0 6px;
   border-radius: 6px;
   font-size: 0.9em;
   font-weight: 560;
@@ -1246,10 +1257,12 @@
 
 .message-file-link-preview {
   position: fixed;
+  top: var(--message-file-preview-top, 0px);
+  left: var(--message-file-preview-left, 0px);
   z-index: 1400;
   width: min(420px, calc(100vw - 24px));
   max-height: 260px;
-  padding: 10px;
+  padding: 12px;
   border-radius: 10px;
   border: 1px solid var(--border-stronger);
   background: var(--surface-popover);
@@ -1266,16 +1279,16 @@
 }
 
 .message-file-link-preview-title {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-muted);
 }
 
 .message-file-link-preview-tag {
-  font-size: 10px;
+  font-size: 14px;
   border-radius: 999px;
-  padding: 1px 6px;
+  padding: 4px 8px;
   border: 1px solid var(--border-subtle);
   color: var(--text-faint);
 }
@@ -1283,14 +1296,14 @@
 .message-file-link-preview-open {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   margin-left: auto;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
   background: transparent;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -1310,7 +1323,7 @@
 .message-file-link-preview .message-file-link-preview-path {
   display: block;
   font-family: var(--code-font-family);
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-faint);
   margin-bottom: 8px;
   white-space: nowrap;
@@ -1322,7 +1335,7 @@
 .message-file-link-preview-lines {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
   max-height: 196px;
   overflow: auto;
   border: 1px solid var(--border-subtle);
@@ -1337,7 +1350,7 @@
   gap: 8px;
   padding: 4px 8px;
   font-family: var(--code-font-family);
-  font-size: var(--code-font-size, 11px);
+  font-size: var(--code-font-size, 14px);
   line-height: var(--code-line-height, 1.28);
 }
 
@@ -1358,9 +1371,9 @@
 }
 
 .message-file-link-preview-status {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-muted);
-  padding: 4px 2px;
+  padding: 4px 4px;
 }
 
 .message-file-link-preview-error {
@@ -1373,8 +1386,8 @@
   border-radius: 10px;
   background: var(--surface-command);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  margin: 10px 0;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--surface-context-core) 20%, transparent);
+  margin: 12px 0;
 }
 
 .message .markdown-codeblock-header {
@@ -1385,7 +1398,7 @@
   padding: 4px 8px;
   background: var(--surface-control);
   border-bottom: 1px solid var(--border-strong);
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -1400,8 +1413,8 @@
 .message .markdown-codeblock-copy {
   border: 1px solid var(--border-strong);
   border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 10px;
+  padding: 4px 8px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-stronger);
@@ -1417,11 +1430,11 @@
 
 .message .markdown-codeblock pre {
   margin: 0;
-  padding: 10px 12px 12px;
+  padding: 12px 12px 12px;
   white-space: pre;
   overflow-x: auto;
   font-family: var(--code-font-family);
-  font-size: var(--code-font-size, 11px);
+  font-size: var(--code-font-size, 14px);
   font-weight: var(--code-font-weight, 400);
   line-height: var(--code-line-height, 1.28);
   -webkit-user-select: text;
@@ -1430,14 +1443,14 @@
 
 .message .markdown-codeblock-single {
   margin: 6px 0;
-  padding: 10px 12px 12px;
+  padding: 12px 12px 12px;
   border: 1px solid var(--border-stronger);
   border-radius: 10px;
   background: var(--surface-command);
   white-space: pre;
   overflow-x: auto;
   font-family: var(--code-font-family);
-  font-size: var(--code-font-size, 11px);
+  font-size: var(--code-font-size, 14px);
   font-weight: var(--code-font-weight, 400);
   line-height: var(--code-line-height, 1.28);
   box-shadow: none;
@@ -1470,7 +1483,7 @@
 
 .markdown ul,
 .markdown ol {
-  padding-left: 20px;
+  padding-left: 24px;
   margin: 0;
   list-style-position: outside;
 }
@@ -1481,7 +1494,7 @@
 .markdown ol ul {
   margin-top: 6px;
   margin-left: 8px;
-  padding-left: 14px;
+  padding-left: 16px;
 }
 
 .markdown li {
@@ -1494,7 +1507,7 @@
 .message.assistant .markdown li > ol {
   margin-top: 6px;
   margin-left: 8px;
-  padding-left: 14px;
+  padding-left: 16px;
 }
 
 .markdown li p {
@@ -1513,7 +1526,7 @@
 .markdown :where(h1, h2, h3, h4) {
   font-weight: 640;
   letter-spacing: 0.008em;
-  margin-top: 18px;
+  margin-top: 16px;
 }
 
 .markdown :where(h1) {
@@ -1539,7 +1552,7 @@
 
 .markdown :where(blockquote) {
   margin: 0;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border-left: 3px solid var(--border-accent-soft);
   background: color-mix(in srgb, var(--surface-card-strong) 55%, transparent);
   border-radius: 8px;
@@ -1561,7 +1574,7 @@
   border-collapse: collapse;
   width: 100%;
   font-size: 0.93em;
-  margin: 10px 0;
+  margin: 12px 0;
   overflow-x: auto;
   display: block;
 }
@@ -1577,7 +1590,7 @@
 }
 
 .markdown tbody td {
-  padding: 7px 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border-subtle);
   vertical-align: top;
   line-height: 1.6;
@@ -1609,4 +1622,20 @@
 .message .markdown a code {
   color: var(--message-link-color);
   font-size: 0.97em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .messages,
+  .messages *,
+  [class^="message-"],
+  [class*=" message-"],
+  [class^="assistant"],
+  [class*=" assistant"],
+  [class^="markdown"],
+  [class*=" markdown"],
+  [class^="tool-inline"],
+  [class*=" tool-inline"] {
+    animation: none;
+    transition: none;
+  }
 }

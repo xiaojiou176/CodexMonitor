@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { CSSProperties, MouseEvent } from "react";
+import type { MouseEvent } from "react";
 
 import type { ThreadSummary } from "../../../types";
 
@@ -70,10 +70,8 @@ export function PinnedThreadList({
     <div className="thread-list pinned-thread-list">
       {rows.map(({ thread, depth, workspaceId }) => {
         const relativeTime = getThreadTime(thread);
-        const indentStyle =
-          depth > 0
-            ? ({ "--thread-indent": `${depth * 14}px` } as CSSProperties)
-            : undefined;
+        const depthClass =
+          depth > 0 ? ` thread-row-indent-14-${Math.min(depth, 20)}` : "";
         const status = threadStatusById[thread.id];
         const statusClass = status?.isReviewing
           ? "reviewing"
@@ -92,12 +90,12 @@ export function PinnedThreadList({
         const orderedThreadIds = orderedThreadIdsByWorkspace.get(workspaceId) ?? [];
 
         return (
-          <div
+          <button
+            type="button"
             key={`${workspaceId}:${thread.id}`}
             className={`thread-row ${
               isActive || isSelected ? "active" : ""
-            }${isSelected ? " thread-row-selected" : ""}`}
-            style={indentStyle}
+            }${isSelected ? " thread-row-selected" : ""}${depthClass}`}
             onClick={(event) => {
               onThreadSelectionChange?.({
                 workspaceId,
@@ -112,22 +110,6 @@ export function PinnedThreadList({
             onContextMenu={(event) =>
               onShowThreadMenu(event, workspaceId, thread.id, canPin)
             }
-            role="button"
-            tabIndex={0}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onThreadSelectionChange?.({
-                  workspaceId,
-                  threadId: thread.id,
-                  orderedThreadIds,
-                  metaKey: false,
-                  ctrlKey: false,
-                  shiftKey: false,
-                });
-                onSelectThread(workspaceId, thread.id);
-              }
-            }}
           >
             <span className={`thread-status ${statusClass}`} aria-hidden />
             {isPinned && (
@@ -136,13 +118,13 @@ export function PinnedThreadList({
               </span>
             )}
             <span className="thread-name">{thread.name}</span>
-            <div className="thread-meta">
+            <span className="thread-meta">
               {relativeTime && <span className="thread-time">{relativeTime}</span>}
-              <div className="thread-menu">
-                <div className="thread-menu-trigger" aria-hidden="true" />
-              </div>
-            </div>
-          </div>
+              <span className="thread-menu">
+                <span className="thread-menu-trigger" aria-hidden="true" />
+              </span>
+            </span>
+          </button>
         );
       })}
     </div>

@@ -45,3 +45,11 @@
   width: 12px;
   height: 12px;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  [class^="panel-tab"],
+  [class*=" panel-tab"] {
+    animation: none;
+    transition: none;
+  }
+}
