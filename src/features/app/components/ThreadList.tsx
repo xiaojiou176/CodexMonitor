@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, DragEvent, MouseEvent } from "react";
+import type { DragEvent, MouseEvent } from "react";
 
 import type { ThreadSummary } from "../../../types";
 import {
@@ -221,10 +221,9 @@ export function ThreadList({
 
   const renderThreadRow = ({ thread, depth }: ThreadRow) => {
     const relativeTime = getThreadTime(thread);
-    const indentStyle =
-      depth > 0
-        ? ({ "--thread-indent": `${depth * indentUnit}px` } as CSSProperties)
-        : undefined;
+    const clampedDepth = Math.min(depth, 20);
+    const indentClass =
+      depth > 0 ? ` thread-row-indent-${indentUnit}-${clampedDepth}` : "";
     const status = threadStatusById[thread.id];
     const visualStatus = deriveThreadVisualStatus(status, nowMs);
     const statusClass = visualStatus;
@@ -251,14 +250,13 @@ export function ThreadList({
         key={thread.id}
         className={`thread-row ${
           isActive || isSelected ? "active" : ""
-        }${isSelected ? " thread-row-selected" : ""}${
+        }${indentClass}${isSelected ? " thread-row-selected" : ""}${
           isReorderableRoot ? " thread-row-draggable" : ""
         }${isDragging ? " thread-row-dragging" : ""}${
           isDropTarget ? " thread-row-drop-target" : ""
         }${
           isDropTargetBefore ? " thread-row-drop-target-before" : ""
         }${isDropTargetAfter ? " thread-row-drop-target-after" : ""}`}
-        style={indentStyle}
         onClick={(event) => {
           emitThreadSelection(
             thread.id,
