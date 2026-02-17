@@ -34,6 +34,10 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const markProcessing = vi.fn();
   const markReviewing = vi.fn();
   const setThreadPhase = vi.fn();
+  const setThreadTurnStatus = vi.fn();
+  const setThreadMessagePhase = vi.fn();
+  const setThreadWaitReason = vi.fn();
+  const setThreadRetryState = vi.fn();
   const setActiveTurnId = vi.fn();
   const pushThreadErrorMessage = vi.fn();
   const safeMessageActivity = vi.fn();
@@ -54,6 +58,10 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
       markProcessing,
       markReviewing,
       setThreadPhase,
+      setThreadTurnStatus,
+      setThreadMessagePhase,
+      setThreadWaitReason,
+      setThreadRetryState,
       setActiveTurnId,
       pendingInterruptsRef,
       pushThreadErrorMessage,
@@ -70,6 +78,10 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
     markProcessing,
     markReviewing,
     setThreadPhase,
+    setThreadTurnStatus,
+    setThreadMessagePhase,
+    setThreadWaitReason,
+    setThreadRetryState,
     setActiveTurnId,
     pushThreadErrorMessage,
     safeMessageActivity,
@@ -330,6 +342,10 @@ describe("useThreadTurnEvents", () => {
     const markProcessing = vi.fn();
     const markReviewing = vi.fn();
     const setThreadPhase = vi.fn();
+    const setThreadTurnStatus = vi.fn();
+    const setThreadMessagePhase = vi.fn();
+    const setThreadWaitReason = vi.fn();
+    const setThreadRetryState = vi.fn();
     const setActiveTurnId = vi.fn();
     const pushThreadErrorMessage = vi.fn();
     const safeMessageActivity = vi.fn();
@@ -348,6 +364,10 @@ describe("useThreadTurnEvents", () => {
         markProcessing,
         markReviewing,
         setThreadPhase,
+        setThreadTurnStatus,
+        setThreadMessagePhase,
+        setThreadWaitReason,
+        setThreadRetryState,
         setActiveTurnId,
         pendingInterruptsRef,
         pushThreadErrorMessage,
@@ -497,7 +517,15 @@ describe("useThreadTurnEvents", () => {
   });
 
   it("ignores turn errors that will retry", () => {
-    const { result, dispatch, markProcessing } = makeOptions();
+    const {
+      result,
+      dispatch,
+      markProcessing,
+      setThreadPhase,
+      setThreadTurnStatus,
+      setThreadWaitReason,
+      setThreadRetryState,
+    } = makeOptions();
 
     act(() => {
       result.current.onTurnError("ws-1", "thread-1", "turn-1", {
@@ -506,8 +534,16 @@ describe("useThreadTurnEvents", () => {
       });
     });
 
-    expect(dispatch).not.toHaveBeenCalled();
-    expect(markProcessing).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+    });
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", true);
+    expect(setThreadTurnStatus).toHaveBeenCalledWith("thread-1", "inProgress");
+    expect(setThreadWaitReason).toHaveBeenCalledWith("thread-1", "retry");
+    expect(setThreadRetryState).toHaveBeenCalledWith("thread-1", "retrying");
+    expect(setThreadPhase).toHaveBeenCalledWith("thread-1", "starting");
   });
 
 });

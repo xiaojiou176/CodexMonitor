@@ -906,6 +906,41 @@ describe("useAppServerEvents", () => {
     });
   });
 
+  it("routes mcp tool call progress events", async () => {
+    const handlers: Handlers = {
+      onAppServerEvent: vi.fn(),
+      onIsAlive: vi.fn(),
+      onMcpToolCallProgress: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-mcp",
+        message: {
+          method: "item/mcpToolCall/progress",
+          params: {
+            threadId: "thread-mcp",
+            itemId: "item-mcp",
+            progress: 0.42,
+          },
+        },
+      });
+    });
+
+    expect(handlers.onIsAlive).toHaveBeenCalledWith("ws-mcp");
+    expect(handlers.onMcpToolCallProgress).toHaveBeenCalledWith(
+      "ws-mcp",
+      "thread-mcp",
+      "item-mcp",
+      "progress: 0.42",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("routes detailed turn/account/item events and guards empty payload branches", async () => {
     const handlers: Handlers = {
       onAppServerEvent: vi.fn(),
@@ -957,7 +992,7 @@ describe("useAppServerEvents", () => {
       "ws-2",
       "thread-2",
       "turn-2",
-      { model: "gpt-5-codex" },
+      { model: "gpt-5-codex", status: "inProgress" },
     );
 
     act(() => {

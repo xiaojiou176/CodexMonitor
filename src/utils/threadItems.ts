@@ -1,4 +1,9 @@
 import type { ConversationItem } from "../types";
+import {
+  normalizeCommandOrFileItemStatus,
+  normalizeMcpOrCollabItemStatus,
+  toWireItemStatus,
+} from "./protocolStatus";
 
 // 0 disables client-side item capping so full thread history remains scrollable.
 const MAX_ITEMS_PER_THREAD = 0;
@@ -748,13 +753,16 @@ export function buildConversationItem(
       ? item.command.map((part) => asString(part)).join(" ")
       : asString(item.command ?? "");
     const durationMs = asNumber(item.durationMs ?? item.duration_ms);
+    const statusText =
+      toWireItemStatus(normalizeCommandOrFileItemStatus(item.status)) ||
+      asString(item.status ?? "");
     return {
       id,
       kind: "tool",
       toolType: type,
       title: command ? `Command: ${command}` : "Command",
       detail: asString(item.cwd ?? ""),
-      status: asString(item.status ?? ""),
+      status: statusText,
       output: asString(item.aggregatedOutput ?? ""),
       durationMs,
     };
@@ -794,13 +802,16 @@ export function buildConversationItem(
       .map((change) => change.diff ?? "")
       .filter(Boolean)
       .join("\n\n");
+    const statusText =
+      toWireItemStatus(normalizeCommandOrFileItemStatus(item.status)) ||
+      asString(item.status ?? "");
     return {
       id,
       kind: "tool",
       toolType: type,
       title: "文件更改",
       detail: paths || "Pending changes",
-      status: asString(item.status ?? ""),
+      status: statusText,
       output: diffOutput,
       changes: normalizedChanges,
     };
@@ -809,19 +820,24 @@ export function buildConversationItem(
     const server = asString(item.server ?? "");
     const tool = asString(item.tool ?? "");
     const args = item.arguments ? JSON.stringify(item.arguments, null, 2) : "";
+    const statusText =
+      toWireItemStatus(normalizeMcpOrCollabItemStatus(item.status)) ||
+      asString(item.status ?? "");
     return {
       id,
       kind: "tool",
       toolType: type,
       title: `Tool: ${server}${tool ? ` / ${tool}` : ""}`,
       detail: args,
-      status: asString(item.status ?? ""),
+      status: statusText,
       output: asString(item.result ?? item.error ?? ""),
     };
   }
   if (type === "collabToolCall" || type === "collabAgentToolCall") {
     const tool = asString(item.tool ?? "");
-    const status = asString(item.status ?? "");
+    const status =
+      toWireItemStatus(normalizeMcpOrCollabItemStatus(item.status)) ||
+      asString(item.status ?? "");
     const sender = asString(item.senderThreadId ?? item.sender_thread_id ?? "");
     const receivers = [
       ...normalizeStringList(item.receiverThreadId ?? item.receiver_thread_id),
@@ -869,7 +885,9 @@ export function buildConversationItem(
     };
   }
   if (type === "contextCompaction") {
-    const status = asString(item.status ?? "").trim();
+    const status =
+      toWireItemStatus(normalizeCommandOrFileItemStatus(item.status)) ||
+      asString(item.status ?? "").trim();
     return {
       id,
       kind: "tool",

@@ -3,6 +3,11 @@ import type { Dispatch, MutableRefObject } from "react";
 import type {
   AppServerEvent,
   DebugEntry,
+  ProtocolItemStatus,
+  ProtocolMessagePhase,
+  ProtocolTurnStatus,
+  ThreadRetryState,
+  ThreadWaitReason,
   ThreadPhase,
   TurnPlan,
 } from "../../../types";
@@ -88,6 +93,22 @@ type ThreadEventHandlersOptions = {
   markProcessing: (threadId: string, isProcessing: boolean) => void;
   markReviewing: (threadId: string, isReviewing: boolean) => void;
   setThreadPhase: (threadId: string, phase: ThreadPhase) => void;
+  setThreadTurnStatus: (threadId: string, turnStatus: ProtocolTurnStatus | null) => void;
+  setThreadMessagePhase: (
+    threadId: string,
+    messagePhase: ProtocolMessagePhase,
+  ) => void;
+  setThreadWaitReason: (threadId: string, waitReason: ThreadWaitReason) => void;
+  setThreadRetryState: (threadId: string, retryState: ThreadRetryState) => void;
+  setActiveItemStatus: (
+    threadId: string,
+    itemId: string,
+    status: ProtocolItemStatus,
+  ) => void;
+  clearActiveItemStatus: (threadId: string, itemId: string) => void;
+  setMcpProgressMessage: (threadId: string, message: string | null) => void;
+  getThreadTurnStatus: (threadId: string) => ProtocolTurnStatus | null;
+  touchThreadActivity: (threadId: string, timestamp?: number) => void;
   markThreadError?: (threadId: string, message: string) => void;
   setActiveTurnId: (threadId: string, turnId: string | null) => void;
   safeMessageActivity: () => void;
@@ -123,6 +144,15 @@ export function useThreadEventHandlers({
   markProcessing,
   markReviewing,
   setThreadPhase,
+  setThreadTurnStatus,
+  setThreadMessagePhase,
+  setThreadWaitReason,
+  setThreadRetryState,
+  setActiveItemStatus,
+  clearActiveItemStatus,
+  setMcpProgressMessage,
+  getThreadTurnStatus,
+  touchThreadActivity,
   markThreadError,
   setActiveTurnId,
   safeMessageActivity,
@@ -141,8 +171,13 @@ export function useThreadEventHandlers({
     dispatch,
     approvalAllowlistRef,
     setThreadPhase,
+    setThreadWaitReason,
   });
-  const onRequestUserInput = useThreadUserInputEvents({ dispatch, setThreadPhase });
+  const onRequestUserInput = useThreadUserInputEvents({
+    dispatch,
+    setThreadPhase,
+    setThreadWaitReason,
+  });
   const onDebugRef = useRef(onDebug);
   const pendingStderrByWorkspaceRef = useRef<Map<string, PendingStderrBatch>>(
     new Map(),
@@ -166,6 +201,7 @@ export function useThreadEventHandlers({
     onCommandOutputDelta,
     onTerminalInteraction,
     onFileChangeOutputDelta,
+    onMcpToolCallProgress,
   } = useThreadItemEvents({
     activeThreadId,
     dispatch,
@@ -173,6 +209,12 @@ export function useThreadEventHandlers({
     markProcessing,
     markReviewing,
     setThreadPhase,
+    setThreadMessagePhase,
+    setActiveItemStatus,
+    clearActiveItemStatus,
+    setMcpProgressMessage,
+    getThreadTurnStatus,
+    touchThreadActivity,
     safeMessageActivity,
     recordThreadActivity,
     applyCollabThreadLinks,
@@ -198,6 +240,10 @@ export function useThreadEventHandlers({
     markProcessing,
     markReviewing,
     setThreadPhase,
+    setThreadTurnStatus,
+    setThreadMessagePhase,
+    setThreadWaitReason,
+    setThreadRetryState,
     markThreadError,
     setActiveTurnId,
     pendingInterruptsRef,
@@ -354,6 +400,7 @@ export function useThreadEventHandlers({
       onCommandOutputDelta,
       onTerminalInteraction,
       onFileChangeOutputDelta,
+      onMcpToolCallProgress,
       onThreadStarted,
       onThreadNameUpdated,
       onTurnStarted,
@@ -381,6 +428,7 @@ export function useThreadEventHandlers({
       onCommandOutputDelta,
       onTerminalInteraction,
       onFileChangeOutputDelta,
+      onMcpToolCallProgress,
       onThreadStarted,
       onThreadNameUpdated,
       onTurnStarted,

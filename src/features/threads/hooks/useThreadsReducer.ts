@@ -2,8 +2,13 @@ import type {
   AccountSnapshot,
   ApprovalRequest,
   ConversationItem,
+  ProtocolItemStatus,
+  ProtocolMessagePhase,
+  ProtocolTurnStatus,
   RateLimitSnapshot,
   RequestUserInputRequest,
+  ThreadRetryState,
+  ThreadWaitReason,
   ThreadPhase,
   ThreadListSortKey,
   ThreadSummary,
@@ -16,6 +21,7 @@ import {
   prepareThreadItemsIncremental,
   upsertItem,
 } from "../../../utils/threadItems";
+import { isTurnTerminalStatus } from "../../../utils/protocolStatus";
 
 const MAX_THREAD_NAME_LENGTH = 38;
 
@@ -119,12 +125,20 @@ type ThreadActivityStatus = {
   isProcessing: boolean;
   hasUnread: boolean;
   isReviewing: boolean;
+  // UI aggregate phase used by existing components.
   phase: ThreadPhase;
   processingStartedAt: number | null;
   lastDurationMs: number | null;
   lastActivityAt?: number | null;
   lastErrorAt?: number | null;
   lastErrorMessage?: string | null;
+  // Protocol-authoritative state (do not infer from UI phase).
+  turnStatus?: ProtocolTurnStatus | null;
+  activeItemStatuses?: Record<string, ProtocolItemStatus>;
+  messagePhase?: ProtocolMessagePhase;
+  waitReason?: ThreadWaitReason;
+  retryState?: ThreadRetryState;
+  lastMcpProgressMessage?: string | null;
 };
 
 type ThreadTurnRuntimeMeta = {
@@ -170,6 +184,47 @@ export type ThreadAction =
       threadId: string;
       isProcessing: boolean;
       timestamp: number;
+    }
+  | {
+      type: "touchThreadActivity";
+      threadId: string;
+      timestamp: number;
+    }
+  | {
+      type: "setThreadTurnStatus";
+      threadId: string;
+      turnStatus: ProtocolTurnStatus | null;
+    }
+  | {
+      type: "setThreadMessagePhase";
+      threadId: string;
+      messagePhase: ProtocolMessagePhase;
+    }
+  | {
+      type: "setThreadWaitReason";
+      threadId: string;
+      waitReason: ThreadWaitReason;
+    }
+  | {
+      type: "setThreadRetryState";
+      threadId: string;
+      retryState: ThreadRetryState;
+    }
+  | {
+      type: "setActiveItemStatus";
+      threadId: string;
+      itemId: string;
+      status: ProtocolItemStatus;
+    }
+  | {
+      type: "clearActiveItemStatus";
+      threadId: string;
+      itemId: string;
+    }
+  | {
+      type: "setMcpProgressMessage";
+      threadId: string;
+      message: string | null;
     }
   | {
       type: "setThreadPhase";
@@ -602,6 +657,28 @@ function prefersUpdatedSort(state: ThreadState, workspaceId: string) {
   return (state.threadSortKeyByWorkspace[workspaceId] ?? "updated_at") === "updated_at";
 }
 
+function resolveApprovalThreadId(
+  approval: ApprovalRequest,
+): string | null {
+  const threadId = approval.params?.threadId ?? approval.params?.thread_id ?? "";
+  if (typeof threadId !== "string") {
+    return null;
+  }
+  const trimmed = threadId.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function resolveUserInputThreadId(
+  request: RequestUserInputRequest,
+): string | null {
+  const threadId = request.params?.thread_id ?? "";
+  if (typeof threadId !== "string") {
+    return null;
+  }
+  const trimmed = threadId.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function buildThreadStatus(
   previous: ThreadActivityStatus | undefined,
   overrides: Partial<ThreadActivityStatus>,
@@ -616,8 +693,28 @@ function buildThreadStatus(
     lastActivityAt: previous?.lastActivityAt ?? null,
     lastErrorAt: previous?.lastErrorAt ?? null,
     lastErrorMessage: previous?.lastErrorMessage ?? null,
+    turnStatus: previous?.turnStatus ?? null,
+    activeItemStatuses: previous?.activeItemStatuses ?? {},
+    messagePhase: previous?.messagePhase ?? "unknown",
+    waitReason: previous?.waitReason ?? "none",
+    retryState: previous?.retryState ?? "none",
+    lastMcpProgressMessage: previous?.lastMcpProgressMessage ?? null,
     ...overrides,
   };
+}
+
+function isSameActiveItemStatuses(
+  left: Record<string, ProtocolItemStatus> | undefined,
+  right: Record<string, ProtocolItemStatus> | undefined,
+) {
+  const leftMap = left ?? {};
+  const rightMap = right ?? {};
+  const leftEntries = Object.entries(leftMap);
+  const rightEntries = Object.entries(rightMap);
+  if (leftEntries.length !== rightEntries.length) {
+    return false;
+  }
+  return leftEntries.every(([itemId, status]) => rightMap[itemId] === status);
 }
 
 function isSameThreadStatus(
@@ -634,7 +731,13 @@ function isSameThreadStatus(
       left.lastDurationMs === right.lastDurationMs &&
       left.lastActivityAt === right.lastActivityAt &&
       left.lastErrorAt === right.lastErrorAt &&
-      left.lastErrorMessage === right.lastErrorMessage,
+      left.lastErrorMessage === right.lastErrorMessage &&
+      left.turnStatus === right.turnStatus &&
+      left.messagePhase === right.messagePhase &&
+      left.waitReason === right.waitReason &&
+      left.retryState === right.retryState &&
+      left.lastMcpProgressMessage === right.lastMcpProgressMessage &&
+      isSameActiveItemStatuses(left.activeItemStatuses, right.activeItemStatuses),
   );
 }
 
@@ -799,6 +902,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             : action.timestamp,
           lastErrorAt: null,
           lastErrorMessage: null,
+          retryState: previous?.waitReason === "retry" ? "retrying" : previous?.retryState,
         });
         if (isSameThreadStatus(previous, nextStatus)) {
           return state;
@@ -827,6 +931,163 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         phase: nextPhase,
         processingStartedAt: null,
         lastDurationMs: nextDuration,
+        activeItemStatuses: {},
+        waitReason: previous?.waitReason === "tool_wait" ? "none" : previous?.waitReason,
+        retryState: previous?.waitReason === "retry" ? "none" : previous?.retryState,
+        lastMcpProgressMessage: null,
+      });
+      if (isSameThreadStatus(previous, nextStatus)) {
+        return state;
+      }
+      return {
+        ...state,
+        threadStatusById: {
+          ...state.threadStatusById,
+          [action.threadId]: nextStatus,
+        },
+      };
+    }
+    case "touchThreadActivity": {
+      const previous = state.threadStatusById[action.threadId];
+      const previousActivityAt = previous?.lastActivityAt ?? null;
+      if (
+        typeof previousActivityAt === "number"
+        && Number.isFinite(previousActivityAt)
+        && previousActivityAt >= action.timestamp
+      ) {
+        return state;
+      }
+      const nextStatus = buildThreadStatus(previous, {
+        lastActivityAt: action.timestamp,
+      });
+      if (isSameThreadStatus(previous, nextStatus)) {
+        return state;
+      }
+      return {
+        ...state,
+        threadStatusById: {
+          ...state.threadStatusById,
+          [action.threadId]: nextStatus,
+        },
+      };
+    }
+    case "setThreadTurnStatus": {
+      const previous = state.threadStatusById[action.threadId];
+      const nextStatus = buildThreadStatus(previous, {
+        turnStatus: action.turnStatus,
+        waitReason: isTurnTerminalStatus(action.turnStatus) ? "none" : previous?.waitReason,
+        retryState: isTurnTerminalStatus(action.turnStatus) ? "none" : previous?.retryState,
+        activeItemStatuses: isTurnTerminalStatus(action.turnStatus)
+          ? {}
+          : previous?.activeItemStatuses,
+        lastMcpProgressMessage: isTurnTerminalStatus(action.turnStatus)
+          ? null
+          : previous?.lastMcpProgressMessage,
+      });
+      if (isSameThreadStatus(previous, nextStatus)) {
+        return state;
+      }
+      return {
+        ...state,
+        threadStatusById: {
+          ...state.threadStatusById,
+          [action.threadId]: nextStatus,
+        },
+      };
+    }
+    case "setThreadMessagePhase": {
+      const previous = state.threadStatusById[action.threadId];
+      const nextStatus = buildThreadStatus(previous, {
+        messagePhase: action.messagePhase,
+      });
+      if (isSameThreadStatus(previous, nextStatus)) {
+        return state;
+      }
+      return {
+        ...state,
+        threadStatusById: {
+          ...state.threadStatusById,
+          [action.threadId]: nextStatus,
+        },
+      };
+    }
+    case "setThreadWaitReason": {
+      const previous = state.threadStatusById[action.threadId];
+      const nextStatus = buildThreadStatus(previous, {
+        waitReason: action.waitReason,
+      });
+      if (isSameThreadStatus(previous, nextStatus)) {
+        return state;
+      }
+      return {
+        ...state,
+        threadStatusById: {
+          ...state.threadStatusById,
+          [action.threadId]: nextStatus,
+        },
+      };
+    }
+    case "setThreadRetryState": {
+      const previous = state.threadStatusById[action.threadId];
+      const nextStatus = buildThreadStatus(previous, {
+        retryState: action.retryState,
+      });
+      if (isSameThreadStatus(previous, nextStatus)) {
+        return state;
+      }
+      return {
+        ...state,
+        threadStatusById: {
+          ...state.threadStatusById,
+          [action.threadId]: nextStatus,
+        },
+      };
+    }
+    case "setActiveItemStatus": {
+      const previous = state.threadStatusById[action.threadId];
+      const nextActiveItemStatuses = {
+        ...(previous?.activeItemStatuses ?? {}),
+        [action.itemId]: action.status,
+      };
+      const nextStatus = buildThreadStatus(previous, {
+        activeItemStatuses: nextActiveItemStatuses,
+      });
+      if (isSameThreadStatus(previous, nextStatus)) {
+        return state;
+      }
+      return {
+        ...state,
+        threadStatusById: {
+          ...state.threadStatusById,
+          [action.threadId]: nextStatus,
+        },
+      };
+    }
+    case "clearActiveItemStatus": {
+      const previous = state.threadStatusById[action.threadId];
+      if (!previous?.activeItemStatuses?.[action.itemId]) {
+        return state;
+      }
+      const nextActiveItemStatuses = { ...previous.activeItemStatuses };
+      delete nextActiveItemStatuses[action.itemId];
+      const nextStatus = buildThreadStatus(previous, {
+        activeItemStatuses: nextActiveItemStatuses,
+      });
+      if (isSameThreadStatus(previous, nextStatus)) {
+        return state;
+      }
+      return {
+        ...state,
+        threadStatusById: {
+          ...state.threadStatusById,
+          [action.threadId]: nextStatus,
+        },
+      };
+    }
+    case "setMcpProgressMessage": {
+      const previous = state.threadStatusById[action.threadId];
+      const nextStatus = buildThreadStatus(previous, {
+        lastMcpProgressMessage: action.message,
       });
       if (isSameThreadStatus(previous, nextStatus)) {
         return state;
@@ -847,6 +1108,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         action.phase === "streaming" ||
         action.phase === "tool_running" ||
         action.phase === "waiting_user";
+      if (isTurnTerminalStatus(previous?.turnStatus) && isActivePhase) {
+        return state;
+      }
       const isFinalPhase =
         action.phase === "completed" ||
         action.phase === "interrupted" ||
@@ -862,6 +1126,15 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           lastActivityAt: nextStatus.lastActivityAt ?? now,
           lastErrorAt: null,
           lastErrorMessage: null,
+          waitReason:
+            action.phase === "tool_running"
+              ? nextStatus.waitReason === "none"
+                ? "tool_wait"
+                : nextStatus.waitReason
+              : nextStatus.waitReason === "tool_wait"
+                ? "none"
+                : nextStatus.waitReason,
+          retryState: action.phase === "tool_running" ? "none" : nextStatus.retryState,
         });
       } else if (isFinalPhase) {
         const nextDuration =
@@ -875,6 +1148,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           isReviewing: false,
           processingStartedAt: null,
           lastDurationMs: nextDuration,
+          waitReason: "none",
+          retryState: "none",
+          activeItemStatuses: {},
+          lastMcpProgressMessage: null,
         });
       }
       if (isSameThreadStatus(previous, nextStatus)) {
@@ -945,6 +1222,11 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         processingStartedAt: null,
         lastErrorAt: action.timestamp,
         lastErrorMessage: normalizedMessage || null,
+        turnStatus: "failed",
+        waitReason: "none",
+        retryState: "none",
+        activeItemStatuses: {},
+        lastMcpProgressMessage: null,
       });
       if (isSameThreadStatus(previous, nextStatus)) {
         return state;
@@ -1437,17 +1719,76 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       if (exists) {
         return state;
       }
-      return { ...state, approvals: [...state.approvals, action.approval] };
-    }
-    case "removeApproval":
+      const nextApprovals = [...state.approvals, action.approval];
+      const threadId = resolveApprovalThreadId(action.approval);
+      if (!threadId) {
+        return { ...state, approvals: nextApprovals };
+      }
+      const previousStatus = state.threadStatusById[threadId];
+      const nextStatus = buildThreadStatus(previousStatus, {
+        waitReason: "approval",
+      });
       return {
         ...state,
-        approvals: state.approvals.filter(
-          (item) =>
-            item.request_id !== action.requestId ||
-            item.workspace_id !== action.workspaceId,
-        ),
+        approvals: nextApprovals,
+        threadStatusById: isSameThreadStatus(previousStatus, nextStatus)
+          ? state.threadStatusById
+          : {
+              ...state.threadStatusById,
+              [threadId]: nextStatus,
+            },
       };
+    }
+    case "removeApproval": {
+      const removed = state.approvals.find(
+        (item) =>
+          item.request_id === action.requestId &&
+          item.workspace_id === action.workspaceId,
+      );
+      const approvals = state.approvals.filter(
+        (item) =>
+          item.request_id !== action.requestId ||
+          item.workspace_id !== action.workspaceId,
+      );
+      const threadId = removed ? resolveApprovalThreadId(removed) : null;
+      if (!threadId) {
+        return {
+          ...state,
+          approvals,
+        };
+      }
+      const hasApprovalPending = approvals.some(
+        (item) =>
+          item.workspace_id === action.workspaceId &&
+          resolveApprovalThreadId(item) === threadId,
+      );
+      const hasUserInputPending = state.userInputRequests.some(
+        (item) =>
+          item.workspace_id === action.workspaceId &&
+          resolveUserInputThreadId(item) === threadId,
+      );
+      const previousStatus = state.threadStatusById[threadId];
+      const nextWaitReason: ThreadWaitReason = hasApprovalPending
+        ? "approval"
+        : hasUserInputPending
+          ? "user_input"
+          : previousStatus?.waitReason === "retry"
+            ? "retry"
+            : "none";
+      const nextStatus = buildThreadStatus(previousStatus, {
+        waitReason: nextWaitReason,
+      });
+      return {
+        ...state,
+        approvals,
+        threadStatusById: isSameThreadStatus(previousStatus, nextStatus)
+          ? state.threadStatusById
+          : {
+              ...state.threadStatusById,
+              [threadId]: nextStatus,
+            },
+      };
+    }
     case "addUserInputRequest": {
       const exists = state.userInputRequests.some(
         (item) =>
@@ -1457,20 +1798,79 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       if (exists) {
         return state;
       }
+      const nextUserInputRequests = [...state.userInputRequests, action.request];
+      const threadId = resolveUserInputThreadId(action.request);
+      if (!threadId) {
+        return {
+          ...state,
+          userInputRequests: nextUserInputRequests,
+        };
+      }
+      const previousStatus = state.threadStatusById[threadId];
+      const nextStatus = buildThreadStatus(previousStatus, {
+        waitReason: "user_input",
+      });
       return {
         ...state,
-        userInputRequests: [...state.userInputRequests, action.request],
+        userInputRequests: nextUserInputRequests,
+        threadStatusById: isSameThreadStatus(previousStatus, nextStatus)
+          ? state.threadStatusById
+          : {
+              ...state.threadStatusById,
+              [threadId]: nextStatus,
+            },
       };
     }
-    case "removeUserInputRequest":
+    case "removeUserInputRequest": {
+      const removed = state.userInputRequests.find(
+        (item) =>
+          item.request_id === action.requestId &&
+          item.workspace_id === action.workspaceId,
+      );
+      const userInputRequests = state.userInputRequests.filter(
+        (item) =>
+          item.request_id !== action.requestId ||
+          item.workspace_id !== action.workspaceId,
+      );
+      const threadId = removed ? resolveUserInputThreadId(removed) : null;
+      if (!threadId) {
+        return {
+          ...state,
+          userInputRequests,
+        };
+      }
+      const hasApprovalPending = state.approvals.some(
+        (item) =>
+          item.workspace_id === action.workspaceId &&
+          resolveApprovalThreadId(item) === threadId,
+      );
+      const hasUserInputPending = userInputRequests.some(
+        (item) =>
+          item.workspace_id === action.workspaceId &&
+          resolveUserInputThreadId(item) === threadId,
+      );
+      const previousStatus = state.threadStatusById[threadId];
+      const nextWaitReason: ThreadWaitReason = hasApprovalPending
+        ? "approval"
+        : hasUserInputPending
+          ? "user_input"
+          : previousStatus?.waitReason === "retry"
+            ? "retry"
+            : "none";
+      const nextStatus = buildThreadStatus(previousStatus, {
+        waitReason: nextWaitReason,
+      });
       return {
         ...state,
-        userInputRequests: state.userInputRequests.filter(
-          (item) =>
-            item.request_id !== action.requestId ||
-            item.workspace_id !== action.workspaceId,
-        ),
+        userInputRequests,
+        threadStatusById: isSameThreadStatus(previousStatus, nextStatus)
+          ? state.threadStatusById
+          : {
+              ...state.threadStatusById,
+              [threadId]: nextStatus,
+            },
       };
+    }
     case "setThreads": {
       const hidden = state.hiddenThreadIdsByWorkspace[action.workspaceId] ?? {};
       const visibleThreads = action.threads.filter((thread) => !hidden[thread.id]);

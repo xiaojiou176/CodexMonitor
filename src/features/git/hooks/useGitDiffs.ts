@@ -24,14 +24,13 @@ export function useGitDiffs(
   const requestIdRef = useRef(0);
   const cacheKeyRef = useRef<string | null>(null);
   const cachedDiffsRef = useRef<Map<string, GitFileDiff[]>>(new Map());
+  const inFlightRefreshRef = useRef<Promise<void> | null>(null);
+  const inFlightCacheKeyRef = useRef<string | null>(null);
 
   const fileKey = useMemo(
     () =>
       files
-        .map(
-          (file) =>
-            `${file.path}:${file.status}:${file.additions}:${file.deletions}`,
-        )
+        .map((file) => `${file.path}:${file.status}`)
         .sort()
         .join("|"),
     [files],
@@ -44,33 +43,49 @@ export function useGitDiffs(
     }
     const workspaceId = activeWorkspace.id;
     const cacheKey = `${workspaceId}|ignoreWhitespaceChanges:${ignoreWhitespaceChanges ? "1" : "0"}`;
+    if (
+      inFlightRefreshRef.current &&
+      inFlightCacheKeyRef.current === cacheKey
+    ) {
+      return inFlightRefreshRef.current;
+    }
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
-    try {
-      const diffs = await getGitDiffs(workspaceId);
-      if (
-        requestIdRef.current !== requestId ||
-        cacheKeyRef.current !== cacheKey
-      ) {
-        return;
-      }
-      setState({ diffs, isLoading: false, error: null });
-      cachedDiffsRef.current.set(cacheKey, diffs);
-    } catch (error) {
-      console.error("Failed to load git diffs", error);
-      if (
-        requestIdRef.current !== requestId ||
-        cacheKeyRef.current !== cacheKey
-      ) {
-        return;
-      }
-      setState({
-        diffs: [],
-        isLoading: false,
-        error: error instanceof Error ? error.message : String(error),
+    const refreshPromise = getGitDiffs(workspaceId)
+      .then((diffs) => {
+        if (
+          requestIdRef.current !== requestId ||
+          cacheKeyRef.current !== cacheKey
+        ) {
+          return;
+        }
+        setState({ diffs, isLoading: false, error: null });
+        cachedDiffsRef.current.set(cacheKey, diffs);
+      })
+      .catch((error) => {
+        console.error("Failed to load git diffs", error);
+        if (
+          requestIdRef.current !== requestId ||
+          cacheKeyRef.current !== cacheKey
+        ) {
+          return;
+        }
+        setState({
+          diffs: [],
+          isLoading: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        if (inFlightRefreshRef.current === refreshPromise) {
+          inFlightRefreshRef.current = null;
+          inFlightCacheKeyRef.current = null;
+        }
       });
-    }
+    inFlightRefreshRef.current = refreshPromise;
+    inFlightCacheKeyRef.current = cacheKey;
+    return refreshPromise;
   }, [activeWorkspace, ignoreWhitespaceChanges]);
 
   useEffect(() => {
@@ -81,6 +96,8 @@ export function useGitDiffs(
     if (cacheKeyRef.current !== nextCacheKey) {
       cacheKeyRef.current = nextCacheKey;
       requestIdRef.current += 1;
+      inFlightRefreshRef.current = null;
+      inFlightCacheKeyRef.current = null;
       if (!nextCacheKey) {
         setState(emptyState);
         return;

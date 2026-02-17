@@ -28,6 +28,8 @@ export function useGitStatus(activeWorkspace: WorkspaceInfo | null) {
   const requestIdRef = useRef(0);
   const workspaceIdRef = useRef<string | null>(activeWorkspace?.id ?? null);
   const cachedStatusRef = useRef<Map<string, GitStatusState>>(new Map());
+  const inFlightRefreshRef = useRef<Promise<void> | null>(null);
+  const inFlightWorkspaceIdRef = useRef<string | null>(null);
   const workspaceId = activeWorkspace?.id ?? null;
 
   const resolveBranchName = useCallback(
@@ -47,11 +49,17 @@ export function useGitStatus(activeWorkspace: WorkspaceInfo | null) {
   const refresh = useCallback(() => {
     if (!workspaceId) {
       setStatus(emptyStatus);
-      return;
+      return Promise.resolve();
+    }
+    if (
+      inFlightRefreshRef.current &&
+      inFlightWorkspaceIdRef.current === workspaceId
+    ) {
+      return inFlightRefreshRef.current;
     }
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    return getGitStatus(workspaceId)
+    const refreshPromise = getGitStatus(workspaceId)
       .then((data) => {
         if (
           requestIdRef.current !== requestId ||
@@ -83,13 +91,24 @@ export function useGitStatus(activeWorkspace: WorkspaceInfo | null) {
           ? { ...cached, error: message }
           : { ...emptyStatus, branchName: "unknown", error: message };
         setStatus(nextStatus);
+      })
+      .finally(() => {
+        if (inFlightRefreshRef.current === refreshPromise) {
+          inFlightRefreshRef.current = null;
+          inFlightWorkspaceIdRef.current = null;
+        }
       });
+    inFlightRefreshRef.current = refreshPromise;
+    inFlightWorkspaceIdRef.current = workspaceId;
+    return refreshPromise;
   }, [resolveBranchName, workspaceId]);
 
   useEffect(() => {
     if (workspaceIdRef.current !== workspaceId) {
       workspaceIdRef.current = workspaceId;
       requestIdRef.current += 1;
+      inFlightRefreshRef.current = null;
+      inFlightWorkspaceIdRef.current = null;
       if (!workspaceId) {
         setStatus(emptyStatus);
         return;
@@ -106,14 +125,23 @@ export function useGitStatus(activeWorkspace: WorkspaceInfo | null) {
     }
 
     const fetchStatus = () => {
-      refresh()?.catch(() => {});
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      refresh().catch(() => {});
     };
+    const handleFocus = () => fetchStatus();
+    const handleVisibilityChange = () => fetchStatus();
 
-    fetchStatus();
+    refresh().catch(() => {});
     const interval = window.setInterval(fetchStatus, REFRESH_INTERVAL_MS);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refresh, workspaceId]);
 

@@ -274,6 +274,12 @@ describe("threadReducer", () => {
           lastActivityAt: null,
           lastErrorAt: null,
           lastErrorMessage: null,
+          turnStatus: null,
+          activeItemStatuses: {},
+          messagePhase: "unknown",
+          waitReason: "none",
+          retryState: "none",
+          lastMcpProgressMessage: null,
         },
       },
     };

@@ -539,6 +539,29 @@ export type TurnPlan = {
   steps: TurnPlanStep[];
 };
 
+export type ProtocolTurnStatus =
+  | "inProgress"
+  | "completed"
+  | "interrupted"
+  | "failed";
+
+export type ProtocolItemStatus =
+  | "inProgress"
+  | "completed"
+  | "failed"
+  | "declined";
+
+export type ProtocolMessagePhase = "commentary" | "finalAnswer" | "unknown";
+
+export type ThreadWaitReason =
+  | "none"
+  | "approval"
+  | "user_input"
+  | "tool_wait"
+  | "retry";
+
+export type ThreadRetryState = "none" | "retrying";
+
 export type RateLimitWindow = {
   usedPercent: number;
   windowDurationMins: number | null;

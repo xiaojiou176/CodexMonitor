@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/react";
 import type {
   CustomPromptOption,
   DebugEntry,
+  ProtocolTurnStatus,
   ThreadListSortKey,
   WorkspaceInfo,
 } from "../../../types";
@@ -89,6 +90,7 @@ export function useThreads({
   const planByThreadRef = useRef(state.planByThread);
   const itemsByThreadRef = useRef(state.itemsByThread);
   const threadsByWorkspaceRef = useRef(state.threadsByWorkspace);
+  const threadStatusByIdRef = useRef(state.threadStatusById);
   const detachedReviewNoticeRef = useRef<Set<string>>(new Set());
   const subAgentThreadIdsRef = useRef<Record<string, true>>({});
   const threadCreatedAtByIdRef = useRef<Record<string, number>>({});
@@ -96,6 +98,7 @@ export function useThreads({
   planByThreadRef.current = state.planByThread;
   itemsByThreadRef.current = state.itemsByThread;
   threadsByWorkspaceRef.current = state.threadsByWorkspace;
+  threadStatusByIdRef.current = state.threadStatusById;
   const {
     customNamesRef,
     threadActivityRef,
@@ -197,14 +200,26 @@ export function useThreads({
     markThreadError,
     setActiveTurnId,
     setThreadPhase,
+    setThreadTurnStatus,
+    setThreadMessagePhase,
+    setThreadWaitReason,
+    setThreadRetryState,
+    setActiveItemStatus,
+    clearActiveItemStatus,
+    setMcpProgressMessage,
+    touchThreadActivity,
     resetThreadRuntimeState,
   } = useThreadStatus({
     dispatch,
   });
 
   const { approvalAllowlistRef, handleApprovalDecision, handleApprovalRemember } =
-    useThreadApprovals({ dispatch, setThreadPhase, onDebug });
-  const { handleUserInputSubmit } = useThreadUserInput({ dispatch, setThreadPhase });
+    useThreadApprovals({ dispatch, setThreadPhase, setThreadWaitReason, onDebug });
+  const { handleUserInputSubmit } = useThreadUserInput({
+    dispatch,
+    setThreadPhase,
+    setThreadWaitReason,
+  });
 
   const pushThreadErrorMessage = useCallback(
     (threadId: string, message: string) => {
@@ -239,6 +254,12 @@ export function useThreads({
       // Ignore refresh errors to avoid breaking the UI.
     }
   }, [onMessageActivity]);
+
+  const getThreadTurnStatus = useCallback(
+    (threadId: string): ProtocolTurnStatus | null =>
+      threadStatusByIdRef.current[threadId]?.turnStatus ?? null,
+    [],
+  );
 
   const renameThread = useCallback(
     (workspaceId: string, threadId: string, newName: string) => {
@@ -386,6 +407,15 @@ export function useThreads({
     markThreadError,
     setActiveTurnId,
     setThreadPhase,
+    setThreadTurnStatus,
+    setThreadMessagePhase,
+    setThreadWaitReason,
+    setThreadRetryState,
+    setActiveItemStatus,
+    clearActiveItemStatus,
+    setMcpProgressMessage,
+    getThreadTurnStatus,
+    touchThreadActivity,
     safeMessageActivity,
     recordThreadActivity,
     onUserMessageCreated,

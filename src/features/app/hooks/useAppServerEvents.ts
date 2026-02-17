@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import type {
   AppServerEvent,
   ApprovalRequest,
+  ProtocolMessagePhase,
+  ProtocolTurnStatus,
   RequestUserInputRequest,
 } from "../../../types";
 import { subscribeAppServerEvents } from "../../../services/events";
@@ -16,6 +18,12 @@ import {
   isSupportedAppServerMethod,
 } from "../../../utils/appServerEvents";
 import type { SupportedAppServerMethod } from "../../../utils/appServerEvents";
+import {
+  normalizeMcpProgressMessage,
+  normalizeMessagePhase,
+  normalizeTurnStatus,
+  normalizeWillRetry,
+} from "../../../utils/protocolStatus";
 
 type AgentDelta = {
   workspaceId: string;
@@ -23,6 +31,7 @@ type AgentDelta = {
   itemId: string;
   delta: string;
   turnId?: string | null;
+  messagePhase?: ProtocolMessagePhase;
 };
 
 type AgentCompleted = {
@@ -35,10 +44,11 @@ type AgentCompleted = {
 
 type TurnStartMetadata = {
   model: string | null;
+  status?: ProtocolTurnStatus | null;
 };
 
 type TurnCompletionMetadata = {
-  status: "completed" | "failed" | "interrupted" | null;
+  status: ProtocolTurnStatus | null;
   errorMessage: string | null;
 };
 
@@ -105,6 +115,12 @@ type AppServerEventHandlers = {
     stdin: string,
   ) => void;
   onFileChangeOutputDelta?: (workspaceId: string, threadId: string, itemId: string, delta: string) => void;
+  onMcpToolCallProgress?: (
+    workspaceId: string,
+    threadId: string,
+    itemId: string,
+    message: string | null,
+  ) => void;
   onTurnDiffUpdated?: (workspaceId: string, threadId: string, diff: string) => void;
   onThreadTokenUsageUpdated?: (
     workspaceId: string,
@@ -313,6 +329,10 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         pendingAgentDeltasRef.current.set(key, {
           ...existing,
           delta: `${existing.delta}${event.delta}`,
+          messagePhase:
+            event.messagePhase && event.messagePhase !== "unknown"
+              ? event.messagePhase
+              : existing.messagePhase,
         });
       } else {
         pendingAgentDeltasRef.current.set(key, event);
@@ -463,6 +483,13 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
           ?? params.content_delta
           ?? "",
         );
+        const messagePhase = normalizeMessagePhase(
+          params.messagePhase
+          ?? params.message_phase
+          ?? params.phase
+          ?? deltaTurn?.messagePhase
+          ?? deltaTurn?.message_phase,
+        );
         if (threadId && itemId && (hasDeltaField || delta.length > 0)) {
           enqueueAgentMessageDelta({
             workspaceId: workspace_id,
@@ -470,6 +497,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
             itemId,
             delta,
             turnId,
+            ...(messagePhase !== "unknown" ? { messagePhase } : {}),
           });
         }
         return;
@@ -482,9 +510,11 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         );
         const turnId = String(turn?.id ?? params.turnId ?? params.turn_id ?? "");
         const model = extractModelHint(params, turn);
+        const status = normalizeTurnStatus(turn?.status ?? params.status ?? "inProgress");
         if (threadId) {
           currentHandlers.onTurnStarted?.(workspace_id, threadId, turnId, {
             model,
+            status,
           });
         }
         return;
@@ -526,7 +556,9 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         const turnId = String(params.turnId ?? params.turn_id ?? "");
         const error = (params.error as Record<string, unknown> | undefined) ?? {};
         const messageText = String(error.message ?? "");
-        const willRetry = Boolean(params.willRetry ?? params.will_retry);
+        const willRetry = normalizeWillRetry(
+          params.willRetry ?? params.will_retry ?? error.willRetry ?? error.will_retry,
+        );
         if (threadId) {
           currentHandlers.onTurnError?.(workspace_id, threadId, turnId, {
             message: messageText,
@@ -543,17 +575,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
           params.threadId ?? params.thread_id ?? turn?.threadId ?? turn?.thread_id ?? "",
         );
         const turnId = String(turn?.id ?? params.turnId ?? params.turn_id ?? "");
-        const normalizedStatusRaw = String(
-          turn?.status ?? params.status ?? "",
-        ).trim().toLowerCase();
-        const status: TurnCompletionMetadata["status"] =
-          normalizedStatusRaw === "completed"
-            ? "completed"
-            : normalizedStatusRaw === "failed"
-              ? "failed"
-              : normalizedStatusRaw === "interrupted"
-                ? "interrupted"
-                : null;
+        const status = normalizeTurnStatus(turn?.status ?? params.status ?? "");
         const errorMessage = firstNonEmptyString(
           turn?.lastError,
           turn?.last_error,
@@ -811,9 +833,25 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         return;
       }
 
+      if (method === "item/mcpToolCall/progress") {
+        const threadId = String(params.threadId ?? params.thread_id ?? "");
+        const itemId = String(params.itemId ?? params.item_id ?? "");
+        // Official payload is `message: string`; keep legacy numeric `progress`
+        // compatibility by converting it into a textual heartbeat.
+        const message = normalizeMcpProgressMessage(params);
+        if (threadId && itemId) {
+          currentHandlers.onMcpToolCallProgress?.(
+            workspace_id,
+            threadId,
+            itemId,
+            message,
+          );
+        }
+        return;
+      }
+
       if (
         method === "rawResponseItem/completed" ||
-        method === "item/mcpToolCall/progress" ||
         method === "mcpServer/oauthLogin/completed" ||
         method === "app/list/updated" ||
         method === "deprecationNotice" ||

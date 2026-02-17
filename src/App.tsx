@@ -116,6 +116,7 @@ import { useWorkspaceAgentMd } from "./features/workspaces/hooks/useWorkspaceAge
 import { isMobilePlatform } from "./utils/platformPaths";
 import type {
   ComposerEditorSettings,
+  GitFileStatus,
   WorkspaceInfo,
 } from "./types";
 import { OPEN_APP_STORAGE_KEY } from "./features/app/constants";
@@ -187,6 +188,52 @@ function loadMessageFontSize(): number {
   } catch {
     return MESSAGE_FONT_SIZE_DEFAULT;
   }
+}
+
+type DiffLineStats = {
+  additions: number;
+  deletions: number;
+};
+
+function countDiffLineStats(diffText: string): DiffLineStats {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of diffText.split("\n")) {
+    if (
+      !line ||
+      line.startsWith("+++") ||
+      line.startsWith("---") ||
+      line.startsWith("diff --git") ||
+      line.startsWith("@@") ||
+      line.startsWith("index ") ||
+      line.startsWith("\\ No newline")
+    ) {
+      continue;
+    }
+    if (line.startsWith("+")) {
+      additions += 1;
+    } else if (line.startsWith("-")) {
+      deletions += 1;
+    }
+  }
+  return { additions, deletions };
+}
+
+function applyDiffStatsToFiles(
+  files: GitFileStatus[],
+  statsByPath: Record<string, DiffLineStats>,
+): GitFileStatus[] {
+  return files.map((file) => {
+    const stats = statsByPath[file.path];
+    if (!stats) {
+      return file;
+    }
+    return {
+      ...file,
+      additions: stats.additions,
+      deletions: stats.deletions,
+    };
+  });
 }
 
 function MainApp() {
@@ -526,6 +573,58 @@ function MainApp() {
     gitPanelMode === "issues" ||
     gitPanelMode === "prs" ||
     (shouldLoadDiffs && diffSource === "pr");
+  const [lazyDiffStatsByPath, setLazyDiffStatsByPath] = useState<
+    Record<string, DiffLineStats>
+  >({});
+
+  useEffect(() => {
+    setLazyDiffStatsByPath({});
+  }, [activeWorkspace?.id]);
+
+  useEffect(() => {
+    if (diffSource !== "local" || !selectedDiffPath) {
+      return;
+    }
+    const selectedEntry = activeDiffs.find((entry) => entry.path === selectedDiffPath);
+    if (!selectedEntry?.diff?.trim()) {
+      return;
+    }
+    const nextStats = countDiffLineStats(selectedEntry.diff);
+    setLazyDiffStatsByPath((current) => {
+      const previous = current[selectedDiffPath];
+      if (
+        previous &&
+        previous.additions === nextStats.additions &&
+        previous.deletions === nextStats.deletions
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        [selectedDiffPath]: nextStats,
+      };
+    });
+  }, [activeDiffs, diffSource, selectedDiffPath]);
+
+  const gitStatusForPanel = useMemo(() => {
+    const stagedFiles = applyDiffStatsToFiles(gitStatus.stagedFiles, lazyDiffStatsByPath);
+    const unstagedFiles = applyDiffStatsToFiles(gitStatus.unstagedFiles, lazyDiffStatsByPath);
+    const files = applyDiffStatsToFiles(gitStatus.files, lazyDiffStatsByPath);
+    const totalAdditions =
+      stagedFiles.reduce((sum, file) => sum + file.additions, 0) +
+      unstagedFiles.reduce((sum, file) => sum + file.additions, 0);
+    const totalDeletions =
+      stagedFiles.reduce((sum, file) => sum + file.deletions, 0) +
+      unstagedFiles.reduce((sum, file) => sum + file.deletions, 0);
+    return {
+      ...gitStatus,
+      files,
+      stagedFiles,
+      unstagedFiles,
+      totalAdditions,
+      totalDeletions,
+    };
+  }, [gitStatus, lazyDiffStatsByPath]);
 
   useEffect(() => {
     resetGitHubPanelState();
@@ -676,10 +775,10 @@ function MainApp() {
     refreshGitStatus,
   });
   const fileStatus =
-    gitStatus.error
+    gitStatusForPanel.error
       ? "Git 状态不可用"
-      : gitStatus.files.length > 0
-        ? `${gitStatus.files.length} 个文件已更改`
+      : gitStatusForPanel.files.length > 0
+        ? `${gitStatusForPanel.files.length} 个文件已更改`
         : "工作树无更改";
 
   usePersistComposerSettings({
@@ -2463,7 +2562,7 @@ function MainApp() {
     onApplyWorktreeChanges: isWorktreeWorkspace
       ? handleApplyWorktreeChanges
       : undefined,
-    gitStatus,
+    gitStatus: gitStatusForPanel,
     fileStatus,
     selectedDiffPath,
     diffScrollRequestId,

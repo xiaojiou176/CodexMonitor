@@ -74,6 +74,23 @@ describe("useThreadStatus", () => {
     });
   });
 
+  it("dispatches touchThreadActivity with a timestamp", () => {
+    const dispatch = vi.fn();
+    vi.spyOn(Date, "now").mockReturnValue(3210);
+    const { result } = renderHook(() => useThreadStatus({ dispatch }));
+
+    act(() => {
+      result.current.touchThreadActivity("thread-7");
+    });
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "touchThreadActivity",
+      threadId: "thread-7",
+      timestamp: 3210,
+    });
+  });
+
   it("resets thread runtime state", () => {
     const dispatch = vi.fn();
     vi.spyOn(Date, "now").mockReturnValue(4321);
@@ -83,24 +100,39 @@ describe("useThreadStatus", () => {
       result.current.resetThreadRuntimeState("thread-9");
     });
 
-    expect(dispatch).toHaveBeenCalledTimes(4);
+    expect(dispatch).toHaveBeenCalledTimes(7);
     expect(dispatch).toHaveBeenNthCalledWith(1, {
       type: "markReviewing",
       threadId: "thread-9",
       isReviewing: false,
     });
     expect(dispatch).toHaveBeenNthCalledWith(2, {
+      type: "setThreadTurnStatus",
+      threadId: "thread-9",
+      turnStatus: "interrupted",
+    });
+    expect(dispatch).toHaveBeenNthCalledWith(3, {
+      type: "setThreadWaitReason",
+      threadId: "thread-9",
+      waitReason: "none",
+    });
+    expect(dispatch).toHaveBeenNthCalledWith(4, {
+      type: "setThreadRetryState",
+      threadId: "thread-9",
+      retryState: "none",
+    });
+    expect(dispatch).toHaveBeenNthCalledWith(5, {
       type: "setThreadPhase",
       threadId: "thread-9",
       phase: "interrupted",
     });
-    expect(dispatch).toHaveBeenNthCalledWith(3, {
+    expect(dispatch).toHaveBeenNthCalledWith(6, {
       type: "markProcessing",
       threadId: "thread-9",
       isProcessing: false,
       timestamp: 4321,
     });
-    expect(dispatch).toHaveBeenNthCalledWith(4, {
+    expect(dispatch).toHaveBeenNthCalledWith(7, {
       type: "setActiveTurnId",
       threadId: "thread-9",
       turnId: null,

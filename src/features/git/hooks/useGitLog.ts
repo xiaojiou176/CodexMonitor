@@ -35,6 +35,8 @@ export function useGitLog(
   const [state, setState] = useState<GitLogState>(emptyState);
   const requestIdRef = useRef(0);
   const workspaceIdRef = useRef<string | null>(activeWorkspace?.id ?? null);
+  const inFlightRefreshRef = useRef<Promise<void> | null>(null);
+  const inFlightWorkspaceIdRef = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!activeWorkspace) {
@@ -42,48 +44,64 @@ export function useGitLog(
       return;
     }
     const workspaceId = activeWorkspace.id;
+    if (
+      inFlightRefreshRef.current &&
+      inFlightWorkspaceIdRef.current === workspaceId
+    ) {
+      return inFlightRefreshRef.current;
+    }
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
-    try {
-      const response = await getGitLog(workspaceId);
-      if (
-        requestIdRef.current !== requestId ||
-        workspaceIdRef.current !== workspaceId
-      ) {
-        return;
-      }
-      setState({
-        entries: response.entries,
-        total: response.total,
-        ahead: response.ahead,
-        behind: response.behind,
-        aheadEntries: response.aheadEntries,
-        behindEntries: response.behindEntries,
-        upstream: response.upstream,
-        isLoading: false,
-        error: null,
+    const refreshPromise = getGitLog(workspaceId)
+      .then((response) => {
+        if (
+          requestIdRef.current !== requestId ||
+          workspaceIdRef.current !== workspaceId
+        ) {
+          return;
+        }
+        setState({
+          entries: response.entries,
+          total: response.total,
+          ahead: response.ahead,
+          behind: response.behind,
+          aheadEntries: response.aheadEntries,
+          behindEntries: response.behindEntries,
+          upstream: response.upstream,
+          isLoading: false,
+          error: null,
+        });
+      })
+      .catch((error) => {
+        console.error("Failed to load git log", error);
+        if (
+          requestIdRef.current !== requestId ||
+          workspaceIdRef.current !== workspaceId
+        ) {
+          return;
+        }
+        setState({
+          entries: [],
+          total: 0,
+          ahead: 0,
+          behind: 0,
+          aheadEntries: [],
+          behindEntries: [],
+          upstream: null,
+          isLoading: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        if (inFlightRefreshRef.current === refreshPromise) {
+          inFlightRefreshRef.current = null;
+          inFlightWorkspaceIdRef.current = null;
+        }
       });
-    } catch (error) {
-      console.error("Failed to load git log", error);
-      if (
-        requestIdRef.current !== requestId ||
-        workspaceIdRef.current !== workspaceId
-      ) {
-        return;
-      }
-      setState({
-        entries: [],
-        total: 0,
-        ahead: 0,
-        behind: 0,
-        aheadEntries: [],
-        behindEntries: [],
-        upstream: null,
-        isLoading: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    inFlightRefreshRef.current = refreshPromise;
+    inFlightWorkspaceIdRef.current = workspaceId;
+    return refreshPromise;
   }, [activeWorkspace]);
 
   useEffect(() => {
@@ -91,6 +109,8 @@ export function useGitLog(
     if (workspaceIdRef.current !== workspaceId) {
       workspaceIdRef.current = workspaceId;
       requestIdRef.current += 1;
+      inFlightRefreshRef.current = null;
+      inFlightWorkspaceIdRef.current = null;
       setState(emptyState);
     }
   }, [activeWorkspace?.id]);
@@ -99,12 +119,22 @@ export function useGitLog(
     if (!enabled || !activeWorkspace) {
       return;
     }
-    void refresh();
-    const interval = window.setInterval(() => {
+    const fetchLog = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
       refresh().catch(() => {});
-    }, REFRESH_INTERVAL_MS);
+    };
+    const handleFocus = () => fetchLog();
+    const handleVisibilityChange = () => fetchLog();
+    fetchLog();
+    const interval = window.setInterval(fetchLog, REFRESH_INTERVAL_MS);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [activeWorkspace, enabled, refresh]);
 

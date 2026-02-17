@@ -353,10 +353,10 @@ export function statusToneFromText(status?: string): StatusTone {
     return "unknown";
   }
   const normalized = status.toLowerCase();
-  if (/(fail|error)/.test(normalized)) {
+  if (/(fail|error|declin|reject|cancel|skip)/.test(normalized)) {
     return "failed";
   }
-  if (/(pending|running|processing|started|in_progress)/.test(normalized)) {
+  if (/(pending|running|processing|started|inprogress|in_progress)/.test(normalized)) {
     return "processing";
   }
   if (/(complete|completed|success|done)/.test(normalized)) {

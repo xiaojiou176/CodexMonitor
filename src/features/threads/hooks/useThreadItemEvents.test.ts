@@ -22,6 +22,12 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const markProcessing = vi.fn();
   const markReviewing = vi.fn();
   const setThreadPhase = vi.fn();
+  const setThreadMessagePhase = vi.fn();
+  const setActiveItemStatus = vi.fn();
+  const clearActiveItemStatus = vi.fn();
+  const setMcpProgressMessage = vi.fn();
+  const getThreadTurnStatus = vi.fn(() => null);
+  const touchThreadActivity = vi.fn();
   const safeMessageActivity = vi.fn();
   const recordThreadActivity = vi.fn();
   const applyCollabThreadLinks = vi.fn();
@@ -36,6 +42,12 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
       markProcessing,
       markReviewing,
       setThreadPhase,
+      setThreadMessagePhase,
+      setActiveItemStatus,
+      clearActiveItemStatus,
+      setMcpProgressMessage,
+      getThreadTurnStatus,
+      touchThreadActivity,
       safeMessageActivity,
       recordThreadActivity,
       applyCollabThreadLinks,
@@ -50,6 +62,12 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
     markProcessing,
     markReviewing,
     setThreadPhase,
+    setThreadMessagePhase,
+    setActiveItemStatus,
+    clearActiveItemStatus,
+    setMcpProgressMessage,
+    getThreadTurnStatus,
+    touchThreadActivity,
     safeMessageActivity,
     recordThreadActivity,
     applyCollabThreadLinks,

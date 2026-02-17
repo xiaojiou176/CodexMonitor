@@ -1,6 +1,13 @@
 import { useCallback } from "react";
 import type { Dispatch, MutableRefObject } from "react";
-import type { ThreadPhase, TurnPlan } from "../../../types";
+import type {
+  ProtocolMessagePhase,
+  ProtocolTurnStatus,
+  ThreadPhase,
+  ThreadRetryState,
+  ThreadWaitReason,
+  TurnPlan,
+} from "../../../types";
 import { interruptTurn as interruptTurnService } from "../../../services/tauri";
 import { getThreadTimestamp } from "../../../utils/threadItems";
 import {
@@ -19,6 +26,13 @@ type UseThreadTurnEventsOptions = {
   markProcessing: (threadId: string, isProcessing: boolean) => void;
   markReviewing: (threadId: string, isReviewing: boolean) => void;
   setThreadPhase: (threadId: string, phase: ThreadPhase) => void;
+  setThreadTurnStatus: (threadId: string, turnStatus: ProtocolTurnStatus | null) => void;
+  setThreadMessagePhase: (
+    threadId: string,
+    messagePhase: ProtocolMessagePhase,
+  ) => void;
+  setThreadWaitReason: (threadId: string, waitReason: ThreadWaitReason) => void;
+  setThreadRetryState: (threadId: string, retryState: ThreadRetryState) => void;
   markThreadError?: (threadId: string, message: string) => void;
   setActiveTurnId: (threadId: string, turnId: string | null) => void;
   pendingInterruptsRef: MutableRefObject<Set<string>>;
@@ -36,6 +50,10 @@ export function useThreadTurnEvents({
   markProcessing,
   markReviewing,
   setThreadPhase,
+  setThreadTurnStatus,
+  setThreadMessagePhase,
+  setThreadWaitReason,
+  setThreadRetryState,
   markThreadError,
   setActiveTurnId,
   pendingInterruptsRef,
@@ -123,7 +141,7 @@ export function useThreadTurnEvents({
       workspaceId: string,
       threadId: string,
       turnId: string,
-      metadata?: { model: string | null },
+      metadata?: { model: string | null; status?: ProtocolTurnStatus | null },
     ) => {
       dispatch({
         type: "ensureThread",
@@ -149,6 +167,10 @@ export function useThreadTurnEvents({
       }
       markProcessing(threadId, true);
       setThreadPhase(threadId, "starting");
+      setThreadTurnStatus(threadId, metadata?.status ?? "inProgress");
+      setThreadMessagePhase(threadId, "unknown");
+      setThreadWaitReason(threadId, "none");
+      setThreadRetryState(threadId, "none");
       if (turnId) {
         setActiveTurnId(threadId, turnId);
       }
@@ -160,6 +182,10 @@ export function useThreadTurnEvents({
       pendingInterruptsRef,
       resolveCurrentModel,
       setThreadPhase,
+      setThreadTurnStatus,
+      setThreadMessagePhase,
+      setThreadWaitReason,
+      setThreadRetryState,
       setActiveTurnId,
     ],
   );
@@ -170,10 +196,13 @@ export function useThreadTurnEvents({
       threadId: string,
       turnId: string,
       metadata?: {
-        status: "completed" | "failed" | "interrupted" | null;
+        status: ProtocolTurnStatus | null;
         errorMessage: string | null;
       },
     ) => {
+      setThreadTurnStatus(threadId, metadata?.status ?? null);
+      setThreadWaitReason(threadId, "none");
+      setThreadRetryState(threadId, "none");
       if (metadata?.status === "failed") {
         const message = metadata.errorMessage
           ? `Turn failed: ${metadata.errorMessage}`
@@ -200,6 +229,9 @@ export function useThreadTurnEvents({
       pendingInterruptsRef,
       pushThreadErrorMessage,
       setThreadPhase,
+      setThreadTurnStatus,
+      setThreadWaitReason,
+      setThreadRetryState,
       setActiveTurnId,
       shouldClearCompletedPlan,
     ],
@@ -279,6 +311,13 @@ export function useThreadTurnEvents({
       payload: { message: string; willRetry: boolean },
     ) => {
       if (payload.willRetry) {
+        dispatch({ type: "ensureThread", workspaceId, threadId });
+        markProcessing(threadId, true);
+        setThreadTurnStatus(threadId, "inProgress");
+        setThreadWaitReason(threadId, "retry");
+        setThreadRetryState(threadId, "retrying");
+        setThreadPhase(threadId, "starting");
+        safeMessageActivity();
         return;
       }
       dispatch({ type: "ensureThread", workspaceId, threadId });
@@ -289,6 +328,9 @@ export function useThreadTurnEvents({
         ? `Turn failed: ${payload.message}`
         : "Turn failed.";
       markThreadError?.(threadId, message);
+      setThreadTurnStatus(threadId, "failed");
+      setThreadWaitReason(threadId, "none");
+      setThreadRetryState(threadId, "none");
       setThreadPhase(threadId, "failed");
       pushThreadErrorMessage(threadId, message);
       safeMessageActivity();
@@ -301,6 +343,9 @@ export function useThreadTurnEvents({
       pushThreadErrorMessage,
       safeMessageActivity,
       setThreadPhase,
+      setThreadTurnStatus,
+      setThreadWaitReason,
+      setThreadRetryState,
       setActiveTurnId,
     ],
   );

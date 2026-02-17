@@ -77,6 +77,7 @@ These are the app-server methods currently supported in
 - `item/commandExecution/outputDelta`
 - `item/commandExecution/terminalInteraction`
 - `item/fileChange/outputDelta`
+- `item/mcpToolCall/progress` (official `message` payload + legacy numeric compatibility)
 - `codex/event/skills_update_available` (handled via
   `isSkillsUpdateAvailableEvent(...)` in `useSkills.ts`)
 
@@ -100,7 +101,6 @@ events are currently not routed:
 
 - `app/list/updated`
 - `rawResponseItem/completed`
-- `item/mcpToolCall/progress`
 - `mcpServer/oauthLogin/completed`
 - `thread/compacted` (deprecated; intentionally not routed)
 - `deprecationNotice`
@@ -231,6 +231,13 @@ Use this when the method list is unchanged but behavior looks off.
 
 ## Notes
 
+- Status semantics are now centralized in `src/utils/protocolStatus.ts`:
+  - Turn status: `inProgress/completed/interrupted/failed`
+  - Item status: command/file (`inProgress/completed/failed/declined`), mcp/collab (`inProgress/completed/failed`)
+  - Message phase: `commentary/finalAnswer/unknown`
+  - Error retry: `willRetry` normalization
+- Thread runtime state in `useThreadsReducer.ts` keeps protocol truth (`turnStatus`, `activeItemStatuses`, `messagePhase`, `waitReason`, `retryState`) separate from UI aggregate `phase`.
+- `item/mcpToolCall/progress` is treated as activity heartbeat text and no longer a no-op.
 - Not all missing events must be surfaced in the conversation view; some may
   be better as toasts, settings warnings, or debug-only entries.
 - For conversation view changes, prefer:

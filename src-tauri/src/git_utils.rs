@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use git2::{DiffOptions, Repository, Tree};
+use git2::Repository;
 use ignore::WalkBuilder;
 
 use crate::types::{GitLogEntry, WorkspaceEntry};
@@ -45,41 +45,6 @@ pub(crate) fn checkout_branch(repo: &Repository, name: &str) -> Result<(), git2:
     repo.checkout_tree(&target, Some(&mut options))?;
     repo.set_head(&refname)?;
     Ok(())
-}
-
-pub(crate) fn diff_stats_for_path(
-    repo: &Repository,
-    head_tree: Option<&Tree>,
-    path: &str,
-    include_index: bool,
-    include_workdir: bool,
-) -> Result<(i64, i64), git2::Error> {
-    let mut additions = 0i64;
-    let mut deletions = 0i64;
-
-    if include_index {
-        let mut options = DiffOptions::new();
-        options.pathspec(path).include_untracked(true);
-        let diff = repo.diff_tree_to_index(head_tree, None, Some(&mut options))?;
-        let stats = diff.stats()?;
-        additions += stats.insertions() as i64;
-        deletions += stats.deletions() as i64;
-    }
-
-    if include_workdir {
-        let mut options = DiffOptions::new();
-        options
-            .pathspec(path)
-            .include_untracked(true)
-            .recurse_untracked_dirs(true)
-            .show_untracked_content(true);
-        let diff = repo.diff_index_to_workdir(None, Some(&mut options))?;
-        let stats = diff.stats()?;
-        additions += stats.insertions() as i64;
-        deletions += stats.deletions() as i64;
-    }
-
-    Ok((additions, deletions))
 }
 
 pub(crate) fn diff_patch_to_string(patch: &mut git2::Patch) -> Result<String, git2::Error> {

@@ -26,6 +26,7 @@ describe("useThreadApprovalEvents", () => {
   it("auto-accepts allowlisted approvals", () => {
     const dispatch = vi.fn();
     const setThreadPhase = vi.fn();
+    const setThreadWaitReason = vi.fn();
     const approvalAllowlistRef = {
       current: { "ws-1": [["git", "status"]] },
     };
@@ -43,7 +44,12 @@ describe("useThreadApprovalEvents", () => {
     vi.mocked(matchesCommandPrefix).mockReturnValue(true);
 
     const { result } = renderHook(() =>
-      useThreadApprovalEvents({ dispatch, approvalAllowlistRef, setThreadPhase }),
+      useThreadApprovalEvents({
+        dispatch,
+        approvalAllowlistRef,
+        setThreadPhase,
+        setThreadWaitReason,
+      }),
     );
 
     act(() => {
@@ -57,6 +63,7 @@ describe("useThreadApprovalEvents", () => {
   it("dispatches approvals that do not match the allowlist", () => {
     const dispatch = vi.fn();
     const setThreadPhase = vi.fn();
+    const setThreadWaitReason = vi.fn();
     const approvalAllowlistRef = {
       current: { "ws-1": [["git", "status"]] },
     };
@@ -74,7 +81,12 @@ describe("useThreadApprovalEvents", () => {
     vi.mocked(matchesCommandPrefix).mockReturnValue(false);
 
     const { result } = renderHook(() =>
-      useThreadApprovalEvents({ dispatch, approvalAllowlistRef, setThreadPhase }),
+      useThreadApprovalEvents({
+        dispatch,
+        approvalAllowlistRef,
+        setThreadPhase,
+        setThreadWaitReason,
+      }),
     );
 
     act(() => {

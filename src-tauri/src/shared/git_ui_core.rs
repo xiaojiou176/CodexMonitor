@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex as StdMutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use git2::{BranchType, DiffOptions, Repository, Sort, Status, StatusOptions};
@@ -8,7 +10,7 @@ use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
 use crate::git_utils::{
-    checkout_branch, commit_to_entry, diff_patch_to_string, diff_stats_for_path, image_mime_type,
+    checkout_branch, commit_to_entry, diff_patch_to_string, image_mime_type,
     list_git_roots as scan_git_roots, parse_github_repo, resolve_git_root,
 };
 use crate::shared::process_core::tokio_command;
@@ -22,6 +24,63 @@ use crate::utils::{git_env_path, normalize_git_path, resolve_git_binary};
 const INDEX_SKIP_WORKTREE_FLAG: u16 = 0x4000;
 const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
 const MAX_TEXT_DIFF_BYTES: usize = 2 * 1024 * 1024;
+const GIT_STATUS_CACHE_TTL: Duration = Duration::from_millis(1_500);
+const GIT_STATUS_CACHE_MAX_ENTRIES: usize = 256;
+
+#[derive(Clone)]
+struct GitStatusCacheEntry {
+    value: Value,
+    captured_at: Instant,
+}
+
+static GIT_STATUS_CACHE: OnceLock<StdMutex<HashMap<String, GitStatusCacheEntry>>> = OnceLock::new();
+
+fn git_status_cache() -> &'static StdMutex<HashMap<String, GitStatusCacheEntry>> {
+    GIT_STATUS_CACHE.get_or_init(|| StdMutex::new(HashMap::new()))
+}
+
+fn load_cached_git_status(workspace_id: &str) -> Option<Value> {
+    let Ok(mut cache) = git_status_cache().lock() else {
+        return None;
+    };
+    let Some(entry) = cache.get(workspace_id) else {
+        return None;
+    };
+    if entry.captured_at.elapsed() > GIT_STATUS_CACHE_TTL {
+        cache.remove(workspace_id);
+        return None;
+    }
+    Some(entry.value.clone())
+}
+
+fn store_cached_git_status(workspace_id: &str, value: &Value) {
+    let Ok(mut cache) = git_status_cache().lock() else {
+        return;
+    };
+    cache.insert(
+        workspace_id.to_string(),
+        GitStatusCacheEntry {
+            value: value.clone(),
+            captured_at: Instant::now(),
+        },
+    );
+    if cache.len() > GIT_STATUS_CACHE_MAX_ENTRIES {
+        cache.retain(|_, entry| entry.captured_at.elapsed() <= GIT_STATUS_CACHE_TTL * 4);
+        if cache.len() > GIT_STATUS_CACHE_MAX_ENTRIES {
+            let mut keys = cache.keys().take(cache.len() - GIT_STATUS_CACHE_MAX_ENTRIES).cloned().collect::<Vec<_>>();
+            for key in keys.drain(..) {
+                cache.remove(&key);
+            }
+        }
+    }
+}
+
+fn invalidate_cached_git_status(workspace_id: &str) {
+    let Ok(mut cache) = git_status_cache().lock() else {
+        return;
+    };
+    cache.remove(workspace_id);
+}
 
 fn encode_image_base64(data: &[u8]) -> Option<String> {
     if data.len() > MAX_IMAGE_BYTES {
@@ -509,6 +568,9 @@ async fn get_git_status_inner(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: String,
 ) -> Result<Value, String> {
+    if let Some(cached) = load_cached_git_status(&workspace_id) {
+        return Ok(cached);
+    }
     let entry = workspace_entry_for_id(workspaces, &workspace_id).await?;
     let repo_root = resolve_git_root(&entry)?;
     let repo = Repository::open(&repo_root).map_err(|e| e.to_string())?;
@@ -531,7 +593,6 @@ async fn get_git_status_inner(
         .statuses(Some(&mut status_options))
         .map_err(|e| e.to_string())?;
 
-    let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
     let index = repo.index().ok();
 
     let mut files = Vec::new();
@@ -571,8 +632,8 @@ async fn get_git_status_inner(
         let mut combined_deletions = 0i64;
 
         if include_index {
-            let (additions, deletions) =
-                diff_stats_for_path(&repo, head_tree.as_ref(), path, true, false).unwrap_or((0, 0));
+            let additions = 0i64;
+            let deletions = 0i64;
             if let Some(status_str) = status_for_index(status) {
                 staged_files.push(GitFileStatus {
                     path: normalized_path.clone(),
@@ -588,8 +649,8 @@ async fn get_git_status_inner(
         }
 
         if include_workdir {
-            let (additions, deletions) =
-                diff_stats_for_path(&repo, head_tree.as_ref(), path, false, true).unwrap_or((0, 0));
+            let additions = 0i64;
+            let deletions = 0i64;
             if let Some(status_str) = status_for_workdir(status) {
                 unstaged_files.push(GitFileStatus {
                     path: normalized_path.clone(),
@@ -617,14 +678,16 @@ async fn get_git_status_inner(
         }
     }
 
-    Ok(json!({
+    let result = json!({
         "branchName": branch_name,
         "files": files,
         "stagedFiles": staged_files,
         "unstagedFiles": unstaged_files,
         "totalAdditions": total_additions,
         "totalDeletions": total_deletions,
-    }))
+    });
+    store_cached_git_status(&workspace_id, &result);
+    Ok(result)
 }
 
 async fn stage_git_file_inner(
@@ -637,6 +700,7 @@ async fn stage_git_file_inner(
     for path in action_paths_for_file(&repo_root, &path) {
         run_git_command(&repo_root, &["add", "-A", "--", &path]).await?;
     }
+    invalidate_cached_git_status(&workspace_id);
     Ok(())
 }
 
@@ -646,7 +710,9 @@ async fn stage_git_all_inner(
 ) -> Result<(), String> {
     let entry = workspace_entry_for_id(workspaces, &workspace_id).await?;
     let repo_root = resolve_git_root(&entry)?;
-    run_git_command(&repo_root, &["add", "-A"]).await
+    run_git_command(&repo_root, &["add", "-A"]).await?;
+    invalidate_cached_git_status(&workspace_id);
+    Ok(())
 }
 
 async fn unstage_git_file_inner(
@@ -659,6 +725,7 @@ async fn unstage_git_file_inner(
     for path in action_paths_for_file(&repo_root, &path) {
         run_git_command(&repo_root, &["restore", "--staged", "--", &path]).await?;
     }
+    invalidate_cached_git_status(&workspace_id);
     Ok(())
 }
 
@@ -681,6 +748,7 @@ async fn revert_git_file_inner(
         }
         run_git_command(&repo_root, &["clean", "-f", "--", &path]).await?;
     }
+    invalidate_cached_git_status(&workspace_id);
     Ok(())
 }
 
@@ -695,7 +763,9 @@ async fn revert_git_all_inner(
         &["restore", "--staged", "--worktree", "--", "."],
     )
     .await?;
-    run_git_command(&repo_root, &["clean", "-f", "-d"]).await
+    run_git_command(&repo_root, &["clean", "-f", "-d"]).await?;
+    invalidate_cached_git_status(&workspace_id);
+    Ok(())
 }
 
 async fn commit_git_inner(
@@ -705,7 +775,9 @@ async fn commit_git_inner(
 ) -> Result<(), String> {
     let entry = workspace_entry_for_id(workspaces, &workspace_id).await?;
     let repo_root = resolve_git_root(&entry)?;
-    run_git_command(&repo_root, &["commit", "-m", &message]).await
+    run_git_command(&repo_root, &["commit", "-m", &message]).await?;
+    invalidate_cached_git_status(&workspace_id);
+    Ok(())
 }
 
 async fn push_git_inner(
@@ -714,7 +786,9 @@ async fn push_git_inner(
 ) -> Result<(), String> {
     let entry = workspace_entry_for_id(workspaces, &workspace_id).await?;
     let repo_root = resolve_git_root(&entry)?;
-    push_with_upstream(&repo_root).await
+    push_with_upstream(&repo_root).await?;
+    invalidate_cached_git_status(&workspace_id);
+    Ok(())
 }
 
 async fn pull_git_inner(
@@ -723,7 +797,9 @@ async fn pull_git_inner(
 ) -> Result<(), String> {
     let entry = workspace_entry_for_id(workspaces, &workspace_id).await?;
     let repo_root = resolve_git_root(&entry)?;
-    pull_with_default_strategy(&repo_root).await
+    pull_with_default_strategy(&repo_root).await?;
+    invalidate_cached_git_status(&workspace_id);
+    Ok(())
 }
 
 async fn fetch_git_inner(
@@ -732,7 +808,9 @@ async fn fetch_git_inner(
 ) -> Result<(), String> {
     let entry = workspace_entry_for_id(workspaces, &workspace_id).await?;
     let repo_root = resolve_git_root(&entry)?;
-    fetch_with_default_remote(&repo_root).await
+    fetch_with_default_remote(&repo_root).await?;
+    invalidate_cached_git_status(&workspace_id);
+    Ok(())
 }
 
 async fn sync_git_inner(
@@ -742,7 +820,9 @@ async fn sync_git_inner(
     let entry = workspace_entry_for_id(workspaces, &workspace_id).await?;
     let repo_root = resolve_git_root(&entry)?;
     pull_with_default_strategy(&repo_root).await?;
-    push_with_upstream(&repo_root).await
+    push_with_upstream(&repo_root).await?;
+    invalidate_cached_git_status(&workspace_id);
+    Ok(())
 }
 
 async fn list_git_roots_inner(
@@ -1392,7 +1472,9 @@ async fn checkout_git_branch_inner(
     let entry = workspace_entry_for_id(workspaces, &workspace_id).await?;
     let repo_root = resolve_git_root(&entry)?;
     let repo = Repository::open(&repo_root).map_err(|e| e.to_string())?;
-    checkout_branch(&repo, &name).map_err(|e| e.to_string())
+    checkout_branch(&repo, &name).map_err(|e| e.to_string())?;
+    invalidate_cached_git_status(&workspace_id);
+    Ok(())
 }
 
 async fn create_git_branch_inner(
@@ -1407,7 +1489,9 @@ async fn create_git_branch_inner(
     let target = head.peel_to_commit().map_err(|e| e.to_string())?;
     repo.branch(&name, &target, false)
         .map_err(|e| e.to_string())?;
-    checkout_branch(&repo, &name).map_err(|e| e.to_string())
+    checkout_branch(&repo, &name).map_err(|e| e.to_string())?;
+    invalidate_cached_git_status(&workspace_id);
+    Ok(())
 }
 
 pub(crate) async fn resolve_repo_root_for_workspace_core(

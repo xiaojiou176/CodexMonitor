@@ -1,3 +1,5 @@
+import { hasInProgressItemStatus } from "./protocolStatus";
+
 type ThreadStatusSnapshot = {
   isProcessing: boolean;
   hasUnread: boolean;
@@ -7,6 +9,11 @@ type ThreadStatusSnapshot = {
   lastActivityAt?: number | null;
   lastErrorAt?: number | null;
   lastErrorMessage?: string | null;
+  turnStatus?: "inProgress" | "completed" | "interrupted" | "failed" | null;
+  activeItemStatuses?: Record<string, "inProgress" | "completed" | "failed" | "declined">;
+  messagePhase?: "commentary" | "finalAnswer" | "unknown";
+  waitReason?: "none" | "approval" | "user_input" | "tool_wait" | "retry";
+  retryState?: "none" | "retrying";
 };
 
 export type ThreadVisualStatus =
@@ -19,7 +26,10 @@ export type ThreadVisualStatus =
   | "error";
 
 const WAITING_AFTER_MS = 8_000;
-const STALLED_AFTER_MS = 45_000;
+const STALLED_AFTER_MS = 3 * 60_000;
+const STARTING_GRACE_MS = 45_000;
+const TOOL_RUNNING_WAITING_AFTER_MS = 45_000;
+const TOOL_RUNNING_STALLED_AFTER_MS = 8 * 60_000;
 const ERROR_HIGHLIGHT_MS = 5 * 60_000;
 
 export function deriveThreadVisualStatus(
@@ -39,25 +49,84 @@ export function deriveThreadVisualStatus(
     return "error";
   }
 
+  // Protocol-first precedence: terminal turn state > explicit wait reasons
+  // > active item/message-phase signals > time-based fallback heuristics.
+  if (status.turnStatus === "failed" && status.retryState !== "retrying") {
+    return "error";
+  }
+
+  if (status.turnStatus === "completed" && !status.isProcessing) {
+    if (status.hasUnread) {
+      return "unread";
+    }
+    return "ready";
+  }
+
+  if (status.turnStatus === "interrupted" && !status.isProcessing) {
+    if (status.hasUnread) {
+      return "unread";
+    }
+    return "ready";
+  }
+
   if (status.isReviewing) {
     return "reviewing";
   }
 
-  if (status.phase === "waiting_user") {
+  if (
+    status.waitReason === "approval" ||
+    status.waitReason === "user_input" ||
+    status.waitReason === "retry" ||
+    status.phase === "waiting_user"
+  ) {
     return "waiting";
   }
 
-  if (status.isProcessing) {
+  const turnInProgress = status.turnStatus === "inProgress";
+  if (hasInProgressItemStatus(status.activeItemStatuses)) {
+    return "processing";
+  }
+
+  if (
+    turnInProgress &&
+    (status.messagePhase === "commentary" || status.messagePhase === "finalAnswer")
+  ) {
+    return "processing";
+  }
+
+  if (status.isProcessing || turnInProgress) {
+    const processingAgeMs =
+      typeof status.processingStartedAt === "number" && Number.isFinite(status.processingStartedAt)
+        ? Math.max(0, now - status.processingStartedAt)
+        : 0;
+    if (status.phase === "starting" && processingAgeMs < STARTING_GRACE_MS) {
+      return "processing";
+    }
     const activityBase =
       status.lastActivityAt ?? status.processingStartedAt ?? null;
     const quietForMs =
       typeof activityBase === "number" && Number.isFinite(activityBase)
         ? Math.max(0, now - activityBase)
         : 0;
-    if (quietForMs >= STALLED_AFTER_MS) {
+    // `tool_running` often represents long-running command/tool work with sparse output.
+    // Keep this threshold much wider to reduce false stuck positives.
+    const waitingAfterMs =
+      status.phase === "tool_running"
+        ? TOOL_RUNNING_WAITING_AFTER_MS
+        : WAITING_AFTER_MS;
+    const stalledAfterMs =
+      status.phase === "tool_running"
+        ? TOOL_RUNNING_STALLED_AFTER_MS
+        : STALLED_AFTER_MS;
+    if (
+      turnInProgress &&
+      status.retryState !== "retrying" &&
+      processingAgeMs >= STALLED_AFTER_MS &&
+      quietForMs >= stalledAfterMs
+    ) {
       return "stalled";
     }
-    if (quietForMs >= WAITING_AFTER_MS) {
+    if (quietForMs >= waitingAfterMs) {
       return "waiting";
     }
     return "processing";
@@ -77,7 +146,7 @@ export function getThreadVisualStatusLabel(status: ThreadVisualStatus): string {
     case "waiting":
       return "等待响应";
     case "stalled":
-      return "可能卡住";
+      return "长时间无响应（疑似卡住）";
     case "reviewing":
       return "审查中";
     case "unread":
@@ -96,7 +165,7 @@ export function getThreadVisualStatusBadge(status: ThreadVisualStatus): string |
     case "waiting":
       return "等待";
     case "stalled":
-      return "卡住";
+      return "疑似卡住";
     case "reviewing":
       return "审查";
     case "error":

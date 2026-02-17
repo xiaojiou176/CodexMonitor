@@ -4,6 +4,7 @@ import type {
   RequestUserInputRequest,
   RequestUserInputResponse,
   ThreadPhase,
+  ThreadWaitReason,
 } from "../../../types";
 import { respondToUserInputRequest } from "../../../services/tauri";
 import type { ThreadAction } from "./useThreadsReducer";
@@ -11,11 +12,13 @@ import type { ThreadAction } from "./useThreadsReducer";
 type UseThreadUserInputOptions = {
   dispatch: Dispatch<ThreadAction>;
   setThreadPhase: (threadId: string, phase: ThreadPhase) => void;
+  setThreadWaitReason: (threadId: string, waitReason: ThreadWaitReason) => void;
 };
 
 export function useThreadUserInput({
   dispatch,
   setThreadPhase,
+  setThreadWaitReason,
 }: UseThreadUserInputOptions) {
   const handleUserInputSubmit = useCallback(
     async (request: RequestUserInputRequest, response: RequestUserInputResponse) => {
@@ -32,9 +35,10 @@ export function useThreadUserInput({
       const threadId = request.params.thread_id.trim();
       if (threadId) {
         setThreadPhase(threadId, "starting");
+        setThreadWaitReason(threadId, "none");
       }
     },
-    [dispatch, setThreadPhase],
+    [dispatch, setThreadPhase, setThreadWaitReason],
   );
 
   return { handleUserInputSubmit };

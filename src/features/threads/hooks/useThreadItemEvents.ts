@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch } from "react";
-import type { ThreadPhase } from "../../../types";
+import type {
+  ProtocolMessagePhase,
+  ProtocolTurnStatus,
+  ThreadPhase,
+} from "../../../types";
 import { buildConversationItem } from "../../../utils/threadItems";
+import {
+  isTurnTerminalStatus,
+  normalizeCommandOrFileItemStatus,
+  normalizeMcpOrCollabItemStatus,
+} from "../../../utils/protocolStatus";
 import { asString } from "../utils/threadNormalize";
 import type { ThreadAction } from "./useThreadsReducer";
 
@@ -12,6 +21,19 @@ type UseThreadItemEventsOptions = {
   markProcessing: (threadId: string, isProcessing: boolean) => void;
   markReviewing: (threadId: string, isReviewing: boolean) => void;
   setThreadPhase: (threadId: string, phase: ThreadPhase) => void;
+  setThreadMessagePhase: (
+    threadId: string,
+    messagePhase: ProtocolMessagePhase,
+  ) => void;
+  setActiveItemStatus: (
+    threadId: string,
+    itemId: string,
+    status: "inProgress" | "completed" | "failed" | "declined",
+  ) => void;
+  clearActiveItemStatus: (threadId: string, itemId: string) => void;
+  setMcpProgressMessage: (threadId: string, message: string | null) => void;
+  getThreadTurnStatus: (threadId: string) => ProtocolTurnStatus | null;
+  touchThreadActivity: (threadId: string, timestamp?: number) => void;
   safeMessageActivity: () => void;
   recordThreadActivity: (
     workspaceId: string,
@@ -50,12 +72,22 @@ export function useThreadItemEvents({
   markProcessing,
   markReviewing,
   setThreadPhase,
+  setThreadMessagePhase,
+  setActiveItemStatus,
+  clearActiveItemStatus,
+  setMcpProgressMessage,
+  getThreadTurnStatus,
+  touchThreadActivity,
   safeMessageActivity,
   recordThreadActivity,
   applyCollabThreadLinks,
   onUserMessageCreated,
   onReviewExited,
 }: UseThreadItemEventsOptions) {
+  const isTerminalThreadTurn = useCallback(
+    (threadId: string) => isTurnTerminalStatus(getThreadTurnStatus(threadId)),
+    [getThreadTurnStatus],
+  );
   const pendingAgentDeltasRef = useRef<Map<string, PendingAgentDelta>>(new Map());
   const pendingAgentDeltaFrameRef = useRef<number | null>(null);
 
@@ -117,27 +149,47 @@ export function useThreadItemEvents({
       shouldMarkProcessing: boolean,
     ) => {
       dispatch({ type: "ensureThread", workspaceId, threadId });
-      if (shouldMarkProcessing) {
+      const threadTurnIsTerminal = isTerminalThreadTurn(threadId);
+      if (shouldMarkProcessing && !threadTurnIsTerminal) {
         markProcessing(threadId, true);
       }
+      touchThreadActivity(threadId);
       applyCollabThreadLinks(threadId, item);
       const itemType = asString(item?.type ?? "");
       const normalizedItemType = itemType.toLowerCase().replace(/[_-]/g, "");
-      if (itemType === "enteredReviewMode") {
-        markReviewing(threadId, true);
-        setThreadPhase(threadId, "tool_running");
-      } else if (itemType === "exitedReviewMode") {
-        markReviewing(threadId, false);
-        markProcessing(threadId, false);
-        setThreadPhase(threadId, "completed");
-        if (!shouldMarkProcessing) {
-          onReviewExited?.(workspaceId, threadId);
-        }
-      } else if (shouldMarkProcessing) {
-        if (normalizedItemType === "agentmessage") {
-          setThreadPhase(threadId, "streaming");
-        } else {
+      const itemId = asString(item?.id ?? "");
+      if (shouldMarkProcessing && itemId) {
+        const normalizedItemStatus =
+          normalizedItemType === "commandexecution" ||
+          normalizedItemType === "filechange" ||
+          normalizedItemType === "contextcompaction"
+            ? normalizeCommandOrFileItemStatus(item.status) ?? "inProgress"
+            : normalizedItemType === "mcptoolcall" ||
+                normalizedItemType === "collabtoolcall" ||
+                normalizedItemType === "collabagenttoolcall"
+              ? normalizeMcpOrCollabItemStatus(item.status) ?? "inProgress"
+              : "inProgress";
+        setActiveItemStatus(threadId, itemId, normalizedItemStatus);
+      } else if (!shouldMarkProcessing && itemId) {
+        clearActiveItemStatus(threadId, itemId);
+      }
+      if (!threadTurnIsTerminal) {
+        if (itemType === "enteredReviewMode") {
+          markReviewing(threadId, true);
           setThreadPhase(threadId, "tool_running");
+        } else if (itemType === "exitedReviewMode") {
+          markReviewing(threadId, false);
+          markProcessing(threadId, false);
+          setThreadPhase(threadId, "completed");
+          if (!shouldMarkProcessing) {
+            onReviewExited?.(workspaceId, threadId);
+          }
+        } else if (shouldMarkProcessing) {
+          if (normalizedItemType === "agentmessage") {
+            setThreadPhase(threadId, "streaming");
+          } else {
+            setThreadPhase(threadId, "tool_running");
+          }
         }
       }
       const itemForDisplay =
@@ -164,25 +216,41 @@ export function useThreadItemEvents({
     },
     [
       applyCollabThreadLinks,
+      clearActiveItemStatus,
       dispatch,
       getCustomName,
+      isTerminalThreadTurn,
       markProcessing,
       markReviewing,
       onReviewExited,
       onUserMessageCreated,
       safeMessageActivity,
+      setActiveItemStatus,
       setThreadPhase,
+      touchThreadActivity,
     ],
   );
 
   const handleToolOutputDelta = useCallback(
     (threadId: string, itemId: string, delta: string) => {
-      markProcessing(threadId, true);
-      setThreadPhase(threadId, "tool_running");
+      if (!isTerminalThreadTurn(threadId)) {
+        markProcessing(threadId, true);
+        setThreadPhase(threadId, "tool_running");
+      }
+      setActiveItemStatus(threadId, itemId, "inProgress");
+      touchThreadActivity(threadId);
       dispatch({ type: "appendToolOutput", threadId, itemId, delta });
       safeMessageActivity();
     },
-    [dispatch, markProcessing, safeMessageActivity, setThreadPhase],
+    [
+      dispatch,
+      isTerminalThreadTurn,
+      markProcessing,
+      safeMessageActivity,
+      setActiveItemStatus,
+      setThreadPhase,
+      touchThreadActivity,
+    ],
   );
 
   const handleTerminalInteraction = useCallback(
@@ -204,16 +272,24 @@ export function useThreadItemEvents({
       itemId,
       delta,
       turnId = null,
+      messagePhase,
     }: {
       workspaceId: string;
       threadId: string;
       itemId: string;
       delta: string;
       turnId?: string | null;
+      messagePhase?: ProtocolMessagePhase;
     }) => {
       dispatch({ type: "ensureThread", workspaceId, threadId });
-      markProcessing(threadId, true);
-      setThreadPhase(threadId, "streaming");
+      if (messagePhase && messagePhase !== "unknown") {
+        setThreadMessagePhase(threadId, messagePhase);
+      }
+      if (!isTerminalThreadTurn(threadId)) {
+        markProcessing(threadId, true);
+        setThreadPhase(threadId, "streaming");
+      }
+      touchThreadActivity(threadId);
       const hasCustomName = Boolean(getCustomName(workspaceId, threadId));
       const key = deltaKey(workspaceId, threadId, itemId);
       const existing = pendingAgentDeltasRef.current.get(key);
@@ -236,7 +312,16 @@ export function useThreadItemEvents({
       }
       schedulePendingAgentDeltaFlush();
     },
-    [dispatch, getCustomName, markProcessing, schedulePendingAgentDeltaFlush, setThreadPhase],
+    [
+      dispatch,
+      getCustomName,
+      isTerminalThreadTurn,
+      markProcessing,
+      schedulePendingAgentDeltaFlush,
+      setThreadMessagePhase,
+      setThreadPhase,
+      touchThreadActivity,
+    ],
   );
 
   const onAgentMessageCompleted = useCallback(
@@ -256,7 +341,10 @@ export function useThreadItemEvents({
       flushPendingAgentDeltas();
       const timestamp = Date.now();
       dispatch({ type: "ensureThread", workspaceId, threadId });
-      setThreadPhase(threadId, "streaming");
+      setThreadMessagePhase(threadId, "finalAnswer");
+      if (!isTerminalThreadTurn(threadId)) {
+        setThreadPhase(threadId, "streaming");
+      }
       const hasCustomName = Boolean(getCustomName(workspaceId, threadId));
       dispatch({
         type: "completeAgentMessage",
@@ -279,6 +367,7 @@ export function useThreadItemEvents({
         text,
         timestamp,
       });
+      touchThreadActivity(threadId, timestamp);
       recordThreadActivity(workspaceId, threadId, timestamp);
       safeMessageActivity();
       if (threadId !== activeThreadId) {
@@ -290,9 +379,12 @@ export function useThreadItemEvents({
       dispatch,
       flushPendingAgentDeltas,
       getCustomName,
+      isTerminalThreadTurn,
       recordThreadActivity,
       safeMessageActivity,
+      setThreadMessagePhase,
       setThreadPhase,
+      touchThreadActivity,
     ],
   );
 
@@ -312,30 +404,34 @@ export function useThreadItemEvents({
 
   const onReasoningSummaryDelta = useCallback(
     (_workspaceId: string, threadId: string, itemId: string, delta: string) => {
+      touchThreadActivity(threadId);
       dispatch({ type: "appendReasoningSummary", threadId, itemId, delta });
     },
-    [dispatch],
+    [dispatch, touchThreadActivity],
   );
 
   const onReasoningSummaryBoundary = useCallback(
     (_workspaceId: string, threadId: string, itemId: string) => {
+      touchThreadActivity(threadId);
       dispatch({ type: "appendReasoningSummaryBoundary", threadId, itemId });
     },
-    [dispatch],
+    [dispatch, touchThreadActivity],
   );
 
   const onReasoningTextDelta = useCallback(
     (_workspaceId: string, threadId: string, itemId: string, delta: string) => {
+      touchThreadActivity(threadId);
       dispatch({ type: "appendReasoningContent", threadId, itemId, delta });
     },
-    [dispatch],
+    [dispatch, touchThreadActivity],
   );
 
   const onPlanDelta = useCallback(
     (_workspaceId: string, threadId: string, itemId: string, delta: string) => {
+      touchThreadActivity(threadId);
       dispatch({ type: "appendPlanDelta", threadId, itemId, delta });
     },
-    [dispatch],
+    [dispatch, touchThreadActivity],
   );
 
   const onCommandOutputDelta = useCallback(
@@ -359,6 +455,33 @@ export function useThreadItemEvents({
     [handleToolOutputDelta],
   );
 
+  const onMcpToolCallProgress = useCallback(
+    (
+      _workspaceId: string,
+      threadId: string,
+      itemId: string,
+      message: string | null,
+    ) => {
+      if (!isTerminalThreadTurn(threadId)) {
+        markProcessing(threadId, true);
+        setThreadPhase(threadId, "tool_running");
+      }
+      setActiveItemStatus(threadId, itemId, "inProgress");
+      setMcpProgressMessage(threadId, message);
+      touchThreadActivity(threadId);
+      safeMessageActivity();
+    },
+    [
+      isTerminalThreadTurn,
+      markProcessing,
+      safeMessageActivity,
+      setActiveItemStatus,
+      setMcpProgressMessage,
+      setThreadPhase,
+      touchThreadActivity,
+    ],
+  );
+
   return {
     onAgentMessageDelta,
     onAgentMessageCompleted,
@@ -371,5 +494,6 @@ export function useThreadItemEvents({
     onCommandOutputDelta,
     onTerminalInteraction,
     onFileChangeOutputDelta,
+    onMcpToolCallProgress,
   };
 }

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { Dispatch, MutableRefObject } from "react";
-import type { ApprovalRequest, ThreadPhase } from "../../../types";
+import type { ApprovalRequest, ThreadPhase, ThreadWaitReason } from "../../../types";
 import {
   getApprovalCommandInfo,
   matchesCommandPrefix,
@@ -12,6 +12,7 @@ type UseThreadApprovalEventsOptions = {
   dispatch: Dispatch<ThreadAction>;
   approvalAllowlistRef: MutableRefObject<Record<string, string[][]>>;
   setThreadPhase: (threadId: string, phase: ThreadPhase) => void;
+  setThreadWaitReason: (threadId: string, waitReason: ThreadWaitReason) => void;
 };
 
 function resolveApprovalThreadId(params: Record<string, unknown>): string | null {
@@ -27,6 +28,7 @@ export function useThreadApprovalEvents({
   dispatch,
   approvalAllowlistRef,
   setThreadPhase,
+  setThreadWaitReason,
 }: UseThreadApprovalEventsOptions) {
   return useCallback(
     (approval: ApprovalRequest) => {
@@ -34,6 +36,7 @@ export function useThreadApprovalEvents({
       if (threadId) {
         dispatch({ type: "ensureThread", workspaceId: approval.workspace_id, threadId });
         setThreadPhase(threadId, "waiting_user");
+        setThreadWaitReason(threadId, "approval");
       }
       const commandInfo = getApprovalCommandInfo(approval.params ?? {});
       const allowlist =
@@ -48,6 +51,6 @@ export function useThreadApprovalEvents({
       }
       dispatch({ type: "addApproval", approval });
     },
-    [approvalAllowlistRef, dispatch, setThreadPhase],
+    [approvalAllowlistRef, dispatch, setThreadPhase, setThreadWaitReason],
   );
 }

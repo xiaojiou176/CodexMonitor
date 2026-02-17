@@ -1,6 +1,11 @@
 import { useCallback, useRef } from "react";
 import type { Dispatch } from "react";
-import type { ApprovalRequest, DebugEntry, ThreadPhase } from "../../../types";
+import type {
+  ApprovalRequest,
+  DebugEntry,
+  ThreadPhase,
+  ThreadWaitReason,
+} from "../../../types";
 import { normalizeCommandTokens } from "../../../utils/approvalRules";
 import {
   rememberApprovalRule,
@@ -11,6 +16,7 @@ import type { ThreadAction } from "./useThreadsReducer";
 type UseThreadApprovalsOptions = {
   dispatch: Dispatch<ThreadAction>;
   setThreadPhase: (threadId: string, phase: ThreadPhase) => void;
+  setThreadWaitReason: (threadId: string, waitReason: ThreadWaitReason) => void;
   onDebug?: (entry: DebugEntry) => void;
 };
 
@@ -26,6 +32,7 @@ function resolveApprovalThreadId(params: Record<string, unknown>): string | null
 export function useThreadApprovals({
   dispatch,
   setThreadPhase,
+  setThreadWaitReason,
   onDebug,
 }: UseThreadApprovalsOptions) {
   const approvalAllowlistRef = useRef<Record<string, string[][]>>({});
@@ -64,9 +71,10 @@ export function useThreadApprovals({
       const threadId = resolveApprovalThreadId(request.params ?? {});
       if (threadId) {
         setThreadPhase(threadId, "starting");
+        setThreadWaitReason(threadId, "none");
       }
     },
-    [dispatch, setThreadPhase],
+    [dispatch, setThreadPhase, setThreadWaitReason],
   );
 
   const handleApprovalRemember = useCallback(
@@ -98,9 +106,10 @@ export function useThreadApprovals({
       const threadId = resolveApprovalThreadId(request.params ?? {});
       if (threadId) {
         setThreadPhase(threadId, "starting");
+        setThreadWaitReason(threadId, "none");
       }
     },
-    [dispatch, onDebug, rememberApprovalPrefix, setThreadPhase],
+    [dispatch, onDebug, rememberApprovalPrefix, setThreadPhase, setThreadWaitReason],
   );
 
   return {
