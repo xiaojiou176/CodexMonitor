@@ -86,7 +86,10 @@ mkdir -p "\$LOG_DIR"
         npm install
       fi
       echo "[2/3] 构建 Release..."
+      set +e
       npm run tauri:build
+      BUILD_EXIT=$?
+      set -e
       if [ -d "src-tauri/target/release/bundle/macos/Codex Monitor.app" ]; then
         APP_PATH="src-tauri/target/release/bundle/macos/Codex Monitor.app"
       elif [ -d "src-tauri/target/release/bundle/macos/CodexMonitor.app" ]; then
@@ -94,6 +97,11 @@ mkdir -p "\$LOG_DIR"
       else
         echo "❌ 构建完成但未找到 app bundle。"
         exit 1
+      fi
+      if [ "\$BUILD_EXIT" -ne 0 ]; then
+        echo "⚠️ tauri:build 返回非零，但检测到 app bundle 已生成。"
+        echo "   常见原因：启用了 updater 公钥，但本地未配置 TAURI_SIGNING_PRIVATE_KEY。"
+        echo "   将继续启动本地 Release App。"
       fi
       echo "[3/3] 启动 Release App..."
       echo "✅ 打开: \$APP_PATH"

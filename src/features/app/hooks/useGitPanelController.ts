@@ -9,6 +9,7 @@ export function useGitPanelController({
   activeWorkspace,
   gitDiffPreloadEnabled,
   gitDiffIgnoreWhitespaceChanges,
+  gitPanelVisible,
   isCompact,
   isTablet,
   activeTab,
@@ -21,6 +22,7 @@ export function useGitPanelController({
   activeWorkspace: WorkspaceInfo | null;
   gitDiffPreloadEnabled: boolean;
   gitDiffIgnoreWhitespaceChanges: boolean;
+  gitPanelVisible: boolean;
   isCompact: boolean;
   isTablet: boolean;
   activeTab: "home" | "projects" | "codex" | "git" | "log";
@@ -52,9 +54,9 @@ export function useGitPanelController({
     "local",
   );
 
-  const { status: gitStatus, refresh: refreshGitStatus } = useGitStatus(
-    activeWorkspace,
-  );
+  const { status: gitStatus, refresh: refreshGitStatus } = useGitStatus(activeWorkspace, {
+    preferFastPolling: gitPanelVisible,
+  });
   const gitStatusRefreshTimeoutRef = useRef<number | null>(null);
   const activeWorkspaceIdRef = useRef<string | null>(activeWorkspace?.id ?? null);
   const activeWorkspaceRef = useRef(activeWorkspace);
@@ -95,24 +97,25 @@ export function useGitPanelController({
   const preloadedWorkspaceIdsRef = useRef<Set<string>>(new Set());
   const compactTab = isTablet ? tabletTab : activeTab;
   const diffUiVisible =
-    centerMode === "diff" ||
-    (isCompact ? compactTab === "git" : gitPanelMode === "diff");
+    gitPanelVisible && (centerMode === "diff" || gitPanelMode === "diff");
   const shouldPreloadDiffs = Boolean(
     gitDiffPreloadEnabled &&
       activeWorkspace &&
       !preloadedWorkspaceIdsRef.current.has(activeWorkspace.id),
   );
   const shouldLoadSelectedLocalDiff =
-    centerMode === "diff" && Boolean(selectedDiffPath);
+    gitPanelVisible && centerMode === "diff" && Boolean(selectedDiffPath);
   const shouldLoadLocalDiffs =
     Boolean(activeWorkspace) &&
+    gitPanelVisible &&
     (shouldPreloadDiffs ||
       (gitDiffPreloadEnabled ? diffUiVisible : shouldLoadSelectedLocalDiff));
   const shouldLoadDiffs =
     Boolean(activeWorkspace) &&
+    gitPanelVisible &&
     (diffSource === "local" ? shouldLoadLocalDiffs : diffUiVisible);
   const shouldLoadGitLog =
-    Boolean(activeWorkspace) && (gitPanelMode === "log" || diffUiVisible);
+    Boolean(activeWorkspace) && gitPanelVisible && gitPanelMode === "log";
 
   const {
     diffs: gitDiffs,

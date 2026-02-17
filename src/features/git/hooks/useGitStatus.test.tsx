@@ -41,7 +41,7 @@ const flushMicrotaskQueue = () =>
 
 describe("useGitStatus", () => {
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
@@ -68,7 +68,7 @@ describe("useGitStatus", () => {
     expect(result.current.status.totalAdditions).toBe(2);
 
     await act(async () => {
-      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(12000);
     });
     await act(async () => {
       await flushMicrotaskQueue();
@@ -77,6 +77,37 @@ describe("useGitStatus", () => {
     expect(getGitStatusMock).toHaveBeenCalledTimes(2);
     expect(result.current.status.branchName).toBe("next");
     expect(result.current.status.totalDeletions).toBe(4);
+
+    unmount();
+  });
+
+  it("uses faster polling when fast mode is requested", async () => {
+    const getGitStatusMock = vi.mocked(getGitStatus);
+    getGitStatusMock
+      .mockResolvedValueOnce(makeStatus("main", 2, 1))
+      .mockResolvedValueOnce(makeStatus("next", 3, 4));
+
+    const { result, unmount } = renderHook(
+      ({ active }: { active: WorkspaceInfo | null }) =>
+        useGitStatus(active, { preferFastPolling: true }),
+      { initialProps: { active: workspace } },
+    );
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    expect(getGitStatusMock).toHaveBeenCalledTimes(1);
+    expect(result.current.status.branchName).toBe("main");
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    expect(getGitStatusMock).toHaveBeenCalledTimes(2);
+    expect(result.current.status.branchName).toBe("next");
 
     unmount();
   });

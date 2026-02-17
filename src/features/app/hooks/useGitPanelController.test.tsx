@@ -38,6 +38,7 @@ function makeProps(overrides?: Partial<Parameters<typeof useGitPanelController>[
     activeWorkspace: workspace,
     gitDiffPreloadEnabled: false,
     gitDiffIgnoreWhitespaceChanges: false,
+    gitPanelVisible: true,
     isCompact: false,
     isTablet: false,
     activeTab: "codex" as const,
@@ -97,6 +98,19 @@ beforeEach(() => {
 });
 
 describe("useGitPanelController preload behavior", () => {
+  it("does not load git data when the git panel is not visible", () => {
+    renderHook(() =>
+      useGitPanelController(
+        makeProps({
+          gitPanelVisible: false,
+        }),
+      ),
+    );
+
+    expect(getLastEnabledArg()).toBe(false);
+    expect(useGitLogMock).toHaveBeenLastCalledWith(workspace, false);
+  });
+
   it("does not preload diffs when disabled and panel is hidden", () => {
     const { result } = renderHook(() => useGitPanelController(makeProps()));
 

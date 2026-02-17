@@ -511,6 +511,10 @@ function MainApp() {
     handleGitPullRequestCommentsChange,
     resetGitHubPanelState,
   } = useGitHubPanelController();
+  const isGitPanelVisible = Boolean(
+    activeWorkspace &&
+      (isCompact ? (isTablet ? tabletTab : activeTab) === "git" : !rightPanelCollapsed),
+  );
 
   const {
     centerMode,
@@ -559,6 +563,7 @@ function MainApp() {
     activeWorkspace,
     gitDiffPreloadEnabled: appSettings.preloadGitDiffs,
     gitDiffIgnoreWhitespaceChanges: appSettings.gitDiffIgnoreWhitespaceChanges,
+    gitPanelVisible: isGitPanelVisible,
     isCompact,
     isTablet,
     activeTab,
@@ -570,9 +575,10 @@ function MainApp() {
   });
 
   const shouldLoadGitHubPanelData =
-    gitPanelMode === "issues" ||
-    gitPanelMode === "prs" ||
-    (shouldLoadDiffs && diffSource === "pr");
+    isGitPanelVisible &&
+    (gitPanelMode === "issues" ||
+      gitPanelMode === "prs" ||
+      (shouldLoadDiffs && diffSource === "pr"));
   const [lazyDiffStatsByPath, setLazyDiffStatsByPath] = useState<
     Record<string, DiffLineStats>
   >({});
