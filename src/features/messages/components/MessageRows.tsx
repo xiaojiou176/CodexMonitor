@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import Check from "lucide-react/dist/esm/icons/check";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import X from "lucide-react/dist/esm/icons/x";
-import type { ConversationItem } from "../../../types";
+import type { ConversationItem, ThreadPhase } from "../../../types";
 import { languageFromPath } from "../../../utils/syntax";
 import { DiffBlock } from "../../git/components/DiffBlock";
 import {
@@ -33,6 +33,7 @@ type MarkdownFileLinkProps = {
 type WorkingIndicatorProps = {
   isThinking: boolean;
   isStreaming?: boolean;
+  threadPhase?: ThreadPhase | null;
   processingStartedAt?: number | null;
   lastDurationMs?: number | null;
   hasItems: boolean;
@@ -379,6 +380,7 @@ const PHASE_LABELS: Record<"start" | "in-progress", string> = {
 export const WorkingIndicator = memo(function WorkingIndicator({
   isThinking,
   isStreaming = false,
+  threadPhase = null,
   processingStartedAt = null,
   lastDurationMs = null,
   hasItems,
@@ -420,6 +422,11 @@ export const WorkingIndicator = memo(function WorkingIndicator({
   }, [isThinking, pollingIntervalMs, showPollingFetchStatus]);
 
   const phase = deriveStreamingPhase(isThinking, hasItems, isStreaming, elapsedMs);
+  const waitingUser = threadPhase === "waiting_user";
+  const statusText = waitingUser
+    ? "等待你处理审批/输入"
+    : (reasoningLabel || (phase !== "done" ? PHASE_LABELS[phase] : "Agent 正在输出…"));
+  const statusBadge = waitingUser ? "等待你" : (phase === "start" ? "等待中" : "输出中");
 
   return (
     <>
@@ -429,11 +436,9 @@ export const WorkingIndicator = memo(function WorkingIndicator({
           <div className="working-timer">
             <span className="working-timer-clock">{formatDurationMs(elapsedMs)}</span>
           </div>
-          <span className="working-text">
-            {reasoningLabel || (phase !== "done" ? PHASE_LABELS[phase] : "Agent 正在输出…")}
-          </span>
+          <span className="working-text">{statusText}</span>
           <span className="working-phase-badge" aria-label={`阶段：${phase}`}>
-            {phase === "start" ? "等待中" : "输出中"}
+            {statusBadge}
           </span>
         </div>
       )}

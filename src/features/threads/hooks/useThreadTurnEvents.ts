@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { Dispatch, MutableRefObject } from "react";
-import type { TurnPlan } from "../../../types";
+import type { ThreadPhase, TurnPlan } from "../../../types";
 import { interruptTurn as interruptTurnService } from "../../../services/tauri";
 import { getThreadTimestamp } from "../../../utils/threadItems";
 import {
@@ -18,6 +18,7 @@ type UseThreadTurnEventsOptions = {
   isThreadHidden: (workspaceId: string, threadId: string) => boolean;
   markProcessing: (threadId: string, isProcessing: boolean) => void;
   markReviewing: (threadId: string, isReviewing: boolean) => void;
+  setThreadPhase: (threadId: string, phase: ThreadPhase) => void;
   markThreadError?: (threadId: string, message: string) => void;
   setActiveTurnId: (threadId: string, turnId: string | null) => void;
   pendingInterruptsRef: MutableRefObject<Set<string>>;
@@ -34,6 +35,7 @@ export function useThreadTurnEvents({
   isThreadHidden,
   markProcessing,
   markReviewing,
+  setThreadPhase,
   markThreadError,
   setActiveTurnId,
   pendingInterruptsRef,
@@ -146,6 +148,7 @@ export function useThreadTurnEvents({
         return;
       }
       markProcessing(threadId, true);
+      setThreadPhase(threadId, "starting");
       if (turnId) {
         setActiveTurnId(threadId, turnId);
       }
@@ -156,12 +159,33 @@ export function useThreadTurnEvents({
       normalizeNonEmptyString,
       pendingInterruptsRef,
       resolveCurrentModel,
+      setThreadPhase,
       setActiveTurnId,
     ],
   );
 
   const onTurnCompleted = useCallback(
-    (_workspaceId: string, threadId: string, turnId: string) => {
+    (
+      _workspaceId: string,
+      threadId: string,
+      turnId: string,
+      metadata?: {
+        status: "completed" | "failed" | "interrupted" | null;
+        errorMessage: string | null;
+      },
+    ) => {
+      if (metadata?.status === "failed") {
+        const message = metadata.errorMessage
+          ? `Turn failed: ${metadata.errorMessage}`
+          : "Turn failed.";
+        markThreadError?.(threadId, message);
+        pushThreadErrorMessage(threadId, message);
+        setThreadPhase(threadId, "failed");
+      } else if (metadata?.status === "interrupted") {
+        setThreadPhase(threadId, "interrupted");
+      } else {
+        setThreadPhase(threadId, "completed");
+      }
       markProcessing(threadId, false);
       setActiveTurnId(threadId, null);
       pendingInterruptsRef.current.delete(threadId);
@@ -172,7 +196,10 @@ export function useThreadTurnEvents({
     [
       dispatch,
       markProcessing,
+      markThreadError,
       pendingInterruptsRef,
+      pushThreadErrorMessage,
+      setThreadPhase,
       setActiveTurnId,
       shouldClearCompletedPlan,
     ],
@@ -262,6 +289,7 @@ export function useThreadTurnEvents({
         ? `Turn failed: ${payload.message}`
         : "Turn failed.";
       markThreadError?.(threadId, message);
+      setThreadPhase(threadId, "failed");
       pushThreadErrorMessage(threadId, message);
       safeMessageActivity();
     },
@@ -272,6 +300,7 @@ export function useThreadTurnEvents({
       markThreadError,
       pushThreadErrorMessage,
       safeMessageActivity,
+      setThreadPhase,
       setActiveTurnId,
     ],
   );

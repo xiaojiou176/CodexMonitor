@@ -33,6 +33,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const isThreadHidden = vi.fn(() => false);
   const markProcessing = vi.fn();
   const markReviewing = vi.fn();
+  const setThreadPhase = vi.fn();
   const setActiveTurnId = vi.fn();
   const pushThreadErrorMessage = vi.fn();
   const safeMessageActivity = vi.fn();
@@ -52,6 +53,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
       isThreadHidden,
       markProcessing,
       markReviewing,
+      setThreadPhase,
       setActiveTurnId,
       pendingInterruptsRef,
       pushThreadErrorMessage,
@@ -67,6 +69,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
     isThreadHidden,
     markProcessing,
     markReviewing,
+    setThreadPhase,
     setActiveTurnId,
     pushThreadErrorMessage,
     safeMessageActivity,
@@ -326,6 +329,7 @@ describe("useThreadTurnEvents", () => {
     const isThreadHidden = vi.fn(() => false);
     const markProcessing = vi.fn();
     const markReviewing = vi.fn();
+    const setThreadPhase = vi.fn();
     const setActiveTurnId = vi.fn();
     const pushThreadErrorMessage = vi.fn();
     const safeMessageActivity = vi.fn();
@@ -343,6 +347,7 @@ describe("useThreadTurnEvents", () => {
         isThreadHidden,
         markProcessing,
         markReviewing,
+        setThreadPhase,
         setActiveTurnId,
         pendingInterruptsRef,
         pushThreadErrorMessage,

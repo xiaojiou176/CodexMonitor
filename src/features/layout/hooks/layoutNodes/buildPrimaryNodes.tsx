@@ -31,15 +31,16 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
     ? options.threadStatusById[options.activeThreadId] ?? null
     : null;
 
-  // The agent is "streaming" when it has produced at least one non-user item
-  // while the turn is still in progress.  This lets the WorkingIndicator
-  // accurately show "输出中" only when content is actually arriving.
   const hasAgentOutput =
     options.isProcessing &&
     options.activeItems.some(
       (item) =>
         item.kind !== "message" || item.role !== "user",
     );
+  const isStreaming =
+    activeThreadStatus?.phase != null
+      ? activeThreadStatus.phase === "streaming"
+      : hasAgentOutput;
 
   const sidebarNode = (
     <Sidebar
@@ -117,7 +118,8 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onOpenThreadLink={options.onOpenThreadLink}
       onReachTop={options.onReachMessagesTop}
       isThinking={options.isProcessing}
-      isStreaming={hasAgentOutput}
+      isStreaming={isStreaming}
+      threadPhase={activeThreadStatus?.phase ?? null}
       isLoadingMessages={
         options.activeThreadId
           ? options.threadResumeLoadingById[options.activeThreadId] ?? false

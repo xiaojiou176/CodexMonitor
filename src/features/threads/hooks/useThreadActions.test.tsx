@@ -192,13 +192,14 @@ describe("useThreadActions", () => {
   });
 
   it("skips resume while processing unless forced", async () => {
-    const options = {
+    const options: Partial<Parameters<typeof useThreadActions>[0]> = {
       loadedThreadsRef: { current: { "thread-1": true } },
       threadStatusById: {
         "thread-1": {
           isProcessing: true,
           hasUnread: false,
           isReviewing: false,
+          phase: "starting",
           processingStartedAt: 123,
           lastDurationMs: null,
         },
@@ -432,6 +433,7 @@ describe("useThreadActions", () => {
           isProcessing: true,
           hasUnread: false,
           isReviewing: false,
+          phase: "starting",
           processingStartedAt: 10,
           lastDurationMs: null,
         },

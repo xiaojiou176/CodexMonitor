@@ -5,10 +5,14 @@ import { waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppServerEvent } from "../../../types";
 import { subscribeAppServerEvents } from "../../../services/events";
+import { respondToServerRequest } from "../../../services/tauri";
 import { useAppServerEvents } from "./useAppServerEvents";
 
 vi.mock("../../../services/events", () => ({
   subscribeAppServerEvents: vi.fn(),
+}));
+vi.mock("../../../services/tauri", () => ({
+  respondToServerRequest: vi.fn(),
 }));
 const pushErrorToastMock = vi.fn();
 vi.mock("../../../services/toasts", () => ({
@@ -29,6 +33,8 @@ beforeEach(() => {
   listener = null;
   unlisten.mockReset();
   pushErrorToastMock.mockReset();
+  vi.mocked(respondToServerRequest).mockReset();
+  vi.mocked(respondToServerRequest).mockResolvedValue(undefined);
   vi.mocked(subscribeAppServerEvents).mockImplementation((cb) => {
     listener = cb;
     return unlisten;
@@ -461,6 +467,38 @@ describe("useAppServerEvents", () => {
     });
   });
 
+  it("accepts thread/compacted without incompatibility toast", async () => {
+    const handlers: Handlers = {
+      onAppServerEvent: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+    expect(listener).toBeTypeOf("function");
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-compacted",
+        message: {
+          method: "thread/compacted",
+          params: { threadId: "thread-1" },
+        },
+      });
+    });
+
+    expect(handlers.onAppServerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspace_id: "ws-compacted",
+        message: expect.objectContaining({
+          method: "thread/compacted",
+        }),
+      }),
+    );
+    expect(pushErrorToastMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("routes legacy codex/event aliases without incompatibility toast", async () => {
     const handlers: Handlers = {
       onAgentMessageDelta: vi.fn(),
@@ -753,11 +791,10 @@ describe("useAppServerEvents", () => {
     });
   });
 
-  it("falls back to degraded turn completion when turn/completed is missing", async () => {
+  it("does not synthesize turn completion from item/completed without turn/completed", async () => {
     vi.useFakeTimers();
     const handlers: Handlers = {
       onTurnCompleted: vi.fn(),
-      onAppServerEvent: vi.fn(),
       onItemCompleted: vi.fn(),
       onAgentMessageCompleted: vi.fn(),
     };
@@ -779,28 +816,10 @@ describe("useAppServerEvents", () => {
     expect(handlers.onTurnCompleted).not.toHaveBeenCalled();
 
     await act(async () => {
-      vi.advanceTimersByTime(15_000);
+      vi.advanceTimersByTime(120_000);
     });
 
-    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
-      "ws-1",
-      "thread-1",
-      "turn-1",
-    );
-    expect(handlers.onAppServerEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspace_id: "ws-1",
-        message: {
-          method: "codex/turnCompletionFallback",
-          params: expect.objectContaining({
-            threadId: "thread-1",
-            turnId: "turn-1",
-            itemId: "item-1",
-            timeoutMs: 15_000,
-          }),
-        },
-      }),
-    );
+    expect(handlers.onTurnCompleted).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
@@ -808,129 +827,83 @@ describe("useAppServerEvents", () => {
     vi.useRealTimers();
   });
 
-  it("does not fallback while there are pending items", async () => {
-    vi.useFakeTimers();
-    const handlers: Handlers = {
-      onTurnCompleted: vi.fn(),
-      onAppServerEvent: vi.fn(),
-      onItemStarted: vi.fn(),
-      onItemCompleted: vi.fn(),
-      onAgentMessageCompleted: vi.fn(),
-    };
-    const { root } = await mount(handlers);
+  it("responds safely to item/tool/call without blocking turn flow", async () => {
+    const { root } = await mount({});
 
     act(() => {
       listener?.({
-        workspace_id: "ws-1",
+        workspace_id: "ws-tools",
         message: {
-          method: "item/completed",
+          method: "item/tool/call",
+          id: 42,
           params: {
             threadId: "thread-1",
-            turnId: "turn-1",
-            item: { type: "agentMessage", id: "msg-1", text: "Done" },
-          },
-        },
-      });
-      listener?.({
-        workspace_id: "ws-1",
-        message: {
-          method: "item/started",
-          params: {
-            threadId: "thread-1",
-            item: { type: "commandExecution", id: "cmd-1" },
+            itemId: "tool-1",
           },
         },
       });
     });
 
-    await act(async () => {
-      vi.advanceTimersByTime(15_000);
-    });
-    expect(handlers.onTurnCompleted).not.toHaveBeenCalled();
-
-    act(() => {
-      listener?.({
-        workspace_id: "ws-1",
-        message: {
-          method: "item/completed",
-          params: {
-            threadId: "thread-1",
-            item: { type: "commandExecution", id: "cmd-1" },
-          },
+    await waitFor(() => {
+      expect(respondToServerRequest).toHaveBeenCalledWith(
+        "ws-tools",
+        42,
+        {
+          contentItems: [
+            {
+              type: "inputText",
+              text: "Dynamic tool call is not supported by this client build.",
+            },
+          ],
+          success: false,
         },
-      });
+      );
     });
-
-    await act(async () => {
-      vi.advanceTimersByTime(2_000);
-    });
-    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
-      "ws-1",
-      "thread-1",
-      "turn-1",
-    );
 
     await act(async () => {
       root.unmount();
     });
-    vi.useRealTimers();
   });
 
-  it("waits for a quiet window before fallback completion", async () => {
-    vi.useFakeTimers();
-    const handlers: Handlers = {
-      onTurnCompleted: vi.fn(),
-      onAppServerEvent: vi.fn(),
-      onPlanDelta: vi.fn(),
-      onItemCompleted: vi.fn(),
-      onAgentMessageCompleted: vi.fn(),
-    };
-    const { root } = await mount(handlers);
+  it("accepts protocol compatibility no-op methods without error toasts", async () => {
+    const { root } = await mount({});
 
     act(() => {
       listener?.({
-        workspace_id: "ws-1",
+        workspace_id: "ws-compat-noop",
         message: {
-          method: "item/completed",
-          params: {
-            threadId: "thread-1",
-            turnId: "turn-1",
-            item: { type: "agentMessage", id: "msg-1", text: "Done" },
-          },
+          method: "rawResponseItem/completed",
+          params: { threadId: "thread-1", itemId: "raw-1" },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-compat-noop",
+        message: {
+          method: "item/mcpToolCall/progress",
+          params: { threadId: "thread-1", itemId: "mcp-1", progress: 0.5 },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-compat-noop",
+        message: {
+          method: "app/list/updated",
+          params: { apps: [] },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-compat-noop",
+        message: {
+          method: "sessionConfigured",
+          params: {},
         },
       });
     });
 
-    await act(async () => {
-      vi.advanceTimersByTime(14_900);
-    });
-    act(() => {
-      listener?.({
-        workspace_id: "ws-1",
-        message: {
-          method: "item/plan/delta",
-          params: { threadId: "thread-1", itemId: "plan-1", delta: "- step" },
-        },
-      });
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(200);
-    });
-    expect(handlers.onTurnCompleted).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(2_000);
-    });
-    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
-      "ws-1",
-      "thread-1",
-      "turn-1",
-    );
+    expect(pushErrorToastMock).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
     });
-    vi.useRealTimers();
   });
 
   it("routes detailed turn/account/item events and guards empty payload branches", async () => {
@@ -1224,7 +1197,15 @@ describe("useAppServerEvents", () => {
       id: "cmd-2",
       type: "commandExecution",
     });
-    expect(handlers.onTurnCompleted).toHaveBeenCalledWith("ws-2", "thread-2", "turn-2");
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-2",
+      "thread-2",
+      "turn-2",
+      {
+        status: null,
+        errorMessage: null,
+      },
+    );
 
     await act(async () => {
       root.unmount();
@@ -1258,69 +1239,6 @@ describe("useAppServerEvents", () => {
       });
     });
     expect(pushErrorToastMock).toHaveBeenCalledTimes(2);
-
-    await act(async () => {
-      root.unmount();
-    });
-    vi.useRealTimers();
-  });
-
-  it("forces fallback completion after max wait even if pending items never finish", async () => {
-    vi.useFakeTimers();
-    const handlers: Handlers = {
-      onTurnCompleted: vi.fn(),
-      onAppServerEvent: vi.fn(),
-      onItemStarted: vi.fn(),
-      onItemCompleted: vi.fn(),
-      onAgentMessageCompleted: vi.fn(),
-    };
-    const { root } = await mount(handlers);
-
-    act(() => {
-      listener?.({
-        workspace_id: "ws-maxwait",
-        message: {
-          method: "item/completed",
-          params: {
-            threadId: "thread-maxwait",
-            turnId: "turn-maxwait",
-            item: { type: "agentMessage", id: "msg-maxwait", text: "Done" },
-          },
-        },
-      });
-      listener?.({
-        workspace_id: "ws-maxwait",
-        message: {
-          method: "item/started",
-          params: {
-            threadId: "thread-maxwait",
-            item: { type: "commandExecution", id: "cmd-stuck" },
-          },
-        },
-      });
-    });
-
-    await act(async () => {
-      vi.advanceTimersByTime(91_000);
-    });
-
-    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
-      "ws-maxwait",
-      "thread-maxwait",
-      "turn-maxwait",
-    );
-    expect(handlers.onAppServerEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspace_id: "ws-maxwait",
-        message: {
-          method: "codex/turnCompletionFallback",
-          params: expect.objectContaining({
-            maxWaitReached: true,
-            pendingItems: 1,
-          }),
-        },
-      }),
-    );
 
     await act(async () => {
       root.unmount();
@@ -1613,7 +1531,7 @@ describe("useAppServerEvents", () => {
     });
   });
 
-  it("clears fallback timers and pending items by thread/workspace without cross-thread bleed", async () => {
+  it("keeps completion scoped to explicit turn/completed events", async () => {
     vi.useFakeTimers();
     const onWorkspaceDisconnected = vi.fn();
     const onTurnCompleted = vi.fn();
@@ -1727,9 +1645,14 @@ describe("useAppServerEvents", () => {
     ).toBe(false);
     expect(
       completionCalls.some(
-        (call) => call[0] === "ws-b" && call[1] === "thread-b" && call[2] === "turn-b",
+        (call) => call[0] === "ws-a" && call[1] === "thread-a" && call[2] === "turn-a",
       ),
     ).toBe(true);
+    expect(
+      completionCalls.some(
+        (call) => call[0] === "ws-b" && call[1] === "thread-b" && call[2] === "turn-b",
+      ),
+    ).toBe(false);
 
     await act(async () => {
       root.unmount();

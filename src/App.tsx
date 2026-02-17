@@ -737,6 +737,7 @@ function MainApp() {
     setActiveThreadId,
     activeThreadId,
     activeItems,
+    itemsByThread,
     approvals,
     userInputRequests,
     threadsByWorkspace,
@@ -798,6 +799,7 @@ function MainApp() {
     handleUserInputSubmit,
     refreshAccountInfo,
     refreshAccountRateLimits,
+    getWorkspaceLastAliveAt,
     resetThreadRuntimeState,
   } = useThreads({
     workspaces,
@@ -1343,6 +1345,7 @@ function MainApp() {
     isReviewing,
     threadStatusById,
     threadWorkspaceById,
+    itemsByThread,
     workspacesById,
     steerEnabled: appSettings.steerEnabled,
     appsEnabled: appSettings.experimentalAppsEnabled,
@@ -1360,6 +1363,7 @@ function MainApp() {
     startApps,
     startMcp,
     startStatus,
+    getWorkspaceLastAliveAt,
     onRecoverStaleThread: resetThreadRuntimeState,
   });
 

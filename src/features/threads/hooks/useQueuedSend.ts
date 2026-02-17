@@ -1,14 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { QueueHealthEntry, QueuedMessage, WorkspaceInfo } from "../../../types";
+import type {
+  ConversationItem,
+  QueueHealthEntry,
+  QueuedMessage,
+  ThreadPhase,
+  WorkspaceInfo,
+} from "../../../types";
+import {
+  evaluateThreadStaleState,
+  hasRunningCommandExecution,
+} from "./threadStalePolicy";
 
 const QUEUED_MESSAGES_STORAGE_KEY = "codexmonitor.queuedMessagesByThread";
-const PROCESSING_STALE_MS = 90_000;
-const TURN_START_STALE_MS = 30_000;
 const MAX_AUTO_RETRY_PER_THREAD = 1;
 
 type ThreadStatusSnapshot = {
   isProcessing: boolean;
   isReviewing: boolean;
+  phase: ThreadPhase;
   processingStartedAt: number | null;
   lastDurationMs: number | null;
 };
@@ -127,12 +136,15 @@ type UseQueuedSendOptions = {
     {
       isProcessing?: boolean;
       isReviewing?: boolean;
+      phase?: ThreadPhase;
       processingStartedAt?: number | null;
       lastDurationMs?: number | null;
     }
   >;
   threadWorkspaceById?: Record<string, string>;
+  itemsByThread?: Record<string, ConversationItem[]>;
   workspacesById?: Map<string, WorkspaceInfo>;
+  getWorkspaceLastAliveAt?: (workspaceId: string) => number | null | undefined;
   steerEnabled: boolean;
   appsEnabled: boolean;
   activeModel?: string | null;
@@ -245,7 +257,9 @@ export function useQueuedSend({
   isReviewing,
   threadStatusById,
   threadWorkspaceById,
+  itemsByThread = {},
   workspacesById,
+  getWorkspaceLastAliveAt,
   steerEnabled,
   appsEnabled,
   activeModel = null,
@@ -315,6 +329,7 @@ export function useQueuedSend({
         return {
           isProcessing: isProcessing || Boolean(activeTurnId),
           isReviewing,
+          phase: status?.phase ?? "completed",
           processingStartedAt: status?.processingStartedAt ?? null,
           lastDurationMs: status?.lastDurationMs ?? null,
         };
@@ -322,6 +337,7 @@ export function useQueuedSend({
       return {
         isProcessing: Boolean(status?.isProcessing),
         isReviewing: Boolean(status?.isReviewing),
+        phase: status?.phase ?? "completed",
         processingStartedAt: status?.processingStartedAt ?? null,
         lastDurationMs: status?.lastDurationMs ?? null,
       };
@@ -365,6 +381,48 @@ export function useQueuedSend({
     [activeThreadId, activeWorkspace, queuedByThread, threadWorkspaceById, workspacesById],
   );
 
+  const hasRunningCommandExecutionForThread = useCallback(
+    (threadId: string) => {
+      return hasRunningCommandExecution(itemsByThread[threadId]);
+    },
+    [itemsByThread],
+  );
+
+  const resolveLastAliveAtForThread = useCallback(
+    (threadId: string) => {
+      if (!getWorkspaceLastAliveAt) {
+        return null;
+      }
+      const workspaceId = resolveWorkspaceForThread(threadId).workspaceId;
+      if (!workspaceId) {
+        return null;
+      }
+      const lastAliveAt = getWorkspaceLastAliveAt(workspaceId);
+      if (
+        typeof lastAliveAt !== "number"
+        || !Number.isFinite(lastAliveAt)
+        || lastAliveAt <= 0
+      ) {
+        return null;
+      }
+      return lastAliveAt;
+    },
+    [getWorkspaceLastAliveAt, resolveWorkspaceForThread],
+  );
+
+  const evaluateStaleStateForThread = useCallback(
+    (threadId: string, startedAt: number | null | undefined, now: number) => {
+      return evaluateThreadStaleState({
+        now,
+        startedAt,
+        lastAliveAt: resolveLastAliveAtForThread(threadId),
+        hasRunningCommandExecution:
+          hasRunningCommandExecutionForThread(threadId),
+      });
+    },
+    [hasRunningCommandExecutionForThread, resolveLastAliveAtForThread],
+  );
+
   const globallyBlockedThreadIds = useMemo(() => {
     const now = Date.now();
     const threadIds = new Set<string>([
@@ -382,11 +440,18 @@ export function useQueuedSend({
         blockedThreadIds.add(threadId);
         return;
       }
+      if (status.phase === "waiting_user") {
+        blockedThreadIds.add(threadId);
+        return;
+      }
 
       if (status.isProcessing) {
-        const startedAt = status.processingStartedAt;
-        const processingAge = startedAt ? Math.max(0, now - startedAt) : 0;
-        const isProcessingStale = Boolean(startedAt && processingAge >= PROCESSING_STALE_MS);
+        const staleState = evaluateStaleStateForThread(
+          threadId,
+          status.processingStartedAt,
+          now,
+        );
+        const isProcessingStale = staleState.isStale;
         if (!isProcessingStale) {
           blockedThreadIds.add(threadId);
           return;
@@ -399,9 +464,10 @@ export function useQueuedSend({
       }
 
       const inFlightSince = inFlightSinceByThread[threadId] ?? inFlightItem.createdAt;
-      const pendingMs = Math.max(0, now - inFlightSince);
       const isAwaitingTurnStart = !hasStartedByThread[threadId];
-      const isAwaitingTurnStartStale = isAwaitingTurnStart && pendingMs >= TURN_START_STALE_MS;
+      const isAwaitingTurnStartStale =
+        isAwaitingTurnStart
+        && evaluateStaleStateForThread(threadId, inFlightSince, now).isStale;
 
       if (!isAwaitingTurnStartStale) {
         blockedThreadIds.add(threadId);
@@ -417,6 +483,7 @@ export function useQueuedSend({
     inFlightSinceByThread,
     queuedByThread,
     threadStatusById,
+    evaluateStaleStateForThread,
   ]);
 
   const queueHealthEntries = useMemo<QueueHealthEntry[]>(() => {
@@ -441,11 +508,15 @@ export function useQueuedSend({
       const hasQueueArtifacts =
         queueLength > 0 || inFlight || Boolean(lastFailureReason) || Boolean(lastFailureAt);
       const isStatusOnlyEntry = !hasQueueArtifacts;
+      const processingStaleState = evaluateStaleStateForThread(
+        threadId,
+        status.processingStartedAt,
+        now,
+      );
       const isProcessingStatusOnlyStale =
         isStatusOnlyEntry
         && status.isProcessing
-        && Boolean(status.processingStartedAt)
-        && now - (status.processingStartedAt ?? 0) >= PROCESSING_STALE_MS;
+        && processingStaleState.isStale;
 
       if (isStatusOnlyEntry && threadId !== activeThreadId) {
         return;
@@ -455,7 +526,12 @@ export function useQueuedSend({
         return;
       }
 
-      if (isStatusOnlyEntry && !status.isProcessing && !status.isReviewing) {
+      if (
+        isStatusOnlyEntry &&
+        !status.isProcessing &&
+        !status.isReviewing &&
+        status.phase !== "waiting_user"
+      ) {
         return;
       }
 
@@ -466,6 +542,8 @@ export function useQueuedSend({
       let blockedReason: QueueHealthEntry["blockedReason"] = null;
       if (status.isReviewing) {
         blockedReason = "reviewing";
+      } else if (status.phase === "waiting_user") {
+        blockedReason = "waiting_user";
       } else if (status.isProcessing) {
         blockedReason = "processing";
       } else if (inFlight && !hasStartedByThread[threadId]) {
@@ -487,16 +565,27 @@ export function useQueuedSend({
       }
 
       let blockedForMs: number | null = null;
+      let isStale = false;
       if (blockedReason === "processing" && status.processingStartedAt) {
-        blockedForMs = Math.max(0, now - status.processingStartedAt);
+        const staleState = evaluateStaleStateForThread(
+          threadId,
+          status.processingStartedAt,
+          now,
+        );
+        blockedForMs = staleState.processingAgeMs;
+        isStale = staleState.isStale;
       } else if (blockedReason === "awaiting_turn_start_event") {
         const inFlightSince = inFlightSinceByThread[threadId] ?? inFlightByThread[threadId]?.createdAt ?? null;
-        blockedForMs = inFlightSince ? Math.max(0, now - inFlightSince) : null;
+        if (inFlightSince) {
+          const staleState = evaluateStaleStateForThread(
+            threadId,
+            inFlightSince,
+            now,
+          );
+          blockedForMs = staleState.processingAgeMs;
+          isStale = staleState.isStale;
+        }
       }
-
-      const isStale =
-        (blockedReason === "processing" && blockedForMs !== null && blockedForMs >= PROCESSING_STALE_MS)
-        || (blockedReason === "awaiting_turn_start_event" && blockedForMs !== null && blockedForMs >= TURN_START_STALE_MS);
 
       const lastStatusUpdatedAt = blockedReason === "processing"
         ? status.processingStartedAt
@@ -551,6 +640,7 @@ export function useQueuedSend({
     queuedByThread,
     resolveWorkspaceForThread,
     threadStatusById,
+    evaluateStaleStateForThread,
   ]);
 
   useEffect(() => {
@@ -986,10 +1076,18 @@ export function useQueuedSend({
 
     for (const [threadId, item] of inFlightEntries) {
       const status = getThreadStatus(threadId);
+      if (status.phase === "waiting_user") {
+        if (!hasStartedByThread[threadId]) {
+          startedUpdates[threadId] = true;
+        }
+        continue;
+      }
       if (status.isProcessing) {
-        const startedAt = status.processingStartedAt;
-        const processingAge = startedAt ? Math.max(0, now - startedAt) : 0;
-        const isProcessingStale = Boolean(startedAt && processingAge >= PROCESSING_STALE_MS);
+        const isProcessingStale = evaluateStaleStateForThread(
+          threadId,
+          status.processingStartedAt,
+          now,
+        ).isStale;
         if (isProcessingStale && threadId !== activeThreadId) {
           clearThreadIds.push(threadId);
           staleRecoverThreadIds.push(threadId);
@@ -1010,8 +1108,12 @@ export function useQueuedSend({
       }
 
       const inFlightSince = inFlightSinceByThread[threadId] ?? item.createdAt;
-      const pendingMs = Math.max(0, now - inFlightSince);
-      if (pendingMs >= TURN_START_STALE_MS) {
+      const isAwaitingTurnStartStale = evaluateStaleStateForThread(
+        threadId,
+        inFlightSince,
+        now,
+      ).isStale;
+      if (isAwaitingTurnStartStale) {
         clearThreadIds.push(threadId);
         staleRecoverThreadIds.push(threadId);
         requeueItems.push([threadId, item]);
@@ -1093,6 +1195,7 @@ export function useQueuedSend({
     inFlightByThread,
     inFlightSinceByThread,
     onRecoverStaleThread,
+    evaluateStaleStateForThread,
   ]);
 
   useEffect(() => {
@@ -1113,6 +1216,7 @@ export function useQueuedSend({
       activeThreadId && queuedThreadIds.includes(activeThreadId)
         ? [activeThreadId, ...queuedThreadIds.filter((threadId) => threadId !== activeThreadId)]
         : queuedThreadIds;
+    const now = Date.now();
 
     const dispatchableThread = orderedThreadIds.find((candidateThreadId) => {
       if (inFlightByThread[candidateThreadId]) {
@@ -1123,14 +1227,19 @@ export function useQueuedSend({
       if (status.isReviewing) {
         return false;
       }
+      if (status.phase === "waiting_user") {
+        return false;
+      }
 
       if (status.isProcessing) {
         if (candidateThreadId === activeThreadId) {
           return false;
         }
-        const startedAt = status.processingStartedAt;
-        const processingAge = startedAt ? Date.now() - startedAt : 0;
-        const isProcessingStale = Boolean(startedAt && processingAge >= PROCESSING_STALE_MS);
+        const isProcessingStale = evaluateStaleStateForThread(
+          candidateThreadId,
+          status.processingStartedAt,
+          now,
+        ).isStale;
         if (!isProcessingStale) {
           return false;
         }
@@ -1303,6 +1412,7 @@ export function useQueuedSend({
     activeModel,
     activeEffort,
     activeCollaborationMode,
+    evaluateStaleStateForThread,
   ]);
 
   return {

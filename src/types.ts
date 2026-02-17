@@ -576,9 +576,20 @@ export type QueuedMessage = {
   collaborationMode?: Record<string, unknown> | null;
 };
 
+export type ThreadPhase =
+  | "starting"
+  | "streaming"
+  | "tool_running"
+  | "waiting_user"
+  | "completed"
+  | "interrupted"
+  | "failed"
+  | "stale_recovered";
+
 export type QueueHealthBlockedReason =
   | "processing"
   | "reviewing"
+  | "waiting_user"
   | "workspace_unresolved"
   | "command_requires_active_thread"
   | "awaiting_turn_start_event"

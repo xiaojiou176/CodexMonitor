@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { Dispatch, MutableRefObject } from "react";
-import type { AppServerEvent, DebugEntry, TurnPlan } from "../../../types";
+import type {
+  AppServerEvent,
+  DebugEntry,
+  ThreadPhase,
+  TurnPlan,
+} from "../../../types";
 import { getAppServerRawMethod } from "../../../utils/appServerEvents";
 import { useThreadApprovalEvents } from "./useThreadApprovalEvents";
 import { useThreadItemEvents } from "./useThreadItemEvents";
@@ -82,6 +87,7 @@ type ThreadEventHandlersOptions = {
   isThreadHidden: (workspaceId: string, threadId: string) => boolean;
   markProcessing: (threadId: string, isProcessing: boolean) => void;
   markReviewing: (threadId: string, isReviewing: boolean) => void;
+  setThreadPhase: (threadId: string, phase: ThreadPhase) => void;
   markThreadError?: (threadId: string, message: string) => void;
   setActiveTurnId: (threadId: string, turnId: string | null) => void;
   safeMessageActivity: () => void;
@@ -116,6 +122,7 @@ export function useThreadEventHandlers({
   isThreadHidden,
   markProcessing,
   markReviewing,
+  setThreadPhase,
   markThreadError,
   setActiveTurnId,
   safeMessageActivity,
@@ -133,8 +140,9 @@ export function useThreadEventHandlers({
   const onApprovalRequest = useThreadApprovalEvents({
     dispatch,
     approvalAllowlistRef,
+    setThreadPhase,
   });
-  const onRequestUserInput = useThreadUserInputEvents({ dispatch });
+  const onRequestUserInput = useThreadUserInputEvents({ dispatch, setThreadPhase });
   const onDebugRef = useRef(onDebug);
   const pendingStderrByWorkspaceRef = useRef<Map<string, PendingStderrBatch>>(
     new Map(),
@@ -164,6 +172,7 @@ export function useThreadEventHandlers({
     getCustomName,
     markProcessing,
     markReviewing,
+    setThreadPhase,
     safeMessageActivity,
     recordThreadActivity,
     applyCollabThreadLinks,
@@ -188,6 +197,7 @@ export function useThreadEventHandlers({
     isThreadHidden,
     markProcessing,
     markReviewing,
+    setThreadPhase,
     markThreadError,
     setActiveTurnId,
     pendingInterruptsRef,

@@ -21,6 +21,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const dispatch = vi.fn();
   const markProcessing = vi.fn();
   const markReviewing = vi.fn();
+  const setThreadPhase = vi.fn();
   const safeMessageActivity = vi.fn();
   const recordThreadActivity = vi.fn();
   const applyCollabThreadLinks = vi.fn();
@@ -34,6 +35,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
       getCustomName,
       markProcessing,
       markReviewing,
+      setThreadPhase,
       safeMessageActivity,
       recordThreadActivity,
       applyCollabThreadLinks,
@@ -47,6 +49,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
     dispatch,
     markProcessing,
     markReviewing,
+    setThreadPhase,
     safeMessageActivity,
     recordThreadActivity,
     applyCollabThreadLinks,

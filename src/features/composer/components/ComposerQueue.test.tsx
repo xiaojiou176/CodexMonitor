@@ -52,7 +52,7 @@ describe("ComposerQueue", () => {
     expect(screen.getByText("queued message 1")).not.toBeNull();
   });
 
-  it("shows blocked recovery action and retries all blocked threads", () => {
+  it("shows recovery action and retries only recoverable blocked threads", () => {
     const onRetryQueuedThread = vi.fn();
 
     render(
@@ -67,7 +67,7 @@ describe("ComposerQueue", () => {
             queueLength: 1,
             inFlight: true,
             blockedReason: "processing",
-            lastFailureReason: null,
+            lastFailureReason: "turn timed out",
             workspaceResolved: true,
             workspaceId: "workspace-a",
           },
@@ -77,6 +77,7 @@ describe("ComposerQueue", () => {
             inFlight: false,
             blockedReason: "workspace_unresolved",
             lastFailureReason: null,
+            isStale: true,
             workspaceResolved: false,
             workspaceId: null,
           },

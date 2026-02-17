@@ -2,6 +2,7 @@ type ThreadStatusSnapshot = {
   isProcessing: boolean;
   hasUnread: boolean;
   isReviewing: boolean;
+  phase?: string;
   processingStartedAt?: number | null;
   lastActivityAt?: number | null;
   lastErrorAt?: number | null;
@@ -40,6 +41,10 @@ export function deriveThreadVisualStatus(
 
   if (status.isReviewing) {
     return "reviewing";
+  }
+
+  if (status.phase === "waiting_user") {
+    return "waiting";
   }
 
   if (status.isProcessing) {

@@ -31,6 +31,7 @@ import type {
   ThreadListSortKey,
   ThreadSummary,
   ThreadTokenUsage,
+  ThreadPhase,
   TurnPlan,
   WorkspaceInfo,
 } from "../../../../types";
@@ -43,6 +44,7 @@ export type ThreadActivityStatus = {
   isProcessing: boolean;
   hasUnread: boolean;
   isReviewing: boolean;
+  phase?: ThreadPhase;
   processingStartedAt?: number | null;
   lastDurationMs?: number | null;
   lastActivityAt?: number | null;

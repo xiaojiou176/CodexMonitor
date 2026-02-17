@@ -197,7 +197,11 @@ fn parse_execution_policy_from_toml(contents: &str) -> (Option<String>, Option<S
     };
     let sandbox_mode = parsed
         .get("sandbox_mode")
-        .and_then(|value| value.as_str())
+        .and_then(|value| match value {
+            TomlValue::String(raw) => Some(raw.as_str()),
+            TomlValue::Table(table) => table.get("type").and_then(TomlValue::as_str),
+            _ => None,
+        })
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string);
@@ -439,5 +443,13 @@ mod tests {
         let (sandbox_mode, approval_policy) = parse_execution_policy_from_toml(input);
         assert_eq!(sandbox_mode, None);
         assert_eq!(approval_policy, None);
+    }
+
+    #[test]
+    fn parse_execution_policy_reads_inline_table_sandbox_mode() {
+        let input = "approval_policy = \"never\"\nsandbox_mode = { type = \"workspace-write\" }\n";
+        let (sandbox_mode, approval_policy) = parse_execution_policy_from_toml(input);
+        assert_eq!(sandbox_mode.as_deref(), Some("workspace-write"));
+        assert_eq!(approval_policy.as_deref(), Some("never"));
     }
 }

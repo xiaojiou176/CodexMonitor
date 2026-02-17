@@ -344,12 +344,19 @@ export async function startReview(
 export async function respondToServerRequest(
   workspaceId: string,
   requestId: number | string,
-  decision: "accept" | "decline",
+  decisionOrResult:
+    | "accept"
+    | "decline"
+    | Record<string, unknown>,
 ) {
+  const result =
+    typeof decisionOrResult === "string"
+      ? { decision: decisionOrResult }
+      : decisionOrResult;
   return invoke("respond_to_server_request", {
     workspaceId,
     requestId,
-    result: { decision },
+    result,
   });
 }
 

@@ -13,6 +13,7 @@ import type {
   OpenAppTarget,
   RequestUserInputRequest,
   RequestUserInputResponse,
+  ThreadPhase,
 } from "../../../types";
 import { isPlanReadyTaggedMessage } from "../../../utils/internalPlanReadyMessages";
 import { PlanReadyFollowupMessage } from "../../app/components/PlanReadyFollowupMessage";
@@ -145,6 +146,7 @@ type MessagesProps = {
   workspaceId?: string | null;
   isThinking: boolean;
   isStreaming?: boolean;
+  threadPhase?: ThreadPhase | null;
   isLoadingMessages?: boolean;
   processingStartedAt?: number | null;
   lastDurationMs?: number | null;
@@ -211,6 +213,7 @@ export const Messages = memo(function Messages({
   workspaceId = null,
   isThinking,
   isStreaming = false,
+  threadPhase = null,
   isLoadingMessages = false,
   processingStartedAt = null,
   lastDurationMs = null,
@@ -552,9 +555,12 @@ export const Messages = memo(function Messages({
     isStreaming,
     statusElapsedMs,
   );
+  const waitingUser = threadPhase === "waiting_user";
   const activityLabel =
-    latestReasoningLabel
-    || (activityPhase !== "done" ? MESSAGE_PHASE_LABELS[activityPhase] : "Agent 正在输出…");
+    waitingUser
+      ? "等待你处理审批/输入"
+      : (latestReasoningLabel
+        || (activityPhase !== "done" ? MESSAGE_PHASE_LABELS[activityPhase] : "Agent 正在输出…"));
 
   const visibleItems = useMemo(
     () =>
@@ -1006,7 +1012,7 @@ export const Messages = memo(function Messages({
           <span className="messages-status-text">{activityLabel}</span>
           <span className="messages-status-timer">{formatDurationMs(statusElapsedMs)}</span>
           <span className="messages-status-phase-badge">
-            {activityPhase === "start" ? "等待中" : "输出中"}
+            {waitingUser ? "等待你" : activityPhase === "start" ? "等待中" : "输出中"}
           </span>
         </div>
       )}
@@ -1046,6 +1052,7 @@ export const Messages = memo(function Messages({
       <WorkingIndicator
         isThinking={isThinking}
         isStreaming={isStreaming}
+        threadPhase={threadPhase}
         processingStartedAt={processingStartedAt}
         lastDurationMs={lastDurationMs}
         hasItems={items.length > 0}

@@ -96,9 +96,6 @@ export function useThreads({
   planByThreadRef.current = state.planByThread;
   itemsByThreadRef.current = state.itemsByThread;
   threadsByWorkspaceRef.current = state.threadsByWorkspace;
-  const { approvalAllowlistRef, handleApprovalDecision, handleApprovalRemember } =
-    useThreadApprovals({ dispatch, onDebug });
-  const { handleUserInputSubmit } = useThreadUserInput({ dispatch });
   const {
     customNamesRef,
     threadActivityRef,
@@ -199,10 +196,15 @@ export function useThreads({
     markReviewing,
     markThreadError,
     setActiveTurnId,
+    setThreadPhase,
     resetThreadRuntimeState,
   } = useThreadStatus({
     dispatch,
   });
+
+  const { approvalAllowlistRef, handleApprovalDecision, handleApprovalRemember } =
+    useThreadApprovals({ dispatch, setThreadPhase, onDebug });
+  const { handleUserInputSubmit } = useThreadUserInput({ dispatch, setThreadPhase });
 
   const pushThreadErrorMessage = useCallback(
     (threadId: string, message: string) => {
@@ -218,13 +220,15 @@ export function useThreads({
     [activeThreadId, dispatch],
   );
 
-  const { recordAlive, handleDisconnected } = useThreadStaleGuard({
+  const { recordAlive, handleDisconnected, getWorkspaceLastAliveAt } = useThreadStaleGuard({
     activeWorkspaceId,
     activeThreadId,
+    itemsByThread: state.itemsByThread,
     threadStatusById: state.threadStatusById,
     markProcessing,
     markReviewing,
     setActiveTurnId,
+    setThreadPhase,
     pushThreadErrorMessage,
   });
 
@@ -313,6 +317,7 @@ export function useThreads({
       }
 
       markReviewing(parentId, false);
+      setThreadPhase(parentId, "completed");
       markProcessing(parentId, false);
       setActiveTurnId(parentId, null);
 
@@ -346,6 +351,7 @@ export function useThreads({
       markReviewing,
       recordThreadActivity,
       safeMessageActivity,
+      setThreadPhase,
       setActiveTurnId,
       state.threadParentById,
       state.threadStatusById,
@@ -379,6 +385,7 @@ export function useThreads({
     markReviewing,
     markThreadError,
     setActiveTurnId,
+    setThreadPhase,
     safeMessageActivity,
     recordThreadActivity,
     onUserMessageCreated,
@@ -770,6 +777,7 @@ export function useThreads({
     activeThreadId,
     setActiveThreadId,
     activeItems,
+    itemsByThread: state.itemsByThread,
     approvals: state.approvals,
     userInputRequests: state.userInputRequests,
     threadsByWorkspace: state.threadsByWorkspace,
@@ -837,6 +845,7 @@ export function useThreads({
     handleApprovalDecision,
     handleApprovalRemember,
     handleUserInputSubmit,
+    getWorkspaceLastAliveAt,
     resetThreadRuntimeState,
   };
 }

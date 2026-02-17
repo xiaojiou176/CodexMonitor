@@ -205,6 +205,7 @@ describe("threadReducer", () => {
             isProcessing: false,
             hasUnread: false,
             isReviewing: false,
+            phase: "completed",
             processingStartedAt: null,
             lastDurationMs: null,
           },
@@ -235,6 +236,7 @@ describe("threadReducer", () => {
             isProcessing: true,
             hasUnread: false,
             isReviewing: false,
+            phase: "starting",
             processingStartedAt: 1000,
             lastDurationMs: null,
           },
@@ -259,15 +261,19 @@ describe("threadReducer", () => {
   });
 
   it("does not churn state for unchanged unread/review flags", () => {
-    const base = {
+    const base: ThreadState = {
       ...initialState,
       threadStatusById: {
         "thread-1": {
           isProcessing: false,
           hasUnread: true,
           isReviewing: true,
+          phase: "tool_running",
           processingStartedAt: null,
           lastDurationMs: 300,
+          lastActivityAt: null,
+          lastErrorAt: null,
+          lastErrorMessage: null,
         },
       },
     };

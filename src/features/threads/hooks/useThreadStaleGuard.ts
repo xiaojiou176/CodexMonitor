@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useRef } from "react";
+import type { ThreadPhase } from "../../../types";
 import type { ThreadState } from "./useThreadsReducer";
-
-/**
- * Maximum time (ms) an active thread can stay in `isProcessing` without
- * hitting stale detection.
- */
-const ACTIVE_THREAD_STALE_MS = 3 * 60_000;
-
-/**
- * Maximum silence window (ms) from the last workspace event before we treat a
- * processing thread as stalled.
- */
-const WORKSPACE_SILENCE_STALE_MS = 90_000;
+import {
+  evaluateThreadStaleState,
+  hasRunningCommandExecution,
+} from "./threadStalePolicy";
 
 /**
  * How often (ms) we check for staleness.
@@ -24,20 +17,24 @@ const STALE_RECOVERY_MESSAGE =
 type UseThreadStaleGuardOptions = {
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
+  itemsByThread: ThreadState["itemsByThread"];
   threadStatusById: ThreadState["threadStatusById"];
   markProcessing: (threadId: string, isProcessing: boolean) => void;
   markReviewing: (threadId: string, isReviewing: boolean) => void;
   setActiveTurnId: (threadId: string, turnId: string | null) => void;
+  setThreadPhase: (threadId: string, phase: ThreadPhase) => void;
   pushThreadErrorMessage: (threadId: string, message: string) => void;
 };
 
 export function useThreadStaleGuard({
   activeWorkspaceId,
   activeThreadId,
+  itemsByThread,
   threadStatusById,
   markProcessing,
   markReviewing,
   setActiveTurnId,
+  setThreadPhase,
   pushThreadErrorMessage,
 }: UseThreadStaleGuardOptions) {
   // Tracks the last time we received *any* event from each workspace.
@@ -47,6 +44,17 @@ export function useThreadStaleGuard({
   const recordAlive = useCallback((workspaceId: string) => {
     lastAliveByWorkspaceRef.current[workspaceId] = Date.now();
   }, []);
+
+  const getWorkspaceLastAliveAt = useCallback((workspaceId: string) => {
+    return lastAliveByWorkspaceRef.current[workspaceId] ?? null;
+  }, []);
+
+  const hasRunningCommandExecutionForThread = useCallback(
+    (threadId: string) => {
+      return hasRunningCommandExecution(itemsByThread[threadId]);
+    },
+    [itemsByThread],
+  );
 
   /** Called when the workspace disconnects (codex/disconnected). */
   const handleDisconnected = useCallback(
@@ -61,6 +69,7 @@ export function useThreadStaleGuard({
         // We can't easily know which workspace a thread belongs to from the
         // status map alone.  For the active thread, we know its workspace.
         if (activeWorkspaceId === workspaceId && threadId === activeThreadId) {
+          setThreadPhase(threadId, "interrupted");
           markProcessing(threadId, false);
           markReviewing(threadId, false);
           setActiveTurnId(threadId, null);
@@ -73,6 +82,7 @@ export function useThreadStaleGuard({
       // Also reset if the active thread is processing (cover edge cases).
       if (activeThreadId && threadStatusById[activeThreadId]?.isProcessing) {
         if (activeWorkspaceId === workspaceId) {
+          setThreadPhase(activeThreadId, "interrupted");
           markProcessing(activeThreadId, false);
           markReviewing(activeThreadId, false);
           setActiveTurnId(activeThreadId, null);
@@ -89,13 +99,15 @@ export function useThreadStaleGuard({
       markReviewing,
       pushThreadErrorMessage,
       setActiveTurnId,
+      setThreadPhase,
       threadStatusById,
     ],
   );
 
   // Periodic check: only auto-recover when BOTH conditions are met:
   // 1) processing duration >= ACTIVE_THREAD_STALE_MS
-  // 2) event silence      >= WORKSPACE_SILENCE_STALE_MS
+  // 2) event silence      >= effective silence threshold
+  //    (default 90s, widened for running commandExecution items)
   useEffect(() => {
     const interval = window.setInterval(() => {
       if (!activeThreadId || !activeWorkspaceId) {
@@ -105,18 +117,21 @@ export function useThreadStaleGuard({
       if (!status?.isProcessing || !status.processingStartedAt) {
         return;
       }
+      if (status.phase === "waiting_user") {
+        return;
+      }
       const now = Date.now();
-      const processingAge = now - status.processingStartedAt;
-      if (processingAge < ACTIVE_THREAD_STALE_MS) {
+      const staleState = evaluateThreadStaleState({
+        now,
+        startedAt: status.processingStartedAt,
+        lastAliveAt: getWorkspaceLastAliveAt(activeWorkspaceId),
+        hasRunningCommandExecution:
+          hasRunningCommandExecutionForThread(activeThreadId),
+      });
+      if (!staleState.isStale) {
         return;
       }
-      // Check if we received any event recently.
-      const lastAlive = lastAliveByWorkspaceRef.current[activeWorkspaceId] ?? 0;
-      const hasAliveSignal = lastAlive > 0;
-      const silenceMs = hasAliveSignal ? Math.max(0, now - lastAlive) : processingAge;
-      if (silenceMs < WORKSPACE_SILENCE_STALE_MS) {
-        return;
-      }
+      setThreadPhase(activeThreadId, "stale_recovered");
       markProcessing(activeThreadId, false);
       markReviewing(activeThreadId, false);
       setActiveTurnId(activeThreadId, null);
@@ -129,12 +144,15 @@ export function useThreadStaleGuard({
   }, [
     activeThreadId,
     activeWorkspaceId,
+    getWorkspaceLastAliveAt,
+    hasRunningCommandExecutionForThread,
     markProcessing,
     markReviewing,
     pushThreadErrorMessage,
+    setThreadPhase,
     setActiveTurnId,
     threadStatusById,
   ]);
 
-  return { recordAlive, handleDisconnected };
+  return { recordAlive, handleDisconnected, getWorkspaceLastAliveAt };
 }

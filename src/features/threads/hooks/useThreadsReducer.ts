@@ -4,6 +4,7 @@ import type {
   ConversationItem,
   RateLimitSnapshot,
   RequestUserInputRequest,
+  ThreadPhase,
   ThreadListSortKey,
   ThreadSummary,
   ThreadTokenUsage,
@@ -118,6 +119,7 @@ type ThreadActivityStatus = {
   isProcessing: boolean;
   hasUnread: boolean;
   isReviewing: boolean;
+  phase: ThreadPhase;
   processingStartedAt: number | null;
   lastDurationMs: number | null;
   lastActivityAt?: number | null;
@@ -168,6 +170,11 @@ export type ThreadAction =
       threadId: string;
       isProcessing: boolean;
       timestamp: number;
+    }
+  | {
+      type: "setThreadPhase";
+      threadId: string;
+      phase: ThreadPhase;
     }
   | { type: "markReviewing"; threadId: string; isReviewing: boolean }
   | { type: "markUnread"; threadId: string; hasUnread: boolean }
@@ -302,6 +309,7 @@ export type ThreadAction =
     };
 
 const emptyItems: Record<string, ConversationItem[]> = {};
+const DEFAULT_THREAD_PHASE: ThreadPhase = "completed";
 
 export const initialState: ThreadState = {
   activeThreadIdByWorkspace: {},
@@ -594,6 +602,42 @@ function prefersUpdatedSort(state: ThreadState, workspaceId: string) {
   return (state.threadSortKeyByWorkspace[workspaceId] ?? "updated_at") === "updated_at";
 }
 
+function buildThreadStatus(
+  previous: ThreadActivityStatus | undefined,
+  overrides: Partial<ThreadActivityStatus>,
+): ThreadActivityStatus {
+  return {
+    isProcessing: previous?.isProcessing ?? false,
+    hasUnread: previous?.hasUnread ?? false,
+    isReviewing: previous?.isReviewing ?? false,
+    phase: previous?.phase ?? DEFAULT_THREAD_PHASE,
+    processingStartedAt: previous?.processingStartedAt ?? null,
+    lastDurationMs: previous?.lastDurationMs ?? null,
+    lastActivityAt: previous?.lastActivityAt ?? null,
+    lastErrorAt: previous?.lastErrorAt ?? null,
+    lastErrorMessage: previous?.lastErrorMessage ?? null,
+    ...overrides,
+  };
+}
+
+function isSameThreadStatus(
+  left: ThreadActivityStatus | undefined,
+  right: ThreadActivityStatus,
+) {
+  return Boolean(
+    left &&
+      left.isProcessing === right.isProcessing &&
+      left.hasUnread === right.hasUnread &&
+      left.isReviewing === right.isReviewing &&
+      left.phase === right.phase &&
+      left.processingStartedAt === right.processingStartedAt &&
+      left.lastDurationMs === right.lastDurationMs &&
+      left.lastActivityAt === right.lastActivityAt &&
+      left.lastErrorAt === right.lastErrorAt &&
+      left.lastErrorMessage === right.lastErrorMessage,
+  );
+}
+
 export function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
   switch (action.type) {
     case "setActiveThreadId":
@@ -606,23 +650,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         threadStatusById: action.threadId
           ? {
               ...state.threadStatusById,
-              [action.threadId]: {
-                isProcessing:
-                  state.threadStatusById[action.threadId]?.isProcessing ?? false,
-                hasUnread: false,
-                isReviewing:
-                  state.threadStatusById[action.threadId]?.isReviewing ?? false,
-                processingStartedAt:
-                  state.threadStatusById[action.threadId]?.processingStartedAt ??
-                  null,
-                lastDurationMs:
-                  state.threadStatusById[action.threadId]?.lastDurationMs ?? null,
-                lastActivityAt:
-                  state.threadStatusById[action.threadId]?.lastActivityAt,
-                lastErrorAt: state.threadStatusById[action.threadId]?.lastErrorAt,
-                lastErrorMessage:
-                  state.threadStatusById[action.threadId]?.lastErrorMessage,
-              },
+              [action.threadId]: buildThreadStatus(
+                state.threadStatusById[action.threadId],
+                { hasUnread: false },
+              ),
             }
           : state.threadStatusById,
       };
@@ -650,16 +681,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         },
         threadStatusById: {
           ...state.threadStatusById,
-          [action.threadId]: {
-            isProcessing: false,
-            hasUnread: false,
-            isReviewing: false,
-            processingStartedAt: null,
-            lastDurationMs: null,
-            lastActivityAt: null,
-            lastErrorAt: null,
-            lastErrorMessage: null,
-          },
+          [action.threadId]: buildThreadStatus(undefined, {
+            phase: DEFAULT_THREAD_PHASE,
+          }),
         },
         activeThreadIdByWorkspace: {
           ...state.activeThreadIdByWorkspace,
@@ -762,36 +786,21 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       const wasProcessing = previous?.isProcessing ?? false;
       const startedAt = previous?.processingStartedAt ?? null;
       const lastDurationMs = previous?.lastDurationMs ?? null;
-      const hasUnread = previous?.hasUnread ?? false;
-      const isReviewing = previous?.isReviewing ?? false;
-      const lastActivityAt = previous?.lastActivityAt;
-      const lastErrorAt = previous?.lastErrorAt;
-      const lastErrorMessage = previous?.lastErrorMessage;
       if (action.isProcessing) {
         const nextStartedAt =
           wasProcessing && startedAt ? startedAt : action.timestamp;
-        const nextStatus: ThreadActivityStatus = {
+        const nextStatus = buildThreadStatus(previous, {
           isProcessing: true,
-          hasUnread,
-          isReviewing,
+          phase: wasProcessing ? previous?.phase ?? "starting" : "starting",
           processingStartedAt: nextStartedAt,
           lastDurationMs,
-          lastActivityAt:
-            wasProcessing ? previous?.lastActivityAt : action.timestamp,
+          lastActivityAt: wasProcessing
+            ? previous?.lastActivityAt ?? action.timestamp
+            : action.timestamp,
           lastErrorAt: null,
           lastErrorMessage: null,
-        };
-        if (
-          previous &&
-          previous.isProcessing === nextStatus.isProcessing &&
-          previous.hasUnread === nextStatus.hasUnread &&
-          previous.isReviewing === nextStatus.isReviewing &&
-          previous.processingStartedAt === nextStatus.processingStartedAt &&
-          previous.lastDurationMs === nextStatus.lastDurationMs &&
-          previous.lastActivityAt === nextStatus.lastActivityAt &&
-          previous.lastErrorAt === nextStatus.lastErrorAt &&
-          previous.lastErrorMessage === nextStatus.lastErrorMessage
-        ) {
+        });
+        if (isSameThreadStatus(previous, nextStatus)) {
           return state;
         }
         return {
@@ -806,27 +815,69 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         wasProcessing && startedAt
           ? Math.max(0, action.timestamp - startedAt)
           : lastDurationMs ?? null;
-      const nextStatus: ThreadActivityStatus = {
+      const preservedPhase = previous?.phase;
+      const nextPhase =
+        preservedPhase === "failed" ||
+        preservedPhase === "interrupted" ||
+        preservedPhase === "stale_recovered"
+          ? preservedPhase
+          : "completed";
+      const nextStatus = buildThreadStatus(previous, {
         isProcessing: false,
-        hasUnread,
-        isReviewing,
+        phase: nextPhase,
         processingStartedAt: null,
         lastDurationMs: nextDuration,
-        lastActivityAt,
-        lastErrorAt,
-        lastErrorMessage,
+      });
+      if (isSameThreadStatus(previous, nextStatus)) {
+        return state;
+      }
+      return {
+        ...state,
+        threadStatusById: {
+          ...state.threadStatusById,
+          [action.threadId]: nextStatus,
+        },
       };
-      if (
-        previous &&
-        previous.isProcessing === nextStatus.isProcessing &&
-        previous.hasUnread === nextStatus.hasUnread &&
-        previous.isReviewing === nextStatus.isReviewing &&
-        previous.processingStartedAt === nextStatus.processingStartedAt &&
-        previous.lastDurationMs === nextStatus.lastDurationMs &&
-        previous.lastActivityAt === nextStatus.lastActivityAt &&
-        previous.lastErrorAt === nextStatus.lastErrorAt &&
-        previous.lastErrorMessage === nextStatus.lastErrorMessage
-      ) {
+    }
+    case "setThreadPhase": {
+      const previous = state.threadStatusById[action.threadId];
+      const now = Date.now();
+      const isActivePhase =
+        action.phase === "starting" ||
+        action.phase === "streaming" ||
+        action.phase === "tool_running" ||
+        action.phase === "waiting_user";
+      const isFinalPhase =
+        action.phase === "completed" ||
+        action.phase === "interrupted" ||
+        action.phase === "failed" ||
+        action.phase === "stale_recovered";
+      let nextStatus = buildThreadStatus(previous, {
+        phase: action.phase,
+      });
+      if (isActivePhase) {
+        nextStatus = buildThreadStatus(nextStatus, {
+          isProcessing: true,
+          processingStartedAt: nextStatus.processingStartedAt ?? now,
+          lastActivityAt: nextStatus.lastActivityAt ?? now,
+          lastErrorAt: null,
+          lastErrorMessage: null,
+        });
+      } else if (isFinalPhase) {
+        const nextDuration =
+          action.phase === "completed" &&
+          nextStatus.isProcessing &&
+          nextStatus.processingStartedAt
+            ? Math.max(0, now - nextStatus.processingStartedAt)
+            : nextStatus.lastDurationMs;
+        nextStatus = buildThreadStatus(nextStatus, {
+          isProcessing: false,
+          isReviewing: false,
+          processingStartedAt: null,
+          lastDurationMs: nextDuration,
+        });
+      }
+      if (isSameThreadStatus(previous, nextStatus)) {
         return state;
       }
       return {
@@ -847,27 +898,17 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       };
     case "markReviewing": {
       const previous = state.threadStatusById[action.threadId];
-      const nextStatus: ThreadActivityStatus = {
-        isProcessing: previous?.isProcessing ?? false,
-        hasUnread: previous?.hasUnread ?? false,
+      const nextStatus = buildThreadStatus(previous, {
         isReviewing: action.isReviewing,
-        processingStartedAt: previous?.processingStartedAt ?? null,
-        lastDurationMs: previous?.lastDurationMs ?? null,
-        lastActivityAt: previous?.lastActivityAt,
-        lastErrorAt: previous?.lastErrorAt,
-        lastErrorMessage: previous?.lastErrorMessage,
-      };
-      if (
-        previous &&
-        previous.isProcessing === nextStatus.isProcessing &&
-        previous.hasUnread === nextStatus.hasUnread &&
-        previous.isReviewing === nextStatus.isReviewing &&
-        previous.processingStartedAt === nextStatus.processingStartedAt &&
-        previous.lastDurationMs === nextStatus.lastDurationMs &&
-        previous.lastActivityAt === nextStatus.lastActivityAt &&
-        previous.lastErrorAt === nextStatus.lastErrorAt &&
-        previous.lastErrorMessage === nextStatus.lastErrorMessage
-      ) {
+        phase: action.isReviewing
+          ? "tool_running"
+          : previous?.isProcessing
+            ? previous?.phase === "tool_running"
+              ? "starting"
+              : previous?.phase ?? "starting"
+            : previous?.phase ?? DEFAULT_THREAD_PHASE,
+      });
+      if (isSameThreadStatus(previous, nextStatus)) {
         return state;
       }
       return {
@@ -880,27 +921,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     }
     case "markUnread": {
       const previous = state.threadStatusById[action.threadId];
-      const nextStatus: ThreadActivityStatus = {
-        isProcessing: previous?.isProcessing ?? false,
+      const nextStatus = buildThreadStatus(previous, {
         hasUnread: action.hasUnread,
-        isReviewing: previous?.isReviewing ?? false,
-        processingStartedAt: previous?.processingStartedAt ?? null,
-        lastDurationMs: previous?.lastDurationMs ?? null,
-        lastActivityAt: previous?.lastActivityAt,
-        lastErrorAt: previous?.lastErrorAt,
-        lastErrorMessage: previous?.lastErrorMessage,
-      };
-      if (
-        previous &&
-        previous.isProcessing === nextStatus.isProcessing &&
-        previous.hasUnread === nextStatus.hasUnread &&
-        previous.isReviewing === nextStatus.isReviewing &&
-        previous.processingStartedAt === nextStatus.processingStartedAt &&
-        previous.lastDurationMs === nextStatus.lastDurationMs &&
-        previous.lastActivityAt === nextStatus.lastActivityAt &&
-        previous.lastErrorAt === nextStatus.lastErrorAt &&
-        previous.lastErrorMessage === nextStatus.lastErrorMessage
-      ) {
+      });
+      if (isSameThreadStatus(previous, nextStatus)) {
         return state;
       }
       return {
@@ -914,27 +938,15 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     case "markThreadError": {
       const previous = state.threadStatusById[action.threadId];
       const normalizedMessage = action.message.trim();
-      const nextStatus: ThreadActivityStatus = {
+      const nextStatus = buildThreadStatus(previous, {
         isProcessing: false,
-        hasUnread: previous?.hasUnread ?? false,
         isReviewing: false,
+        phase: "failed",
         processingStartedAt: null,
-        lastDurationMs: previous?.lastDurationMs ?? null,
-        lastActivityAt: previous?.lastActivityAt,
         lastErrorAt: action.timestamp,
         lastErrorMessage: normalizedMessage || null,
-      };
-      if (
-        previous &&
-        previous.isProcessing === nextStatus.isProcessing &&
-        previous.hasUnread === nextStatus.hasUnread &&
-        previous.isReviewing === nextStatus.isReviewing &&
-        previous.processingStartedAt === nextStatus.processingStartedAt &&
-        previous.lastDurationMs === nextStatus.lastDurationMs &&
-        previous.lastActivityAt === nextStatus.lastActivityAt &&
-        previous.lastErrorAt === nextStatus.lastErrorAt &&
-        previous.lastErrorMessage === nextStatus.lastErrorMessage
-      ) {
+      });
+      if (isSameThreadStatus(previous, nextStatus)) {
         return state;
       }
       return {

@@ -62,6 +62,22 @@ async fn resolve_codex_home_for_workspace_core(
         .ok_or_else(|| "Unable to resolve CODEX_HOME".to_string())
 }
 
+fn sandbox_policy_param_from_mode(mode: &str) -> Option<Value> {
+    let normalized = mode
+        .trim()
+        .to_ascii_lowercase()
+        .replace('-', "")
+        .replace('_', "");
+    let policy_type = match normalized.as_str() {
+        "readonly" => "readOnly",
+        "workspacewrite" => "workspaceWrite",
+        "dangerfullaccess" => "dangerFullAccess",
+        "externalsandbox" => "externalSandbox",
+        _ => return None,
+    };
+    Some(json!({ "type": policy_type }))
+}
+
 fn apply_execution_policy_from_config(params: &mut Map<String, Value>) {
     let Ok((sandbox_mode, approval_policy)) = codex_config::read_execution_policy(None) else {
         return;
@@ -70,7 +86,8 @@ fn apply_execution_policy_from_config(params: &mut Map<String, Value>) {
         params.insert("approvalPolicy".to_string(), json!(policy));
     }
     if let Some(policy) = sandbox_mode {
-        params.insert("sandboxPolicy".to_string(), json!(policy));
+        let policy_value = sandbox_policy_param_from_mode(&policy).unwrap_or_else(|| json!(policy));
+        params.insert("sandboxPolicy".to_string(), policy_value);
     }
 }
 
@@ -638,7 +655,7 @@ pub(crate) async fn get_config_model_core(
 
 #[cfg(test)]
 mod tests {
-    use super::build_archive_threads_result;
+    use super::{build_archive_threads_result, sandbox_policy_param_from_mode};
     use serde_json::json;
 
     #[test]
@@ -677,5 +694,26 @@ mod tests {
                 "total": 2
             })
         );
+    }
+
+    #[test]
+    fn sandbox_policy_param_maps_supported_modes() {
+        assert_eq!(
+            sandbox_policy_param_from_mode("read-only"),
+            Some(json!({ "type": "readOnly" }))
+        );
+        assert_eq!(
+            sandbox_policy_param_from_mode("workspace-write"),
+            Some(json!({ "type": "workspaceWrite" }))
+        );
+        assert_eq!(
+            sandbox_policy_param_from_mode("danger-full-access"),
+            Some(json!({ "type": "dangerFullAccess" }))
+        );
+        assert_eq!(
+            sandbox_policy_param_from_mode("external_sandbox"),
+            Some(json!({ "type": "externalSandbox" }))
+        );
+        assert_eq!(sandbox_policy_param_from_mode("unsupported"), None);
     }
 }

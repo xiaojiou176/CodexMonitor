@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
 import type { Dispatch } from "react";
-import type { ApprovalRequest, DebugEntry } from "../../../types";
+import type { ApprovalRequest, DebugEntry, ThreadPhase } from "../../../types";
 import { normalizeCommandTokens } from "../../../utils/approvalRules";
 import {
   rememberApprovalRule,
@@ -10,10 +10,24 @@ import type { ThreadAction } from "./useThreadsReducer";
 
 type UseThreadApprovalsOptions = {
   dispatch: Dispatch<ThreadAction>;
+  setThreadPhase: (threadId: string, phase: ThreadPhase) => void;
   onDebug?: (entry: DebugEntry) => void;
 };
 
-export function useThreadApprovals({ dispatch, onDebug }: UseThreadApprovalsOptions) {
+function resolveApprovalThreadId(params: Record<string, unknown>): string | null {
+  const threadId = params.threadId ?? params.thread_id ?? null;
+  if (typeof threadId !== "string") {
+    return null;
+  }
+  const trimmed = threadId.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function useThreadApprovals({
+  dispatch,
+  setThreadPhase,
+  onDebug,
+}: UseThreadApprovalsOptions) {
   const approvalAllowlistRef = useRef<Record<string, string[][]>>({});
 
   const rememberApprovalPrefix = useCallback((workspaceId: string, command: string[]) => {
@@ -47,8 +61,12 @@ export function useThreadApprovals({ dispatch, onDebug }: UseThreadApprovalsOpti
         requestId: request.request_id,
         workspaceId: request.workspace_id,
       });
+      const threadId = resolveApprovalThreadId(request.params ?? {});
+      if (threadId) {
+        setThreadPhase(threadId, "starting");
+      }
     },
-    [dispatch],
+    [dispatch, setThreadPhase],
   );
 
   const handleApprovalRemember = useCallback(
@@ -77,8 +95,12 @@ export function useThreadApprovals({ dispatch, onDebug }: UseThreadApprovalsOpti
         requestId: request.request_id,
         workspaceId: request.workspace_id,
       });
+      const threadId = resolveApprovalThreadId(request.params ?? {});
+      if (threadId) {
+        setThreadPhase(threadId, "starting");
+      }
     },
-    [dispatch, onDebug, rememberApprovalPrefix],
+    [dispatch, onDebug, rememberApprovalPrefix, setThreadPhase],
   );
 
   return {

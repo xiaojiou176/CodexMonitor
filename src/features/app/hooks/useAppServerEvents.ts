@@ -5,6 +5,7 @@ import type {
   RequestUserInputRequest,
 } from "../../../types";
 import { subscribeAppServerEvents } from "../../../services/events";
+import { respondToServerRequest } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import {
   getAppServerParams,
@@ -34,6 +35,11 @@ type AgentCompleted = {
 
 type TurnStartMetadata = {
   model: string | null;
+};
+
+type TurnCompletionMetadata = {
+  status: "completed" | "failed" | "interrupted" | null;
+  errorMessage: string | null;
 };
 
 function isAgentMessageType(value: unknown): boolean {
@@ -67,7 +73,12 @@ type AppServerEventHandlers = {
     turnId: string,
     metadata?: TurnStartMetadata,
   ) => void;
-  onTurnCompleted?: (workspaceId: string, threadId: string, turnId: string) => void;
+  onTurnCompleted?: (
+    workspaceId: string,
+    threadId: string,
+    turnId: string,
+    metadata?: TurnCompletionMetadata,
+  ) => void;
   onTurnError?: (
     workspaceId: string,
     threadId: string,
@@ -128,12 +139,25 @@ export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
   "item/commandExecution/terminalInteraction",
   "item/completed",
   "item/fileChange/outputDelta",
+  "item/mcpToolCall/progress",
   "item/plan/delta",
   "item/reasoning/summaryPartAdded",
   "item/reasoning/summaryTextDelta",
   "item/reasoning/textDelta",
   "item/started",
+  "item/tool/call",
   "item/tool/requestUserInput",
+  "mcpServer/oauthLogin/completed",
+  "app/list/updated",
+  "rawResponseItem/completed",
+  "deprecationNotice",
+  "configWarning",
+  "fuzzyFileSearch/sessionUpdated",
+  "fuzzyFileSearch/sessionCompleted",
+  "windows/worldWritableWarning",
+  "sessionConfigured",
+  "authStatusChange",
+  "loginChatGptComplete",
   "thread/name/updated",
   "thread/started",
   "thread/tokenUsage/updated",
@@ -144,15 +168,7 @@ export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
 ] as const satisfies readonly SupportedAppServerMethod[];
 
 const AGENT_DELTA_FLUSH_INTERVAL_MS = 16;
-const TURN_COMPLETION_FALLBACK_MS = 15_000;
-const TURN_COMPLETION_QUIET_WINDOW_MS = 2_000;
-const TURN_COMPLETION_MAX_WAIT_MS = 90_000;
 const UNSUPPORTED_METHOD_TOAST_INTERVAL_MS = 30_000;
-
-type TurnCompletionFallbackTimer = {
-  timerId: number;
-  startedAtMs: number;
-};
 
 function extractAgentMessageTextFromChunk(chunk: unknown): string {
   if (typeof chunk === "string") {
@@ -267,17 +283,6 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
   const handlersRef = useRef(handlers);
   const pendingAgentDeltasRef = useRef<Map<string, AgentDelta>>(new Map());
   const pendingAgentDeltaFlushTimerRef = useRef<number | null>(null);
-  const pendingTurnCompletionFallbackTimersRef = useRef<
-    Map<string, TurnCompletionFallbackTimer>
-  >(
-    new Map(),
-  );
-  const pendingItemIdsByThreadRef = useRef<Map<string, Set<string>>>(
-    new Map(),
-  );
-  const lastThreadEventAtRef = useRef<Map<string, number>>(
-    new Map(),
-  );
   const lastUnsupportedMethodToastAtRef = useRef(0);
 
   useEffect(() => {
@@ -285,10 +290,6 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
   }, [handlers]);
 
   useEffect(() => {
-    const pendingTurnCompletionFallbackTimers = pendingTurnCompletionFallbackTimersRef.current;
-    const pendingItemIdsByThread = pendingItemIdsByThreadRef.current;
-    const lastThreadEventAt = lastThreadEventAtRef.current;
-
     const flushAgentMessageDeltas = () => {
       if (pendingAgentDeltaFlushTimerRef.current !== null) {
         window.clearTimeout(pendingAgentDeltaFlushTimerRef.current);
@@ -326,177 +327,6 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }, AGENT_DELTA_FLUSH_INTERVAL_MS);
     };
 
-    const makeTurnCompletionFallbackKey = (
-      workspaceId: string,
-      threadId: string,
-      turnId: string | null,
-    ) => `${workspaceId}:${threadId}:${turnId ?? "__unknown__"}`;
-
-    const makeThreadKey = (workspaceId: string, threadId: string) =>
-      `${workspaceId}:${threadId}`;
-
-    const markThreadEvent = (workspaceId: string, threadId: string) => {
-      lastThreadEventAtRef.current.set(makeThreadKey(workspaceId, threadId), Date.now());
-    };
-
-    const clearThreadEvent = (workspaceId: string, threadId: string) => {
-      lastThreadEventAtRef.current.delete(makeThreadKey(workspaceId, threadId));
-    };
-
-    const clearThreadEventsForWorkspace = (workspaceId: string) => {
-      const prefix = `${workspaceId}:`;
-      for (const key of Array.from(lastThreadEventAtRef.current.keys())) {
-        if (key.startsWith(prefix)) {
-          lastThreadEventAtRef.current.delete(key);
-        }
-      }
-    };
-
-    const trackItemStarted = (workspaceId: string, threadId: string, itemId: string) => {
-      const key = makeThreadKey(workspaceId, threadId);
-      const existing = pendingItemIdsByThreadRef.current.get(key);
-      if (existing) {
-        existing.add(itemId);
-        return;
-      }
-      pendingItemIdsByThreadRef.current.set(key, new Set([itemId]));
-    };
-
-    const trackItemCompleted = (workspaceId: string, threadId: string, itemId: string) => {
-      const key = makeThreadKey(workspaceId, threadId);
-      const existing = pendingItemIdsByThreadRef.current.get(key);
-      if (!existing) {
-        return;
-      }
-      existing.delete(itemId);
-      if (existing.size === 0) {
-        pendingItemIdsByThreadRef.current.delete(key);
-      }
-    };
-
-    const clearPendingItemsForThread = (workspaceId: string, threadId: string) => {
-      pendingItemIdsByThreadRef.current.delete(makeThreadKey(workspaceId, threadId));
-    };
-
-    const clearPendingItemsForWorkspace = (workspaceId: string) => {
-      const prefix = `${workspaceId}:`;
-      for (const key of Array.from(pendingItemIdsByThreadRef.current.keys())) {
-        if (key.startsWith(prefix)) {
-          pendingItemIdsByThreadRef.current.delete(key);
-        }
-      }
-    };
-
-    const clearTurnCompletionFallbackByKey = (key: string) => {
-      const timer = pendingTurnCompletionFallbackTimersRef.current.get(key);
-      if (!timer) {
-        return;
-      }
-      window.clearTimeout(timer.timerId);
-      pendingTurnCompletionFallbackTimersRef.current.delete(key);
-    };
-
-    const clearTurnCompletionFallbackForThread = (
-      workspaceId: string,
-      threadId: string,
-    ) => {
-      const prefix = `${workspaceId}:${threadId}:`;
-      for (const key of Array.from(
-        pendingTurnCompletionFallbackTimersRef.current.keys(),
-      )) {
-        if (!key.startsWith(prefix)) {
-          continue;
-        }
-        clearTurnCompletionFallbackByKey(key);
-      }
-    };
-
-    const clearTurnCompletionFallbackForWorkspace = (workspaceId: string) => {
-      const prefix = `${workspaceId}:`;
-      for (const key of Array.from(
-        pendingTurnCompletionFallbackTimersRef.current.keys(),
-      )) {
-        if (!key.startsWith(prefix)) {
-          continue;
-        }
-        clearTurnCompletionFallbackByKey(key);
-      }
-    };
-
-    const scheduleTurnCompletionFallback = (
-      workspaceId: string,
-      threadId: string,
-      turnId: string | null,
-      itemId: string,
-    ) => {
-      const key = makeTurnCompletionFallbackKey(workspaceId, threadId, turnId);
-      const existing = pendingTurnCompletionFallbackTimersRef.current.get(key);
-      const startedAtMs = existing?.startedAtMs ?? Date.now();
-      if (existing) {
-        window.clearTimeout(existing.timerId);
-      }
-
-      const runFallbackCheck = () => {
-        const latest = pendingTurnCompletionFallbackTimersRef.current.get(key);
-        if (!latest) {
-          return;
-        }
-
-        const now = Date.now();
-        const threadKey = makeThreadKey(workspaceId, threadId);
-        const pendingItems =
-          pendingItemIdsByThreadRef.current.get(threadKey)?.size ?? 0;
-        const lastEventAt = lastThreadEventAtRef.current.get(threadKey) ?? 0;
-        const idleForMs = Math.max(0, now - lastEventAt);
-        const waitedMs = Math.max(0, now - latest.startedAtMs);
-
-        const quietEnough = idleForMs >= TURN_COMPLETION_QUIET_WINDOW_MS;
-        const noPendingItems = pendingItems === 0;
-        const maxWaitReached = waitedMs >= TURN_COMPLETION_MAX_WAIT_MS;
-
-        if ((quietEnough && noPendingItems) || maxWaitReached) {
-          pendingTurnCompletionFallbackTimersRef.current.delete(key);
-          const currentHandlers = handlersRef.current;
-          currentHandlers.onAppServerEvent?.({
-            workspace_id: workspaceId,
-            message: {
-              method: "codex/turnCompletionFallback",
-              params: {
-                threadId,
-                turnId,
-                itemId,
-                timeoutMs: TURN_COMPLETION_FALLBACK_MS,
-                quietWindowMs: TURN_COMPLETION_QUIET_WINDOW_MS,
-                pendingItems,
-                idleForMs,
-                waitedMs,
-                maxWaitReached,
-              },
-            },
-          });
-          currentHandlers.onTurnCompleted?.(workspaceId, threadId, turnId ?? "");
-          return;
-        }
-
-        const remainingQuietMs = Math.max(
-          0,
-          TURN_COMPLETION_QUIET_WINDOW_MS - idleForMs,
-        );
-        const nextCheckMs = Math.max(250, remainingQuietMs || TURN_COMPLETION_QUIET_WINDOW_MS);
-        const timerId = window.setTimeout(runFallbackCheck, nextCheckMs);
-        pendingTurnCompletionFallbackTimersRef.current.set(key, {
-          timerId,
-          startedAtMs: latest.startedAtMs,
-        });
-      };
-
-      const timerId = window.setTimeout(runFallbackCheck, TURN_COMPLETION_FALLBACK_MS);
-      pendingTurnCompletionFallbackTimersRef.current.set(key, {
-        timerId,
-        startedAtMs,
-      });
-    };
-
     const unlisten = subscribeAppServerEvents((payload) => {
       const currentHandlers = handlersRef.current;
 
@@ -512,18 +342,6 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       // the stale-processing guard to detect silent disconnects.
       currentHandlers.onIsAlive?.(workspace_id);
       const params = getAppServerParams(payload);
-      const eventTurn = params.turn as Record<string, unknown> | undefined;
-      const eventThread = params.thread as Record<string, unknown> | undefined;
-      const eventThreadId = firstNonEmptyString(
-        params.threadId,
-        params.thread_id,
-        eventTurn?.threadId,
-        eventTurn?.thread_id,
-        eventThread?.id,
-      );
-      if (eventThreadId) {
-        markThreadEvent(workspace_id, eventThreadId);
-      }
 
       if (method === "codex/connected") {
         currentHandlers.onWorkspaceConnected?.(workspace_id);
@@ -532,9 +350,6 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
 
       if (method === "codex/disconnected") {
         flushAgentMessageDeltas();
-        clearTurnCompletionFallbackForWorkspace(workspace_id);
-        clearPendingItemsForWorkspace(workspace_id);
-        clearThreadEventsForWorkspace(workspace_id);
         currentHandlers.onWorkspaceDisconnected?.(workspace_id);
         return;
       }
@@ -610,6 +425,21 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         return;
       }
 
+      if (method === "item/tool/call" && hasRequestId) {
+        void respondToServerRequest(workspace_id, requestId as string | number, {
+          contentItems: [
+            {
+              type: "inputText",
+              text: "Dynamic tool call is not supported by this client build.",
+            },
+          ],
+          success: false,
+        }).catch((error) => {
+          console.warn("[useAppServerEvents] failed to respond to item/tool/call:", error);
+        });
+        return;
+      }
+
       if (method === "item/agentMessage/delta") {
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const itemId = String(params.itemId ?? params.item_id ?? "");
@@ -653,8 +483,6 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         const turnId = String(turn?.id ?? params.turnId ?? params.turn_id ?? "");
         const model = extractModelHint(params, turn);
         if (threadId) {
-          clearPendingItemsForThread(workspace_id, threadId);
-          clearTurnCompletionFallbackForThread(workspace_id, threadId);
           currentHandlers.onTurnStarted?.(workspace_id, threadId, turnId, {
             model,
           });
@@ -715,11 +543,28 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
           params.threadId ?? params.thread_id ?? turn?.threadId ?? turn?.thread_id ?? "",
         );
         const turnId = String(turn?.id ?? params.turnId ?? params.turn_id ?? "");
+        const normalizedStatusRaw = String(
+          turn?.status ?? params.status ?? "",
+        ).trim().toLowerCase();
+        const status: TurnCompletionMetadata["status"] =
+          normalizedStatusRaw === "completed"
+            ? "completed"
+            : normalizedStatusRaw === "failed"
+              ? "failed"
+              : normalizedStatusRaw === "interrupted"
+                ? "interrupted"
+                : null;
+        const errorMessage = firstNonEmptyString(
+          turn?.lastError,
+          turn?.last_error,
+          params.lastError,
+          params.last_error,
+        );
         if (threadId) {
-          clearPendingItemsForThread(workspace_id, threadId);
-          clearThreadEvent(workspace_id, threadId);
-          clearTurnCompletionFallbackForThread(workspace_id, threadId);
-          currentHandlers.onTurnCompleted?.(workspace_id, threadId, turnId);
+          currentHandlers.onTurnCompleted?.(workspace_id, threadId, turnId, {
+            status,
+            errorMessage,
+          });
         }
         return;
       }
@@ -863,9 +708,6 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         if (threadId && item) {
           currentHandlers.onItemCompleted?.(workspace_id, threadId, item);
         }
-        if (threadId && itemId) {
-          trackItemCompleted(workspace_id, threadId, itemId);
-        }
         if (threadId && item && isAgentMessageType(item.type ?? item.itemType)) {
           const text = extractAgentMessageText(item);
           if (itemId) {
@@ -876,7 +718,6 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
               text,
               turnId,
             });
-            scheduleTurnCompletionFallback(workspace_id, threadId, turnId, itemId);
           }
         }
         return;
@@ -895,18 +736,8 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
           ?? payloadThread?.id
           ?? "",
         );
-        const itemId = firstNonEmptyString(
-          params.itemId,
-          params.item_id,
-          payloadParams?.itemId,
-          payloadParams?.item_id,
-          item?.id,
-        );
         if (threadId && item) {
           currentHandlers.onItemStarted?.(workspace_id, threadId, item);
-        }
-        if (threadId && itemId) {
-          trackItemStarted(workspace_id, threadId, itemId);
         }
         return;
       }
@@ -979,16 +810,28 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         }
         return;
       }
+
+      if (
+        method === "rawResponseItem/completed" ||
+        method === "item/mcpToolCall/progress" ||
+        method === "mcpServer/oauthLogin/completed" ||
+        method === "app/list/updated" ||
+        method === "deprecationNotice" ||
+        method === "configWarning" ||
+        method === "fuzzyFileSearch/sessionUpdated" ||
+        method === "fuzzyFileSearch/sessionCompleted" ||
+        method === "windows/worldWritableWarning" ||
+        method === "sessionConfigured" ||
+        method === "authStatusChange" ||
+        method === "loginChatGptComplete"
+      ) {
+        // Known protocol methods that are currently compatibility no-ops in UI.
+        return;
+      }
     });
 
     return () => {
       flushAgentMessageDeltas();
-      for (const timer of pendingTurnCompletionFallbackTimers.values()) {
-        window.clearTimeout(timer.timerId);
-      }
-      pendingTurnCompletionFallbackTimers.clear();
-      pendingItemIdsByThread.clear();
-      lastThreadEventAt.clear();
       unlisten();
     };
   }, []);

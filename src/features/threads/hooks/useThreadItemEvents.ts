@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch } from "react";
+import type { ThreadPhase } from "../../../types";
 import { buildConversationItem } from "../../../utils/threadItems";
 import { asString } from "../utils/threadNormalize";
 import type { ThreadAction } from "./useThreadsReducer";
@@ -10,6 +11,7 @@ type UseThreadItemEventsOptions = {
   getCustomName: (workspaceId: string, threadId: string) => string | undefined;
   markProcessing: (threadId: string, isProcessing: boolean) => void;
   markReviewing: (threadId: string, isReviewing: boolean) => void;
+  setThreadPhase: (threadId: string, phase: ThreadPhase) => void;
   safeMessageActivity: () => void;
   recordThreadActivity: (
     workspaceId: string,
@@ -47,6 +49,7 @@ export function useThreadItemEvents({
   getCustomName,
   markProcessing,
   markReviewing,
+  setThreadPhase,
   safeMessageActivity,
   recordThreadActivity,
   applyCollabThreadLinks,
@@ -119,13 +122,22 @@ export function useThreadItemEvents({
       }
       applyCollabThreadLinks(threadId, item);
       const itemType = asString(item?.type ?? "");
+      const normalizedItemType = itemType.toLowerCase().replace(/[_-]/g, "");
       if (itemType === "enteredReviewMode") {
         markReviewing(threadId, true);
+        setThreadPhase(threadId, "tool_running");
       } else if (itemType === "exitedReviewMode") {
         markReviewing(threadId, false);
         markProcessing(threadId, false);
+        setThreadPhase(threadId, "completed");
         if (!shouldMarkProcessing) {
           onReviewExited?.(workspaceId, threadId);
+        }
+      } else if (shouldMarkProcessing) {
+        if (normalizedItemType === "agentmessage") {
+          setThreadPhase(threadId, "streaming");
+        } else {
+          setThreadPhase(threadId, "tool_running");
         }
       }
       const itemForDisplay =
@@ -159,16 +171,18 @@ export function useThreadItemEvents({
       onReviewExited,
       onUserMessageCreated,
       safeMessageActivity,
+      setThreadPhase,
     ],
   );
 
   const handleToolOutputDelta = useCallback(
     (threadId: string, itemId: string, delta: string) => {
       markProcessing(threadId, true);
+      setThreadPhase(threadId, "tool_running");
       dispatch({ type: "appendToolOutput", threadId, itemId, delta });
       safeMessageActivity();
     },
-    [dispatch, markProcessing, safeMessageActivity],
+    [dispatch, markProcessing, safeMessageActivity, setThreadPhase],
   );
 
   const handleTerminalInteraction = useCallback(
@@ -199,6 +213,7 @@ export function useThreadItemEvents({
     }) => {
       dispatch({ type: "ensureThread", workspaceId, threadId });
       markProcessing(threadId, true);
+      setThreadPhase(threadId, "streaming");
       const hasCustomName = Boolean(getCustomName(workspaceId, threadId));
       const key = deltaKey(workspaceId, threadId, itemId);
       const existing = pendingAgentDeltasRef.current.get(key);
@@ -221,7 +236,7 @@ export function useThreadItemEvents({
       }
       schedulePendingAgentDeltaFlush();
     },
-    [dispatch, getCustomName, markProcessing, schedulePendingAgentDeltaFlush],
+    [dispatch, getCustomName, markProcessing, schedulePendingAgentDeltaFlush, setThreadPhase],
   );
 
   const onAgentMessageCompleted = useCallback(
@@ -241,6 +256,7 @@ export function useThreadItemEvents({
       flushPendingAgentDeltas();
       const timestamp = Date.now();
       dispatch({ type: "ensureThread", workspaceId, threadId });
+      setThreadPhase(threadId, "streaming");
       const hasCustomName = Boolean(getCustomName(workspaceId, threadId));
       dispatch({
         type: "completeAgentMessage",
@@ -276,6 +292,7 @@ export function useThreadItemEvents({
       getCustomName,
       recordThreadActivity,
       safeMessageActivity,
+      setThreadPhase,
     ],
   );
 

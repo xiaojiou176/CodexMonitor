@@ -23,6 +23,9 @@ function getBlockedReasonLabel(reason: QueueHealthEntry["blockedReason"]): strin
   if (reason === "reviewing") {
     return "Review 中";
   }
+  if (reason === "waiting_user") {
+    return "等待你处理审批/输入";
+  }
   if (reason === "workspace_unresolved") {
     return "Workspace 未就绪";
   }
@@ -50,6 +53,9 @@ function getBlockedReasonTone(
   }
   if (reason === "reviewing") {
     return "is-reviewing";
+  }
+  if (reason === "waiting_user") {
+    return "is-awaiting";
   }
   if (reason === "workspace_unresolved" || reason === "command_requires_active_thread") {
     return "is-danger";
@@ -104,8 +110,11 @@ export function ComposerQueue({
     [onEditQueued],
   );
 
-  const blockedQueueHealthEntries = useMemo(
-    () => queueHealthEntries.filter((entry) => entry.blockedReason !== null),
+  const recoverableQueueHealthEntries = useMemo(
+    () =>
+      queueHealthEntries.filter(
+        (entry) => Boolean(entry.isStale) || Boolean(entry.lastFailureReason),
+      ),
     [queueHealthEntries],
   );
 
@@ -115,18 +124,18 @@ export function ComposerQueue({
     : "正常";
 
   const handleRecoverBlocked = useCallback(() => {
-    if (!onRetryQueuedThread || blockedQueueHealthEntries.length === 0) {
+    if (!onRetryQueuedThread || recoverableQueueHealthEntries.length === 0) {
       return;
     }
 
     const blockedThreadIds = Array.from(
-      new Set(blockedQueueHealthEntries.map((entry) => entry.threadId)),
+      new Set(recoverableQueueHealthEntries.map((entry) => entry.threadId)),
     );
 
     blockedThreadIds.forEach((threadId) => {
       onRetryQueuedThread(threadId);
     });
-  }, [blockedQueueHealthEntries, onRetryQueuedThread]);
+  }, [onRetryQueuedThread, recoverableQueueHealthEntries]);
 
   const handleSteerItem = useCallback(
     async (item: QueuedMessage) => {
@@ -191,7 +200,7 @@ export function ComposerQueue({
                 {statusLabel}
               </span>
             </div>
-            {onRetryQueuedThread && blockedQueueHealthEntries.length > 0 ? (
+            {onRetryQueuedThread && recoverableQueueHealthEntries.length > 0 ? (
               <button
                 type="button"
                 className="composer-queue-recover"

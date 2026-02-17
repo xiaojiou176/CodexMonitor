@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import type { Dispatch } from "react";
+import type { ThreadPhase } from "../../../types";
 import type { ThreadAction } from "./useThreadsReducer";
 
 type UseThreadStatusOptions = {
@@ -45,13 +46,21 @@ export function useThreadStatus({ dispatch }: UseThreadStatusOptions) {
     [dispatch],
   );
 
+  const setThreadPhase = useCallback(
+    (threadId: string, phase: ThreadPhase) => {
+      dispatch({ type: "setThreadPhase", threadId, phase });
+    },
+    [dispatch],
+  );
+
   const resetThreadRuntimeState = useCallback(
     (threadId: string) => {
       markReviewing(threadId, false);
+      setThreadPhase(threadId, "interrupted");
       markProcessing(threadId, false);
       setActiveTurnId(threadId, null);
     },
-    [markProcessing, markReviewing, setActiveTurnId],
+    [markProcessing, markReviewing, setActiveTurnId, setThreadPhase],
   );
 
   return {
@@ -59,6 +68,7 @@ export function useThreadStatus({ dispatch }: UseThreadStatusOptions) {
     markReviewing,
     markThreadError,
     setActiveTurnId,
+    setThreadPhase,
     resetThreadRuntimeState,
   };
 }

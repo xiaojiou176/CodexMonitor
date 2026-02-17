@@ -383,7 +383,7 @@ describe("useQueuedSend", () => {
   });
 
   it("marks processing stale entries in queue health", async () => {
-    const processingStartedAt = Date.now() - 120_000;
+    const processingStartedAt = Date.now() - (4 * 60_000);
     const options = makeOptions({
       activeThreadId: "thread-1",
       activeWorkspace: workspace,
@@ -411,7 +411,7 @@ describe("useQueuedSend", () => {
     const staleEntry = result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1");
     expect(staleEntry?.blockedReason).toBe("processing");
     expect(staleEntry?.isStale).toBe(true);
-    expect((staleEntry?.blockedForMs ?? 0)).toBeGreaterThanOrEqual(90_000);
+    expect((staleEntry?.blockedForMs ?? 0)).toBeGreaterThanOrEqual(3 * 60_000);
   });
 
   it("does not auto-dispatch active-thread queue while processing is stale", async () => {
@@ -450,7 +450,7 @@ describe("useQueuedSend", () => {
           "thread-1": {
             isProcessing: true,
             isReviewing: false,
-            processingStartedAt: Date.now() - 120_000,
+            processingStartedAt: Date.now() - (4 * 60_000),
           },
         },
       });
@@ -497,7 +497,7 @@ describe("useQueuedSend", () => {
           "thread-1": {
             isProcessing: true,
             isReviewing: false,
-            processingStartedAt: Date.now() - 120_000,
+            processingStartedAt: Date.now() - (4 * 60_000),
           },
         },
       });
@@ -526,6 +526,91 @@ describe("useQueuedSend", () => {
 
     expect(options.sendUserMessage).toHaveBeenCalledTimes(2);
     expect(options.sendUserMessage).toHaveBeenNthCalledWith(2, "second", []);
+  });
+
+  it("does not auto-recover awaiting turn/start when workspace events are recent", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-16T00:00:00.000Z"));
+
+    try {
+      const workspaceTwo: WorkspaceInfo = {
+        ...workspace,
+        id: "workspace-2",
+        name: "Another",
+        path: "/tmp/another",
+      };
+      const onRecoverStaleThread = vi.fn();
+      let lastAliveWorkspaceOne = Date.now();
+
+      const options = makeOptions({
+        activeThreadId: "thread-2",
+        activeWorkspace: workspaceTwo,
+        isProcessing: false,
+        onRecoverStaleThread,
+        threadStatusById: {
+          "thread-1": {
+            isProcessing: false,
+            isReviewing: false,
+            processingStartedAt: null,
+          },
+          "thread-2": {
+            isProcessing: false,
+            isReviewing: false,
+            processingStartedAt: null,
+          },
+        },
+        threadWorkspaceById: {
+          "thread-1": "workspace-1",
+          "thread-2": "workspace-2",
+        },
+        workspacesById: new Map([
+          ["workspace-1", workspace],
+          ["workspace-2", workspaceTwo],
+        ]),
+        getWorkspaceLastAliveAt: (workspaceId: string) =>
+          workspaceId === "workspace-1" ? lastAliveWorkspaceOne : null,
+      });
+
+      const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+        initialProps: options,
+      });
+
+      await act(async () => {
+        await result.current.queueMessageForThread("thread-1", "background in-flight");
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(0);
+        await Promise.resolve();
+      });
+
+      expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
+
+      vi.setSystemTime(new Date("2026-02-16T00:04:00.000Z"));
+      lastAliveWorkspaceOne = Date.now() - 10_000;
+
+      await act(async () => {
+        rerender({
+          ...options,
+          threadStatusById: {
+            ...options.threadStatusById,
+          },
+        });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(0);
+        await Promise.resolve();
+      });
+
+      expect(onRecoverStaleThread).not.toHaveBeenCalled();
+      expect(
+        result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1")
+          ?.blockedReason,
+      ).toBe("awaiting_turn_start_event");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("records lastFailureAt when dispatch fails", async () => {
@@ -590,7 +675,7 @@ describe("useQueuedSend", () => {
         "thread-1": {
           isProcessing: true,
           isReviewing: false,
-          processingStartedAt: Date.now() - 120_000,
+          processingStartedAt: Date.now() - (4 * 60_000),
         },
       },
     });

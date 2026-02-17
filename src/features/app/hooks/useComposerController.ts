@@ -1,5 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import type { QueuedMessage, WorkspaceInfo } from "../../../types";
+import type {
+  ConversationItem,
+  QueuedMessage,
+  ThreadPhase,
+  WorkspaceInfo,
+} from "../../../types";
 import { useComposerImages } from "../../composer/hooks/useComposerImages";
 import { useQueuedSend } from "../../threads/hooks/useQueuedSend";
 
@@ -12,6 +17,7 @@ export function useComposerController({
   isReviewing,
   threadStatusById,
   threadWorkspaceById,
+  itemsByThread,
   workspacesById,
   steerEnabled,
   appsEnabled,
@@ -29,6 +35,7 @@ export function useComposerController({
   startApps,
   startMcp,
   startStatus,
+  getWorkspaceLastAliveAt,
   onRecoverStaleThread,
 }: {
   activeThreadId: string | null;
@@ -42,11 +49,13 @@ export function useComposerController({
     {
       isProcessing?: boolean;
       isReviewing?: boolean;
+      phase?: ThreadPhase;
       processingStartedAt?: number | null;
       lastDurationMs?: number | null;
     }
   >;
   threadWorkspaceById: Record<string, string>;
+  itemsByThread?: Record<string, ConversationItem[]>;
   workspacesById: Map<string, WorkspaceInfo>;
   steerEnabled: boolean;
   appsEnabled: boolean;
@@ -86,6 +95,7 @@ export function useComposerController({
   startApps: (text: string) => Promise<void>;
   startMcp: (text: string) => Promise<void>;
   startStatus: (text: string) => Promise<void>;
+  getWorkspaceLastAliveAt?: (workspaceId: string) => number | null | undefined;
   onRecoverStaleThread?: (threadId: string) => void;
 }) {
   const [composerDraftsByThread, setComposerDraftsByThread] = useState<
@@ -124,6 +134,7 @@ export function useComposerController({
     isReviewing,
     threadStatusById,
     threadWorkspaceById,
+    itemsByThread,
     workspacesById,
     steerEnabled,
     appsEnabled,
@@ -142,6 +153,7 @@ export function useComposerController({
     startApps,
     startMcp,
     startStatus,
+    getWorkspaceLastAliveAt,
     clearActiveImages,
     onRecoverStaleThread,
   });
