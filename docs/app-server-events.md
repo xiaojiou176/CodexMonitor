@@ -1,4 +1,4 @@
-# App-Server Events Reference (Codex `825a4af42feef5ceacfe97f1b1eb838c18004e3b`)
+# App-Server Events Reference (Codex `fc810ba045d02edbc1526d71d02e102cec142f7b`)
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
@@ -12,6 +12,35 @@ When updating this document:
 3. Compare Codex client request methods vs CodexMonitor outgoing request methods.
 4. Compare Codex server request methods vs CodexMonitor inbound request handling.
 5. Update supported and missing lists below.
+
+## 0.103 Upgrade Delta (2026-02-18 Audit)
+
+This audit is specifically for upgrading to Codex 0.103 and focuses on
+newly relevant v2 notifications that can trigger false incompatibility toasts
+if unsupported.
+
+Upstream methods verified in `codex-rs/app-server-protocol/src/protocol/common.rs`:
+
+- `thread/archived`
+- `thread/unarchived`
+- `model/rerouted`
+
+Current CodexMonitor status:
+
+- They are **not** listed in `src/utils/appServerEvents.ts` `SUPPORTED_APP_SERVER_METHODS`.
+- Unknown methods currently enter unsupported branch in
+  `src/features/app/hooks/useAppServerEvents.ts` and show
+  "协议事件不兼容" (30s throttled).
+
+Required compatibility floor for 0.103:
+
+1. Add all three methods to `SUPPORTED_APP_SERVER_METHODS`.
+2. Keep routing tolerant even before full UX handling is implemented.
+
+Recommended next step after floor:
+
+1. Handle `model/rerouted` to update turn model observability.
+2. Handle `thread/archived|thread/unarchived` to keep sidebar/thread list state in sync.
 
 ## Where To Look In CodexMonitor
 
@@ -99,13 +128,25 @@ CodexMonitor status:
 Compared against Codex app-server protocol v2 notifications, the following
 events are currently not routed:
 
+- `thread/archived`
+- `thread/unarchived`
+- `model/rerouted`
+
+### Note: Supported As Compatibility No-Op
+
+The following methods are recognized and accepted by the router, but currently
+handled as intentional UI no-ops (no state mutation):
+
 - `rawResponseItem/completed`
-- `item/mcpToolCall/progress`
 - `mcpServer/oauthLogin/completed`
-- `thread/compacted` (deprecated; intentionally not routed)
 - `deprecationNotice`
 - `configWarning`
+- `fuzzyFileSearch/sessionUpdated`
+- `fuzzyFileSearch/sessionCompleted`
 - `windows/worldWritableWarning`
+
+`item/mcpToolCall/progress` is actively routed and normalized (not a no-op).
+`thread/compacted` is also recognized for backward compatibility.
 
 ## Supported Requests (CodexMonitor -> App-Server, v2)
 

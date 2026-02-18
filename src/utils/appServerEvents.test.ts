@@ -66,6 +66,9 @@ describe("appServerEvents", () => {
   it("checks supported method and approval requests", () => {
     expect(isSupportedAppServerMethod("turn/started")).toBe(true);
     expect(isSupportedAppServerMethod("thread/compacted")).toBe(true);
+    expect(isSupportedAppServerMethod("model/rerouted")).toBe(true);
+    expect(isSupportedAppServerMethod("thread/archived")).toBe(true);
+    expect(isSupportedAppServerMethod("thread/unarchived")).toBe(true);
     expect(isSupportedAppServerMethod("unknown/method")).toBe(false);
     expect(isCompatPassthroughAppServerMethod("codex/stderr")).toBe(true);
     expect(isCompatPassthroughAppServerMethod("codex/event/mcp_startup_update")).toBe(true);

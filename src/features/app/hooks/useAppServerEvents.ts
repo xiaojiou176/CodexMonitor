@@ -165,6 +165,7 @@ export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
   "item/tool/requestUserInput",
   "mcpServer/oauthLogin/completed",
   "app/list/updated",
+  "model/rerouted",
   "rawResponseItem/completed",
   "deprecationNotice",
   "configWarning",
@@ -175,6 +176,8 @@ export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
   "authStatusChange",
   "loginChatGptComplete",
   "thread/name/updated",
+  "thread/archived",
+  "thread/unarchived",
   "thread/started",
   "thread/tokenUsage/updated",
   "turn/completed",
@@ -854,6 +857,9 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         method === "rawResponseItem/completed" ||
         method === "mcpServer/oauthLogin/completed" ||
         method === "app/list/updated" ||
+        method === "model/rerouted" ||
+        method === "thread/archived" ||
+        method === "thread/unarchived" ||
         method === "deprecationNotice" ||
         method === "configWarning" ||
         method === "fuzzyFileSearch/sessionUpdated" ||
