@@ -4,16 +4,25 @@ import * as notification from "@tauri-apps/plugin-notification";
 import {
   addWorkspace,
   compactThread,
+  createAgent,
+  deleteAgent,
   fetchGit,
   forkThread,
+  getAgentsSettings,
+  getAppsList,
+  getExperimentalFeatureList,
   getGitHubIssues,
   getGitLog,
   getGitStatus,
   getOpenAppIcon,
+  listThreads,
   listMcpServerStatus,
+  readAgentConfigToml,
   readGlobalAgentsMd,
   readGlobalCodexConfigToml,
   listWorkspaces,
+  setAgentsCoreSettings,
+  setCodexFeatureFlag,
   TauriInvokeBridgeUnavailableError,
   orbitConnectTest,
   orbitRunnerStart,
@@ -32,6 +41,7 @@ import {
   sendNotification,
   startReview,
   setThreadName,
+  updateAgent,
   threadLiveSubscribe,
   threadLiveUnsubscribe,
   tailscaleDaemonStart,
@@ -41,6 +51,7 @@ import {
   tailscaleStatus,
   writeGlobalAgentsMd,
   writeGlobalCodexConfigToml,
+  writeAgentConfigToml,
   writeAgentMd,
 } from "./tauri";
 
@@ -210,6 +221,89 @@ describe("tauri invoke wrappers", () => {
       workspaceId: "ws-10",
       cursor: "cursor-1",
       limit: 25,
+    });
+  });
+
+  it("maps workspaceId/cursor/limit/sortKey/cwd for list_threads", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await listThreads("ws-11", "cursor-0", 20, "updated_at", "/tmp/repo");
+
+    expect(invokeMock).toHaveBeenCalledWith("list_threads", {
+      workspaceId: "ws-11",
+      cursor: "cursor-0",
+      limit: 20,
+      sortKey: "updated_at",
+      cwd: "/tmp/repo",
+    });
+  });
+
+  it("keeps list_threads cwd undefined when omitted", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await listThreads("ws-11");
+
+    expect(invokeMock).toHaveBeenCalledWith("list_threads", {
+      workspaceId: "ws-11",
+      cursor: undefined,
+      limit: undefined,
+      sortKey: undefined,
+      cwd: undefined,
+    });
+  });
+
+  it("maps workspaceId/cursor/limit/threadId for apps_list", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await getAppsList("ws-11", "cursor-1", 25, "thread-11");
+
+    expect(invokeMock).toHaveBeenCalledWith("apps_list", {
+      workspaceId: "ws-11",
+      cursor: "cursor-1",
+      limit: 25,
+      threadId: "thread-11",
+    });
+  });
+
+  it("keeps apps_list threadId undefined when omitted", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await getAppsList("ws-11");
+
+    expect(invokeMock).toHaveBeenCalledWith("apps_list", {
+      workspaceId: "ws-11",
+      cursor: undefined,
+      limit: undefined,
+      threadId: undefined,
+    });
+  });
+
+  it("maps workspaceId/cursor/limit for experimental_feature_list", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await getExperimentalFeatureList("ws-11", "cursor-2", 50);
+
+    expect(invokeMock).toHaveBeenCalledWith("experimental_feature_list", {
+      workspaceId: "ws-11",
+      cursor: "cursor-2",
+      limit: 50,
+    });
+  });
+
+  it("maps feature key and enabled for set_codex_feature_flag", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await setCodexFeatureFlag("collab", true);
+
+    expect(invokeMock).toHaveBeenCalledWith("set_codex_feature_flag", {
+      featureKey: "collab",
+      enabled: true,
     });
   });
 
@@ -384,6 +478,120 @@ describe("tauri invoke wrappers", () => {
     });
   });
 
+  it("reads agents settings", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      configPath: "/Users/me/.codex/config.toml",
+      multiAgentEnabled: true,
+      maxThreads: 6,
+      agents: [],
+    });
+
+    await getAgentsSettings();
+
+    expect(invokeMock).toHaveBeenCalledWith("get_agents_settings");
+  });
+
+  it("updates core agents settings", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      configPath: "/Users/me/.codex/config.toml",
+      multiAgentEnabled: false,
+      maxThreads: 4,
+      agents: [],
+    });
+
+    await setAgentsCoreSettings({ multiAgentEnabled: false, maxThreads: 4 });
+
+    expect(invokeMock).toHaveBeenCalledWith("set_agents_core_settings", {
+      input: { multiAgentEnabled: false, maxThreads: 4 },
+    });
+  });
+
+  it("creates an agent", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await createAgent({
+      name: "researcher",
+      description: "Research-focused role",
+      template: "blank",
+      model: "gpt-5-codex",
+      reasoningEffort: "medium",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("create_agent", {
+      input: {
+        name: "researcher",
+        description: "Research-focused role",
+        template: "blank",
+        model: "gpt-5-codex",
+        reasoningEffort: "medium",
+      },
+    });
+  });
+
+  it("updates an agent", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await updateAgent({
+      originalName: "researcher",
+      name: "code_reviewer",
+      description: "Review-focused role",
+      renameManagedFile: true,
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("update_agent", {
+      input: {
+        originalName: "researcher",
+        name: "code_reviewer",
+        description: "Review-focused role",
+        renameManagedFile: true,
+      },
+    });
+  });
+
+  it("deletes an agent", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await deleteAgent({
+      name: "researcher",
+      deleteManagedFile: true,
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("delete_agent", {
+      input: {
+        name: "researcher",
+        deleteManagedFile: true,
+      },
+    });
+  });
+
+  it("reads an agent config file", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce("model = \"gpt-5-codex\"");
+
+    await readAgentConfigToml("researcher");
+
+    expect(invokeMock).toHaveBeenCalledWith("read_agent_config_toml", {
+      agentName: "researcher",
+    });
+  });
+
+  it("writes an agent config file", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await writeAgentConfigToml("researcher", "model = \"gpt-5-codex\"");
+
+    expect(invokeMock).toHaveBeenCalledWith("write_agent_config_toml", {
+      agentName: "researcher",
+      content: "model = \"gpt-5-codex\"",
+    });
+  });
+
   it("fills sendUserMessage defaults in payload", async () => {
     const invokeMock = vi.mocked(invoke);
     invokeMock.mockResolvedValueOnce({});
@@ -400,6 +608,27 @@ describe("tauri invoke wrappers", () => {
       effort: null,
       accessMode: null,
       images: ["image.png"],
+      appMentions: null,
+    });
+  });
+
+  it("includes app mentions when sending a message", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await sendUserMessage("ws-4", "thread-1", "hello $calendar", {
+      appMentions: [{ name: "Calendar", path: "app://connector_calendar" }],
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("send_user_message", {
+      workspaceId: "ws-4",
+      threadId: "thread-1",
+      text: "hello $calendar",
+      model: null,
+      effort: null,
+      accessMode: null,
+      images: null,
+      appMentions: [{ name: "Calendar", path: "app://connector_calendar" }],
     });
   });
 
@@ -415,6 +644,25 @@ describe("tauri invoke wrappers", () => {
       turnId: "turn-2",
       text: "continue",
       images: ["image.png"],
+      appMentions: null,
+    });
+  });
+
+  it("passes app mentions to turn_steer", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await steerTurn("ws-4", "thread-1", "turn-2", "continue", undefined, [
+      { name: "Calendar", path: "app://connector_calendar" },
+    ]);
+
+    expect(invokeMock).toHaveBeenCalledWith("turn_steer", {
+      workspaceId: "ws-4",
+      threadId: "thread-1",
+      turnId: "turn-2",
+      text: "continue",
+      images: null,
+      appMentions: [{ name: "Calendar", path: "app://connector_calendar" }],
     });
   });
 

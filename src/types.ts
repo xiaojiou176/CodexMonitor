@@ -588,11 +588,17 @@ export type AccountSnapshot = {
   requiresOpenaiAuth: boolean | null;
 };
 
+export type AppMention = {
+  name: string;
+  path: string;
+};
+
 export type QueuedMessage = {
   id: string;
   text: string;
   createdAt: number;
   images?: string[];
+  appMentions?: AppMention[];
   workspaceId?: string;
   model?: string | null;
   effort?: string | null;
