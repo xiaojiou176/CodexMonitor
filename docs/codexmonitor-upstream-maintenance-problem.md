@@ -145,3 +145,19 @@ CodexMonitor 当前属于“已形成产品级分叉但尚未制度化同步”�
 - dry-run：`bash scripts/sync-upstream.sh --dry-run --allow-dirty --upstream-remote origin --upstream-branch main --custom-branch main --vendor-branch vendor/upstream`
 - fast verify：`npm run -s sync:verify:fast -- --upstream-remote origin --upstream-branch main --custom-branch custom/main`
 - 输出基线：`behind=9, ahead=24`，变更规模 `647 files`
+
+5. 增量挑拣执行记录（2026-02-17）
+- 分支：`custom/main`
+- 规则：每个主题提交后必须 `npm run typecheck`，失败即回滚（revert/abort）。
+- 已纳入且通过 typecheck：
+  - `d77ab4b`（通知音频播放路径）
+  - `791558b`（Windows 下拉可见性样式修复）
+  - `ebc5260`（app-server docs hash + iOS Info.plist 规范化）
+  - `ed76f8d`（terminal 自动命名序号修复）
+- 已尝试但回滚：
+  - `0788f2c`（post-update release notes toast）→ 与当前 App 结构/导入体系不兼容，已 `revert`
+  - `005cd77`（list_threads workspace cwd）→ 触发 tests/types 语义不兼容，已 `revert`
+  - `cc3ca1d`（panel resize perf）→ 冲突面过大，已 `cherry-pick --abort`
+  - `abddbb2`（multi-remote mobile settings）→ 高耦合跨层冲突，已在隔离 worktree 评估后 `abort`
+
+结论：当前仓库可安全吸收“低耦合修复提交”；高耦合提交需进入专项迁移分支分阶段改造，不适合继续机械 cherry-pick。
