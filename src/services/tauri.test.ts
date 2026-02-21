@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import * as notification from "@tauri-apps/plugin-notification";
 import {
   addWorkspace,
+  appendStructuredLog,
   compactThread,
   createAgent,
   deleteAgent,
@@ -104,6 +105,22 @@ describe("tauri invoke wrappers", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("get_git_status", {
       workspaceId: "ws-1",
+    });
+  });
+
+  it("maps structured log payload for append_structured_log", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await appendStructuredLog("ERROR", "useGitDiffs", "Failed to load git diffs", {
+      workspaceId: "ws-1",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("append_structured_log", {
+      level: "ERROR",
+      source: "useGitDiffs",
+      message: "Failed to load git diffs",
+      context: { workspaceId: "ws-1" },
     });
   });
 

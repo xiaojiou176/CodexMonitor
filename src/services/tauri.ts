@@ -90,6 +90,22 @@ export async function getCodexConfigPath(): Promise<string> {
   return invoke<string>("get_codex_config_path");
 }
 
+export type StructuredLogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
+
+export async function appendStructuredLog(
+  level: StructuredLogLevel,
+  source: string,
+  message: string,
+  context?: Record<string, unknown> | null,
+): Promise<void> {
+  return invoke("append_structured_log", {
+    level,
+    source,
+    message,
+    context: context ?? null,
+  });
+}
+
 export type TextFileResponse = {
   exists: boolean;
   content: string;

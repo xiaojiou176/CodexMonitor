@@ -1,7 +1,8 @@
 import { getIconUrlForFilePath } from "vscode-material-icons";
+import { BoundedCache } from "./boundedCache";
 
 const MATERIAL_ICONS_BASE_URL = "/assets/material-icons";
-const iconUrlCache = new Map<string, string>();
+const iconUrlCache = new BoundedCache<string, string>(512);
 
 export function getFileTypeIconUrl(path: string): string {
   const normalizedPath = path.replace(/\\/g, "/");

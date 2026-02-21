@@ -8,6 +8,8 @@ pub(crate) mod files_core;
 pub(crate) mod git_core;
 pub(crate) mod git_ui_core;
 pub(crate) mod local_usage_core;
+#[allow(dead_code)]
+pub(crate) mod logging_core;
 pub(crate) mod orbit_core;
 pub(crate) mod process_core;
 pub(crate) mod prompts_core;
