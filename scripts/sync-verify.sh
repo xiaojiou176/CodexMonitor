@@ -4,7 +4,7 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 
-UPSTREAM_REMOTE=${UPSTREAM_REMOTE:-upstream}
+UPSTREAM_REMOTE=${UPSTREAM_REMOTE:-}
 UPSTREAM_BRANCH=${UPSTREAM_BRANCH:-main}
 CUSTOM_BRANCH=${CUSTOM_BRANCH:-custom/main}
 BASELINE_RANGE=${BASELINE_RANGE:-}
@@ -15,7 +15,7 @@ usage() {
 Usage: $(basename "$0") [options]
 
 Options:
-  --upstream-remote <name>  Upstream remote name (default: upstream).
+  --upstream-remote <name>  Upstream remote name (default: auto-detect upstream, fallback origin).
   --upstream-branch <name>  Upstream branch name (default: main).
   --custom-branch <name>    Custom branch name (default: custom/main).
   --baseline-range <range>  Previous baseline for range-diff (example: abc123..def456).
@@ -58,13 +58,25 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-if [ -z "$UPSTREAM_REMOTE" ] || [ -z "$UPSTREAM_BRANCH" ] || [ -z "$CUSTOM_BRANCH" ]; then
+if [ -z "$UPSTREAM_BRANCH" ] || [ -z "$CUSTOM_BRANCH" ]; then
   echo "Error: empty parameter is not allowed." >&2
   usage
   exit 1
 fi
 
 cd "$REPO_ROOT"
+
+if [ -z "$UPSTREAM_REMOTE" ]; then
+  if git remote get-url upstream >/dev/null 2>&1; then
+    UPSTREAM_REMOTE=upstream
+  elif git remote get-url origin >/dev/null 2>&1; then
+    UPSTREAM_REMOTE=origin
+  else
+    echo "Error: could not auto-detect upstream remote (checked: upstream, origin)." >&2
+    echo "Hint: pass --upstream-remote <name> explicitly." >&2
+    exit 1
+  fi
+fi
 
 echo "[sync-verify] repo: $REPO_ROOT"
 echo "[sync-verify] upstream base: $UPSTREAM_REMOTE/$UPSTREAM_BRANCH"
@@ -111,4 +123,3 @@ npm run test
 )
 
 echo "[sync-verify] done"
-

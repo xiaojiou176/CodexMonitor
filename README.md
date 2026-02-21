@@ -283,6 +283,15 @@ npm run test:repo
 - Upstream sync runbook: `docs/upstream-sync-runbook.md`
 - Upstream patch inventory template: `docs/upstream-patch-inventory.md`
 
+## Upstream Sync Commands
+
+- Dry run: `npm run sync:upstream:dry`
+- Execute sync: `npm run sync:upstream`
+- Quick verification: `npm run sync:verify:fast`
+- Full verification: `npm run sync:verify`
+
+Default remote detection order is `upstream` then `origin`.
+
 ## Project Structure
 
 ```
