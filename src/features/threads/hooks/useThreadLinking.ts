@@ -1,17 +1,27 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { Dispatch } from "react";
 import type { ThreadAction } from "./useThreadsReducer";
 import { asString, normalizeStringList } from "../utils/threadNormalize";
+import { isSubAgentSource } from "../utils/subAgentSource";
 
 type UseThreadLinkingOptions = {
   dispatch: Dispatch<ThreadAction>;
   threadParentById: Record<string, string>;
+  onCollabLinkedThread?: (threadId: string) => void;
+};
+
+type UpdateThreadParentOptions = {
+  source?: unknown;
+  allowReparent?: boolean;
 };
 
 export function useThreadLinking({
   dispatch,
   threadParentById,
+  onCollabLinkedThread,
 }: UseThreadLinkingOptions) {
+  const reparentedThreadIdsRef = useRef<Record<string, true>>({});
+
   const wouldCreateThreadCycle = useCallback(
     (parentId: string, childId: string) => {
       const visited = new Set([childId]);
@@ -29,10 +39,16 @@ export function useThreadLinking({
   );
 
   const updateThreadParent = useCallback(
-    (parentId: string, childIds: string[]) => {
+    (
+      parentId: string,
+      childIds: string[],
+      options?: UpdateThreadParentOptions,
+    ) => {
       if (!parentId || childIds.length === 0) {
         return;
       }
+      const allowReparent =
+        options?.allowReparent ?? isSubAgentSource(options?.source);
       childIds.forEach((childId) => {
         if (!childId || childId === parentId) {
           return;
@@ -42,10 +58,15 @@ export function useThreadLinking({
           return;
         }
         if (existingParent) {
-          return;
+          if (!allowReparent || reparentedThreadIdsRef.current[childId]) {
+            return;
+          }
         }
         if (wouldCreateThreadCycle(parentId, childId)) {
           return;
+        }
+        if (existingParent && existingParent !== parentId) {
+          reparentedThreadIdsRef.current[childId] = true;
         }
         dispatch({ type: "setThreadParent", threadId: childId, parentId });
       });
@@ -69,9 +90,12 @@ export function useThreadLinking({
         ...normalizeStringList(item.receiverThreadIds ?? item.receiver_thread_ids),
         ...normalizeStringList(item.newThreadId ?? item.new_thread_id),
       ];
+      receivers.forEach((childId) => {
+        onCollabLinkedThread?.(childId);
+      });
       updateThreadParent(parentId, receivers);
     },
-    [updateThreadParent],
+    [onCollabLinkedThread, updateThreadParent],
   );
 
   const applyCollabThreadLinksFromThread = useCallback(

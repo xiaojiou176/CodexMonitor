@@ -13,6 +13,7 @@ import type {
   OrbitRunnerStatus,
   OrbitSignInPollResult,
   OrbitSignOutResult,
+  SkillMention,
   ThreadArchiveBatchResult,
   TcpDaemonStatus,
   TailscaleDaemonCommandPreview,
@@ -362,6 +363,7 @@ export async function sendUserMessage(
     images?: string[];
     collaborationMode?: Record<string, unknown> | null;
     appMentions?: AppMention[];
+    skillMentions?: SkillMention[];
   },
 ) {
   const payload: Record<string, unknown> = {
@@ -373,6 +375,7 @@ export async function sendUserMessage(
     accessMode: null, // Always null — let app-server use config.toml
     images: options?.images ?? null,
     appMentions: options?.appMentions ?? null,
+    skillMentions: options?.skillMentions ?? null,
   };
   if (options?.collaborationMode) {
     payload.collaborationMode = options.collaborationMode;
@@ -395,6 +398,7 @@ export async function steerTurn(
   text: string,
   images?: string[],
   appMentions?: AppMention[],
+  skillMentions?: SkillMention[],
 ) {
   return invoke("turn_steer", {
     workspaceId,
@@ -403,6 +407,7 @@ export async function steerTurn(
     text,
     images: images ?? null,
     appMentions: appMentions ?? null,
+    skillMentions: skillMentions ?? null,
   });
 }
 

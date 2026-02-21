@@ -236,6 +236,32 @@
   color: var(--text-muted);
 }
 
+.sidebar-subagent-toggle {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.sidebar-subagent-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.sidebar-subagent-toggle:hover,
+.sidebar-subagent-toggle:focus-visible,
+.sidebar-subagent-toggle.is-active {
+  color: var(--text-strong);
+  background: var(--surface-hover);
+  transform: none;
+  box-shadow: none;
+}
+
 .sidebar-refresh-toggle {
   width: 28px;
   height: 28px;
@@ -974,47 +1000,31 @@
   position: relative;
 }
 
-.thread-row-indent-10-1 { --thread-indent: 10px; }
-.thread-row-indent-10-2 { --thread-indent: 20px; }
-.thread-row-indent-10-3 { --thread-indent: 30px; }
-.thread-row-indent-10-4 { --thread-indent: 40px; }
-.thread-row-indent-10-5 { --thread-indent: 50px; }
-.thread-row-indent-10-6 { --thread-indent: 60px; }
-.thread-row-indent-10-7 { --thread-indent: 70px; }
-.thread-row-indent-10-8 { --thread-indent: 80px; }
-.thread-row-indent-10-9 { --thread-indent: 90px; }
-.thread-row-indent-10-10 { --thread-indent: 100px; }
-.thread-row-indent-10-11 { --thread-indent: 110px; }
-.thread-row-indent-10-12 { --thread-indent: 120px; }
-.thread-row-indent-10-13 { --thread-indent: 130px; }
-.thread-row-indent-10-14 { --thread-indent: 140px; }
-.thread-row-indent-10-15 { --thread-indent: 150px; }
-.thread-row-indent-10-16 { --thread-indent: 160px; }
-.thread-row-indent-10-17 { --thread-indent: 170px; }
-.thread-row-indent-10-18 { --thread-indent: 180px; }
-.thread-row-indent-10-19 { --thread-indent: 190px; }
-.thread-row-indent-10-20 { --thread-indent: 200px; }
+.thread-collapse-toggle {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+}
 
-.thread-row-indent-14-1 { --thread-indent: 14px; }
-.thread-row-indent-14-2 { --thread-indent: 28px; }
-.thread-row-indent-14-3 { --thread-indent: 42px; }
-.thread-row-indent-14-4 { --thread-indent: 56px; }
-.thread-row-indent-14-5 { --thread-indent: 70px; }
-.thread-row-indent-14-6 { --thread-indent: 84px; }
-.thread-row-indent-14-7 { --thread-indent: 98px; }
-.thread-row-indent-14-8 { --thread-indent: 112px; }
-.thread-row-indent-14-9 { --thread-indent: 126px; }
-.thread-row-indent-14-10 { --thread-indent: 140px; }
-.thread-row-indent-14-11 { --thread-indent: 154px; }
-.thread-row-indent-14-12 { --thread-indent: 168px; }
-.thread-row-indent-14-13 { --thread-indent: 182px; }
-.thread-row-indent-14-14 { --thread-indent: 196px; }
-.thread-row-indent-14-15 { --thread-indent: 210px; }
-.thread-row-indent-14-16 { --thread-indent: 224px; }
-.thread-row-indent-14-17 { --thread-indent: 238px; }
-.thread-row-indent-14-18 { --thread-indent: 252px; }
-.thread-row-indent-14-19 { --thread-indent: 266px; }
-.thread-row-indent-14-20 { --thread-indent: 280px; }
+.thread-collapse-toggle svg {
+  width: 12px;
+  height: 12px;
+}
+
+.thread-collapse-toggle:hover,
+.thread-collapse-toggle:focus-visible {
+  color: var(--text-strong);
+  background: var(--surface-hover);
+}
 
 .thread-row:focus-visible {
   outline: 2px solid var(--border-accent-soft);

@@ -103,6 +103,8 @@ export type LayoutNodesOptions = {
   threadListSortKey: ThreadListSortKey;
   onSetThreadListSortKey: (sortKey: ThreadListSortKey) => void;
   onRefreshAllThreads: () => void;
+  showSubAgentThreadsInSidebar: boolean;
+  onToggleShowSubAgentThreadsInSidebar: () => void;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   activeItems: ConversationItem[];

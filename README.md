@@ -75,6 +75,13 @@ npm run start:dev
 
 (Equivalent direct command: `npm run tauri:dev`.)
 
+Dev ports:
+
+- Default Vite/Tauri dev port: `17420`
+- Default HMR port: `17421`
+- Default Playwright web port (`PLAYWRIGHT_WEB_PORT`): `17473`
+- Auto-fallback search range: `17420-17520`
+
 ### Optional: Create a desktop shortcut
 
 Create a one-click desktop launcher:

@@ -218,6 +218,7 @@ export type AppSettings = {
   collaborationModesEnabled: boolean;
   steerEnabled: boolean;
   unifiedExecEnabled: boolean;
+  showSubAgentThreadsInSidebar: boolean;
   autoArchiveSubAgentThreadsEnabled: boolean;
   autoArchiveSubAgentThreadsMaxAgeMinutes: number;
   experimentalAppsEnabled: boolean;
@@ -593,12 +594,18 @@ export type AppMention = {
   path: string;
 };
 
+export type SkillMention = {
+  name: string;
+  path: string;
+};
+
 export type QueuedMessage = {
   id: string;
   text: string;
   createdAt: number;
   images?: string[];
   appMentions?: AppMention[];
+  skillMentions?: SkillMention[];
   workspaceId?: string;
   model?: string | null;
   effort?: string | null;
@@ -664,6 +671,12 @@ export type SkillOption = {
   name: string;
   path: string;
   description?: string;
+  scope?: string;
+  enabled?: boolean;
+  interface?: unknown;
+  dependencies?: unknown;
+  errors?: string[];
+  cwd?: string;
 };
 
 export type AppOption = {

@@ -1,6 +1,7 @@
 import Calendar from "lucide-react/dist/esm/icons/calendar";
 import Clock3 from "lucide-react/dist/esm/icons/clock-3";
 import FolderPlus from "lucide-react/dist/esm/icons/folder-plus";
+import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import ListFilter from "lucide-react/dist/esm/icons/list-filter";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Search from "lucide-react/dist/esm/icons/search";
@@ -20,6 +21,8 @@ type SidebarHeaderProps = {
   threadListSortKey: ThreadListSortKey;
   onSetThreadListSortKey: (sortKey: ThreadListSortKey) => void;
   onRefreshAllThreads: () => void;
+  showSubAgentThreadsInSidebar: boolean;
+  onToggleShowSubAgentThreadsInSidebar: () => void;
   refreshDisabled?: boolean;
   refreshInProgress?: boolean;
 };
@@ -32,6 +35,8 @@ export function SidebarHeader({
   threadListSortKey,
   onSetThreadListSortKey,
   onRefreshAllThreads,
+  showSubAgentThreadsInSidebar,
+  onToggleShowSubAgentThreadsInSidebar,
   refreshDisabled = false,
   refreshInProgress = false,
 }: SidebarHeaderProps) {
@@ -116,6 +121,17 @@ export function SidebarHeader({
             </PopoverSurface>
           )}
         </div>
+        <button
+          className={`ghost sidebar-subagent-toggle${showSubAgentThreadsInSidebar ? " is-active" : ""}`}
+          onClick={onToggleShowSubAgentThreadsInSidebar}
+          data-tauri-drag-region="false"
+          aria-label={showSubAgentThreadsInSidebar ? "隐藏子代理线程" : "显示子代理线程"}
+          aria-pressed={showSubAgentThreadsInSidebar}
+          type="button"
+          title={showSubAgentThreadsInSidebar ? "隐藏子代理线程" : "显示子代理线程"}
+        >
+          <GitBranch aria-hidden />
+        </button>
         <button
           className="ghost sidebar-refresh-toggle"
           onClick={onRefreshAllThreads}

@@ -211,8 +211,306 @@ describe("useThreadMessaging telemetry", () => {
       "turn-1",
       "steer this",
       [],
+      undefined,
+      [],
     );
     expect(sendUserMessageService).not.toHaveBeenCalled();
+  });
+
+  it("extracts and forwards skill mentions from final message text", async () => {
+    const { result } = renderHook(() =>
+      useThreadMessaging({
+        activeWorkspace: workspace,
+        activeThreadId: "thread-1",
+        model: null,
+        effort: null,
+        collaborationMode: null,
+        reviewDeliveryMode: "inline",
+        steerEnabled: false,
+        skills: [
+          { name: "deep_debug", path: "/Users/me/.codex/skills/_深度模式/深度调试模式/SKILL.md" },
+          { name: "relativeSkill", path: "skills/relative/SKILL.md" },
+        ],
+        customPrompts: [],
+        threadStatusById: {},
+        activeTurnIdByThread: {},
+        rateLimitsByWorkspace: {},
+        pendingInterruptsRef: { current: new Set<string>() },
+        dispatch: vi.fn(),
+        getCustomName: vi.fn(() => undefined),
+        markProcessing: vi.fn(),
+        markReviewing: vi.fn(),
+        setActiveTurnId: vi.fn(),
+        recordThreadActivity: vi.fn(),
+        safeMessageActivity: vi.fn(),
+        onDebug: vi.fn(),
+        pushThreadErrorMessage: vi.fn(),
+        ensureThreadForActiveWorkspace: vi.fn(async () => "thread-1"),
+        ensureThreadForWorkspace: vi.fn(async () => "thread-1"),
+        refreshThread: vi.fn(async () => null),
+        forkThreadForWorkspace: vi.fn(async () => null),
+        updateThreadParent: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "run $deep_debug then again $deep_debug",
+        [],
+      );
+    });
+
+    expect(sendUserMessageService).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "run $deep_debug then again $deep_debug",
+      expect.objectContaining({
+        skillMentions: [
+          {
+            name: "deep_debug",
+            path: "/Users/me/.codex/skills/_深度模式/深度调试模式/SKILL.md",
+          },
+        ],
+      }),
+    );
+  });
+
+  it("extracts and forwards unicode skill mentions from final message text", async () => {
+    const { result } = renderHook(() =>
+      useThreadMessaging({
+        activeWorkspace: workspace,
+        activeThreadId: "thread-1",
+        model: null,
+        effort: null,
+        collaborationMode: null,
+        reviewDeliveryMode: "inline",
+        steerEnabled: false,
+        skills: [
+          { name: "深度调试模式", path: "/Users/me/.codex/skills/_深度模式/深度调试模式/SKILL.md" },
+        ],
+        customPrompts: [],
+        threadStatusById: {},
+        activeTurnIdByThread: {},
+        rateLimitsByWorkspace: {},
+        pendingInterruptsRef: { current: new Set<string>() },
+        dispatch: vi.fn(),
+        getCustomName: vi.fn(() => undefined),
+        markProcessing: vi.fn(),
+        markReviewing: vi.fn(),
+        setActiveTurnId: vi.fn(),
+        recordThreadActivity: vi.fn(),
+        safeMessageActivity: vi.fn(),
+        onDebug: vi.fn(),
+        pushThreadErrorMessage: vi.fn(),
+        ensureThreadForActiveWorkspace: vi.fn(async () => "thread-1"),
+        ensureThreadForWorkspace: vi.fn(async () => "thread-1"),
+        refreshThread: vi.fn(async () => null),
+        forkThreadForWorkspace: vi.fn(async () => null),
+        updateThreadParent: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "请执行 $深度调试模式 并继续",
+        [],
+      );
+    });
+
+    expect(sendUserMessageService).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "请执行 $深度调试模式 并继续",
+      expect.objectContaining({
+        skillMentions: [
+          {
+            name: "深度调试模式",
+            path: "/Users/me/.codex/skills/_深度模式/深度调试模式/SKILL.md",
+          },
+        ],
+      }),
+    );
+  });
+
+  it("extracts unicode skill mentions when token has a space after $", async () => {
+    const { result } = renderHook(() =>
+      useThreadMessaging({
+        activeWorkspace: workspace,
+        activeThreadId: "thread-1",
+        model: null,
+        effort: null,
+        collaborationMode: null,
+        reviewDeliveryMode: "inline",
+        steerEnabled: false,
+        skills: [
+          { name: "深度调试模式", path: "/Users/me/.codex/skills/_深度模式/深度调试模式/SKILL.md" },
+        ],
+        customPrompts: [],
+        threadStatusById: {},
+        activeTurnIdByThread: {},
+        rateLimitsByWorkspace: {},
+        pendingInterruptsRef: { current: new Set<string>() },
+        dispatch: vi.fn(),
+        getCustomName: vi.fn(() => undefined),
+        markProcessing: vi.fn(),
+        markReviewing: vi.fn(),
+        setActiveTurnId: vi.fn(),
+        recordThreadActivity: vi.fn(),
+        safeMessageActivity: vi.fn(),
+        onDebug: vi.fn(),
+        pushThreadErrorMessage: vi.fn(),
+        ensureThreadForActiveWorkspace: vi.fn(async () => "thread-1"),
+        ensureThreadForWorkspace: vi.fn(async () => "thread-1"),
+        refreshThread: vi.fn(async () => null),
+        forkThreadForWorkspace: vi.fn(async () => null),
+        updateThreadParent: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "请执行 $ 深度调试模式 并继续",
+        [],
+      );
+    });
+
+    expect(sendUserMessageService).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "请执行 $ 深度调试模式 并继续",
+      expect.objectContaining({
+        skillMentions: [
+          {
+            name: "深度调试模式",
+            path: "/Users/me/.codex/skills/_深度模式/深度调试模式/SKILL.md",
+          },
+        ],
+      }),
+    );
+  });
+
+  it("extracts unicode skill mentions from full-width dollar tokens", async () => {
+    const { result } = renderHook(() =>
+      useThreadMessaging({
+        activeWorkspace: workspace,
+        activeThreadId: "thread-1",
+        model: null,
+        effort: null,
+        collaborationMode: null,
+        reviewDeliveryMode: "inline",
+        steerEnabled: false,
+        skills: [
+          { name: "深度调试模式", path: "/Users/me/.codex/skills/_深度模式/深度调试模式/SKILL.md" },
+        ],
+        customPrompts: [],
+        threadStatusById: {},
+        activeTurnIdByThread: {},
+        rateLimitsByWorkspace: {},
+        pendingInterruptsRef: { current: new Set<string>() },
+        dispatch: vi.fn(),
+        getCustomName: vi.fn(() => undefined),
+        markProcessing: vi.fn(),
+        markReviewing: vi.fn(),
+        setActiveTurnId: vi.fn(),
+        recordThreadActivity: vi.fn(),
+        safeMessageActivity: vi.fn(),
+        onDebug: vi.fn(),
+        pushThreadErrorMessage: vi.fn(),
+        ensureThreadForActiveWorkspace: vi.fn(async () => "thread-1"),
+        ensureThreadForWorkspace: vi.fn(async () => "thread-1"),
+        refreshThread: vi.fn(async () => null),
+        forkThreadForWorkspace: vi.fn(async () => null),
+        updateThreadParent: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "请执行 ＄深度调试模式 并继续",
+        [],
+      );
+    });
+
+    expect(sendUserMessageService).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "请执行 ＄深度调试模式 并继续",
+      expect.objectContaining({
+        skillMentions: [
+          {
+            name: "深度调试模式",
+            path: "/Users/me/.codex/skills/_深度模式/深度调试模式/SKILL.md",
+          },
+        ],
+      }),
+    );
+  });
+
+  it("extracts spaced skill-name mentions such as $my skill", async () => {
+    const { result } = renderHook(() =>
+      useThreadMessaging({
+        activeWorkspace: workspace,
+        activeThreadId: "thread-1",
+        model: null,
+        effort: null,
+        collaborationMode: null,
+        reviewDeliveryMode: "inline",
+        steerEnabled: false,
+        skills: [
+          { name: "my skill", path: "/Users/me/.codex/skills/my-skill/SKILL.md" },
+        ],
+        customPrompts: [],
+        threadStatusById: {},
+        activeTurnIdByThread: {},
+        rateLimitsByWorkspace: {},
+        pendingInterruptsRef: { current: new Set<string>() },
+        dispatch: vi.fn(),
+        getCustomName: vi.fn(() => undefined),
+        markProcessing: vi.fn(),
+        markReviewing: vi.fn(),
+        setActiveTurnId: vi.fn(),
+        recordThreadActivity: vi.fn(),
+        safeMessageActivity: vi.fn(),
+        onDebug: vi.fn(),
+        pushThreadErrorMessage: vi.fn(),
+        ensureThreadForActiveWorkspace: vi.fn(async () => "thread-1"),
+        ensureThreadForWorkspace: vi.fn(async () => "thread-1"),
+        refreshThread: vi.fn(async () => null),
+        forkThreadForWorkspace: vi.fn(async () => null),
+        updateThreadParent: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "run $my skill now",
+        [],
+      );
+    });
+
+    expect(sendUserMessageService).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "run $my skill now",
+      expect.objectContaining({
+        skillMentions: [
+          {
+            name: "my skill",
+            path: "/Users/me/.codex/skills/my-skill/SKILL.md",
+          },
+        ],
+      }),
+    );
   });
 
   it("enforces sub-agent model inheritance in collaboration settings", async () => {
@@ -504,6 +802,8 @@ describe("useThreadMessaging telemetry", () => {
       "turn-1",
       "steer drift",
       [],
+      undefined,
+      [],
     );
     expect(steerTurnService).toHaveBeenNthCalledWith(
       2,
@@ -511,6 +811,8 @@ describe("useThreadMessaging telemetry", () => {
       "thread-1",
       "turn-2",
       "steer drift",
+      [],
+      undefined,
       [],
     );
     expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", "turn-2");

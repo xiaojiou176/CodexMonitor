@@ -129,6 +129,17 @@ type ThreadEventHandlersOptions = {
     threadId: string,
     item: Record<string, unknown>,
   ) => void;
+  updateThreadParent: (
+    parentId: string,
+    childIds: string[],
+    options?: { source?: unknown; allowReparent?: boolean },
+  ) => void;
+  markSubAgentThread?: (threadId: string) => void;
+  recordThreadCreatedAt?: (
+    threadId: string,
+    createdAt: number,
+    fallbackTimestamp?: number,
+  ) => void;
   onReviewExited?: (workspaceId: string, threadId: string) => void;
   approvalAllowlistRef: MutableRefObject<Record<string, string[][]>>;
   pendingInterruptsRef: MutableRefObject<Set<string>>;
@@ -162,6 +173,9 @@ export function useThreadEventHandlers({
   onDebug,
   onWorkspaceConnected,
   applyCollabThreadLinks,
+  updateThreadParent,
+  markSubAgentThread,
+  recordThreadCreatedAt,
   onReviewExited,
   approvalAllowlistRef,
   pendingInterruptsRef,
@@ -250,6 +264,9 @@ export function useThreadEventHandlers({
     pushThreadErrorMessage,
     safeMessageActivity,
     recordThreadActivity,
+    updateThreadParent,
+    markSubAgentThread,
+    recordThreadCreatedAt,
     resolveCurrentModel,
   });
 

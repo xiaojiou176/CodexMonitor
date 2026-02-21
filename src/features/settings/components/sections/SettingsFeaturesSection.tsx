@@ -147,6 +147,28 @@ export function SettingsFeaturesSection({
       </div>
       <div className="settings-toggle-row">
         <div>
+          <div className="settings-toggle-title">侧边栏显示子代理线程</div>
+          <div className="settings-toggle-subtitle">
+            在项目侧边栏中显示或隐藏子代理线程（可在侧边栏头部快速切换）。
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`settings-toggle ${appSettings.showSubAgentThreadsInSidebar ? "on" : ""}`}
+          onClick={() =>
+            void onUpdateAppSettings({
+              ...appSettings,
+              showSubAgentThreadsInSidebar:
+                !appSettings.showSubAgentThreadsInSidebar,
+            })
+          }
+          aria-pressed={appSettings.showSubAgentThreadsInSidebar}
+        >
+          <span className="settings-toggle-knob" />
+        </button>
+      </div>
+      <div className="settings-toggle-row">
+        <div>
           <div className="settings-toggle-title">自动归档子代理线程</div>
           <div className="settings-toggle-subtitle">
             自动归档创建时间超过阈值且处于不活跃状态的子代理线程。

@@ -2,9 +2,13 @@ import { useCallback } from "react";
 
 import type { ThreadSummary } from "../../../types";
 
-type ThreadRow = {
+export type ThreadRow = {
   thread: ThreadSummary;
   depth: number;
+  rootId: string;
+  isSubAgent: boolean;
+  hasSubAgentDescendants: boolean;
+  isCollapsed: boolean;
 };
 
 type ThreadRowResult = {
@@ -14,6 +18,11 @@ type ThreadRowResult = {
   hasMoreRoots: boolean;
 };
 
+type GetThreadRowsOptions = {
+  showSubAgentThreads?: boolean;
+  isRootCollapsed?: (workspaceId: string, rootId: string) => boolean;
+};
+
 export function useThreadRows(threadParentById: Record<string, string>) {
   const getThreadRows = useCallback(
     (
@@ -21,7 +30,10 @@ export function useThreadRows(threadParentById: Record<string, string>) {
       isExpanded: boolean,
       workspaceId: string,
       getPinTimestamp: (workspaceId: string, threadId: string) => number | null,
+      options?: GetThreadRowsOptions,
     ): ThreadRowResult => {
+      const showSubAgentThreads = options?.showSubAgentThreads ?? true;
+      const isRootCollapsed = options?.isRootCollapsed ?? (() => false);
       const threadIds = new Set(threads.map((thread) => thread.id));
       const childrenByParent = new Map<string, ThreadSummary[]>();
       const roots: ThreadSummary[] = [];
@@ -53,6 +65,9 @@ export function useThreadRows(threadParentById: Record<string, string>) {
       const unpinnedRoots: ThreadSummary[] = [];
 
       roots.forEach((thread) => {
+        if (!showSubAgentThreads && threadParentById[thread.id]) {
+          return;
+        }
         const pinTime = getPinTimestamp(workspaceId, thread.id);
         if (pinTime !== null) {
           pinnedRoots.push(thread);
@@ -73,18 +88,40 @@ export function useThreadRows(threadParentById: Record<string, string>) {
       const appendThread = (
         thread: ThreadSummary,
         depth: number,
+        rootId: string,
+        rootCollapsed: boolean,
         rows: ThreadRow[],
       ) => {
-        rows.push({ thread, depth });
         const children = childrenByParent.get(thread.id) ?? [];
-        children.forEach((child) => appendThread(child, depth + 1, rows));
+        const isSubAgent = depth > 0 || Boolean(threadParentById[thread.id]);
+        rows.push({
+          thread,
+          depth,
+          rootId,
+          isSubAgent,
+          hasSubAgentDescendants: showSubAgentThreads && children.length > 0,
+          isCollapsed: depth === 0 ? rootCollapsed : false,
+        });
+        if (!showSubAgentThreads) {
+          return;
+        }
+        if (depth === 0 && rootCollapsed) {
+          return;
+        }
+        children.forEach((child) => appendThread(child, depth + 1, rootId, false, rows));
       };
 
       const pinnedRows: ThreadRow[] = [];
-      pinnedRoots.forEach((thread) => appendThread(thread, 0, pinnedRows));
+      pinnedRoots.forEach((thread) => {
+        const rootCollapsed = isRootCollapsed(workspaceId, thread.id);
+        appendThread(thread, 0, thread.id, rootCollapsed, pinnedRows);
+      });
 
       const unpinnedRows: ThreadRow[] = [];
-      visibleRoots.forEach((thread) => appendThread(thread, 0, unpinnedRows));
+      visibleRoots.forEach((thread) => {
+        const rootCollapsed = isRootCollapsed(workspaceId, thread.id);
+        appendThread(thread, 0, thread.id, rootCollapsed, unpinnedRows);
+      });
 
       return {
         pinnedRows,

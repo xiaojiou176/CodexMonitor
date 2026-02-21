@@ -10,9 +10,34 @@ import {
 
 /** Derive a short human-readable source label from the full skill path. */
 function skillSourceLabel(path: string): string {
+  if (!path) return "未知";
   if (path.includes("/.codex/skills/")) return "Codex";
   if (path.includes("/prompts/") || path.includes("/workspace/")) return "工作区";
   return "自定义";
+}
+
+function summarizeDependencies(dependencies: unknown): string | null {
+  if (!dependencies) {
+    return null;
+  }
+  if (Array.isArray(dependencies)) {
+    return dependencies.length > 0 ? `依赖 ${dependencies.length}` : "依赖";
+  }
+  if (typeof dependencies !== "object") {
+    return "依赖";
+  }
+  const record = dependencies as Record<string, unknown>;
+  const nestedCount = Object.values(record).reduce<number>((sum, value) => {
+    if (Array.isArray(value)) {
+      return sum + value.length;
+    }
+    return sum;
+  }, 0);
+  if (nestedCount > 0) {
+    return `依赖 ${nestedCount}`;
+  }
+  const keys = Object.keys(record).length;
+  return keys > 0 ? `依赖 ${keys}` : "依赖";
 }
 
 type SkillsPanelProps = {
@@ -69,26 +94,51 @@ export function SkillsPanel({
             {query ? "未找到匹配的技能" : "当前工作区暂无可用技能"}
           </div>
         ) : (
-          filtered.map((skill) => (
-            <button
-              key={skill.name}
-              type="button"
-              className="skills-panel-item"
-              role="listitem"
-              onClick={() => onInvokeSkill?.(skill)}
-              title={skill.path}
-            >
-              <span className="skills-panel-item-header">
-                <span className="skills-panel-item-name">{skill.name}</span>
-                <span className="skills-panel-item-source">
-                  {skillSourceLabel(skill.path)}
+          filtered.map((skill) => {
+            const dependencySummary = summarizeDependencies(skill.dependencies);
+            return (
+              <button
+                key={skill.path ? `${skill.path}::${skill.name}` : skill.name}
+                type="button"
+                className="skills-panel-item"
+                role="listitem"
+                onClick={() => onInvokeSkill?.(skill)}
+                title={skill.path}
+              >
+                <span className="skills-panel-item-header">
+                  <span className="skills-panel-item-name">{skill.name}</span>
+                  <span className="skills-panel-item-source">
+                    {skillSourceLabel(skill.path)}
+                  </span>
                 </span>
-              </span>
-              {skill.description ? (
-                <span className="skills-panel-item-desc">{skill.description}</span>
-              ) : null}
-            </button>
-          ))
+                {skill.description ? (
+                  <span className="skills-panel-item-desc">{skill.description}</span>
+                ) : null}
+                <span className="skills-panel-item-meta">
+                  <span className="skills-panel-item-pill">
+                    {skill.enabled === false ? "Disabled" : "Enabled"}
+                  </span>
+                  {skill.scope ? (
+                    <span className="skills-panel-item-pill">{skill.scope}</span>
+                  ) : null}
+                  {dependencySummary ? (
+                    <span className="skills-panel-item-pill">{dependencySummary}</span>
+                  ) : null}
+                  {skill.interface != null ? (
+                    <span className="skills-panel-item-pill">接口</span>
+                  ) : null}
+                </span>
+                {skill.errors && skill.errors.length > 0 ? (
+                  <span
+                    className="skills-panel-item-error"
+                    title={skill.errors.join("\n")}
+                  >
+                    {skill.errors[0]}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })
         )}
       </div>
     </PanelFrame>

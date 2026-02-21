@@ -59,6 +59,10 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       threadListSortKey={options.threadListSortKey}
       onSetThreadListSortKey={options.onSetThreadListSortKey}
       onRefreshAllThreads={options.onRefreshAllThreads}
+      showSubAgentThreadsInSidebar={options.showSubAgentThreadsInSidebar}
+      onToggleShowSubAgentThreadsInSidebar={
+        options.onToggleShowSubAgentThreadsInSidebar
+      }
       activeWorkspaceId={options.activeWorkspaceId}
       activeThreadId={options.activeThreadId}
       accountInfo={options.accountInfo}

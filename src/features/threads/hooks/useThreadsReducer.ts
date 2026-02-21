@@ -843,6 +843,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       const { [action.threadId]: ____, ...restDiffs } = state.turnDiffByThread;
       const { [action.threadId]: _____, ...restPlans } = state.planByThread;
       const { [action.threadId]: ______, ...restParents } = state.threadParentById;
+      const restParentsWithoutRemovedParent = Object.fromEntries(
+        Object.entries(restParents).filter(([, parentId]) => parentId !== action.threadId),
+      );
       const { [action.threadId]: _______, ...restTurnMetaByThread } = state.turnMetaByThread;
       const restTurnMetaByTurnId = Object.fromEntries(
         Object.entries(state.turnMetaByTurnId).filter(
@@ -860,7 +863,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         activeTurnIdByThread: restTurns,
         turnDiffByThread: restDiffs,
         planByThread: restPlans,
-        threadParentById: restParents,
+        threadParentById: restParentsWithoutRemovedParent,
         turnMetaByThread: restTurnMetaByThread,
         turnMetaByTurnId: restTurnMetaByTurnId,
         activeThreadIdByWorkspace: {

@@ -42,6 +42,9 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const pushThreadErrorMessage = vi.fn();
   const safeMessageActivity = vi.fn();
   const recordThreadActivity = vi.fn();
+  const updateThreadParent = vi.fn();
+  const markSubAgentThread = vi.fn();
+  const recordThreadCreatedAt = vi.fn();
   const pendingInterruptsRef = {
     current: new Set(overrides.pendingInterrupts ?? []),
   };
@@ -67,6 +70,9 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
       pushThreadErrorMessage,
       safeMessageActivity,
       recordThreadActivity,
+      updateThreadParent,
+      markSubAgentThread,
+      recordThreadCreatedAt,
     }),
   );
 
@@ -86,6 +92,9 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
     pushThreadErrorMessage,
     safeMessageActivity,
     recordThreadActivity,
+    updateThreadParent,
+    markSubAgentThread,
+    recordThreadCreatedAt,
     pendingInterruptsRef,
     planByThreadRef,
   };
@@ -97,7 +106,13 @@ describe("useThreadTurnEvents", () => {
   });
 
   it("upserts thread summaries when a thread starts", () => {
-    const { result, dispatch, recordThreadActivity, safeMessageActivity } =
+    const {
+      result,
+      dispatch,
+      recordThreadActivity,
+      safeMessageActivity,
+      recordThreadCreatedAt,
+    } =
       makeOptions();
 
     act(() => {
@@ -130,7 +145,41 @@ describe("useThreadTurnEvents", () => {
       "thread-1",
       1_700_000_000_000,
     );
+    expect(recordThreadCreatedAt).toHaveBeenCalledWith(
+      "thread-1",
+      0,
+      1_700_000_000_000,
+    );
     expect(safeMessageActivity).toHaveBeenCalled();
+  });
+
+  it("builds parent/subagent link immediately on thread started from source", () => {
+    const { result, updateThreadParent, markSubAgentThread, recordThreadCreatedAt } =
+      makeOptions();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", {
+        id: "thread-child",
+        source: {
+          subagent: {
+            threadSpawn: {
+              parentThreadId: "thread-parent",
+            },
+          },
+        },
+        updated_at: 1234,
+      });
+    });
+
+    expect(updateThreadParent).toHaveBeenCalledWith(
+      "thread-parent",
+      ["thread-child"],
+      expect.objectContaining({
+        allowReparent: true,
+      }),
+    );
+    expect(markSubAgentThread).toHaveBeenCalledWith("thread-child");
+    expect(recordThreadCreatedAt).toHaveBeenCalledWith("thread-child", 0, 1234000);
   });
 
   it("does not override custom thread names on thread started", () => {
@@ -350,6 +399,9 @@ describe("useThreadTurnEvents", () => {
     const pushThreadErrorMessage = vi.fn();
     const safeMessageActivity = vi.fn();
     const recordThreadActivity = vi.fn();
+    const updateThreadParent = vi.fn();
+    const markSubAgentThread = vi.fn();
+    const recordThreadCreatedAt = vi.fn();
     const pendingInterruptsRef = { current: new Set<string>() };
     const planByThreadRef = {
       current: {} as Record<string, TurnPlan | null>,
@@ -373,6 +425,9 @@ describe("useThreadTurnEvents", () => {
         pushThreadErrorMessage,
         safeMessageActivity,
         recordThreadActivity,
+        updateThreadParent,
+        markSubAgentThread,
+        recordThreadCreatedAt,
       }),
     );
 

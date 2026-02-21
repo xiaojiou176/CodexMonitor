@@ -121,6 +121,31 @@
   text-overflow: ellipsis;
 }
 
+.skills-panel-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.skills-panel-item-pill {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-faint);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+
+.skills-panel-item-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--danger-text, #d66);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Automations Panel ── */
 .automations-panel {
   display: flex;

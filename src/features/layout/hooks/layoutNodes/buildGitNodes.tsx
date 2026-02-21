@@ -50,7 +50,7 @@ export function buildGitNodes(options: LayoutNodesOptions): GitLayoutNodes {
       <SkillsPanel
         skills={options.skills}
         onInvokeSkill={(skill) => {
-          options.onInsertComposerText?.(`$ ${skill.name} `);
+          options.onInsertComposerText?.(`$${skill.name} `);
         }}
         filePanelMode={options.filePanelMode}
         onFilePanelModeChange={options.onFilePanelModeChange}

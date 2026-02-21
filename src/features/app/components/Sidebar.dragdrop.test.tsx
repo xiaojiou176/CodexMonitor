@@ -23,6 +23,8 @@ const baseProps = {
   threadListSortKey: "updated_at" as const,
   onSetThreadListSortKey: vi.fn(),
   onRefreshAllThreads: vi.fn(),
+  showSubAgentThreadsInSidebar: true,
+  onToggleShowSubAgentThreadsInSidebar: vi.fn(),
   activeWorkspaceId: null,
   activeThreadId: null,
   accountInfo: null,

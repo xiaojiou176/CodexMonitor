@@ -336,7 +336,7 @@ describe("ThreadList", () => {
     if (!nestedRow) {
       throw new Error("Missing nested thread row");
     }
-    expect(nestedRow.className).toContain("thread-row-indent-10-1");
+    expect((nestedRow as HTMLElement).style.getPropertyValue("--thread-indent")).toBe("10px");
 
     fireEvent.contextMenu(nestedRow);
     expect(onShowThreadMenu).toHaveBeenCalledWith(
@@ -345,5 +345,47 @@ describe("ThreadList", () => {
       "thread-2",
       false,
     );
+  });
+
+  it("supports deep indentation without class-based clamp", () => {
+    render(
+      <ThreadList
+        {...baseProps}
+        nested
+        unpinnedRows={[
+          { thread, depth: 0 },
+          { thread: nestedThread, depth: 25 },
+        ]}
+      />,
+    );
+
+    const deepRow = screen.getByText("Nested Agent").closest(".thread-row");
+    expect(deepRow).not.toBeNull();
+    if (!deepRow) {
+      throw new Error("Missing deep nested thread row");
+    }
+    expect((deepRow as HTMLElement).style.getPropertyValue("--thread-indent")).toBe("250px");
+  });
+
+  it("toggles root collapse for rows with sub-agent descendants", () => {
+    const onToggleRootCollapse = vi.fn();
+    render(
+      <ThreadList
+        {...baseProps}
+        unpinnedRows={[
+          {
+            thread,
+            depth: 0,
+            rootId: "thread-1",
+            hasSubAgentDescendants: true,
+            isCollapsed: false,
+          },
+        ]}
+        onToggleRootCollapse={onToggleRootCollapse}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "折叠子代理" }));
+    expect(onToggleRootCollapse).toHaveBeenCalledWith("ws-1", "thread-1");
   });
 });

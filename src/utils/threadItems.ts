@@ -34,9 +34,65 @@ const RG_FLAGS_WITH_VALUES = new Set([
   "--context",
   "--max-depth",
 ]);
+const SKILL_TOKEN_PATTERN = /(?:\$|＄)\s*([\p{L}\p{N}\p{M}_-]+)/gu;
+const SKILL_NAME_BOUNDARY_CLASS = "\\p{L}\\p{N}\\p{M}_-";
+const SKILL_MENTION_MARKER_PATTERN = /(?:\$|＄)\s*/gu;
 
 function asString(value: unknown) {
   return typeof value === "string" ? value : value ? String(value) : "";
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildSkillMentionPattern(skillName: string): RegExp | null {
+  const segments = skillName
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean);
+  if (segments.length === 0) {
+    return null;
+  }
+  const namePattern = segments.map((segment) => escapeRegex(segment)).join("\\s+");
+  return new RegExp(
+    `^${namePattern}(?=$|[^${SKILL_NAME_BOUNDARY_CLASS}])`,
+    "iu",
+  );
+}
+
+function normalizeSkillNameKey(name: string): string {
+  return name.trim().replace(/\s+/gu, " ").toLowerCase();
+}
+
+function collectMentionedSkillNameKeys(text: string, skillNames: string[]): Set<string> {
+  const candidates = skillNames
+    .map((name) => {
+      const key = normalizeSkillNameKey(name);
+      const pattern = buildSkillMentionPattern(name);
+      if (!key || !pattern) {
+        return null;
+      }
+      return { key, name, pattern };
+    })
+    .filter((candidate): candidate is { key: string; name: string; pattern: RegExp } => Boolean(candidate))
+    .sort((left, right) => right.name.length - left.name.length);
+
+  const mentionedKeys = new Set<string>();
+  for (const markerMatch of text.matchAll(SKILL_MENTION_MARKER_PATTERN)) {
+    const markerIndex = markerMatch.index;
+    if (markerIndex === undefined) {
+      continue;
+    }
+    const markerEnd = markerIndex + markerMatch[0].length;
+    const rest = text.slice(markerEnd);
+    const matched = candidates.find((candidate) => candidate.pattern.test(rest));
+    if (!matched) {
+      continue;
+    }
+    mentionedKeys.add(matched.key);
+  }
+  return mentionedKeys;
 }
 
 function toCanonicalItemType(value: unknown) {
@@ -971,6 +1027,7 @@ function extractAgentMessageText(item: Record<string, unknown>) {
 
 function parseUserInputs(inputs: Array<Record<string, unknown>>) {
   const textParts: string[] = [];
+  const skillNames: string[] = [];
   const images: string[] = [];
   inputs.forEach((input) => {
     const type = asString(input.type);
@@ -984,7 +1041,7 @@ function parseUserInputs(inputs: Array<Record<string, unknown>>) {
     if (type === "skill") {
       const name = asString(input.name);
       if (name) {
-        textParts.push(`$${name}`);
+        skillNames.push(name);
       }
       return;
     }
@@ -995,7 +1052,29 @@ function parseUserInputs(inputs: Array<Record<string, unknown>>) {
       }
     }
   });
-  return { text: textParts.join(" ").trim(), images };
+  const baseText = textParts.join(" ").trim();
+  const existingSkillTokens = new Set(
+    Array.from(baseText.matchAll(SKILL_TOKEN_PATTERN)).map((match) => match[1]),
+  );
+  const mentionedSkillKeys = collectMentionedSkillNameKeys(baseText, skillNames);
+  const appendedSkillTokens: string[] = [];
+  const appendedSkillKeys = new Set<string>();
+  skillNames.forEach((name) => {
+    const key = normalizeSkillNameKey(name);
+    if (
+      existingSkillTokens.has(name)
+      || (key && mentionedSkillKeys.has(key))
+      || (key && appendedSkillKeys.has(key))
+    ) {
+      return;
+    }
+    if (key) {
+      appendedSkillKeys.add(key);
+    }
+    appendedSkillTokens.push(`$${name}`);
+  });
+  const text = [baseText, ...appendedSkillTokens].filter(Boolean).join(" ").trim();
+  return { text, images };
 }
 
 export function buildConversationItemFromThreadItem(

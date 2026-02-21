@@ -350,6 +350,7 @@ pub(crate) async fn send_user_message(
     access_mode: Option<String>,
     images: Option<Vec<String>>,
     app_mentions: Option<Vec<Value>>,
+    skill_mentions: Option<Vec<Value>>,
     collaboration_mode: Option<Value>,
     state: State<'_, AppState>,
     app: AppHandle,
@@ -370,6 +371,7 @@ pub(crate) async fn send_user_message(
         payload.insert("accessMode".to_string(), json!(access_mode));
         payload.insert("images".to_string(), json!(images));
         payload.insert("appMentions".to_string(), json!(app_mentions));
+        payload.insert("skillMentions".to_string(), json!(skill_mentions));
         if let Some(mode) = collaboration_mode {
             if !mode.is_null() {
                 payload.insert("collaborationMode".to_string(), mode);
@@ -394,6 +396,7 @@ pub(crate) async fn send_user_message(
         access_mode,
         images,
         app_mentions,
+        skill_mentions,
         collaboration_mode,
     )
     .await
@@ -407,6 +410,7 @@ pub(crate) async fn turn_steer(
     text: String,
     images: Option<Vec<String>>,
     app_mentions: Option<Vec<Value>>,
+    skill_mentions: Option<Vec<Value>>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Value, String> {
@@ -428,6 +432,7 @@ pub(crate) async fn turn_steer(
                 "text": text,
                 "images": images,
                 "appMentions": app_mentions,
+                "skillMentions": skill_mentions,
             }),
         )
         .await;
@@ -441,6 +446,7 @@ pub(crate) async fn turn_steer(
         text,
         images,
         app_mentions,
+        skill_mentions,
     )
     .await
 }

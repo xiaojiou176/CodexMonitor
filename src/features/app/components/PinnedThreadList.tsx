@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 
 import type { ThreadSummary } from "../../../types";
 import {
@@ -25,6 +27,10 @@ type PinnedThreadRow = {
   thread: ThreadSummary;
   depth: number;
   workspaceId: string;
+  rootId?: string;
+  isSubAgent?: boolean;
+  hasSubAgentDescendants?: boolean;
+  isCollapsed?: boolean;
 };
 
 type PinnedThreadListProps = {
@@ -51,6 +57,8 @@ type PinnedThreadListProps = {
     threadId: string,
     canPin: boolean,
   ) => void;
+  onToggleRootCollapse?: (workspaceId: string, rootId: string) => void;
+  showSubAgentCollapseToggles?: boolean;
 };
 
 export function PinnedThreadList({
@@ -65,6 +73,8 @@ export function PinnedThreadList({
   onSelectThread,
   onThreadSelectionChange,
   onShowThreadMenu,
+  onToggleRootCollapse,
+  showSubAgentCollapseToggles = true,
 }: PinnedThreadListProps) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const orderedThreadIdsByWorkspace = useMemo(() => {
@@ -98,7 +108,8 @@ export function PinnedThreadList({
 
   return (
     <div className="thread-list pinned-thread-list">
-      {rows.map(({ thread, depth, workspaceId }) => {
+      {rows.map((threadRow) => {
+        const { thread, depth, workspaceId } = threadRow;
         const relativeTime = getThreadTime(thread);
         const indentStyle =
           depth > 0
@@ -117,6 +128,14 @@ export function PinnedThreadList({
         const isActive =
           workspaceId === activeWorkspaceId && thread.id === activeThreadId;
         const orderedThreadIds = orderedThreadIdsByWorkspace.get(workspaceId) ?? [];
+        const rootId = threadRow.rootId ?? thread.id;
+        const hasSubAgentDescendants = threadRow.hasSubAgentDescendants ?? false;
+        const isCollapsed = threadRow.isCollapsed ?? false;
+        const isRootCollapseToggleVisible =
+          depth === 0 &&
+          showSubAgentCollapseToggles &&
+          hasSubAgentDescendants &&
+          Boolean(onToggleRootCollapse);
 
         return (
           <div
@@ -156,6 +175,21 @@ export function PinnedThreadList({
               }
             }}
           >
+            {isRootCollapseToggleVisible && (
+              <button
+                type="button"
+                className={`thread-collapse-toggle${isCollapsed ? " is-collapsed" : ""}`}
+                aria-label={isCollapsed ? "展开子代理" : "折叠子代理"}
+                title={isCollapsed ? "展开子代理" : "折叠子代理"}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onToggleRootCollapse?.(workspaceId, rootId);
+                }}
+              >
+                {isCollapsed ? <ChevronRight aria-hidden /> : <ChevronDown aria-hidden />}
+              </button>
+            )}
             <span
               className={`thread-status ${statusClass}`}
               aria-label={statusLabel}

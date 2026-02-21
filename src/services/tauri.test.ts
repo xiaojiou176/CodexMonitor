@@ -609,6 +609,7 @@ describe("tauri invoke wrappers", () => {
       accessMode: null,
       images: ["image.png"],
       appMentions: null,
+      skillMentions: null,
     });
   });
 
@@ -629,6 +630,38 @@ describe("tauri invoke wrappers", () => {
       accessMode: null,
       images: null,
       appMentions: [{ name: "Calendar", path: "app://connector_calendar" }],
+      skillMentions: null,
+    });
+  });
+
+  it("includes skill mentions when sending a message", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await sendUserMessage("ws-4", "thread-1", "hello $深度调试模式", {
+      skillMentions: [
+        {
+          name: "深度调试模式",
+          path: "/Users/me/.codex/skills/_深度模式/深度调试模式/SKILL.md",
+        },
+      ],
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("send_user_message", {
+      workspaceId: "ws-4",
+      threadId: "thread-1",
+      text: "hello $深度调试模式",
+      model: null,
+      effort: null,
+      accessMode: null,
+      images: null,
+      appMentions: null,
+      skillMentions: [
+        {
+          name: "深度调试模式",
+          path: "/Users/me/.codex/skills/_深度模式/深度调试模式/SKILL.md",
+        },
+      ],
     });
   });
 
@@ -645,6 +678,7 @@ describe("tauri invoke wrappers", () => {
       text: "continue",
       images: ["image.png"],
       appMentions: null,
+      skillMentions: null,
     });
   });
 
@@ -663,6 +697,42 @@ describe("tauri invoke wrappers", () => {
       text: "continue",
       images: null,
       appMentions: [{ name: "Calendar", path: "app://connector_calendar" }],
+      skillMentions: null,
+    });
+  });
+
+  it("passes skill mentions to turn_steer", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await steerTurn(
+      "ws-4",
+      "thread-1",
+      "turn-2",
+      "continue $深度调试模式",
+      undefined,
+      undefined,
+      [
+        {
+          name: "深度调试模式",
+          path: "/Users/me/.codex/skills/_深度模式/深度调试模式/SKILL.md",
+        },
+      ],
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith("turn_steer", {
+      workspaceId: "ws-4",
+      threadId: "thread-1",
+      turnId: "turn-2",
+      text: "continue $深度调试模式",
+      images: null,
+      appMentions: null,
+      skillMentions: [
+        {
+          name: "深度调试模式",
+          path: "/Users/me/.codex/skills/_深度模式/深度调试模式/SKILL.md",
+        },
+      ],
     });
   });
 

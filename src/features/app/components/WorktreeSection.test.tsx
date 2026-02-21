@@ -37,6 +37,9 @@ describe("WorktreeSection", () => {
         getThreadTime={() => null}
         isThreadPinned={() => false}
         getPinTimestamp={() => null}
+        showSubAgentThreadsInSidebar
+        isRootCollapsed={() => false}
+        onToggleRootCollapse={vi.fn()}
         onSelectWorkspace={vi.fn()}
         onConnectWorkspace={vi.fn()}
         onToggleWorkspaceCollapse={vi.fn()}

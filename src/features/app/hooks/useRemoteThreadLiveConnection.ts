@@ -18,6 +18,7 @@ type UseRemoteThreadLiveConnectionOptions = {
   backendMode: string;
   activeWorkspace: WorkspaceInfo | null;
   activeThreadId: string | null;
+  backgroundThreadIds?: string[];
   activeThreadIsProcessing?: boolean;
   refreshThread: (workspaceId: string, threadId: string) => Promise<unknown> | unknown;
   reconnectWorkspace?: (workspace: WorkspaceInfo) => Promise<unknown> | unknown;
@@ -67,6 +68,7 @@ export function useRemoteThreadLiveConnection({
   backendMode,
   activeWorkspace,
   activeThreadId,
+  backgroundThreadIds = [],
   activeThreadIsProcessing = false,
   refreshThread,
   reconnectWorkspace,
@@ -90,6 +92,7 @@ export function useRemoteThreadLiveConnection({
   const reconnectWorkspaceRef = useRef(reconnectWorkspace);
   const connectionStateRef = useRef(connectionState);
   const activeSubscriptionKeyRef = useRef<string | null>(null);
+  const backgroundSubscriptionKeysRef = useRef<Set<string>>(new Set());
   const reconnectSequenceRef = useRef(0);
 
   useEffect(() => {
@@ -205,6 +208,14 @@ export function useRemoteThreadLiveConnection({
 
   useEffect(() => {
     const workspace = activeWorkspace;
+    const nextBackgroundKeys =
+      backendMode === "remote" && workspace?.id
+        ? new Set(
+            backgroundThreadIds
+              .filter((threadId) => threadId && threadId !== activeThreadId)
+              .map((threadId) => keyForThread(workspace.id, threadId)),
+          )
+        : new Set<string>();
     const nextKey =
       backendMode === "remote" && workspace?.id && activeThreadId
         ? keyForThread(workspace.id, activeThreadId)
@@ -217,13 +228,48 @@ export function useRemoteThreadLiveConnection({
     }
 
     if (!nextKey) {
+      const existingBackgroundKeys = backgroundSubscriptionKeysRef.current;
+      if (existingBackgroundKeys.size > 0) {
+        for (const key of existingBackgroundKeys) {
+          void unsubscribeByKey(key);
+        }
+        backgroundSubscriptionKeysRef.current = new Set();
+      }
       reconcileDisconnectedState();
       return;
     }
     if (!isDocumentVisible()) {
+      const existingBackgroundKeys = backgroundSubscriptionKeysRef.current;
+      if (existingBackgroundKeys.size > 0) {
+        for (const key of existingBackgroundKeys) {
+          void unsubscribeByKey(key);
+        }
+        backgroundSubscriptionKeysRef.current = new Set();
+      }
       reconcileDisconnectedState();
       return;
     }
+
+    const existingBackgroundKeys = backgroundSubscriptionKeysRef.current;
+    for (const key of existingBackgroundKeys) {
+      if (!nextBackgroundKeys.has(key)) {
+        void unsubscribeByKey(key);
+      }
+    }
+    for (const key of nextBackgroundKeys) {
+      if (key === nextKey || existingBackgroundKeys.has(key)) {
+        continue;
+      }
+      const parsedKey = splitKey(key);
+      if (!parsedKey) {
+        continue;
+      }
+      void threadLiveSubscribe(parsedKey.workspaceId, parsedKey.threadId).catch(() => {
+        // Best-effort subscription; reconnect/polling keeps active thread healthy.
+      });
+    }
+    backgroundSubscriptionKeysRef.current = nextBackgroundKeys;
+
     const parsed = splitKey(nextKey);
     if (!parsed) {
       reconcileDisconnectedState();
@@ -234,6 +280,7 @@ export function useRemoteThreadLiveConnection({
     activeThreadId,
     activeWorkspace,
     backendMode,
+    backgroundThreadIds,
     reconcileDisconnectedState,
     reconnectLive,
     unsubscribeByKey,
@@ -326,10 +373,25 @@ export function useRemoteThreadLiveConnection({
     const handleBlur = () => {
       const currentKey = activeSubscriptionKeyRef.current;
       if (!currentKey) {
+        const backgroundKeys = backgroundSubscriptionKeysRef.current;
+        if (backgroundKeys.size > 0) {
+          backgroundSubscriptionKeysRef.current = new Set();
+          for (const key of backgroundKeys) {
+            void unsubscribeByKey(key);
+          }
+          reconcileDisconnectedState();
+        }
         return;
       }
       activeSubscriptionKeyRef.current = null;
       void unsubscribeByKey(currentKey);
+      const backgroundKeys = backgroundSubscriptionKeysRef.current;
+      if (backgroundKeys.size > 0) {
+        backgroundSubscriptionKeysRef.current = new Set();
+        for (const key of backgroundKeys) {
+          void unsubscribeByKey(key);
+        }
+      }
       reconcileDisconnectedState();
     };
 
@@ -390,6 +452,13 @@ export function useRemoteThreadLiveConnection({
       if (currentKey) {
         activeSubscriptionKeyRef.current = null;
         void unsubscribeByKey(currentKey);
+      }
+      const backgroundKeys = backgroundSubscriptionKeysRef.current;
+      if (backgroundKeys.size > 0) {
+        backgroundSubscriptionKeysRef.current = new Set();
+        for (const key of backgroundKeys) {
+          void unsubscribeByKey(key);
+        }
       }
     };
   }, [reconnectLive, reconcileDisconnectedState, unsubscribeByKey]);

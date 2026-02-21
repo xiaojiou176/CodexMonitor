@@ -29,6 +29,7 @@ import {
   normalizeRootPath,
 } from "../utils/threadNormalize";
 import { saveThreadActivity } from "../utils/threadStorage";
+import { extractSubAgentParentThreadId, isSubAgentSource } from "../utils/subAgentSource";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 
 const THREAD_LIST_TARGET_COUNT = 20;
@@ -72,25 +73,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     return null;
   }
   return value as Record<string, unknown>;
-}
-
-function getParentThreadIdFromSource(source: unknown): string | null {
-  const sourceRecord = asRecord(source);
-  if (!sourceRecord) {
-    return null;
-  }
-  const subAgent = asRecord(sourceRecord.subAgent ?? sourceRecord.sub_agent);
-  if (!subAgent) {
-    return null;
-  }
-  const threadSpawn = asRecord(subAgent.thread_spawn ?? subAgent.threadSpawn);
-  if (!threadSpawn) {
-    return null;
-  }
-  const parentId = asString(
-    threadSpawn.parent_thread_id ?? threadSpawn.parentThreadId,
-  );
-  return parentId || null;
 }
 
 function normalizeTurnStatus(value: unknown): string {
@@ -234,9 +216,17 @@ type UseThreadActionsOptions = {
     threadId: string,
     thread: Record<string, unknown>,
   ) => void;
-  updateThreadParent: (parentId: string, childIds: string[]) => void;
+  updateThreadParent: (
+    parentId: string,
+    childIds: string[],
+    options?: { source?: unknown; allowReparent?: boolean },
+  ) => void;
   markSubAgentThread?: (threadId: string) => void;
-  recordThreadCreatedAt?: (threadId: string, createdAt: number) => void;
+  recordThreadCreatedAt?: (
+    threadId: string,
+    createdAt: number,
+    fallbackTimestamp?: number,
+  ) => void;
 };
 
 export function useThreadActions({
@@ -367,12 +357,23 @@ export function useThreadActions({
         if (thread) {
           dispatch({ type: "ensureThread", workspaceId, threadId });
           applyCollabThreadLinksFromThread(threadId, thread);
-          const sourceParentId = getParentThreadIdFromSource(thread.source);
+          const sourceParentId = extractSubAgentParentThreadId(thread.source);
           if (sourceParentId) {
-            updateThreadParent(sourceParentId, [threadId]);
+            updateThreadParent(sourceParentId, [threadId], {
+              source: thread.source,
+              allowReparent: true,
+            });
+          }
+          if (isSubAgentSource(thread.source)) {
             markSubAgentThread?.(threadId);
           }
-          recordThreadCreatedAt?.(threadId, getThreadCreatedTimestamp(thread));
+          const threadTimestamp = getThreadTimestamp(thread);
+          const fallbackTimestamp = threadTimestamp > 0 ? threadTimestamp : Date.now();
+          recordThreadCreatedAt?.(
+            threadId,
+            getThreadCreatedTimestamp(thread),
+            fallbackTimestamp,
+          );
           const items = buildItemsFromThread(thread);
           const localItems = itemsByThread[threadId] ?? [];
           const shouldReplace =
@@ -662,12 +663,23 @@ export function useThreadActions({
           if (!threadId) {
             return;
           }
-          const sourceParentId = getParentThreadIdFromSource(thread.source);
+          const sourceParentId = extractSubAgentParentThreadId(thread.source);
           if (sourceParentId) {
-            updateThreadParent(sourceParentId, [threadId]);
+            updateThreadParent(sourceParentId, [threadId], {
+              source: thread.source,
+              allowReparent: true,
+            });
+          }
+          if (isSubAgentSource(thread.source)) {
             markSubAgentThread?.(threadId);
           }
-          recordThreadCreatedAt?.(threadId, getThreadCreatedTimestamp(thread));
+          const threadTimestamp = getThreadTimestamp(thread);
+          const fallbackTimestamp = threadTimestamp > 0 ? threadTimestamp : Date.now();
+          recordThreadCreatedAt?.(
+            threadId,
+            getThreadCreatedTimestamp(thread),
+            fallbackTimestamp,
+          );
           const timestamp = getThreadTimestamp(thread);
           if (timestamp > (nextActivityByThread[threadId] ?? 0)) {
             nextActivityByThread[threadId] = timestamp;
@@ -858,12 +870,23 @@ export function useThreadActions({
           if (!id || existingIds.has(id)) {
             return;
           }
-          const sourceParentId = getParentThreadIdFromSource(thread.source);
+          const sourceParentId = extractSubAgentParentThreadId(thread.source);
           if (sourceParentId) {
-            updateThreadParent(sourceParentId, [id]);
+            updateThreadParent(sourceParentId, [id], {
+              source: thread.source,
+              allowReparent: true,
+            });
+          }
+          if (isSubAgentSource(thread.source)) {
             markSubAgentThread?.(id);
           }
-          recordThreadCreatedAt?.(id, getThreadCreatedTimestamp(thread));
+          const threadTimestamp = getThreadTimestamp(thread);
+          const fallbackTimestamp = threadTimestamp > 0 ? threadTimestamp : Date.now();
+          recordThreadCreatedAt?.(
+            id,
+            getThreadCreatedTimestamp(thread),
+            fallbackTimestamp,
+          );
           const name = resolveThreadDisplayName(
             thread,
             existing.length + additions.length,

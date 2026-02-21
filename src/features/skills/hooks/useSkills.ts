@@ -9,6 +9,149 @@ type UseSkillsOptions = {
   onDebug?: (entry: DebugEntry) => void;
 };
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function asNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeErrorStrings(value: unknown): string[] {
+  if (!value) {
+    return [];
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => normalizeErrorStrings(entry));
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return [];
+  }
+  const fromKnownFields = [
+    asNonEmptyString(record.message),
+    asNonEmptyString(record.error),
+    asNonEmptyString(record.detail),
+    asNonEmptyString(record.reason),
+  ].filter((item): item is string => Boolean(item));
+  if (fromKnownFields.length > 0) {
+    return fromKnownFields;
+  }
+  const serialized = JSON.stringify(record);
+  return serialized ? [serialized] : [];
+}
+
+function mergeSkillOption(previous: SkillOption, next: SkillOption): SkillOption {
+  return {
+    ...previous,
+    description: previous.description ?? next.description,
+    scope: previous.scope ?? next.scope,
+    enabled: previous.enabled ?? next.enabled,
+    interface: previous.interface ?? next.interface,
+    dependencies: previous.dependencies ?? next.dependencies,
+    errors:
+      previous.errors && previous.errors.length > 0
+        ? previous.errors
+        : next.errors && next.errors.length > 0
+          ? next.errors
+          : undefined,
+    cwd: previous.cwd ?? next.cwd,
+  };
+}
+
+function parseSkillEntry(
+  value: unknown,
+  bucketMeta?: { cwd?: string; errors?: string[] },
+): SkillOption | null {
+  const skill = asRecord(value);
+  if (!skill) {
+    return null;
+  }
+  const name = asNonEmptyString(skill.name);
+  if (!name) {
+    return null;
+  }
+  const path = typeof skill.path === "string" ? skill.path.trim() : "";
+  const errors = [
+    ...normalizeErrorStrings(skill.errors),
+    ...(bucketMeta?.errors ?? []),
+  ];
+  return {
+    name,
+    path,
+    description: asNonEmptyString(skill.description),
+    scope: asNonEmptyString(skill.scope),
+    enabled:
+      typeof skill.enabled === "boolean"
+        ? skill.enabled
+        : typeof skill.isEnabled === "boolean"
+          ? skill.isEnabled
+          : undefined,
+    interface: skill.interface ?? skill.skillInterface,
+    dependencies: skill.dependencies,
+    errors: errors.length > 0 ? errors : undefined,
+    cwd: asNonEmptyString(skill.cwd) ?? bucketMeta?.cwd,
+  };
+}
+
+function parseSkillsListResponse(response: Record<string, unknown>): SkillOption[] {
+  const nextSkills: SkillOption[] = [];
+  const result = asRecord(response.result) ?? {};
+  const responseData = Array.isArray(response.data) ? response.data : [];
+  const resultData = Array.isArray(result.data) ? result.data : [];
+  const buckets = resultData.length > 0 ? resultData : responseData;
+
+  if (buckets.length > 0) {
+    buckets.forEach((bucketRaw) => {
+      const bucket = asRecord(bucketRaw);
+      if (!bucket) {
+        return;
+      }
+      const bucketSkills = Array.isArray(bucket.skills) ? bucket.skills : [];
+      const bucketMeta = {
+        cwd: asNonEmptyString(bucket.cwd),
+        errors: normalizeErrorStrings(bucket.errors),
+      };
+      bucketSkills.forEach((entry) => {
+        const normalized = parseSkillEntry(entry, bucketMeta);
+        if (normalized) {
+          nextSkills.push(normalized);
+        }
+      });
+    });
+  }
+
+  const topLevelSkills = [
+    ...(Array.isArray(result.skills) ? result.skills : []),
+    ...(Array.isArray(response.skills) ? response.skills : []),
+  ];
+  topLevelSkills.forEach((entry) => {
+    const normalized = parseSkillEntry(entry);
+    if (normalized) {
+      nextSkills.push(normalized);
+    }
+  });
+
+  const deduped = new Map<string, SkillOption>();
+  nextSkills.forEach((skill) => {
+    const key = skill.path ? `path:${skill.path}` : `name:${skill.name.toLowerCase()}`;
+    const existing = deduped.get(key);
+    deduped.set(key, existing ? mergeSkillOption(existing, skill) : skill);
+  });
+  return Array.from(deduped.values());
+}
+
 export function useSkills({ activeWorkspace, onDebug }: UseSkillsOptions) {
   const [skills, setSkills] = useState<SkillOption[]>([]);
   const lastFetchedWorkspaceId = useRef<string | null>(null);
@@ -41,19 +184,7 @@ export function useSkills({ activeWorkspace, onDebug }: UseSkillsOptions) {
         label: "skills/list response",
         payload: response,
       });
-      const dataBuckets = response.result?.data ?? response.data ?? [];
-      const rawSkills =
-        response.result?.skills ??
-        response.skills ??
-        (Array.isArray(dataBuckets)
-          ? dataBuckets.flatMap((bucket: any) => bucket?.skills ?? [])
-          : []);
-      const data: SkillOption[] = rawSkills.map((item: any) => ({
-        name: String(item.name ?? ""),
-        path: String(item.path ?? ""),
-        description: item.description ? String(item.description) : undefined,
-      }));
-      setSkills(data);
+      setSkills(parseSkillsListResponse(response as Record<string, unknown>));
       lastFetchedWorkspaceId.current = workspaceId;
     } catch (error) {
       onDebug?.({

@@ -29,6 +29,8 @@ const baseProps = {
   threadListSortKey: "updated_at" as const,
   onSetThreadListSortKey: vi.fn(),
   onRefreshAllThreads: vi.fn(),
+  showSubAgentThreadsInSidebar: true,
+  onToggleShowSubAgentThreadsInSidebar: vi.fn(),
   activeWorkspaceId: null,
   activeThreadId: null,
   accountInfo: null,
@@ -201,6 +203,19 @@ describe("Sidebar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "刷新全部工作区对话" }));
     expect(onRefreshAllThreads).toHaveBeenCalledTimes(1);
+  });
+
+  it("toggles global sub-agent visibility from the header button", () => {
+    const onToggleShowSubAgentThreadsInSidebar = vi.fn();
+    render(
+      <Sidebar
+        {...baseProps}
+        onToggleShowSubAgentThreadsInSidebar={onToggleShowSubAgentThreadsInSidebar}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "隐藏子代理线程" }));
+    expect(onToggleShowSubAgentThreadsInSidebar).toHaveBeenCalledTimes(1);
   });
 
   it("spins the refresh icon while workspace threads are refreshing", () => {
@@ -401,5 +416,96 @@ describe("Sidebar", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(onUpdateWorkspaceDisplayName).toHaveBeenCalledWith("ws-1", "Design System");
+  });
+
+  it("hides sub-agent threads when global sidebar visibility is disabled", () => {
+    render(
+      <Sidebar
+        {...baseProps}
+        showSubAgentThreadsInSidebar={false}
+        threadParentById={{ "thread-child": "thread-parent" }}
+        threadsByWorkspace={{
+          "ws-1": [
+            { id: "thread-parent", name: "Parent", updatedAt: 3 },
+            { id: "thread-child", name: "Child", updatedAt: 2 },
+          ],
+        }}
+        workspaces={[
+          {
+            id: "ws-1",
+            name: "Workspace",
+            path: "/tmp/workspace",
+            connected: true,
+            settings: { sidebarCollapsed: false },
+          },
+        ]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [
+              {
+                id: "ws-1",
+                name: "Workspace",
+                path: "/tmp/workspace",
+                connected: true,
+                settings: { sidebarCollapsed: false },
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Parent")).not.toBeNull();
+    expect(screen.queryByText("Child")).toBeNull();
+  });
+
+  it("restores root collapse state from localStorage and can expand it", () => {
+    window.localStorage.setItem(
+      "codexmonitor.subAgentRootCollapseByWorkspace",
+      JSON.stringify({ "ws-1": { "thread-parent": true } }),
+    );
+
+    render(
+      <Sidebar
+        {...baseProps}
+        threadParentById={{ "thread-child": "thread-parent" }}
+        threadsByWorkspace={{
+          "ws-1": [
+            { id: "thread-parent", name: "Parent", updatedAt: 3 },
+            { id: "thread-child", name: "Child", updatedAt: 2 },
+          ],
+        }}
+        workspaces={[
+          {
+            id: "ws-1",
+            name: "Workspace",
+            path: "/tmp/workspace",
+            connected: true,
+            settings: { sidebarCollapsed: false },
+          },
+        ]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [
+              {
+                id: "ws-1",
+                name: "Workspace",
+                path: "/tmp/workspace",
+                connected: true,
+                settings: { sidebarCollapsed: false },
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText("Child")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "展开子代理" }));
+    expect(screen.getByText("Child")).not.toBeNull();
   });
 });

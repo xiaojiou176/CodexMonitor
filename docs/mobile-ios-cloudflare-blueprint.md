@@ -410,6 +410,7 @@ npm run tauri ios dev
 
 Notes:
 - Uses `build.devUrl` and `beforeDevCommand`.
+- Current default dev URL/ports are `http://localhost:17420` (app), `17421` (HMR), and Playwright `17473` (`PLAYWRIGHT_WEB_PORT`), with auto-fallback range `17420-17520`.
 - Rust + frontend hot-reload loop in dev.
 
 ## Run on Physical Device (dev)

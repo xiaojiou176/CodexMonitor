@@ -12,8 +12,22 @@ type ThreadStatusMap = Record<
 >;
 
 type ThreadRowsResult = {
-  pinnedRows: Array<{ thread: ThreadSummary; depth: number }>;
-  unpinnedRows: Array<{ thread: ThreadSummary; depth: number }>;
+  pinnedRows: Array<{
+    thread: ThreadSummary;
+    depth: number;
+    rootId: string;
+    isSubAgent: boolean;
+    hasSubAgentDescendants: boolean;
+    isCollapsed: boolean;
+  }>;
+  unpinnedRows: Array<{
+    thread: ThreadSummary;
+    depth: number;
+    rootId: string;
+    isSubAgent: boolean;
+    hasSubAgentDescendants: boolean;
+    isCollapsed: boolean;
+  }>;
   totalRoots: number;
   hasMoreRoots: boolean;
 };
@@ -34,10 +48,17 @@ type WorktreeSectionProps = {
     isExpanded: boolean,
     workspaceId: string,
     getPinTimestamp: (workspaceId: string, threadId: string) => number | null,
+    options?: {
+      showSubAgentThreads?: boolean;
+      isRootCollapsed?: (workspaceId: string, rootId: string) => boolean;
+    },
   ) => ThreadRowsResult;
   getThreadTime: (thread: ThreadSummary) => string | null;
   isThreadPinned: (workspaceId: string, threadId: string) => boolean;
   getPinTimestamp: (workspaceId: string, threadId: string) => number | null;
+  showSubAgentThreadsInSidebar: boolean;
+  isRootCollapsed: (workspaceId: string, rootId: string) => boolean;
+  onToggleRootCollapse: (workspaceId: string, rootId: string) => void;
   onSelectWorkspace: (id: string) => void;
   onConnectWorkspace: (workspace: WorkspaceInfo) => void;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
@@ -78,6 +99,9 @@ export function WorktreeSection({
   getThreadTime,
   isThreadPinned,
   getPinTimestamp,
+  showSubAgentThreadsInSidebar,
+  isRootCollapsed,
+  onToggleRootCollapse,
   onSelectWorkspace,
   onConnectWorkspace,
   onToggleWorkspaceCollapse,
@@ -122,6 +146,10 @@ export function WorktreeSection({
             isWorktreeExpanded,
             worktree.id,
             getPinTimestamp,
+            {
+              showSubAgentThreads: showSubAgentThreadsInSidebar,
+              isRootCollapsed,
+            },
           );
 
           return (
@@ -159,6 +187,8 @@ export function WorktreeSection({
                     selectedWorkspaceId === worktree.id ? selectedThreadIds : undefined
                   }
                   onShowThreadMenu={onShowThreadMenu}
+                  onToggleRootCollapse={onToggleRootCollapse}
+                  showSubAgentCollapseToggles={showSubAgentThreadsInSidebar}
                 />
               )}
               {showWorktreeLoader && <ThreadLoading nested />}

@@ -2,6 +2,7 @@ import type { AppServerEvent } from "../types";
 
 export const SUPPORTED_APP_SERVER_METHODS = [
   "account/login/completed",
+  "account/chatgptAuthTokens/refresh",
   "account/rateLimits/updated",
   "account/updated",
   "codex/backgroundThread",
@@ -35,6 +36,7 @@ export const SUPPORTED_APP_SERVER_METHODS = [
   "thread/live_detached",
   "thread/live_heartbeat",
   "thread/started",
+  "thread/status/changed",
   "thread/tokenUsage/updated",
   "turn/completed",
   "turn/diff/updated",
@@ -46,6 +48,7 @@ export const SUPPORTED_APP_SERVER_METHODS = [
   "fuzzyFileSearch/sessionUpdated",
   "fuzzyFileSearch/sessionCompleted",
   "windows/worldWritableWarning",
+  "windowsSandbox/setupCompleted",
   "sessionConfigured",
   "authStatusChange",
   "loginChatGptComplete",
@@ -67,7 +70,7 @@ const SUPPORTED_METHOD_SET = new Set<string>(SUPPORTED_APP_SERVER_METHODS);
 const SUPPORTED_METHOD_NORMALIZED_MAP = new Map<string, SupportedAppServerMethod>(
   SUPPORTED_APP_SERVER_METHODS.map((method) => [normalizeMethodForMatch(method), method]),
 );
-const COMPAT_PASSTHROUGH_METHOD_PREFIXES = ["codex/event/"] as const;
+const COMPAT_PASSTHROUGH_METHOD_PREFIXES = ["codex/event/", "codex/eventstream"] as const;
 const COMPAT_PASSTHROUGH_METHODS = new Set<string>([
   normalizeMethodForMatch("codex/stderr"),
 ]);

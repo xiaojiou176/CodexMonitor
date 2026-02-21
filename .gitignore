@@ -31,6 +31,7 @@ CodexMonitor.zip
 .codex/Plans/
 .codex-memory.jsonl
 .runtime-cache/
+test-results/
 public/assets/material-icons/
 第三方Repo参考/
 

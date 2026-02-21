@@ -36,12 +36,15 @@ import { setWorkspaceReorderDragging } from "../../../services/dragDrop";
 const COLLAPSED_GROUPS_STORAGE_KEY = "codexmonitor.collapsedGroups";
 const THREAD_ORDER_STORAGE_KEY = "codexmonitor.threadOrderByWorkspace";
 const WORKSPACE_ORDER_STORAGE_KEY = "codexmonitor.workspaceOrderByGroup";
+const SUB_AGENT_ROOT_COLLAPSE_STORAGE_KEY =
+  "codexmonitor.subAgentRootCollapseByWorkspace";
 const UNGROUPED_COLLAPSE_ID = "__ungrouped__";
 const UNGROUPED_WORKSPACE_GROUP_KEY = "__ungrouped_workspace_group__";
 const ADD_MENU_WIDTH = 200;
 
 type ThreadOrderByWorkspace = Record<string, string[]>;
 type WorkspaceOrderByGroup = Record<string, string[]>;
+type SubAgentRootCollapseByWorkspace = Record<string, Record<string, true>>;
 type WorkspaceDropPosition = "before" | "after";
 type WorkspacePointerDragContext = {
   sourceWorkspaceId: string;
@@ -163,6 +166,56 @@ function saveWorkspaceOrderByGroup(orderByGroup: WorkspaceOrderByGroup): void {
   }
   try {
     window.localStorage.setItem(WORKSPACE_ORDER_STORAGE_KEY, JSON.stringify(orderByGroup));
+  } catch {
+    // Best-effort persistence.
+  }
+}
+
+function loadSubAgentRootCollapseByWorkspace(): SubAgentRootCollapseByWorkspace {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(SUB_AGENT_ROOT_COLLAPSE_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") {
+      return {};
+    }
+    const next: SubAgentRootCollapseByWorkspace = {};
+    Object.entries(parsed).forEach(([workspaceId, value]) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return;
+      }
+      const roots: Record<string, true> = {};
+      Object.entries(value as Record<string, unknown>).forEach(([rootId, collapsed]) => {
+        if (collapsed === true) {
+          roots[rootId] = true;
+        }
+      });
+      if (Object.keys(roots).length > 0) {
+        next[workspaceId] = roots;
+      }
+    });
+    return next;
+  } catch {
+    return {};
+  }
+}
+
+function saveSubAgentRootCollapseByWorkspace(
+  collapsedByWorkspace: SubAgentRootCollapseByWorkspace,
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      SUB_AGENT_ROOT_COLLAPSE_STORAGE_KEY,
+      JSON.stringify(collapsedByWorkspace),
+    );
   } catch {
     // Best-effort persistence.
   }
@@ -323,6 +376,8 @@ type SidebarProps = {
   threadListSortKey: ThreadListSortKey;
   onSetThreadListSortKey: (sortKey: ThreadListSortKey) => void;
   onRefreshAllThreads: () => void;
+  showSubAgentThreadsInSidebar: boolean;
+  onToggleShowSubAgentThreadsInSidebar: () => void;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   accountInfo: AccountSnapshot | null;
@@ -385,6 +440,8 @@ export const Sidebar = memo(function Sidebar({
   threadListSortKey,
   onSetThreadListSortKey,
   onRefreshAllThreads,
+  showSubAgentThreadsInSidebar,
+  onToggleShowSubAgentThreadsInSidebar,
   activeWorkspaceId,
   activeThreadId,
   accountInfo,
@@ -431,6 +488,10 @@ export const Sidebar = memo(function Sidebar({
     useState<ThreadOrderByWorkspace>(() => loadThreadOrderByWorkspace());
   const [workspaceOrderByGroup, setWorkspaceOrderByGroup] =
     useState<WorkspaceOrderByGroup>(() => loadWorkspaceOrderByGroup());
+  const [subAgentRootCollapseByWorkspace, setSubAgentRootCollapseByWorkspace] =
+    useState<SubAgentRootCollapseByWorkspace>(() =>
+      loadSubAgentRootCollapseByWorkspace(),
+    );
   const [editingWorkspaceAliasId, setEditingWorkspaceAliasId] = useState<string | null>(null);
   const [workspaceAliasDraft, setWorkspaceAliasDraft] = useState("");
   const [draggingWorkspaceId, setDraggingWorkspaceId] = useState<string | null>(null);
@@ -460,6 +521,33 @@ export const Sidebar = memo(function Sidebar({
     COLLAPSED_GROUPS_STORAGE_KEY,
   );
   const { getThreadRows } = useThreadRows(threadParentById);
+  const isRootCollapsed = useCallback(
+    (workspaceId: string, rootId: string) =>
+      Boolean(subAgentRootCollapseByWorkspace[workspaceId]?.[rootId]),
+    [subAgentRootCollapseByWorkspace],
+  );
+  const handleToggleRootCollapse = useCallback(
+    (workspaceId: string, rootId: string) => {
+      setSubAgentRootCollapseByWorkspace((previous) => {
+        const currentWorkspace = previous[workspaceId] ?? {};
+        const nextWorkspace = { ...currentWorkspace };
+        if (nextWorkspace[rootId]) {
+          delete nextWorkspace[rootId];
+        } else {
+          nextWorkspace[rootId] = true;
+        }
+        const next = { ...previous };
+        if (Object.keys(nextWorkspace).length === 0) {
+          delete next[workspaceId];
+        } else {
+          next[workspaceId] = nextWorkspace;
+        }
+        saveSubAgentRootCollapseByWorkspace(next);
+        return next;
+      });
+    },
+    [],
+  );
   const handleRenameWorkspaceAlias = useCallback(
     (workspaceId: string) => {
       const workspace = workspaces.find((entry) => entry.id === workspaceId);
@@ -795,6 +883,10 @@ export const Sidebar = memo(function Sidebar({
         true,
         workspace.id,
         getPinTimestamp,
+        {
+          showSubAgentThreads: showSubAgentThreadsInSidebar,
+          isRootCollapsed,
+        },
       );
       if (!pinnedRows.length) {
         return;
@@ -841,6 +933,8 @@ export const Sidebar = memo(function Sidebar({
     getThreadRows,
     getPinTimestamp,
     isWorkspaceMatch,
+    isRootCollapsed,
+    showSubAgentThreadsInSidebar,
   ]);
 
   const orderedGroupedWorkspaces = useMemo(
@@ -1465,6 +1559,8 @@ export const Sidebar = memo(function Sidebar({
         threadListSortKey={threadListSortKey}
         onSetThreadListSortKey={onSetThreadListSortKey}
         onRefreshAllThreads={onRefreshAllThreads}
+        showSubAgentThreadsInSidebar={showSubAgentThreadsInSidebar}
+        onToggleShowSubAgentThreadsInSidebar={onToggleShowSubAgentThreadsInSidebar}
         refreshDisabled={refreshDisabled || refreshInProgress}
         refreshInProgress={refreshInProgress}
       />
@@ -1539,6 +1635,8 @@ export const Sidebar = memo(function Sidebar({
                 onSelectThread={onSelectThread}
                 onThreadSelectionChange={handleThreadSelectionChange}
                 onShowThreadMenu={showThreadMenu}
+                onToggleRootCollapse={handleToggleRootCollapse}
+                showSubAgentCollapseToggles={showSubAgentThreadsInSidebar}
               />
             </div>
           )}
@@ -1584,6 +1682,10 @@ export const Sidebar = memo(function Sidebar({
                     isExpanded,
                     entry.id,
                     getPinTimestamp,
+                    {
+                      showSubAgentThreads: showSubAgentThreadsInSidebar,
+                      isRootCollapsed,
+                    },
                   );
                   const nextCursor =
                     threadListCursorByWorkspace[entry.id] ?? null;
@@ -1720,6 +1822,9 @@ export const Sidebar = memo(function Sidebar({
                           getThreadTime={getThreadTime}
                           isThreadPinned={isThreadPinned}
                           getPinTimestamp={getPinTimestamp}
+                          showSubAgentThreadsInSidebar={showSubAgentThreadsInSidebar}
+                          isRootCollapsed={isRootCollapsed}
+                          onToggleRootCollapse={handleToggleRootCollapse}
                           onSelectWorkspace={onSelectWorkspace}
                           onConnectWorkspace={onConnectWorkspace}
                           onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
@@ -1755,6 +1860,8 @@ export const Sidebar = memo(function Sidebar({
                           onThreadSelectionChange={handleThreadSelectionChange}
                           onShowThreadMenu={showThreadMenu}
                           onReorderThreads={handleReorderThreads}
+                          onToggleRootCollapse={handleToggleRootCollapse}
+                          showSubAgentCollapseToggles={showSubAgentThreadsInSidebar}
                         />
                       )}
                       {showThreadLoader && <ThreadLoading />}

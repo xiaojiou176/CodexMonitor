@@ -638,6 +638,33 @@ describe("threadReducer", () => {
     expect(next.activeThreadIdByWorkspace["ws-1"]).toBe("thread-2");
   });
 
+  it("removes reverse parent mappings that point to a removed thread", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [
+          { id: "thread-parent", name: "Parent", updatedAt: 3 },
+          { id: "thread-child", name: "Child", updatedAt: 2 },
+          { id: "thread-sibling", name: "Sibling", updatedAt: 1 },
+        ],
+      },
+      activeThreadIdByWorkspace: { "ws-1": "thread-parent" },
+      threadParentById: {
+        "thread-child": "thread-parent",
+        "thread-sibling": "thread-other",
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "removeThread",
+      workspaceId: "ws-1",
+      threadId: "thread-parent",
+    });
+
+    expect(next.threadParentById["thread-child"]).toBeUndefined();
+    expect(next.threadParentById["thread-sibling"]).toBe("thread-other");
+  });
+
   it("applies bulk last-agent updates with timestamp guard", () => {
     const base: ThreadState = {
       ...initialState,

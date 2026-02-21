@@ -467,6 +467,38 @@ describe("useAppServerEvents", () => {
     });
   });
 
+  it("passes through codex/eventStream notifications without incompatibility toast", async () => {
+    const handlers: Handlers = {
+      onAppServerEvent: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+    expect(listener).toBeTypeOf("function");
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-eventstream",
+        message: {
+          method: "codex/eventStreamLagged",
+          params: { lagMs: 1280 },
+        },
+      });
+    });
+
+    expect(handlers.onAppServerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspace_id: "ws-eventstream",
+        message: expect.objectContaining({
+          method: "codex/eventStreamLagged",
+        }),
+      }),
+    );
+    expect(pushErrorToastMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("accepts thread/compacted without incompatibility toast", async () => {
     const handlers: Handlers = {
       onAppServerEvent: vi.fn(),
@@ -865,6 +897,66 @@ describe("useAppServerEvents", () => {
     });
   });
 
+  it("responds to account/chatgptAuthTokens/refresh requests", async () => {
+    const { root } = await mount({});
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-auth",
+        message: {
+          method: "account/chatgptAuthTokens/refresh",
+          id: 77,
+          params: {},
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(respondToServerRequest).toHaveBeenCalledWith("ws-auth", 77, {
+        tokens: [],
+      });
+    });
+    expect(pushErrorToastMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("rejects unsupported requests with id instead of showing incompatibility toasts", async () => {
+    const { root } = await mount({});
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-unsupported-request",
+        message: {
+          method: "turn/newUnknownMethod",
+          id: 701,
+          params: { foo: "bar" },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(respondToServerRequest).toHaveBeenCalledWith(
+        "ws-unsupported-request",
+        701,
+        {
+          success: false,
+          error: {
+            code: "unsupported_method",
+            message: "Unsupported method: turn/newUnknownMethod",
+          },
+        },
+      );
+    });
+    expect(pushErrorToastMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("accepts protocol compatibility no-op methods without error toasts", async () => {
     const { root } = await mount({});
 
@@ -894,6 +986,20 @@ describe("useAppServerEvents", () => {
         workspace_id: "ws-compat-noop",
         message: {
           method: "sessionConfigured",
+          params: {},
+        },
+      });
+      listener?.({
+        workspace_id: "ws-compat-noop",
+        message: {
+          method: "thread/status/changed",
+          params: { threadId: "thread-1", status: "inProgress" },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-compat-noop",
+        message: {
+          method: "windowsSandbox/setupCompleted",
           params: {},
         },
       });

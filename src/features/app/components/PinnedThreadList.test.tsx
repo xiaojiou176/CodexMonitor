@@ -101,4 +101,27 @@ describe("PinnedThreadList", () => {
       true,
     );
   });
+
+  it("toggles root collapse for pinned rows with sub-agent descendants", () => {
+    const onToggleRootCollapse = vi.fn();
+    render(
+      <PinnedThreadList
+        {...baseProps}
+        rows={[
+          {
+            thread,
+            depth: 0,
+            workspaceId: "ws-1",
+            rootId: "thread-1",
+            hasSubAgentDescendants: true,
+            isCollapsed: true,
+          },
+        ]}
+        onToggleRootCollapse={onToggleRootCollapse}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "展开子代理" }));
+    expect(onToggleRootCollapse).toHaveBeenCalledWith("ws-1", "thread-1");
+  });
 });

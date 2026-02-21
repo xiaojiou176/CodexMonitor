@@ -914,6 +914,7 @@ function MainApp() {
     model: resolvedModel,
     effort: resolvedEffort,
     collaborationMode: collaborationModePayload,
+    skills,
     reviewDeliveryMode: appSettings.reviewDeliveryMode,
     steerEnabled: appSettings.steerEnabled,
     autoArchiveSubAgentThreadsEnabled:
@@ -927,11 +928,22 @@ function MainApp() {
     persistThreadDisplayName,
   });
 
+  const remoteBackgroundThreadIds = useMemo(() => {
+    if (!activeWorkspace) {
+      return [];
+    }
+    const threads = threadsByWorkspace[activeWorkspace.id] ?? [];
+    return threads
+      .map((thread) => thread.id)
+      .filter((threadId) => threadId !== activeThreadId);
+  }, [activeThreadId, activeWorkspace, threadsByWorkspace]);
+
   const { connectionState: remoteThreadConnectionState, reconnectLive } =
     useRemoteThreadLiveConnection({
       backendMode: appSettings.backendMode,
       activeWorkspace,
       activeThreadId,
+      backgroundThreadIds: remoteBackgroundThreadIds,
       activeThreadIsProcessing: Boolean(
         activeThreadId && threadStatusById[activeThreadId]?.isProcessing,
       ),
@@ -2336,6 +2348,17 @@ function MainApp() {
     threadListSortKey,
     onSetThreadListSortKey: handleSetThreadListSortKey,
     onRefreshAllThreads: handleRefreshAllWorkspaceThreads,
+    showSubAgentThreadsInSidebar: appSettings.showSubAgentThreadsInSidebar,
+    onToggleShowSubAgentThreadsInSidebar: () => {
+      setAppSettings((current) => {
+        const next = {
+          ...current,
+          showSubAgentThreadsInSidebar: !current.showSubAgentThreadsInSidebar,
+        };
+        void queueSaveSettings(next);
+        return next;
+      });
+    },
     activeWorkspaceId,
     activeThreadId,
     activeItems,
