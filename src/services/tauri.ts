@@ -625,6 +625,14 @@ export async function setCodexFeatureFlag(
   return invoke("set_codex_feature_flag", { featureKey, enabled });
 }
 
+export async function setAppBadgeCount(count: number): Promise<void> {
+  return invoke("set_app_badge_count", { count });
+}
+
+export async function clearAppBadge(): Promise<void> {
+  return invoke("clear_app_badge");
+}
+
 export async function generateRunMetadata(workspaceId: string, prompt: string) {
   return invoke<{ title: string; worktreeName: string }>("generate_run_metadata", {
     workspaceId,

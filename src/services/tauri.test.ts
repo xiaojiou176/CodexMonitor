@@ -23,6 +23,8 @@ import {
   readGlobalCodexConfigToml,
   listWorkspaces,
   setAgentsCoreSettings,
+  setAppBadgeCount,
+  clearAppBadge,
   setCodexFeatureFlag,
   TauriInvokeBridgeUnavailableError,
   orbitConnectTest,
@@ -322,6 +324,24 @@ describe("tauri invoke wrappers", () => {
       featureKey: "collab",
       enabled: true,
     });
+  });
+
+  it("sets app badge count", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await setAppBadgeCount(6);
+
+    expect(invokeMock).toHaveBeenCalledWith("set_app_badge_count", { count: 6 });
+  });
+
+  it("clears app badge", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await clearAppBadge();
+
+    expect(invokeMock).toHaveBeenCalledWith("clear_app_badge");
   });
 
   it("invokes stage_git_all", async () => {

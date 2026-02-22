@@ -76,6 +76,7 @@ import {
 import { useAppSettingsController } from "./features/app/hooks/useAppSettingsController";
 import { useUpdaterController } from "./features/app/hooks/useUpdaterController";
 import { useResponseRequiredNotificationsController } from "./features/app/hooks/useResponseRequiredNotificationsController";
+import { useAppBadgeCount } from "./features/app/hooks/useAppBadgeCount";
 import { useErrorToasts } from "./features/notifications/hooks/useErrorToasts";
 import { useComposerShortcuts } from "./features/composer/hooks/useComposerShortcuts";
 import { useComposerMenuActions } from "./features/composer/hooks/useComposerMenuActions";
@@ -1015,6 +1016,13 @@ function MainApp() {
     isSubAgentThread,
     getWorkspaceName,
     onDebug: addDebugEntry,
+  });
+  useAppBadgeCount({
+    threadStatusById,
+    approvals,
+    userInputRequests,
+    isSubAgentThread,
+    threadsByWorkspace,
   });
 
   const {

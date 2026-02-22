@@ -318,6 +318,8 @@ pub fn run() {
             local_usage::local_usage_snapshot,
             notifications::is_macos_debug_build,
             notifications::send_notification_fallback,
+            notifications::set_app_badge_count,
+            notifications::clear_app_badge,
             logging::append_structured_log,
             orbit::orbit_connect_test,
             orbit::orbit_sign_in_start,
