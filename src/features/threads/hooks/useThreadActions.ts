@@ -655,6 +655,14 @@ export function useThreadActions({
           }
         });
         const uniqueThreads = Array.from(uniqueById.values());
+        const existingThreads = threadsByWorkspace[workspace.id] ?? [];
+        const missingParentIds = new Set<string>();
+        uniqueThreads.forEach((thread) => {
+          const sourceParentId = extractSubAgentParentThreadId(thread.source);
+          if (sourceParentId && !uniqueById.has(sourceParentId)) {
+            missingParentIds.add(sourceParentId);
+          }
+        });
         const activityByThread = threadActivityRef.current[workspace.id] ?? {};
         const nextActivityByThread = { ...activityByThread };
         let didChangeActivity = false;
@@ -715,7 +723,13 @@ export function useThreadActions({
             return aId.localeCompare(bId);
           });
         }
-        const summaries = uniqueThreads
+        const anchoredParents = Array.from(missingParentIds)
+          .map((parentId) =>
+            existingThreads.find((thread) => thread.id === parentId),
+          )
+          .filter((thread): thread is ThreadSummary => Boolean(thread));
+        const hydratedThreads = [...uniqueThreads, ...anchoredParents];
+        const summaries = hydratedThreads
           .slice(0, THREAD_LIST_TARGET_COUNT)
           .map((thread, index) => {
             const id = String(thread?.id ?? "");
@@ -794,6 +808,7 @@ export function useThreadActions({
       onDebug,
       threadActivityRef,
       threadSortKey,
+      threadsByWorkspace,
       updateThreadParent,
       markSubAgentThread,
       recordThreadCreatedAt,

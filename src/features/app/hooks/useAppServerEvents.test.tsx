@@ -124,6 +124,7 @@ describe("useAppServerEvents", () => {
       onRequestUserInput: vi.fn(),
       onItemCompleted: vi.fn(),
       onAgentMessageCompleted: vi.fn(),
+      onAccountRateLimitsUpdated: vi.fn(),
       onAccountUpdated: vi.fn(),
       onAccountLoginCompleted: vi.fn(),
     };
@@ -316,6 +317,36 @@ describe("useAppServerEvents", () => {
       itemId: "item-2",
       text: "Done",
       turnId: null,
+    });
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "account/rateLimits/updated",
+          params: {
+            rateLimits: { primary: { usedPercent: 25 } },
+          },
+        },
+      });
+    });
+    expect(handlers.onAccountRateLimitsUpdated).toHaveBeenCalledWith("ws-1", {
+      primary: { usedPercent: 25 },
+    });
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "account/rateLimits/updated",
+          params: {
+            rate_limits: { primary: { used_percent: 30 } },
+          },
+        },
+      });
+    });
+    expect(handlers.onAccountRateLimitsUpdated).toHaveBeenCalledWith("ws-1", {
+      primary: { used_percent: 30 },
     });
 
     act(() => {
