@@ -73,6 +73,7 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onOpenDebug={options.onOpenDebug}
       showDebugButton={options.showDebugButton}
       onAddWorkspace={options.onAddWorkspace}
+      onAddWorkspaceFromUrl={options.onAddWorkspaceFromUrl}
       onSelectHome={options.onSelectHome}
       onSelectWorkspace={options.onSelectWorkspace}
       onConnectWorkspace={options.onConnectWorkspace}
@@ -254,6 +255,7 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
     <Home
       onOpenProject={options.onAddWorkspace}
       onAddWorkspace={options.onAddWorkspace}
+      onAddWorkspaceFromUrl={options.onAddWorkspaceFromUrl}
       latestAgentRuns={options.latestAgentRuns}
       isLoadingLatestAgents={options.isLoadingLatestAgents}
       localUsageSnapshot={options.localUsageSnapshot}

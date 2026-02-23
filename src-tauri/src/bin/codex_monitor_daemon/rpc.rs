@@ -200,6 +200,22 @@ pub(super) async fn handle_rpc_request(
             let workspace = state.add_workspace(path, codex_bin, client_version).await?;
             serde_json::to_value(workspace).map_err(|err| err.to_string())
         }
+        "add_workspace_from_git_url" => {
+            let url = parse_string(&params, "url")?;
+            let destination_path = parse_string(&params, "destinationPath")?;
+            let target_folder_name = parse_optional_string(&params, "targetFolderName");
+            let codex_bin = parse_optional_string(&params, "codex_bin");
+            let workspace = state
+                .add_workspace_from_git_url(
+                    url,
+                    destination_path,
+                    target_folder_name,
+                    codex_bin,
+                    client_version,
+                )
+                .await?;
+            serde_json::to_value(workspace).map_err(|err| err.to_string())
+        }
         "add_worktree" => {
             let parent_id = parse_string(&params, "parentId")?;
             let branch = parse_string(&params, "branch")?;

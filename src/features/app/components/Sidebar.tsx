@@ -388,6 +388,7 @@ type SidebarProps = {
   onOpenDebug: () => void;
   showDebugButton: boolean;
   onAddWorkspace: () => void;
+  onAddWorkspaceFromUrl: () => void;
   onSelectHome: () => void;
   onSelectWorkspace: (id: string) => void;
   onConnectWorkspace: (workspace: WorkspaceInfo) => void;
@@ -452,6 +453,7 @@ export const Sidebar = memo(function Sidebar({
   onOpenDebug,
   showDebugButton,
   onAddWorkspace,
+  onAddWorkspaceFromUrl,
   onSelectHome,
   onSelectWorkspace,
   onConnectWorkspace,
@@ -1554,6 +1556,7 @@ export const Sidebar = memo(function Sidebar({
       <SidebarHeader
         onSelectHome={onSelectHome}
         onAddWorkspace={onAddWorkspace}
+        onAddWorkspaceFromUrl={onAddWorkspaceFromUrl}
         onToggleSearch={() => setIsSearchOpen((prev) => !prev)}
         isSearchOpen={isSearchOpen}
         threadListSortKey={threadListSortKey}

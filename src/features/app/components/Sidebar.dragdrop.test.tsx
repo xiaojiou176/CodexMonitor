@@ -35,6 +35,7 @@ const baseProps = {
   onOpenDebug: vi.fn(),
   showDebugButton: false,
   onAddWorkspace: vi.fn(),
+  onAddWorkspaceFromUrl: vi.fn(),
   onSelectHome: vi.fn(),
   onSelectWorkspace: vi.fn(),
   onConnectWorkspace: vi.fn(),

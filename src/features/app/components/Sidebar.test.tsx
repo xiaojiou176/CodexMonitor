@@ -41,6 +41,7 @@ const baseProps = {
   onOpenDebug: vi.fn(),
   showDebugButton: false,
   onAddWorkspace: vi.fn(),
+  onAddWorkspaceFromUrl: vi.fn(),
   onSelectHome: vi.fn(),
   onSelectWorkspace: vi.fn(),
   onConnectWorkspace: vi.fn(),
@@ -145,6 +146,18 @@ describe("Sidebar", () => {
       name: "搜索工作区和对话",
     }) as HTMLInputElement;
     expect(reopened.value).toBe("");
+  });
+
+  it("opens add-workspace-from-url prompt from header action", async () => {
+    const onAddWorkspaceFromUrl = vi.fn();
+    render(<Sidebar {...baseProps} onAddWorkspaceFromUrl={onAddWorkspaceFromUrl} />);
+
+    const button = screen.getByRole("button", { name: "从 URL 添加工作区" });
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(onAddWorkspaceFromUrl).toHaveBeenCalledTimes(1);
   });
 
   it("opens thread sort menu from the header filter button", () => {

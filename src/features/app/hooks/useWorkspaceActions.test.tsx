@@ -34,6 +34,7 @@ describe("useWorkspaceActions telemetry", () => {
       useWorkspaceActions({
         isCompact: false,
         addWorkspace: vi.fn(async () => null),
+        openWorkspaceFromUrlPrompt: vi.fn(),
         addWorkspaceFromPath: vi.fn(async () => null),
         setActiveThreadId,
         setActiveTab: vi.fn(),
@@ -60,5 +61,33 @@ describe("useWorkspaceActions telemetry", () => {
         thread_id: "draft",
       },
     });
+  });
+
+  it("opens workspace-from-url prompt when requested", () => {
+    const openWorkspaceFromUrlPrompt = vi.fn();
+
+    const { result } = renderHook(() =>
+      useWorkspaceActions({
+        isCompact: false,
+        addWorkspace: vi.fn(async () => null),
+        openWorkspaceFromUrlPrompt,
+        addWorkspaceFromPath: vi.fn(async () => null),
+        setActiveThreadId: vi.fn(),
+        setActiveTab: vi.fn(),
+        exitDiffView: vi.fn(),
+        selectWorkspace: vi.fn(),
+        onStartNewAgentDraft: vi.fn(),
+        openWorktreePrompt: vi.fn(),
+        openClonePrompt: vi.fn(),
+        composerInputRef: { current: null },
+        onDebug: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      result.current.handleAddWorkspaceFromUrl();
+    });
+
+    expect(openWorkspaceFromUrlPrompt).toHaveBeenCalledTimes(1);
   });
 });

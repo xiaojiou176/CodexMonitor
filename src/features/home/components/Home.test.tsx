@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Home } from "./Home";
 
 const baseProps = {
   onOpenProject: vi.fn(),
   onAddWorkspace: vi.fn(),
+  onAddWorkspaceFromUrl: vi.fn(),
   latestAgentRuns: [],
   isLoadingLatestAgents: false,
   localUsageSnapshot: null,
@@ -101,5 +102,19 @@ describe("Home", () => {
     const usageTrend = screen.getByRole("list", { name: "近7天用量趋势" });
     expect(usageTrend).not.toBeNull();
     expect(screen.getAllByRole("listitem").length).toBeGreaterThan(0);
+  });
+
+  it("triggers add-workspace-from-url action from visible entry", () => {
+    const onAddWorkspaceFromUrl = vi.fn();
+    const { container } = render(
+      <Home {...baseProps} onAddWorkspaceFromUrl={onAddWorkspaceFromUrl} />,
+    );
+
+    const actions = within(container).getAllByRole("button", {
+      name: "从 URL 添加工作区",
+    });
+    const action = actions[0];
+    fireEvent.click(action);
+    expect(onAddWorkspaceFromUrl).toHaveBeenCalledTimes(1);
   });
 });

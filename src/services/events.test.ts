@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { AppServerEvent } from "../types";
 import {
   subscribeAppServerEvents,
+  subscribeMenuAddWorkspaceFromUrl,
   subscribeMenuCycleCollaborationMode,
   subscribeMenuCycleModel,
   subscribeMenuNewAgent,
@@ -133,6 +134,29 @@ describe("events subscriptions", () => {
 
     const event: Event<void> = {
       event: "menu-open-branch-switcher",
+      id: 1,
+      payload: undefined,
+    };
+    listener(event);
+    expect(onEvent).toHaveBeenCalledTimes(1);
+
+    cleanup();
+  });
+
+  it("delivers add-workspace-from-url menu events to subscribers", async () => {
+    let listener: EventCallback<void> = () => {};
+    const unlisten = vi.fn();
+
+    vi.mocked(listen).mockImplementation((_event, handler) => {
+      listener = handler as EventCallback<void>;
+      return Promise.resolve(unlisten);
+    });
+
+    const onEvent = vi.fn();
+    const cleanup = subscribeMenuAddWorkspaceFromUrl(onEvent);
+
+    const event: Event<void> = {
+      event: "menu-add-workspace-from-url",
       id: 1,
       payload: undefined,
     };
