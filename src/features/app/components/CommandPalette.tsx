@@ -147,6 +147,7 @@ export function CommandPalette({
           <input
             ref={inputRef}
             className="command-palette-input"
+            aria-label="搜索命令"
             placeholder="搜索命令…"
             value={query}
             onChange={(event) => setQuery(event.target.value)}

@@ -294,6 +294,22 @@
   align-items: end;
 }
 
+.composer-compose-shell {
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: var(--surface-card-strong);
+  padding: 8px 12px 10px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.composer-compose-shell:focus-within {
+  border-color: var(--border-accent);
+  box-shadow: 0 0 0 2px var(--border-accent-soft);
+}
+
 .composer-input-area {
   position: relative;
   min-width: 0;
@@ -321,6 +337,19 @@
 .composer-input-row:focus-within {
   border-color: var(--border-accent);
   box-shadow: 0 0 0 2px var(--border-accent-soft);
+}
+
+.composer-compose-shell .composer-input-row {
+  padding: 4px 0 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.composer-compose-shell .composer-input-row:focus-within {
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .composer-mobile-menu {
@@ -833,6 +862,12 @@
   gap: 12px;
 }
 
+.composer-compose-shell .composer-bar {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top-color: color-mix(in srgb, var(--border-subtle) 78%, transparent);
+}
+
 .composer-meta {
   display: flex;
   gap: 8px;
@@ -1130,6 +1165,11 @@
 }
 
 @media (max-width: 720px) {
+  .app.layout-phone .composer-compose-shell {
+    padding: 8px 10px;
+    border-radius: 14px;
+  }
+
   .app.layout-phone .composer-input {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
@@ -1204,6 +1244,11 @@
   .app.layout-phone .composer-bar {
     gap: 8px;
     padding-top: 4px;
+  }
+
+  .app.layout-phone .composer-compose-shell .composer-bar {
+    margin-top: 2px;
+    padding-top: 6px;
   }
 
   .app.layout-phone .composer-meta {

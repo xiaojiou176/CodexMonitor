@@ -45,7 +45,7 @@ export function PhoneLayout({
   debugPanelNode,
 }: PhoneLayoutProps) {
   return (
-    <div className="compact-shell">
+    <main className="compact-shell">
       {approvalToastsNode}
       {updateToastNode}
       {errorToastsNode}
@@ -92,6 +92,6 @@ export function PhoneLayout({
         <div className="compact-panel">{debugPanelNode}</div>
       )}
       {tabBarNode}
-    </div>
+    </main>
   );
 }
