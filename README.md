@@ -75,6 +75,13 @@ npm run start:dev
 
 (Equivalent direct command: `npm run tauri:dev`.)
 
+Dev ports:
+
+- Default Vite/Tauri dev port: `17420`
+- Default HMR port: `17421`
+- Default Playwright web port (`PLAYWRIGHT_WEB_PORT`): `17473`
+- Auto-fallback search range: `17420-17520`
+
 ### Optional: Create a desktop shortcut
 
 Create a one-click desktop launcher:
@@ -266,6 +273,25 @@ One-shot JavaScript quality gate:
 npm run test:repo
 ```
 
+## Documentation
+
+- Docs index: `docs/README.md`
+- App-server compatibility reference: `docs/app-server-events.md`
+- Configuration reference: `docs/reference/configuration.md`
+- Logging/cache governance: `docs/reference/logging-cache-governance.md`
+- Dependency maintenance policy: `docs/reference/dependency-maintenance.md`
+- Upstream sync runbook: `docs/upstream-sync-runbook.md`
+- Upstream patch inventory template: `docs/upstream-patch-inventory.md`
+
+## Upstream Sync Commands
+
+- Dry run: `npm run sync:upstream:dry`
+- Execute sync: `npm run sync:upstream`
+- Quick verification: `npm run sync:verify:fast`
+- Full verification: `npm run sync:verify`
+
+Default remote detection order is `upstream` then `origin`.
+
 ## Project Structure
 
 ```
@@ -304,7 +330,7 @@ src-tauri/
 
 Frontend calls live in `src/services/tauri.ts` and map to commands in `src-tauri/src/lib.rs`. The current surface includes:
 
-- Settings/config/files: `get_app_settings`, `update_app_settings`, `get_codex_config_path`, `get_config_model`, `file_read`, `file_write`, `codex_doctor`, `menu_set_accelerators`.
+- Settings/config/files: `get_app_settings`, `update_app_settings`, `get_codex_config_path`, `get_config_model`, `file_read`, `file_write`, `codex_doctor`, `menu_set_accelerators`, `append_structured_log`.
 - Workspaces/worktrees: `list_workspaces`, `is_workspace_path_dir`, `add_workspace`, `add_clone`, `add_worktree`, `worktree_setup_status`, `worktree_setup_mark_ran`, `rename_worktree`, `rename_worktree_upstream`, `apply_worktree_changes`, `update_workspace_settings`, `update_workspace_codex_bin`, `remove_workspace`, `remove_worktree`, `connect_workspace`, `list_workspace_files`, `read_workspace_file`, `open_workspace_in`, `get_open_app_icon`.
 - Threads/turns/reviews: `start_thread`, `fork_thread`, `compact_thread`, `list_threads`, `resume_thread`, `archive_thread`, `set_thread_name`, `send_user_message`, `turn_interrupt`, `respond_to_server_request`, `start_review`, `remember_approval_rule`, `get_commit_message_prompt`, `generate_commit_message`, `generate_run_metadata`.
 - Account/models/collaboration: `model_list`, `account_rate_limits`, `account_read`, `skills_list`, `apps_list`, `collaboration_mode_list`, `codex_login`, `codex_login_cancel`, `list_mcp_server_status`.

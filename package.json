@@ -20,6 +20,7 @@
     "sync:upstream:dry": "bash scripts/sync-upstream.sh --dry-run",
     "sync:verify": "bash scripts/sync-verify.sh",
     "sync:verify:fast": "bash scripts/sync-verify.sh --skip-gates",
+    "docs:check:app-server-events": "node scripts/docs/check-app-server-events-sync.mjs",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:ds": "eslint . --ext .ts,.tsx",
     "codemod:modal-shell": "node scripts/codemods/modal-shell-codemod.mjs",

@@ -76,6 +76,7 @@ import {
 import { useAppSettingsController } from "./features/app/hooks/useAppSettingsController";
 import { useUpdaterController } from "./features/app/hooks/useUpdaterController";
 import { useResponseRequiredNotificationsController } from "./features/app/hooks/useResponseRequiredNotificationsController";
+import { useAppBadgeCount } from "./features/app/hooks/useAppBadgeCount";
 import { useErrorToasts } from "./features/notifications/hooks/useErrorToasts";
 import { useComposerShortcuts } from "./features/composer/hooks/useComposerShortcuts";
 import { useComposerMenuActions } from "./features/composer/hooks/useComposerMenuActions";
@@ -114,6 +115,7 @@ import { useMobileServerSetup } from "./features/mobile/hooks/useMobileServerSet
 import { useWorkspaceHome } from "./features/workspaces/hooks/useWorkspaceHome";
 import { useWorkspaceAgentMd } from "./features/workspaces/hooks/useWorkspaceAgentMd";
 import { isMobilePlatform } from "./utils/platformPaths";
+import { normalizeCodexArgsInput } from "./utils/codexArgsInput";
 import type {
   ComposerEditorSettings,
   GitFileStatus,
@@ -135,6 +137,12 @@ import {
   REMOTE_THREAD_POLL_INTERVAL_MS,
   useRemoteThreadRefreshOnFocus,
 } from "./features/app/hooks/useRemoteThreadRefreshOnFocus";
+import { createPendingThreadSeed } from "./features/threads/utils/threadCodexParamsSeed";
+import {
+  useThreadCodexBootstrapOrchestration,
+  useThreadCodexSyncOrchestration,
+  useThreadSelectionHandlersOrchestration,
+} from "./features/app/orchestration/useThreadOrchestration";
 
 const AboutView = lazy(() =>
   import("./features/about/components/AboutView").then((module) => ({
@@ -308,6 +316,19 @@ function MainApp() {
     setActiveWorkspaceId,
     addWorkspace,
     addWorkspaceFromPath,
+    mobileRemoteWorkspacePathPrompt,
+    updateMobileRemoteWorkspacePathInput,
+    cancelMobileRemoteWorkspacePathPrompt,
+    submitMobileRemoteWorkspacePathPrompt,
+    workspaceFromUrlPrompt,
+    openWorkspaceFromUrlPrompt,
+    closeWorkspaceFromUrlPrompt,
+    chooseWorkspaceFromUrlDestinationPath,
+    submitWorkspaceFromUrlPrompt,
+    updateWorkspaceFromUrlUrl,
+    updateWorkspaceFromUrlTargetFolderName,
+    clearWorkspaceFromUrlDestinationPath,
+    canSubmitWorkspaceFromUrlPrompt,
     addCloneAgent,
     addWorktreeAgent,
     connectWorkspace,
@@ -348,6 +369,27 @@ function MainApp() {
     () => new Map(workspaces.map((workspace) => [workspace.id, workspace])),
     [workspaces],
   );
+  const {
+    threadCodexParamsVersion,
+    getThreadCodexParams,
+    patchThreadCodexParams,
+    accessMode,
+    setAccessMode,
+    preferredModelId,
+    setPreferredModelId,
+    preferredEffort,
+    setPreferredEffort,
+    setPreferredCollabModeId,
+    preferredCodexArgsOverride,
+    setPreferredCodexArgsOverride,
+    threadCodexSelectionKey,
+    setThreadCodexSelectionKey,
+    activeThreadIdRef,
+    pendingNewThreadSeedRef,
+    persistThreadCodexParams,
+  } = useThreadCodexBootstrapOrchestration({
+    activeWorkspaceId,
+  });
   const persistWorkspaceDisplayName = useCallback(
     async (workspaceId: string, displayName: string | null) => {
       const workspace = workspacesById.get(workspaceId);
@@ -658,8 +700,8 @@ function MainApp() {
   } = useModels({
     activeWorkspace,
     onDebug: addDebugEntry,
-    preferredModelId: appSettings.lastComposerModelId,
-    preferredEffort: appSettings.lastComposerReasoningEffort,
+    preferredModelId,
+    preferredEffort,
   });
 
   const {
@@ -672,6 +714,33 @@ function MainApp() {
     enabled: appSettings.collaborationModesEnabled,
     onDebug: addDebugEntry,
   });
+  const [selectedCodexArgsOverride, setSelectedCodexArgsOverride] = useState<string | null>(
+    null,
+  );
+  useEffect(() => {
+    setSelectedCodexArgsOverride(normalizeCodexArgsInput(preferredCodexArgsOverride));
+  }, [preferredCodexArgsOverride, threadCodexSelectionKey]);
+
+  const {
+    handleSelectModel,
+    handleSelectEffort,
+    handleSelectCollaborationMode,
+    handleSelectAccessMode,
+    handleSelectCodexArgsOverride,
+  } = useThreadSelectionHandlersOrchestration({
+    appSettingsLoading,
+    setAppSettings,
+    queueSaveSettings,
+    activeThreadIdRef,
+    setSelectedModelId,
+    setSelectedEffort,
+    setSelectedCollaborationModeId,
+    setAccessMode,
+    setSelectedCodexArgsOverride,
+    persistThreadCodexParams,
+  });
+  void handleSelectAccessMode;
+  void handleSelectCodexArgsOverride;
 
   const composerShortcuts = {
     modelShortcut: appSettings.composerModelShortcut,
@@ -682,12 +751,12 @@ function MainApp() {
     models,
     collaborationModes,
     selectedModelId,
-    onSelectModel: setSelectedModelId,
+    onSelectModel: handleSelectModel,
     selectedCollaborationModeId,
-    onSelectCollaborationMode: setSelectedCollaborationModeId,
+    onSelectCollaborationMode: handleSelectCollaborationMode,
     reasoningOptions,
     selectedEffort,
-    onSelectEffort: setSelectedEffort,
+    onSelectEffort: handleSelectEffort,
     reasoningSupported,
   };
 
@@ -699,13 +768,13 @@ function MainApp() {
   useComposerMenuActions({
     models,
     selectedModelId,
-    onSelectModel: setSelectedModelId,
+    onSelectModel: handleSelectModel,
     collaborationModes,
     selectedCollaborationModeId,
-    onSelectCollaborationMode: setSelectedCollaborationModeId,
+    onSelectCollaborationMode: handleSelectCollaborationMode,
     reasoningOptions,
     selectedEffort,
-    onSelectEffort: setSelectedEffort,
+    onSelectEffort: handleSelectEffort,
     reasoningSupported,
     onFocusComposer: () => composerInputRef.current?.focus(),
   });
@@ -914,6 +983,7 @@ function MainApp() {
     model: resolvedModel,
     effort: resolvedEffort,
     collaborationMode: collaborationModePayload,
+    skills,
     reviewDeliveryMode: appSettings.reviewDeliveryMode,
     steerEnabled: appSettings.steerEnabled,
     autoArchiveSubAgentThreadsEnabled:
@@ -927,11 +997,22 @@ function MainApp() {
     persistThreadDisplayName,
   });
 
+  const remoteBackgroundThreadIds = useMemo(() => {
+    if (!activeWorkspace) {
+      return [];
+    }
+    const threads = threadsByWorkspace[activeWorkspace.id] ?? [];
+    return threads
+      .map((thread) => thread.id)
+      .filter((threadId) => threadId !== activeThreadId);
+  }, [activeThreadId, activeWorkspace, threadsByWorkspace]);
+
   const { connectionState: remoteThreadConnectionState, reconnectLive } =
     useRemoteThreadLiveConnection({
       backendMode: appSettings.backendMode,
       activeWorkspace,
       activeThreadId,
+      backgroundThreadIds: remoteBackgroundThreadIds,
       activeThreadIsProcessing: Boolean(
         activeThreadId && threadStatusById[activeThreadId]?.isProcessing,
       ),
@@ -1004,6 +1085,13 @@ function MainApp() {
     getWorkspaceName,
     onDebug: addDebugEntry,
   });
+  useAppBadgeCount({
+    threadStatusById,
+    approvals,
+    userInputRequests,
+    isSubAgentThread,
+    threadsByWorkspace,
+  });
 
   const {
     activeAccount,
@@ -1030,11 +1118,32 @@ function MainApp() {
     activeWorkspaceId,
     activeThreadId,
   });
-  const activeThreadIdRef = useRef<string | null>(activeThreadId ?? null);
   const { getThreadRows } = useThreadRows(threadParentById);
-  useEffect(() => {
-    activeThreadIdRef.current = activeThreadId ?? null;
-  }, [activeThreadId]);
+
+  useThreadCodexSyncOrchestration({
+    activeWorkspaceId,
+    activeThreadId,
+    appSettings: {
+      lastComposerModelId: appSettings.lastComposerModelId,
+      lastComposerReasoningEffort: appSettings.lastComposerReasoningEffort,
+    },
+    threadCodexParamsVersion,
+    getThreadCodexParams,
+    patchThreadCodexParams,
+    setThreadCodexSelectionKey,
+    setAccessMode,
+    setPreferredModelId,
+    setPreferredEffort,
+    setPreferredCollabModeId,
+    setPreferredCodexArgsOverride,
+    activeThreadIdRef,
+    pendingNewThreadSeedRef,
+    selectedModelId,
+    resolvedEffort,
+    accessMode,
+    selectedCollaborationModeId,
+    selectedCodexArgsOverride,
+  });
 
   const { recordPendingThreadLink } = useSystemNotificationThreadLinks({
     hasLoadedWorkspaces: hasLoaded,
@@ -1889,6 +1998,7 @@ function MainApp() {
 
   const {
     handleAddWorkspace,
+    handleAddWorkspaceFromUrl,
     handleAddWorkspaceFromPath,
     handleAddAgent,
     handleAddWorktreeAgent,
@@ -1896,6 +2006,7 @@ function MainApp() {
   } = useWorkspaceActions({
     isCompact,
     addWorkspace,
+    openWorkspaceFromUrlPrompt,
     addWorkspaceFromPath,
     setActiveThreadId,
     setActiveTab,
@@ -1989,19 +2100,53 @@ function MainApp() {
     queueMessage,
   });
   const handleComposerSendWithDraftStart = useCallback(
-    (text: string, images: string[]) =>
-      runWithDraftStart(() => handleComposerSend(text, images)),
-    [handleComposerSend, runWithDraftStart],
+    (text: string, images: string[]) => {
+      pendingNewThreadSeedRef.current = createPendingThreadSeed({
+        activeThreadId: activeThreadId ?? null,
+        activeWorkspaceId: activeWorkspaceId ?? null,
+        selectedCollaborationModeId,
+        accessMode,
+        codexArgsOverride: selectedCodexArgsOverride ?? null,
+      });
+      return runWithDraftStart(() => handleComposerSend(text, images));
+    },
+    [
+      accessMode,
+      activeThreadId,
+      activeWorkspaceId,
+      handleComposerSend,
+      pendingNewThreadSeedRef,
+      runWithDraftStart,
+      selectedCollaborationModeId,
+      selectedCodexArgsOverride,
+    ],
   );
   const handleComposerQueueWithDraftStart = useCallback(
     (text: string, images: string[]) => {
+      pendingNewThreadSeedRef.current = createPendingThreadSeed({
+        activeThreadId: activeThreadId ?? null,
+        activeWorkspaceId: activeWorkspaceId ?? null,
+        selectedCollaborationModeId,
+        accessMode,
+        codexArgsOverride: selectedCodexArgsOverride ?? null,
+      });
       // Queueing without an active thread would no-op; bootstrap through send so user input is not lost.
       const runner = activeThreadId
         ? () => handleComposerQueue(text, images)
         : () => handleComposerSend(text, images);
       return runWithDraftStart(runner);
     },
-    [activeThreadId, handleComposerQueue, handleComposerSend, runWithDraftStart],
+    [
+      accessMode,
+      activeThreadId,
+      activeWorkspaceId,
+      handleComposerQueue,
+      handleComposerSend,
+      pendingNewThreadSeedRef,
+      runWithDraftStart,
+      selectedCollaborationModeId,
+      selectedCodexArgsOverride,
+    ],
   );
 
   const handleSelectWorkspaceInstance = useCallback(
@@ -2053,7 +2198,7 @@ function MainApp() {
     resolvedEffort,
     connectWorkspace,
     sendUserMessageToThread,
-    setSelectedCollaborationModeId,
+    setSelectedCollaborationModeId: handleSelectCollaborationMode,
   });
 
   const orderValue = (entry: WorkspaceInfo) =>
@@ -2252,6 +2397,9 @@ function MainApp() {
     onAddWorkspace: () => {
       void handleAddWorkspace();
     },
+    onAddWorkspaceFromUrl: () => {
+      handleAddWorkspaceFromUrl();
+    },
     onAddAgent: (workspace) => {
       void handleAddAgent(workspace);
     },
@@ -2336,6 +2484,17 @@ function MainApp() {
     threadListSortKey,
     onSetThreadListSortKey: handleSetThreadListSortKey,
     onRefreshAllThreads: handleRefreshAllWorkspaceThreads,
+    showSubAgentThreadsInSidebar: appSettings.showSubAgentThreadsInSidebar,
+    onToggleShowSubAgentThreadsInSidebar: () => {
+      setAppSettings((current) => {
+        const next = {
+          ...current,
+          showSubAgentThreadsInSidebar: !current.showSubAgentThreadsInSidebar,
+        };
+        void queueSaveSettings(next);
+        return next;
+      });
+    },
     activeWorkspaceId,
     activeThreadId,
     activeItems,
@@ -2367,6 +2526,7 @@ function MainApp() {
     onOpenDebug: handleDebugClick,
     showDebugButton,
     onAddWorkspace: handleAddWorkspace,
+    onAddWorkspaceFromUrl: handleAddWorkspaceFromUrl,
     onSelectHome: () => {
       resetPullRequestSelection();
       clearDraftStateOnNavigation();
@@ -2720,13 +2880,13 @@ function MainApp() {
     canSteerQueued: Boolean(activeThreadId) && appSettings.steerEnabled,
     collaborationModes,
     selectedCollaborationModeId,
-    onSelectCollaborationMode: setSelectedCollaborationModeId,
+    onSelectCollaborationMode: handleSelectCollaborationMode,
     models,
     selectedModelId,
-    onSelectModel: setSelectedModelId,
+    onSelectModel: handleSelectModel,
     reasoningOptions,
     selectedEffort,
-    onSelectEffort: setSelectedEffort,
+    onSelectEffort: handleSelectEffort,
     reasoningSupported,
     continueModeEnabled: Boolean(activeThreadId) && activeContinueEnabled,
     onContinueModeEnabledChange: handleContinueModeEnabledChange,
@@ -2866,17 +3026,82 @@ function MainApp() {
   );
 
   // ── Command Palette (⌘K) ──
-  const commandItems: CommandItem[] = useMemo(() => [
-    ...(activeWorkspace
-      ? [
-          { id: "new-agent", label: "新建 Agent", shortcut: appSettings.newAgentShortcut ?? "⌘N", section: "工作区", action: () => { void handleAddAgent(activeWorkspace); } },
-          { id: "new-worktree", label: "新建工作树 Agent", shortcut: appSettings.newWorktreeAgentShortcut ?? undefined, section: "工作区", action: () => { void handleAddWorktreeAgent(activeWorkspace); } },
-        ]
-      : []),
-    { id: "toggle-terminal", label: "切换终端", shortcut: appSettings.toggleTerminalShortcut ?? "⌘`", section: "面板", action: handleToggleTerminal },
-    { id: "toggle-sidebar", label: "切换侧栏", shortcut: appSettings.toggleProjectsSidebarShortcut ?? undefined, section: "面板", action: () => { sidebarCollapsed ? sidebarToggleProps.onExpandSidebar() : sidebarToggleProps.onCollapseSidebar(); } },
-    { id: "open-settings", label: "打开设置", section: "导航", action: () => openSettings() },
-  ], [appSettings, activeWorkspace, handleAddAgent, handleAddWorktreeAgent, handleToggleTerminal, sidebarCollapsed, sidebarToggleProps, openSettings]);
+  const commandItems: CommandItem[] = useMemo(
+    () => [
+      {
+        id: "add-workspace",
+        label: "添加工作区",
+        section: "工作区",
+        action: () => {
+          void handleAddWorkspace();
+        },
+      },
+      {
+        id: "add-workspace-from-url",
+        label: "从 URL 添加工作区",
+        section: "工作区",
+        action: handleAddWorkspaceFromUrl,
+      },
+      ...(activeWorkspace
+        ? [
+            {
+              id: "new-agent",
+              label: "新建 Agent",
+              shortcut: appSettings.newAgentShortcut ?? "⌘N",
+              section: "工作区",
+              action: () => {
+                void handleAddAgent(activeWorkspace);
+              },
+            },
+            {
+              id: "new-worktree",
+              label: "新建工作树 Agent",
+              shortcut: appSettings.newWorktreeAgentShortcut ?? undefined,
+              section: "工作区",
+              action: () => {
+                void handleAddWorktreeAgent(activeWorkspace);
+              },
+            },
+          ]
+        : []),
+      {
+        id: "toggle-terminal",
+        label: "切换终端",
+        shortcut: appSettings.toggleTerminalShortcut ?? "⌘`",
+        section: "面板",
+        action: handleToggleTerminal,
+      },
+      {
+        id: "toggle-sidebar",
+        label: "切换侧栏",
+        shortcut: appSettings.toggleProjectsSidebarShortcut ?? undefined,
+        section: "面板",
+        action: () => {
+          sidebarCollapsed
+            ? sidebarToggleProps.onExpandSidebar()
+            : sidebarToggleProps.onCollapseSidebar();
+        },
+      },
+      {
+        id: "open-settings",
+        label: "打开设置",
+        section: "导航",
+        action: () => openSettings(),
+      },
+    ],
+    [
+      appSettings,
+      activeWorkspace,
+      handleAddAgent,
+      handleAddWorkspace,
+      handleAddWorkspaceFromUrl,
+      handleAddWorktreeAgent,
+      handleToggleTerminal,
+      sidebarCollapsed,
+      sidebarToggleProps,
+      openSettings,
+    ],
+  );
 
   const cmdPalette = useCommandPalette(commandItems);
   const appCssVars = useMemo(
@@ -2996,6 +3221,24 @@ function MainApp() {
         onClonePromptClearCopiesFolder={clearCloneCopiesFolder}
         onClonePromptCancel={cancelClonePrompt}
         onClonePromptConfirm={confirmClonePrompt}
+        workspaceFromUrlPrompt={workspaceFromUrlPrompt}
+        canSubmitWorkspaceFromUrlPrompt={canSubmitWorkspaceFromUrlPrompt}
+        onWorkspaceFromUrlPromptUrlChange={updateWorkspaceFromUrlUrl}
+        onWorkspaceFromUrlPromptTargetFolderNameChange={
+          updateWorkspaceFromUrlTargetFolderName
+        }
+        onWorkspaceFromUrlPromptChooseDestinationPath={
+          chooseWorkspaceFromUrlDestinationPath
+        }
+        onWorkspaceFromUrlPromptClearDestinationPath={
+          clearWorkspaceFromUrlDestinationPath
+        }
+        onWorkspaceFromUrlPromptCancel={closeWorkspaceFromUrlPrompt}
+        onWorkspaceFromUrlPromptConfirm={submitWorkspaceFromUrlPrompt}
+        mobileRemoteWorkspacePathPrompt={mobileRemoteWorkspacePathPrompt}
+        onMobileRemoteWorkspacePathInputChange={updateMobileRemoteWorkspacePathInput}
+        onMobileRemoteWorkspacePathPromptCancel={cancelMobileRemoteWorkspacePathPrompt}
+        onMobileRemoteWorkspacePathPromptConfirm={submitMobileRemoteWorkspacePathPrompt}
         branchSwitcher={branchSwitcher}
         branches={branches}
         workspaces={workspaces}

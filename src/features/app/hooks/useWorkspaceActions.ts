@@ -7,6 +7,7 @@ import { pushErrorToast } from "../../../services/toasts";
 type Params = {
   isCompact: boolean;
   addWorkspace: () => Promise<WorkspaceInfo | null>;
+  openWorkspaceFromUrlPrompt: () => void;
   addWorkspaceFromPath: (path: string) => Promise<WorkspaceInfo | null>;
   setActiveThreadId: (threadId: string | null, workspaceId: string) => void;
   setActiveTab: (tab: "home" | "projects" | "codex" | "git" | "log") => void;
@@ -22,6 +23,7 @@ type Params = {
 export function useWorkspaceActions({
   isCompact,
   addWorkspace,
+  openWorkspaceFromUrlPrompt,
   addWorkspaceFromPath,
   setActiveThreadId,
   setActiveTab,
@@ -64,6 +66,10 @@ export function useWorkspaceActions({
       });
     }
   }, [addWorkspace, handleWorkspaceAdded, onDebug]);
+
+  const handleAddWorkspaceFromUrl = useCallback(() => {
+    openWorkspaceFromUrlPrompt();
+  }, [openWorkspaceFromUrlPrompt]);
 
   const handleAddWorkspaceFromPath = useCallback(
     async (path: string) => {
@@ -136,6 +142,7 @@ export function useWorkspaceActions({
 
   return {
     handleAddWorkspace,
+    handleAddWorkspaceFromUrl,
     handleAddWorkspaceFromPath,
     handleAddAgent,
     handleAddWorktreeAgent,

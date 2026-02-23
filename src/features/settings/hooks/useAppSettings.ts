@@ -130,6 +130,7 @@ function buildDefaultSettings(): AppSettings {
     collaborationModesEnabled: true,
     steerEnabled: true,
     unifiedExecEnabled: true,
+    showSubAgentThreadsInSidebar: true,
     autoArchiveSubAgentThreadsEnabled: true,
     autoArchiveSubAgentThreadsMaxAgeMinutes:
       AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_DEFAULT,
@@ -205,6 +206,10 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
       : "latest",
     reviewDeliveryMode:
       settings.reviewDeliveryMode === "detached" ? "detached" : "inline",
+    showSubAgentThreadsInSidebar:
+      typeof settings.showSubAgentThreadsInSidebar === "boolean"
+        ? settings.showSubAgentThreadsInSidebar
+        : true,
     autoArchiveSubAgentThreadsEnabled:
       typeof settings.autoArchiveSubAgentThreadsEnabled === "boolean"
         ? settings.autoArchiveSubAgentThreadsEnabled

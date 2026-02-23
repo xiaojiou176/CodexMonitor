@@ -423,69 +423,6 @@ export function useQueuedSend({
     [hasRunningCommandExecutionForThread, resolveLastAliveAtForThread],
   );
 
-  const globallyBlockedThreadIds = useMemo(() => {
-    const now = Date.now();
-    const threadIds = new Set<string>([
-      ...Object.keys(queuedByThread),
-      ...Object.keys(inFlightByThread),
-      ...Object.keys(threadStatusById ?? {}),
-      ...(activeThreadId ? [activeThreadId] : []),
-    ]);
-
-    const blockedThreadIds = new Set<string>();
-
-    threadIds.forEach((threadId) => {
-      const status = getThreadStatus(threadId);
-      if (status.isReviewing) {
-        blockedThreadIds.add(threadId);
-        return;
-      }
-      if (status.phase === "waiting_user") {
-        blockedThreadIds.add(threadId);
-        return;
-      }
-
-      if (status.isProcessing) {
-        const staleState = evaluateStaleStateForThread(
-          threadId,
-          status.processingStartedAt,
-          now,
-        );
-        const isProcessingStale = staleState.isStale;
-        if (!isProcessingStale) {
-          blockedThreadIds.add(threadId);
-          return;
-        }
-      }
-
-      const inFlightItem = inFlightByThread[threadId];
-      if (!inFlightItem) {
-        return;
-      }
-
-      const inFlightSince = inFlightSinceByThread[threadId] ?? inFlightItem.createdAt;
-      const isAwaitingTurnStart = !hasStartedByThread[threadId];
-      const isAwaitingTurnStartStale =
-        isAwaitingTurnStart
-        && evaluateStaleStateForThread(threadId, inFlightSince, now).isStale;
-
-      if (!isAwaitingTurnStartStale) {
-        blockedThreadIds.add(threadId);
-      }
-    });
-
-    return blockedThreadIds;
-  }, [
-    activeThreadId,
-    getThreadStatus,
-    hasStartedByThread,
-    inFlightByThread,
-    inFlightSinceByThread,
-    queuedByThread,
-    threadStatusById,
-    evaluateStaleStateForThread,
-  ]);
-
   const queueHealthEntries = useMemo<QueueHealthEntry[]>(() => {
     const now = Date.now();
     const threadIds = new Set<string>([
@@ -552,16 +489,6 @@ export function useQueuedSend({
         blockedReason = "workspace_unresolved";
       } else if (queueLength > 0 && command && threadId !== activeThreadId) {
         blockedReason = "command_requires_active_thread";
-      }
-
-      const blockedByOtherThread =
-        threadId !== activeThreadId
-        &&
-        globallyBlockedThreadIds.size > 0
-        && !(globallyBlockedThreadIds.size === 1 && globallyBlockedThreadIds.has(threadId));
-
-      if (!blockedReason && queueLength > 0 && blockedByOtherThread) {
-        blockedReason = "global_processing";
       }
 
       let blockedForMs: number | null = null;
@@ -631,7 +558,6 @@ export function useQueuedSend({
     activeThreadId,
     appsEnabled,
     getThreadStatus,
-    globallyBlockedThreadIds,
     hasStartedByThread,
     inFlightByThread,
     inFlightSinceByThread,
@@ -1206,12 +1132,6 @@ export function useQueuedSend({
       return;
     }
 
-    const hasGlobalBusyBlock =
-      globallyBlockedThreadIds.size > 0
-      && queuedThreadIds.some(
-        (threadId) => !(globallyBlockedThreadIds.size === 1 && globallyBlockedThreadIds.has(threadId)),
-      );
-
     const orderedThreadIds =
       activeThreadId && queuedThreadIds.includes(activeThreadId)
         ? [activeThreadId, ...queuedThreadIds.filter((threadId) => threadId !== activeThreadId)]
@@ -1252,13 +1172,6 @@ export function useQueuedSend({
 
       const queue = queuedByThread[candidateThreadId] ?? [];
       if (queue.length === 0) {
-        return false;
-      }
-
-      if (
-        hasGlobalBusyBlock
-        && candidateThreadId !== activeThreadId
-      ) {
         return false;
       }
 
@@ -1401,7 +1314,6 @@ export function useQueuedSend({
     connectWorkspace,
     failureCountByThread,
     getThreadStatus,
-    globallyBlockedThreadIds,
     inFlightByThread,
     prependQueuedMessage,
     queuedByThread,

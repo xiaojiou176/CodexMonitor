@@ -697,4 +697,89 @@ describe("threadItems", () => {
     expect(timestamp).toBe(Date.parse("2025-01-01T00:00:00Z"));
   });
 
+  it("avoids duplicating skill tokens when text and type:skill coexist", () => {
+    const item = buildConversationItemFromThreadItem({
+      type: "userMessage",
+      id: "msg-skill-1",
+      content: [
+        { type: "text", text: "Please run $deep_debug now" },
+        { type: "skill", name: "deep_debug" },
+      ],
+    });
+
+    expect(item).not.toBeNull();
+    if (item && item.kind === "message") {
+      expect(item.role).toBe("user");
+      expect(item.text).toBe("Please run $deep_debug now");
+    }
+  });
+
+  it("avoids duplicating unicode skill tokens when text and type:skill coexist", () => {
+    const item = buildConversationItemFromThreadItem({
+      type: "userMessage",
+      id: "msg-skill-2",
+      content: [
+        { type: "text", text: "请执行 $深度调试模式" },
+        { type: "skill", name: "深度调试模式" },
+      ],
+    });
+
+    expect(item).not.toBeNull();
+    if (item && item.kind === "message") {
+      expect(item.role).toBe("user");
+      expect(item.text).toBe("请执行 $深度调试模式");
+    }
+  });
+
+  it("avoids duplicating spaced unicode skill tokens when text and type:skill coexist", () => {
+    const item = buildConversationItemFromThreadItem({
+      type: "userMessage",
+      id: "msg-skill-3",
+      content: [
+        { type: "text", text: "请执行 $ 深度调试模式" },
+        { type: "skill", name: "深度调试模式" },
+      ],
+    });
+
+    expect(item).not.toBeNull();
+    if (item && item.kind === "message") {
+      expect(item.role).toBe("user");
+      expect(item.text).toBe("请执行 $ 深度调试模式");
+    }
+  });
+
+  it("avoids duplicating full-width-dollar unicode skill tokens when text and type:skill coexist", () => {
+    const item = buildConversationItemFromThreadItem({
+      type: "userMessage",
+      id: "msg-skill-4",
+      content: [
+        { type: "text", text: "请执行 ＄深度调试模式" },
+        { type: "skill", name: "深度调试模式" },
+      ],
+    });
+
+    expect(item).not.toBeNull();
+    if (item && item.kind === "message") {
+      expect(item.role).toBe("user");
+      expect(item.text).toBe("请执行 ＄深度调试模式");
+    }
+  });
+
+  it("avoids duplicating skill names that contain spaces when text and type:skill coexist", () => {
+    const item = buildConversationItemFromThreadItem({
+      type: "userMessage",
+      id: "msg-skill-5",
+      content: [
+        { type: "text", text: "Please run $my skill now" },
+        { type: "skill", name: "my skill" },
+      ],
+    });
+
+    expect(item).not.toBeNull();
+    if (item && item.kind === "message") {
+      expect(item.role).toBe("user");
+      expect(item.text).toBe("Please run $my skill now");
+    }
+  });
+
 });

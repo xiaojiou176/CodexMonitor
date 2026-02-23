@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { logWarn } from "../../../services/logger";
 import type { DebugEntry } from "../../../types";
 
 const MAX_DEBUG_ENTRIES = 200;
@@ -59,6 +60,13 @@ export function useDebugLog() {
       }
       if (isAlertEntry(entry)) {
         setHasDebugAlerts(true);
+        logWarn("useDebugLog", entry.label, {
+          source: entry.source,
+          payload:
+            typeof entry.payload === "string"
+              ? entry.payload.slice(0, 2000)
+              : entry.payload,
+        });
       }
       setDebugEntries((prev) => [...prev, entry].slice(-MAX_DEBUG_ENTRIES));
     },

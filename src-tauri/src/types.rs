@@ -634,6 +634,11 @@ pub(crate) struct AppSettings {
     )]
     pub(crate) unified_exec_enabled: bool,
     #[serde(
+        default = "default_show_sub_agent_threads_in_sidebar",
+        rename = "showSubAgentThreadsInSidebar"
+    )]
+    pub(crate) show_sub_agent_threads_in_sidebar: bool,
+    #[serde(
         default = "default_auto_archive_sub_agent_threads_enabled",
         rename = "autoArchiveSubAgentThreadsEnabled"
     )]
@@ -974,6 +979,10 @@ fn default_unified_exec_enabled() -> bool {
     true
 }
 
+fn default_show_sub_agent_threads_in_sidebar() -> bool {
+    true
+}
+
 fn default_auto_archive_sub_agent_threads_enabled() -> bool {
     true
 }
@@ -1217,6 +1226,7 @@ impl Default for AppSettings {
             collaboration_modes_enabled: true,
             steer_enabled: true,
             unified_exec_enabled: true,
+            show_sub_agent_threads_in_sidebar: default_show_sub_agent_threads_in_sidebar(),
             auto_archive_sub_agent_threads_enabled: default_auto_archive_sub_agent_threads_enabled(),
             auto_archive_sub_agent_threads_max_age_minutes:
                 default_auto_archive_sub_agent_threads_max_age_minutes(),
@@ -1384,6 +1394,7 @@ mod tests {
         assert!(settings.collaboration_modes_enabled);
         assert!(settings.steer_enabled);
         assert!(settings.unified_exec_enabled);
+        assert!(settings.show_sub_agent_threads_in_sidebar);
         assert!(settings.auto_archive_sub_agent_threads_enabled);
         assert_eq!(settings.auto_archive_sub_agent_threads_max_age_minutes, 30);
         assert!(!settings.experimental_apps_enabled);

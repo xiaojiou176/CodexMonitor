@@ -1,4 +1,5 @@
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
+import Link2 from "lucide-react/dist/esm/icons/link-2";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 import type { LocalUsageSnapshot } from "../../../types";
@@ -25,6 +26,7 @@ type UsageWorkspaceOption = {
 type HomeProps = {
   onOpenProject: () => void;
   onAddWorkspace: () => void;
+  onAddWorkspaceFromUrl: () => void;
   latestAgentRuns: LatestAgentRun[];
   isLoadingLatestAgents: boolean;
   localUsageSnapshot: LocalUsageSnapshot | null;
@@ -42,6 +44,7 @@ type HomeProps = {
 export function Home({
   onOpenProject,
   onAddWorkspace,
+  onAddWorkspaceFromUrl,
   latestAgentRuns,
   isLoadingLatestAgents,
   localUsageSnapshot,
@@ -249,6 +252,19 @@ export function Home({
           <button
             className="home-suggestion-card"
             type="button"
+            onClick={onAddWorkspaceFromUrl}
+          >
+            <span className="home-suggestion-icon" aria-hidden>
+              🔗
+            </span>
+            <span className="home-suggestion-title">从 URL 添加工作区</span>
+            <span className="home-suggestion-description">
+              输入 Git 仓库地址与目标目录，快速接入远程项目。
+            </span>
+          </button>
+          <button
+            className="home-suggestion-card"
+            type="button"
             onClick={handleResumeLatest}
             disabled={!latestRun}
           >
@@ -339,6 +355,16 @@ export function Home({
             +
           </span>
           添加工作区
+        </button>
+        <button
+          className="home-button secondary"
+          onClick={onAddWorkspaceFromUrl}
+          data-tauri-drag-region="false"
+        >
+          <span className="home-icon" aria-hidden>
+            <Link2 size={16} />
+          </span>
+          从 URL 添加工作区
         </button>
       </div>
       <div className="home-usage">

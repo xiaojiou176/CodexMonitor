@@ -77,4 +77,44 @@ describe("useRemoteThreadLiveConnection", () => {
     expect(threadLiveUnsubscribeMock).toHaveBeenCalledWith("ws-1", "thread-1");
     unmount();
   });
+
+  it("subscribes background remote threads and unsubscribes them on blur", async () => {
+    subscribeAppServerEventsMock.mockImplementation((_handler: (event: AppServerEvent) => void) => {
+      return () => {};
+    });
+    const refreshThread = vi.fn().mockResolvedValue(undefined);
+
+    renderHook(() =>
+      useRemoteThreadLiveConnection({
+        backendMode: "remote",
+        activeWorkspace: {
+          id: "ws-1",
+          name: "Workspace 1",
+          path: "/tmp/ws-1",
+          connected: true,
+          settings: { sidebarCollapsed: false },
+        },
+        activeThreadId: "thread-1",
+        backgroundThreadIds: ["thread-2", "thread-3", "thread-1"],
+        refreshThread,
+      }),
+    );
+
+    await act(async () => {
+      await new Promise<void>((resolve) => { queueMicrotask(resolve); });
+    });
+
+    expect(threadLiveSubscribeMock).toHaveBeenCalledWith("ws-1", "thread-1");
+    expect(threadLiveSubscribeMock).toHaveBeenCalledWith("ws-1", "thread-2");
+    expect(threadLiveSubscribeMock).toHaveBeenCalledWith("ws-1", "thread-3");
+
+    await act(async () => {
+      window.dispatchEvent(new Event("blur"));
+      await new Promise<void>((resolve) => { queueMicrotask(resolve); });
+    });
+
+    expect(threadLiveUnsubscribeMock).toHaveBeenCalledWith("ws-1", "thread-1");
+    expect(threadLiveUnsubscribeMock).toHaveBeenCalledWith("ws-1", "thread-2");
+    expect(threadLiveUnsubscribeMock).toHaveBeenCalledWith("ws-1", "thread-3");
+  });
 });

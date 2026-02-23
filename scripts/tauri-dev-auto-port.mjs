@@ -8,8 +8,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const repoRoot = resolve(__dirname, "..");
 
-const DEFAULT_PORT = 1420;
-const MAX_PORT = 1520;
+const DEFAULT_PORT = 17420;
+const MAX_PORT = 17520;
 
 function isPortAvailableOnHost(port, host) {
   return new Promise((resolveAvailable) => {

@@ -1,4 +1,5 @@
 use super::*;
+use serde::de::DeserializeOwned;
 
 pub(super) fn build_error_response(id: Option<u64>, message: &str) -> Option<String> {
     let id = id?;
@@ -159,6 +160,15 @@ fn parse_file_write_request(params: &Value) -> Result<FileWriteRequest, String> 
     serde_json::from_value(params.clone()).map_err(|err| err.to_string())
 }
 
+fn parse_input<T: DeserializeOwned>(params: &Value) -> Result<T, String> {
+    let input_value = params
+        .as_object()
+        .and_then(|map| map.get("input"))
+        .cloned()
+        .ok_or_else(|| "missing `input`".to_string())?;
+    serde_json::from_value(input_value).map_err(|err| err.to_string())
+}
+
 pub(super) async fn handle_rpc_request(
     state: &DaemonState,
     method: &str,
@@ -188,6 +198,22 @@ pub(super) async fn handle_rpc_request(
             let path = parse_string(&params, "path")?;
             let codex_bin = parse_optional_string(&params, "codex_bin");
             let workspace = state.add_workspace(path, codex_bin, client_version).await?;
+            serde_json::to_value(workspace).map_err(|err| err.to_string())
+        }
+        "add_workspace_from_git_url" => {
+            let url = parse_string(&params, "url")?;
+            let destination_path = parse_string(&params, "destinationPath")?;
+            let target_folder_name = parse_optional_string(&params, "targetFolderName");
+            let codex_bin = parse_optional_string(&params, "codex_bin");
+            let workspace = state
+                .add_workspace_from_git_url(
+                    url,
+                    destination_path,
+                    target_folder_name,
+                    codex_bin,
+                    client_version,
+                )
+                .await?;
             serde_json::to_value(workspace).map_err(|err| err.to_string())
         }
         "add_worktree" => {
@@ -347,8 +373,9 @@ pub(super) async fn handle_rpc_request(
             let cursor = parse_optional_string(&params, "cursor");
             let limit = parse_optional_u32(&params, "limit");
             let sort_key = parse_optional_string(&params, "sortKey");
+            let cwd = parse_optional_string(&params, "cwd");
             state
-                .list_threads(workspace_id, cursor, limit, sort_key)
+                .list_threads(workspace_id, cursor, limit, sort_key, cwd)
                 .await
         }
         "list_mcp_server_status" => {
@@ -398,6 +425,10 @@ pub(super) async fn handle_rpc_request(
             let effort = parse_optional_string(&params, "effort");
             let access_mode = parse_optional_string(&params, "accessMode");
             let images = parse_optional_string_array(&params, "images");
+            let app_mentions =
+                parse_optional_value(&params, "appMentions").and_then(|value| value.as_array().cloned());
+            let skill_mentions = parse_optional_value(&params, "skillMentions")
+                .and_then(|value| value.as_array().cloned());
             let collaboration_mode = parse_optional_value(&params, "collaborationMode");
             state
                 .send_user_message(
@@ -408,6 +439,8 @@ pub(super) async fn handle_rpc_request(
                     effort,
                     access_mode,
                     images,
+                    app_mentions,
+                    skill_mentions,
                     collaboration_mode,
                 )
                 .await
@@ -424,8 +457,20 @@ pub(super) async fn handle_rpc_request(
             let turn_id = parse_string(&params, "turnId")?;
             let text = parse_string(&params, "text")?;
             let images = parse_optional_string_array(&params, "images");
+            let app_mentions =
+                parse_optional_value(&params, "appMentions").and_then(|value| value.as_array().cloned());
+            let skill_mentions = parse_optional_value(&params, "skillMentions")
+                .and_then(|value| value.as_array().cloned());
             state
-                .turn_steer(workspace_id, thread_id, turn_id, text, images)
+                .turn_steer(
+                    workspace_id,
+                    thread_id,
+                    turn_id,
+                    text,
+                    images,
+                    app_mentions,
+                    skill_mentions,
+                )
                 .await
         }
         "start_review" => {
@@ -445,9 +490,71 @@ pub(super) async fn handle_rpc_request(
             let workspace_id = parse_string(&params, "workspaceId")?;
             state.model_list(workspace_id).await
         }
+        "experimental_feature_list" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let cursor = parse_optional_string(&params, "cursor");
+            let limit = parse_optional_u32(&params, "limit");
+            state.experimental_feature_list(workspace_id, cursor, limit).await
+        }
+        "set_codex_feature_flag" => {
+            let feature_key = parse_string(&params, "featureKey")?;
+            let enabled =
+                parse_optional_bool(&params, "enabled").ok_or("missing or invalid `enabled`")?;
+            state
+                .set_codex_feature_flag(feature_key, enabled)
+                .await
+                .map(|_| json!({ "ok": true }))
+        }
         "collaboration_mode_list" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             state.collaboration_mode_list(workspace_id).await
+        }
+        "get_agents_settings" => state
+            .get_agents_settings()
+            .await
+            .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string())),
+        "set_agents_core_settings" => {
+            let input = parse_input::<agents_config_core::SetAgentsCoreInput>(&params)?;
+            state
+                .set_agents_core_settings(input)
+                .await
+                .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string()))
+        }
+        "create_agent" => {
+            let input = parse_input::<agents_config_core::CreateAgentInput>(&params)?;
+            state
+                .create_agent(input)
+                .await
+                .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string()))
+        }
+        "update_agent" => {
+            let input = parse_input::<agents_config_core::UpdateAgentInput>(&params)?;
+            state
+                .update_agent(input)
+                .await
+                .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string()))
+        }
+        "delete_agent" => {
+            let input = parse_input::<agents_config_core::DeleteAgentInput>(&params)?;
+            state
+                .delete_agent(input)
+                .await
+                .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string()))
+        }
+        "read_agent_config_toml" => {
+            let agent_name = parse_string(&params, "agentName")?;
+            state
+                .read_agent_config_toml(agent_name)
+                .await
+                .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string()))
+        }
+        "write_agent_config_toml" => {
+            let agent_name = parse_string(&params, "agentName")?;
+            let content = parse_string(&params, "content")?;
+            state
+                .write_agent_config_toml(agent_name, content)
+                .await
+                .map(|_| json!({ "ok": true }))
         }
         "account_rate_limits" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
@@ -473,7 +580,8 @@ pub(super) async fn handle_rpc_request(
             let workspace_id = parse_string(&params, "workspaceId")?;
             let cursor = parse_optional_string(&params, "cursor");
             let limit = parse_optional_u32(&params, "limit");
-            state.apps_list(workspace_id, cursor, limit).await
+            let thread_id = parse_optional_string(&params, "threadId");
+            state.apps_list(workspace_id, cursor, limit, thread_id).await
         }
         "respond_to_server_request" => {
             let workspace_id = parse_string(&params, "workspaceId")?;

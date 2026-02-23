@@ -16,7 +16,7 @@ function makeWorkspace(overrides: Partial<WorkspaceInfo> = {}): WorkspaceInfo {
 }
 
 describe("useSystemNotificationThreadLinks", () => {
-  it("navigates to the thread when the app regains focus", async () => {
+  it("does not navigate automatically on window focus", async () => {
     const workspace = makeWorkspace({ connected: true });
     const workspacesById = new Map([[workspace.id, workspace]]);
 
@@ -49,6 +49,49 @@ describe("useSystemNotificationThreadLinks", () => {
     await act(async () => {
       window.dispatchEvent(new Event("focus"));
       await new Promise<void>((resolve) => { queueMicrotask(resolve); });
+    });
+
+    expect(setCenterMode).not.toHaveBeenCalled();
+    expect(setSelectedDiffPath).not.toHaveBeenCalled();
+    expect(setActiveTab).not.toHaveBeenCalled();
+    expect(setActiveWorkspaceId).not.toHaveBeenCalled();
+    expect(setActiveThreadId).not.toHaveBeenCalled();
+    expect(connectWorkspace).not.toHaveBeenCalled();
+    expect(refreshWorkspaces).not.toHaveBeenCalled();
+  });
+
+  it("navigates to the thread only when explicitly opened", async () => {
+    const workspace = makeWorkspace({ connected: true });
+    const workspacesById = new Map([[workspace.id, workspace]]);
+
+    const refreshWorkspaces = vi.fn(async () => [workspace]);
+    const connectWorkspace = vi.fn(async () => {});
+    const setActiveTab = vi.fn();
+    const setCenterMode = vi.fn();
+    const setSelectedDiffPath = vi.fn();
+    const setActiveWorkspaceId = vi.fn();
+    const setActiveThreadId = vi.fn();
+
+    const { result } = renderHook(() =>
+      useSystemNotificationThreadLinks({
+        hasLoadedWorkspaces: true,
+        workspacesById,
+        refreshWorkspaces,
+        connectWorkspace,
+        setActiveTab,
+        setCenterMode,
+        setSelectedDiffPath,
+        setActiveWorkspaceId,
+        setActiveThreadId,
+      }),
+    );
+
+    act(() => {
+      result.current.recordPendingThreadLink("ws-1", "t-1");
+    });
+
+    await act(async () => {
+      await result.current.openPendingThreadLink();
     });
 
     expect(setCenterMode).toHaveBeenCalledWith("chat");
@@ -91,8 +134,7 @@ describe("useSystemNotificationThreadLinks", () => {
     });
 
     await act(async () => {
-      window.dispatchEvent(new Event("focus"));
-      await new Promise<void>((resolve) => { queueMicrotask(resolve); });
+      await result.current.openPendingThreadLink();
     });
 
     expect(connectWorkspace).toHaveBeenCalledTimes(1);

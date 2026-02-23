@@ -13,11 +13,13 @@ import type {
   OrbitRunnerStatus,
   OrbitSignInPollResult,
   OrbitSignOutResult,
+  SkillMention,
   ThreadArchiveBatchResult,
   TcpDaemonStatus,
   TailscaleDaemonCommandPreview,
   TailscaleStatus,
   WorkspaceInfo,
+  AppMention,
   WorkspaceSettings,
 } from "../types";
 import type {
@@ -88,6 +90,22 @@ export async function getCodexConfigPath(): Promise<string> {
   return invoke<string>("get_codex_config_path");
 }
 
+export type StructuredLogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
+
+export async function appendStructuredLog(
+  level: StructuredLogLevel,
+  source: string,
+  message: string,
+  context?: Record<string, unknown> | null,
+): Promise<void> {
+  return invoke("append_structured_log", {
+    level,
+    source,
+    message,
+    context: context ?? null,
+  });
+}
+
 export type TextFileResponse = {
   exists: boolean;
   content: string;
@@ -97,6 +115,46 @@ export type TextFileResponse = {
 export type GlobalAgentsResponse = TextFileResponse;
 export type GlobalCodexConfigResponse = TextFileResponse;
 export type AgentMdResponse = TextFileResponse;
+export type AgentSummary = {
+  name: string;
+  description: string | null;
+  configFile: string;
+  resolvedPath: string;
+  managedByApp: boolean;
+  fileExists: boolean;
+};
+
+export type AgentsSettings = {
+  configPath: string;
+  multiAgentEnabled: boolean;
+  maxThreads: number;
+  agents: AgentSummary[];
+};
+
+export type SetAgentsCoreInput = {
+  multiAgentEnabled: boolean;
+  maxThreads: number;
+};
+
+export type CreateAgentInput = {
+  name: string;
+  description?: string | null;
+  template?: "blank" | string | null;
+  model?: string | null;
+  reasoningEffort?: string | null;
+};
+
+export type UpdateAgentInput = {
+  originalName: string;
+  name: string;
+  description?: string | null;
+  renameManagedFile?: boolean;
+};
+
+export type DeleteAgentInput = {
+  name: string;
+  deleteManagedFile?: boolean;
+};
 
 type FileScope = "workspace" | "global";
 type FileKind = "agents" | "config";
@@ -134,6 +192,39 @@ export async function writeGlobalCodexConfigToml(content: string): Promise<void>
   return fileWrite("global", "config", content);
 }
 
+export async function getAgentsSettings(): Promise<AgentsSettings> {
+  return invoke<AgentsSettings>("get_agents_settings");
+}
+
+export async function setAgentsCoreSettings(
+  input: SetAgentsCoreInput,
+): Promise<AgentsSettings> {
+  return invoke<AgentsSettings>("set_agents_core_settings", { input });
+}
+
+export async function createAgent(input: CreateAgentInput): Promise<AgentsSettings> {
+  return invoke<AgentsSettings>("create_agent", { input });
+}
+
+export async function updateAgent(input: UpdateAgentInput): Promise<AgentsSettings> {
+  return invoke<AgentsSettings>("update_agent", { input });
+}
+
+export async function deleteAgent(input: DeleteAgentInput): Promise<AgentsSettings> {
+  return invoke<AgentsSettings>("delete_agent", { input });
+}
+
+export async function readAgentConfigToml(agentName: string): Promise<string> {
+  return invoke<string>("read_agent_config_toml", { agentName });
+}
+
+export async function writeAgentConfigToml(
+  agentName: string,
+  content: string,
+): Promise<void> {
+  return invoke("write_agent_config_toml", { agentName, content });
+}
+
 export async function getConfigModel(workspaceId: string): Promise<string | null> {
   const response = await invoke<{ model?: string | null }>("get_config_model", {
     workspaceId,
@@ -151,6 +242,20 @@ export async function addWorkspace(
   codex_bin: string | null,
 ): Promise<WorkspaceInfo> {
   return invoke<WorkspaceInfo>("add_workspace", { path, codex_bin });
+}
+
+export async function addWorkspaceFromGitUrl(
+  url: string,
+  destinationPath: string,
+  targetFolderName: string | null,
+  codex_bin: string | null,
+): Promise<WorkspaceInfo> {
+  return invoke<WorkspaceInfo>("add_workspace_from_git_url", {
+    url,
+    destinationPath,
+    targetFolderName,
+    codex_bin,
+  });
 }
 
 export async function isWorkspacePathDir(path: string): Promise<boolean> {
@@ -287,6 +392,8 @@ export async function sendUserMessage(
     effort?: string | null;
     images?: string[];
     collaborationMode?: Record<string, unknown> | null;
+    appMentions?: AppMention[];
+    skillMentions?: SkillMention[];
   },
 ) {
   const payload: Record<string, unknown> = {
@@ -297,6 +404,8 @@ export async function sendUserMessage(
     effort: options?.effort ?? null,
     accessMode: null, // Always null — let app-server use config.toml
     images: options?.images ?? null,
+    appMentions: options?.appMentions ?? null,
+    skillMentions: options?.skillMentions ?? null,
   };
   if (options?.collaborationMode) {
     payload.collaborationMode = options.collaborationMode;
@@ -318,6 +427,8 @@ export async function steerTurn(
   turnId: string,
   text: string,
   images?: string[],
+  appMentions?: AppMention[],
+  skillMentions?: SkillMention[],
 ) {
   return invoke("turn_steer", {
     workspaceId,
@@ -325,6 +436,8 @@ export async function steerTurn(
     turnId,
     text,
     images: images ?? null,
+    appMentions: appMentions ?? null,
+    skillMentions: skillMentions ?? null,
   });
 }
 
@@ -511,6 +624,29 @@ export async function getModelList(workspaceId: string) {
   return invoke<any>("model_list", { workspaceId });
 }
 
+export async function getExperimentalFeatureList(
+  workspaceId: string,
+  cursor?: string | null,
+  limit?: number | null,
+) {
+  return invoke<any>("experimental_feature_list", { workspaceId, cursor, limit });
+}
+
+export async function setCodexFeatureFlag(
+  featureKey: string,
+  enabled: boolean,
+): Promise<void> {
+  return invoke("set_codex_feature_flag", { featureKey, enabled });
+}
+
+export async function setAppBadgeCount(count: number): Promise<void> {
+  return invoke("set_app_badge_count", { count });
+}
+
+export async function clearAppBadge(): Promise<void> {
+  return invoke("clear_app_badge");
+}
+
 export async function generateRunMetadata(workspaceId: string, prompt: string) {
   return invoke<{ title: string; worktreeName: string }>("generate_run_metadata", {
     workspaceId,
@@ -551,8 +687,9 @@ export async function getAppsList(
   workspaceId: string,
   cursor?: string | null,
   limit?: number | null,
+  threadId?: string | null,
 ) {
-  return invoke<any>("apps_list", { workspaceId, cursor, limit });
+  return invoke<any>("apps_list", { workspaceId, cursor, limit, threadId });
 }
 
 export async function getPromptsList(workspaceId: string) {
@@ -837,8 +974,9 @@ export async function listThreads(
   cursor?: string | null,
   limit?: number | null,
   sortKey?: "created_at" | "updated_at" | null,
+  cwd?: string | null,
 ) {
-  return invoke<any>("list_threads", { workspaceId, cursor, limit, sortKey });
+  return invoke<any>("list_threads", { workspaceId, cursor, limit, sortKey, cwd });
 }
 
 export async function listMcpServerStatus(

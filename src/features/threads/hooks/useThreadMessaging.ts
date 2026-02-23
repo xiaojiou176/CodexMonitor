@@ -6,6 +6,8 @@ import type {
   CustomPromptOption,
   DebugEntry,
   ReviewTarget,
+  SkillMention,
+  SkillOption,
   WorkspaceInfo,
 } from "../../../types";
 import {
@@ -44,6 +46,7 @@ type UseThreadMessagingOptions = {
   collaborationMode?: Record<string, unknown> | null;
   reviewDeliveryMode?: "inline" | "detached";
   steerEnabled: boolean;
+  skills?: SkillOption[];
   customPrompts: CustomPromptOption[];
   threadStatusById: ThreadState["threadStatusById"];
   activeTurnIdByThread: ThreadState["activeTurnIdByThread"];
@@ -70,6 +73,88 @@ type UseThreadMessagingOptions = {
 };
 
 const SUBAGENT_MODEL_POLICY_MARKER = "[codexmonitor-subagent-model-inherit-v1]";
+const SKILL_NAME_BOUNDARY_CLASS = "\\p{L}\\p{N}\\p{M}_-";
+const SKILL_MENTION_MARKER_PATTERN = /(?:\$|＄)\s*/gu;
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildSkillMentionPattern(skillName: string): RegExp | null {
+  const segments = skillName
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean);
+  if (segments.length === 0) {
+    return null;
+  }
+  const namePattern = segments.map((segment) => escapeRegex(segment)).join("\\s+");
+  return new RegExp(
+    `^${namePattern}(?=$|[^${SKILL_NAME_BOUNDARY_CLASS}])`,
+    "iu",
+  );
+}
+
+function isAbsoluteLocalPath(path: string): boolean {
+  if (!path) {
+    return false;
+  }
+  if (path.startsWith("/")) {
+    return true;
+  }
+  if (/^[A-Za-z]:[\\/]/.test(path)) {
+    return true;
+  }
+  return path.startsWith("\\\\");
+}
+
+function buildSkillMentionsFromText(text: string, skills: SkillOption[]): SkillMention[] {
+  if (!text || skills.length === 0) {
+    return [];
+  }
+  const skillByName = new Map<string, { name: string; path: string; pattern: RegExp }>();
+  skills.forEach((skill) => {
+    const name = skill.name.trim();
+    const path = skill.path.trim();
+    if (!name || !path || !isAbsoluteLocalPath(path)) {
+      return;
+    }
+    const pattern = buildSkillMentionPattern(name);
+    if (!pattern) {
+      return;
+    }
+    const normalized = name.toLowerCase();
+    if (!skillByName.has(normalized)) {
+      skillByName.set(normalized, { name, path, pattern });
+    }
+  });
+  const skillCandidates = Array.from(skillByName.values()).sort(
+    (left, right) => right.name.length - left.name.length,
+  );
+  const mentions: SkillMention[] = [];
+  const seen = new Set<string>();
+  for (const markerMatch of text.matchAll(SKILL_MENTION_MARKER_PATTERN)) {
+    const markerIndex = markerMatch.index;
+    if (markerIndex === undefined) {
+      continue;
+    }
+    const markerEnd = markerIndex + markerMatch[0].length;
+    const rest = text.slice(markerEnd);
+    const matchedSkill = skillCandidates.find((candidate) =>
+      candidate.pattern.test(rest),
+    );
+    if (!matchedSkill) {
+      continue;
+    }
+    const key = `${matchedSkill.name}::${matchedSkill.path}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    mentions.push({ name: matchedSkill.name, path: matchedSkill.path });
+  }
+  return mentions;
+}
 
 function enforceSubagentModelInheritance(
   collaborationMode: Record<string, unknown> | null,
@@ -159,6 +244,7 @@ export function useThreadMessaging({
   collaborationMode,
   reviewDeliveryMode = "inline",
   steerEnabled,
+  skills = [],
   customPrompts,
   threadStatusById,
   activeTurnIdByThread,
@@ -211,6 +297,7 @@ export function useThreadMessaging({
         options?.collaborationMode !== undefined
           ? options.collaborationMode
           : collaborationMode;
+      const skillMentions = buildSkillMentionsFromText(finalText, skills);
       const sanitizedCollaborationModeRaw =
         resolvedCollaborationMode &&
         typeof resolvedCollaborationMode === "object" &&
@@ -279,6 +366,7 @@ export function useThreadMessaging({
           turnId: activeTurnId,
           text: finalText,
           images,
+          skillMentions,
           model: resolvedModel,
           effort: resolvedEffort,
           collaborationMode: sanitizedCollaborationMode,
@@ -294,17 +382,14 @@ export function useThreadMessaging({
           }
         }
 
-        const startTurn = () => sendUserMessageService(
-          workspace.id,
-          threadId,
-          finalText,
-          {
+        const startTurn = () =>
+          sendUserMessageService(workspace.id, threadId, finalText, {
             model: resolvedModel,
             effort: resolvedEffort,
             collaborationMode: sanitizedCollaborationMode,
             images,
-          },
-        );
+            skillMentions,
+          });
 
         let response: Record<string, unknown>;
         if (shouldSteer) {
@@ -315,6 +400,8 @@ export function useThreadMessaging({
               activeTurnId ?? "",
               finalText,
               images,
+              undefined,
+              skillMentions,
             )) as Record<string, unknown>;
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -328,6 +415,8 @@ export function useThreadMessaging({
                   retryTurnId,
                   finalText,
                   images,
+                  undefined,
+                  skillMentions,
                 )) as Record<string, unknown>;
               } else {
                 requestMode = "start";
@@ -370,6 +459,8 @@ export function useThreadMessaging({
               retryTurnId,
               finalText,
               images,
+              undefined,
+              skillMentions,
             )) as Record<string, unknown>;
             rpcError = extractRpcErrorMessage(response);
           } else {
@@ -473,6 +564,7 @@ export function useThreadMessaging({
       refreshThread,
       safeMessageActivity,
       setActiveTurnId,
+      skills,
       steerEnabled,
       threadStatusById,
     ],

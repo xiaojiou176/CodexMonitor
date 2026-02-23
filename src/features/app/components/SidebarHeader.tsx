@@ -1,6 +1,8 @@
 import Calendar from "lucide-react/dist/esm/icons/calendar";
 import Clock3 from "lucide-react/dist/esm/icons/clock-3";
 import FolderPlus from "lucide-react/dist/esm/icons/folder-plus";
+import GitBranch from "lucide-react/dist/esm/icons/git-branch";
+import Link2 from "lucide-react/dist/esm/icons/link-2";
 import ListFilter from "lucide-react/dist/esm/icons/list-filter";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Search from "lucide-react/dist/esm/icons/search";
@@ -15,11 +17,14 @@ import { useDismissibleMenu } from "../hooks/useDismissibleMenu";
 type SidebarHeaderProps = {
   onSelectHome: () => void;
   onAddWorkspace: () => void;
+  onAddWorkspaceFromUrl: () => void;
   onToggleSearch: () => void;
   isSearchOpen: boolean;
   threadListSortKey: ThreadListSortKey;
   onSetThreadListSortKey: (sortKey: ThreadListSortKey) => void;
   onRefreshAllThreads: () => void;
+  showSubAgentThreadsInSidebar: boolean;
+  onToggleShowSubAgentThreadsInSidebar: () => void;
   refreshDisabled?: boolean;
   refreshInProgress?: boolean;
 };
@@ -27,11 +32,14 @@ type SidebarHeaderProps = {
 export function SidebarHeader({
   onSelectHome,
   onAddWorkspace,
+  onAddWorkspaceFromUrl,
   onToggleSearch,
   isSearchOpen,
   threadListSortKey,
   onSetThreadListSortKey,
   onRefreshAllThreads,
+  showSubAgentThreadsInSidebar,
+  onToggleShowSubAgentThreadsInSidebar,
   refreshDisabled = false,
   refreshInProgress = false,
 }: SidebarHeaderProps) {
@@ -62,8 +70,19 @@ export function SidebarHeader({
             data-tauri-drag-region="false"
             aria-label="添加工作区"
             type="button"
+            title="添加工作区"
           >
             <FolderPlus aria-hidden />
+          </button>
+          <button
+            className="sidebar-title-add"
+            onClick={onAddWorkspaceFromUrl}
+            data-tauri-drag-region="false"
+            aria-label="从 URL 添加工作区"
+            type="button"
+            title="从 URL 添加工作区"
+          >
+            <Link2 aria-hidden />
           </button>
           <button
             className="subtitle subtitle-button sidebar-title-button"
@@ -116,6 +135,17 @@ export function SidebarHeader({
             </PopoverSurface>
           )}
         </div>
+        <button
+          className={`ghost sidebar-subagent-toggle${showSubAgentThreadsInSidebar ? " is-active" : ""}`}
+          onClick={onToggleShowSubAgentThreadsInSidebar}
+          data-tauri-drag-region="false"
+          aria-label={showSubAgentThreadsInSidebar ? "隐藏子代理线程" : "显示子代理线程"}
+          aria-pressed={showSubAgentThreadsInSidebar}
+          type="button"
+          title={showSubAgentThreadsInSidebar ? "隐藏子代理线程" : "显示子代理线程"}
+        >
+          <GitBranch aria-hidden />
+        </button>
         <button
           className="ghost sidebar-refresh-toggle"
           onClick={onRefreshAllThreads}

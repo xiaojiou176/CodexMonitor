@@ -83,6 +83,7 @@ const baseSettings: AppSettings = {
   collaborationModesEnabled: true,
   steerEnabled: true,
   unifiedExecEnabled: true,
+  showSubAgentThreadsInSidebar: true,
   autoArchiveSubAgentThreadsEnabled: true,
   autoArchiveSubAgentThreadsMaxAgeMinutes: 30,
   experimentalAppsEnabled: false,

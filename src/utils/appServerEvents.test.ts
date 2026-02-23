@@ -66,9 +66,16 @@ describe("appServerEvents", () => {
   it("checks supported method and approval requests", () => {
     expect(isSupportedAppServerMethod("turn/started")).toBe(true);
     expect(isSupportedAppServerMethod("thread/compacted")).toBe(true);
+    expect(isSupportedAppServerMethod("model/rerouted")).toBe(true);
+    expect(isSupportedAppServerMethod("thread/archived")).toBe(true);
+    expect(isSupportedAppServerMethod("thread/unarchived")).toBe(true);
+    expect(isSupportedAppServerMethod("thread/status/changed")).toBe(true);
+    expect(isSupportedAppServerMethod("windowsSandbox/setupCompleted")).toBe(true);
+    expect(isSupportedAppServerMethod("account/chatgptAuthTokens/refresh")).toBe(true);
     expect(isSupportedAppServerMethod("unknown/method")).toBe(false);
     expect(isCompatPassthroughAppServerMethod("codex/stderr")).toBe(true);
     expect(isCompatPassthroughAppServerMethod("codex/event/mcp_startup_update")).toBe(true);
+    expect(isCompatPassthroughAppServerMethod("codex/eventStreamLagged")).toBe(true);
     expect(isCompatPassthroughAppServerMethod("turn/unknownFutureMethod")).toBe(false);
     expect(isApprovalRequestMethod("workspace/requestApproval")).toBe(true);
     expect(isApprovalRequestMethod("workspace/request")).toBe(false);

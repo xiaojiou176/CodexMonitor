@@ -15,6 +15,7 @@ mod files;
 mod git;
 mod git_utils;
 mod local_usage;
+mod logging;
 #[cfg(desktop)]
 mod menu;
 #[cfg(not(desktop))]
@@ -111,6 +112,9 @@ pub fn run() {
         })
         .setup(|app| {
             let state = state::AppState::load(&app.handle());
+            if let Err(err) = logging::run_startup_maintenance(&state) {
+                eprintln!("Failed to run startup logging/cache maintenance: {err}");
+            }
             app.manage(state);
             #[cfg(desktop)]
             {
@@ -217,6 +221,7 @@ pub fn run() {
             workspaces::list_workspaces,
             workspaces::is_workspace_path_dir,
             workspaces::add_workspace,
+            workspaces::add_workspace_from_git_url,
             workspaces::add_clone,
             workspaces::add_worktree,
             workspaces::worktree_setup_status,
@@ -277,12 +282,21 @@ pub fn run() {
             git::checkout_git_branch,
             git::create_git_branch,
             codex::model_list,
+            codex::experimental_feature_list,
+            codex::set_codex_feature_flag,
             codex::account_rate_limits,
             codex::account_read,
             codex::codex_login,
             codex::codex_login_cancel,
             codex::skills_list,
             codex::apps_list,
+            codex::get_agents_settings,
+            codex::set_agents_core_settings,
+            codex::create_agent,
+            codex::update_agent,
+            codex::delete_agent,
+            codex::read_agent_config_toml,
+            codex::write_agent_config_toml,
             prompts::prompts_list,
             prompts::prompts_create,
             prompts::prompts_update,
@@ -305,6 +319,9 @@ pub fn run() {
             local_usage::local_usage_snapshot,
             notifications::is_macos_debug_build,
             notifications::send_notification_fallback,
+            notifications::set_app_badge_count,
+            notifications::clear_app_badge,
+            logging::append_structured_log,
             orbit::orbit_connect_test,
             orbit::orbit_sign_in_start,
             orbit::orbit_sign_in_poll,

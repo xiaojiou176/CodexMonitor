@@ -336,6 +336,13 @@ npm install
 npm run tauri dev
 ```
 
+Tauri/Vite dev port defaults:
+
+- App dev URL: `http://localhost:17420`
+- Vite HMR: `17421`
+- Playwright web port (`PLAYWRIGHT_WEB_PORT`): `17473`
+- Auto-fallback search range: `17420-17520`
+
 ## iOS (WIP)
 
 - iOS is supported as WIP.

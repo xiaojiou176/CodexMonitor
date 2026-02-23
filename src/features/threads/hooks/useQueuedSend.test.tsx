@@ -455,7 +455,7 @@ describe("useQueuedSend", () => {
     expect(options.sendUserMessage).toHaveBeenCalledWith("Thread-1", []);
   });
 
-  it("drains queued thread after global processing clears", async () => {
+  it("drains queued background thread even while active thread is processing", async () => {
     const workspaceTwo: WorkspaceInfo = {
       ...workspace,
       id: "workspace-2",
@@ -500,14 +500,14 @@ describe("useQueuedSend", () => {
 
     await flushAsyncTicks(2);
 
-    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
-    expect(result.current.queuedByThread["thread-1"]?.map((item) => item.text)).toEqual([
+    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspace,
+      "thread-1",
       "wait until global processing ends",
-    ]);
-    expect(
-      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1")
-        ?.queueLength,
-    ).toBe(1);
+      [],
+    );
+    expect(result.current.queuedByThread["thread-1"] ?? []).toEqual([]);
 
     await act(async () => {
       rerender({
@@ -523,12 +523,6 @@ describe("useQueuedSend", () => {
     await flushAsyncTicks(2);
 
     expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
-    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
-      workspace,
-      "thread-1",
-      "wait until global processing ends",
-      [],
-    );
     expect(result.current.queuedByThread["thread-1"] ?? []).toEqual([]);
     expect(
       result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1")
@@ -634,7 +628,7 @@ describe("useQueuedSend", () => {
     expect(options.sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("waits for global processing before dispatching non-active queued thread", async () => {
+  it("dispatches non-active queued thread even when another thread is processing", async () => {
     const workspaceTwo: WorkspaceInfo = {
       ...workspace,
       id: "workspace-2",
@@ -699,11 +693,13 @@ describe("useQueuedSend", () => {
 
     await flushAsyncTicks(2);
 
-    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
-    expect(
-      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-2")
-        ?.blockedReason,
-    ).toBe("global_processing");
+    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspaceTwo,
+      "thread-2",
+      "thread-2 waits for global processing",
+      [],
+    );
 
     await act(async () => {
       rerender({
@@ -729,12 +725,6 @@ describe("useQueuedSend", () => {
     await flushAsyncTicks(2);
 
     expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
-    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
-      workspaceTwo,
-      "thread-2",
-      "thread-2 waits for global processing",
-      [],
-    );
     expect(result.current.queuedByThread["thread-2"] ?? []).toEqual([]);
   });
 
@@ -790,6 +780,125 @@ describe("useQueuedSend", () => {
       [],
     );
     expect(result.current.queuedByThread["thread-1"] ?? []).toEqual([]);
+  });
+
+  it("drains two queued background messages without switching to target thread", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      isProcessing: false,
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: false, processingStartedAt: null },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessageForThread("thread-2", "bg-first");
+      await result.current.queueMessageForThread("thread-2", "bg-second");
+    });
+
+    await flushAsyncTicks(2);
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessageToThread).toHaveBeenNthCalledWith(
+      1,
+      workspaceTwo,
+      "thread-2",
+      "bg-first",
+      [],
+    );
+    expect(result.current.queuedByThread["thread-2"]?.map((item) => item.text)).toEqual([
+      "bg-second",
+    ]);
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "thread-1",
+        activeWorkspace: workspace,
+        threadStatusById: {
+          "thread-1": { isProcessing: false, isReviewing: false },
+          "thread-2": { isProcessing: true, isReviewing: false, processingStartedAt: Date.now() },
+        },
+      });
+    });
+
+    await flushAsyncTicks(2);
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "thread-1",
+        activeWorkspace: workspace,
+        threadStatusById: {
+          "thread-1": { isProcessing: false, isReviewing: false },
+          "thread-2": { isProcessing: false, isReviewing: false, processingStartedAt: null },
+        },
+      });
+    });
+
+    await flushAsyncTicks(4);
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(2);
+    expect(options.sendUserMessageToThread).toHaveBeenNthCalledWith(
+      2,
+      workspaceTwo,
+      "thread-2",
+      "bg-second",
+      [],
+    );
+    expect(result.current.queuedByThread["thread-2"] ?? []).toEqual([]);
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "thread-1",
+        activeWorkspace: workspace,
+        threadStatusById: {
+          "thread-1": { isProcessing: false, isReviewing: false },
+          "thread-2": { isProcessing: true, isReviewing: false, processingStartedAt: Date.now() },
+        },
+      });
+    });
+
+    await flushAsyncTicks(2);
+
+    await act(async () => {
+      rerender({
+        ...options,
+        activeThreadId: "thread-1",
+        activeWorkspace: workspace,
+        threadStatusById: {
+          "thread-1": { isProcessing: false, isReviewing: false },
+          "thread-2": { isProcessing: false, isReviewing: false, processingStartedAt: null },
+        },
+      });
+    });
+
+    await flushAsyncTicks(2);
+
+    const threadTwoHealth = result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-2");
+    expect(threadTwoHealth?.queueLength ?? 0).toBe(0);
+    expect(threadTwoHealth?.inFlight ?? false).toBe(false);
   });
 
   it("keeps background queue serial when switching threads", async () => {

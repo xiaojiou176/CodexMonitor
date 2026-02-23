@@ -28,6 +28,16 @@ const BranchSwitcherPrompt = lazy(() =>
     default: module.BranchSwitcherPrompt,
   })),
 );
+const WorkspaceFromUrlPrompt = lazy(() =>
+  import("../../workspaces/components/WorkspaceFromUrlPrompt").then((module) => ({
+    default: module.WorkspaceFromUrlPrompt,
+  })),
+);
+const MobileRemoteWorkspacePrompt = lazy(() =>
+  import("../../workspaces/components/MobileRemoteWorkspacePrompt").then((module) => ({
+    default: module.MobileRemoteWorkspacePrompt,
+  })),
+);
 
 type RenamePromptState = ReturnType<typeof useRenameThreadPrompt>["renamePrompt"];
 
@@ -54,6 +64,27 @@ type AppModalsProps = {
   onClonePromptClearCopiesFolder: () => void;
   onClonePromptCancel: () => void;
   onClonePromptConfirm: () => void;
+  workspaceFromUrlPrompt: {
+    url: string;
+    destinationPath: string;
+    targetFolderName: string;
+    error: string | null;
+    isSubmitting: boolean;
+  } | null;
+  canSubmitWorkspaceFromUrlPrompt: boolean;
+  onWorkspaceFromUrlPromptUrlChange: (value: string) => void;
+  onWorkspaceFromUrlPromptTargetFolderNameChange: (value: string) => void;
+  onWorkspaceFromUrlPromptChooseDestinationPath: () => void;
+  onWorkspaceFromUrlPromptClearDestinationPath: () => void;
+  onWorkspaceFromUrlPromptCancel: () => void;
+  onWorkspaceFromUrlPromptConfirm: () => void;
+  mobileRemoteWorkspacePathPrompt: {
+    value: string;
+    error: string | null;
+  } | null;
+  onMobileRemoteWorkspacePathInputChange: (value: string) => void;
+  onMobileRemoteWorkspacePathPromptCancel: () => void;
+  onMobileRemoteWorkspacePathPromptConfirm: () => void;
   branchSwitcher: BranchSwitcherState;
   branches: BranchInfo[];
   workspaces: WorkspaceInfo[];
@@ -87,6 +118,18 @@ export const AppModals = memo(function AppModals({
   onClonePromptClearCopiesFolder,
   onClonePromptCancel,
   onClonePromptConfirm,
+  workspaceFromUrlPrompt,
+  canSubmitWorkspaceFromUrlPrompt,
+  onWorkspaceFromUrlPromptUrlChange,
+  onWorkspaceFromUrlPromptTargetFolderNameChange,
+  onWorkspaceFromUrlPromptChooseDestinationPath,
+  onWorkspaceFromUrlPromptClearDestinationPath,
+  onWorkspaceFromUrlPromptCancel,
+  onWorkspaceFromUrlPromptConfirm,
+  mobileRemoteWorkspacePathPrompt,
+  onMobileRemoteWorkspacePathInputChange,
+  onMobileRemoteWorkspacePathPromptCancel,
+  onMobileRemoteWorkspacePathPromptConfirm,
   branchSwitcher,
   branches,
   workspaces,
@@ -155,6 +198,35 @@ export const AppModals = memo(function AppModals({
             onClearCopiesFolder={onClonePromptClearCopiesFolder}
             onCancel={onClonePromptCancel}
             onConfirm={onClonePromptConfirm}
+          />
+        </Suspense>
+      )}
+      {workspaceFromUrlPrompt && (
+        <Suspense fallback={null}>
+          <WorkspaceFromUrlPrompt
+            url={workspaceFromUrlPrompt.url}
+            destinationPath={workspaceFromUrlPrompt.destinationPath}
+            targetFolderName={workspaceFromUrlPrompt.targetFolderName}
+            error={workspaceFromUrlPrompt.error}
+            isBusy={workspaceFromUrlPrompt.isSubmitting}
+            canSubmit={canSubmitWorkspaceFromUrlPrompt}
+            onUrlChange={onWorkspaceFromUrlPromptUrlChange}
+            onTargetFolderNameChange={onWorkspaceFromUrlPromptTargetFolderNameChange}
+            onChooseDestinationPath={onWorkspaceFromUrlPromptChooseDestinationPath}
+            onClearDestinationPath={onWorkspaceFromUrlPromptClearDestinationPath}
+            onCancel={onWorkspaceFromUrlPromptCancel}
+            onConfirm={onWorkspaceFromUrlPromptConfirm}
+          />
+        </Suspense>
+      )}
+      {mobileRemoteWorkspacePathPrompt && (
+        <Suspense fallback={null}>
+          <MobileRemoteWorkspacePrompt
+            value={mobileRemoteWorkspacePathPrompt.value}
+            error={mobileRemoteWorkspacePathPrompt.error}
+            onChange={onMobileRemoteWorkspacePathInputChange}
+            onCancel={onMobileRemoteWorkspacePathPromptCancel}
+            onConfirm={onMobileRemoteWorkspacePathPromptConfirm}
           />
         </Suspense>
       )}

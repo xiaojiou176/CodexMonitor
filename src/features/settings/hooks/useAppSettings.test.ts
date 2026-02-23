@@ -41,6 +41,7 @@ describe("useAppSettings", () => {
         uiFontFamily: "",
         codeFontFamily: "  ",
         codeFontSize: 25,
+        showSubAgentThreadsInSidebar: "nope" as unknown as boolean,
         autoArchiveSubAgentThreadsEnabled: "nope" as unknown as boolean,
         autoArchiveSubAgentThreadsMaxAgeMinutes: 999,
       } as unknown) as AppSettings,
@@ -55,6 +56,7 @@ describe("useAppSettings", () => {
     expect(result.current.settings.uiFontFamily).toContain("system-ui");
     expect(result.current.settings.codeFontFamily).toContain("ui-monospace");
     expect(result.current.settings.codeFontSize).toBe(16);
+    expect(result.current.settings.showSubAgentThreadsInSidebar).toBe(true);
     expect(result.current.settings.autoArchiveSubAgentThreadsEnabled).toBe(true);
     expect(result.current.settings.autoArchiveSubAgentThreadsMaxAgeMinutes).toBe(240);
     expect(result.current.settings.personality).toBe("friendly");

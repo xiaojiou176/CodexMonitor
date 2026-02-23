@@ -179,9 +179,9 @@
   --text-quiet: var(--theme-color-110);
   --text-muted: var(--theme-color-109);
   --text-subtle: var(--theme-color-107);
-  --text-faint: var(--theme-color-104);
-  --text-fainter: var(--theme-color-103);
-  --text-dim: var(--theme-color-100);
+  --text-faint: var(--theme-color-106);
+  --text-fainter: var(--theme-color-105);
+  --text-dim: var(--theme-color-102);
   --text-on-accent: var(--theme-color-154);
   --surface-sidebar: var(--theme-color-066);
   --surface-sidebar-opaque: var(--theme-color-037);

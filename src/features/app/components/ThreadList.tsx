@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DragEvent, MouseEvent } from "react";
+import type { CSSProperties, DragEvent, MouseEvent } from "react";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 
 import type { ThreadSummary } from "../../../types";
 import {
   deriveThreadVisualStatus,
   getThreadVisualStatusBadge,
   getThreadVisualStatusLabel,
+  type ThreadVisualStatus,
 } from "../../../utils/threadStatus";
 
 type ThreadStatusMap = Record<
@@ -24,6 +27,10 @@ type ThreadStatusMap = Record<
 type ThreadRow = {
   thread: ThreadSummary;
   depth: number;
+  rootId?: string;
+  isSubAgent?: boolean;
+  hasSubAgentDescendants?: boolean;
+  isCollapsed?: boolean;
 };
 
 type ThreadListProps = {
@@ -65,7 +72,28 @@ type ThreadListProps = {
     targetThreadId: string,
     position: "before" | "after",
   ) => void;
+  onToggleRootCollapse?: (workspaceId: string, rootId: string) => void;
+  showSubAgentCollapseToggles?: boolean;
 };
+
+function getThreadVisualStatusMarker(status: ThreadVisualStatus): string {
+  switch (status) {
+    case "processing":
+      return "RUN";
+    case "waiting":
+      return "WAIT";
+    case "stalled":
+      return "STUCK";
+    case "reviewing":
+      return "REVIEW";
+    case "unread":
+      return "NEW";
+    case "error":
+      return "ERR";
+    default:
+      return "OK";
+  }
+}
 
 export function ThreadList({
   workspaceId,
@@ -89,6 +117,8 @@ export function ThreadList({
   selectedThreadIds,
   onShowThreadMenu,
   onReorderThreads,
+  onToggleRootCollapse,
+  showSubAgentCollapseToggles = true,
 }: ThreadListProps) {
   const [draggingRootId, setDraggingRootId] = useState<string | null>(null);
   const [dropTargetRootId, setDropTargetRootId] = useState<string | null>(null);
@@ -219,16 +249,19 @@ export function ThreadList({
     ],
   );
 
-  const renderThreadRow = ({ thread, depth }: ThreadRow) => {
+  const renderThreadRow = (row: ThreadRow) => {
+    const { thread, depth } = row;
     const relativeTime = getThreadTime(thread);
-    const clampedDepth = Math.min(depth, 20);
-    const indentClass =
-      depth > 0 ? ` thread-row-indent-${indentUnit}-${clampedDepth}` : "";
+    const indentStyle =
+      depth > 0
+        ? ({ "--thread-indent": `${depth * indentUnit}px` } as CSSProperties)
+        : undefined;
     const status = threadStatusById[thread.id];
     const visualStatus = deriveThreadVisualStatus(status, nowMs);
     const statusClass = visualStatus;
     const statusLabel = getThreadVisualStatusLabel(visualStatus);
     const statusBadge = getThreadVisualStatusBadge(visualStatus);
+    const statusMarker = getThreadVisualStatusMarker(visualStatus);
     const canPin = depth === 0;
     const isPinned = canPin && isThreadPinned(workspaceId, thread.id);
     const isReorderableRoot =
@@ -244,19 +277,28 @@ export function ThreadList({
     const isSelected = selectedThreadIds?.has(thread.id) ?? false;
     const isActive =
       workspaceId === activeWorkspaceId && thread.id === activeThreadId;
+    const rootId = row.rootId ?? thread.id;
+    const hasSubAgentDescendants = row.hasSubAgentDescendants ?? false;
+    const isRootCollapseToggleVisible =
+      depth === 0 &&
+      showSubAgentCollapseToggles &&
+      hasSubAgentDescendants &&
+      Boolean(onToggleRootCollapse);
+    const isCollapsed = row.isCollapsed ?? false;
 
     return (
       <div
         key={thread.id}
         className={`thread-row ${
           isActive || isSelected ? "active" : ""
-        }${indentClass}${isSelected ? " thread-row-selected" : ""}${
+        }${isSelected ? " thread-row-selected" : ""}${
           isReorderableRoot ? " thread-row-draggable" : ""
         }${isDragging ? " thread-row-dragging" : ""}${
           isDropTarget ? " thread-row-drop-target" : ""
         }${
           isDropTargetBefore ? " thread-row-drop-target-before" : ""
         }${isDropTargetAfter ? " thread-row-drop-target-after" : ""}`}
+        style={indentStyle}
         onClick={(event) => {
           emitThreadSelection(
             thread.id,
@@ -288,11 +330,30 @@ export function ThreadList({
           }
         }}
       >
+        {isRootCollapseToggleVisible && (
+          <button
+            type="button"
+            className={`thread-collapse-toggle${isCollapsed ? " is-collapsed" : ""}`}
+            aria-label={isCollapsed ? "展开子代理" : "折叠子代理"}
+            title={isCollapsed ? "展开子代理" : "折叠子代理"}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onToggleRootCollapse?.(workspaceId, rootId);
+            }}
+          >
+            {isCollapsed ? <ChevronRight aria-hidden /> : <ChevronDown aria-hidden />}
+          </button>
+        )}
         <span
           className={`thread-status ${statusClass}`}
           aria-label={statusLabel}
           title={statusLabel}
         />
+        <span className={`thread-status-marker ${statusClass}`} aria-hidden="true">
+          {statusMarker}
+        </span>
+        <span className="sr-only">{`线程状态：${statusLabel}`}</span>
         {statusBadge ? (
           <span className={`thread-status-badge ${statusClass}`}>{statusBadge}</span>
         ) : null}

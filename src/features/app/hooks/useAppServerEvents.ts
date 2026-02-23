@@ -144,6 +144,7 @@ type AppServerEventHandlers = {
 
 export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
   "account/login/completed",
+  "account/chatgptAuthTokens/refresh",
   "account/rateLimits/updated",
   "account/updated",
   "codex/backgroundThread",
@@ -165,16 +166,21 @@ export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
   "item/tool/requestUserInput",
   "mcpServer/oauthLogin/completed",
   "app/list/updated",
+  "model/rerouted",
   "rawResponseItem/completed",
   "deprecationNotice",
   "configWarning",
   "fuzzyFileSearch/sessionUpdated",
   "fuzzyFileSearch/sessionCompleted",
   "windows/worldWritableWarning",
+  "windowsSandbox/setupCompleted",
   "sessionConfigured",
   "authStatusChange",
   "loginChatGptComplete",
   "thread/name/updated",
+  "thread/archived",
+  "thread/status/changed",
+  "thread/unarchived",
   "thread/started",
   "thread/tokenUsage/updated",
   "turn/completed",
@@ -391,6 +397,18 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         if (isCompatPassthroughAppServerMethod(method)) {
           return;
         }
+        if (hasRequestId) {
+          void respondToServerRequest(workspace_id, requestId as string | number, {
+            success: false,
+            error: {
+              code: "unsupported_method",
+              message: `Unsupported method: ${method}`,
+            },
+          }).catch((error) => {
+            console.warn("[useAppServerEvents] failed to reject unsupported request:", error);
+          });
+          return;
+        }
         console.warn("[useAppServerEvents] unsupported method:", method, payload);
         const now = Date.now();
         if (
@@ -403,6 +421,21 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
             message: `收到未支持的事件方法：${method}。请同步前后端版本。`,
           });
         }
+        return;
+      }
+
+      if (method === "account/chatgptAuthTokens/refresh") {
+        if (!hasRequestId) {
+          return;
+        }
+        void respondToServerRequest(workspace_id, requestId as string | number, {
+          tokens: [],
+        }).catch((error) => {
+          console.warn(
+            "[useAppServerEvents] failed to respond to account/chatgptAuthTokens/refresh:",
+            error,
+          );
+        });
         return;
       }
 
@@ -526,6 +559,10 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         if (thread && threadId) {
           currentHandlers.onThreadStarted?.(workspace_id, thread);
         }
+        return;
+      }
+
+      if (method === "thread/status/changed") {
         return;
       }
 
@@ -854,6 +891,10 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         method === "rawResponseItem/completed" ||
         method === "mcpServer/oauthLogin/completed" ||
         method === "app/list/updated" ||
+        method === "model/rerouted" ||
+        method === "thread/archived" ||
+        method === "thread/unarchived" ||
+        method === "windowsSandbox/setupCompleted" ||
         method === "deprecationNotice" ||
         method === "configWarning" ||
         method === "fuzzyFileSearch/sessionUpdated" ||

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getGitDiffs } from "../../../services/tauri";
+import { logError } from "../../../services/logger";
 import type { GitFileDiff, GitFileStatus, WorkspaceInfo } from "../../../types";
+import { BoundedCache } from "../../../utils/boundedCache";
 
 type GitDiffState = {
   diffs: GitFileDiff[];
@@ -14,6 +16,9 @@ const emptyState: GitDiffState = {
   error: null,
 };
 
+const GIT_DIFFS_CACHE_MAX_ENTRIES = 32;
+const GIT_DIFFS_CACHE_TTL_MS = 5 * 60 * 1000;
+
 export function useGitDiffs(
   activeWorkspace: WorkspaceInfo | null,
   files: GitFileStatus[],
@@ -23,7 +28,12 @@ export function useGitDiffs(
   const [state, setState] = useState<GitDiffState>(emptyState);
   const requestIdRef = useRef(0);
   const cacheKeyRef = useRef<string | null>(null);
-  const cachedDiffsRef = useRef<Map<string, GitFileDiff[]>>(new Map());
+  const cachedDiffsRef = useRef(
+    new BoundedCache<string, GitFileDiff[]>(
+      GIT_DIFFS_CACHE_MAX_ENTRIES,
+      GIT_DIFFS_CACHE_TTL_MS,
+    ),
+  );
   const inFlightRefreshRef = useRef<Promise<void> | null>(null);
   const inFlightCacheKeyRef = useRef<string | null>(null);
 
@@ -65,6 +75,11 @@ export function useGitDiffs(
       })
       .catch((error) => {
         console.error("Failed to load git diffs", error);
+        logError("useGitDiffs", "Failed to load git diffs", {
+          workspaceId,
+          cacheKey,
+          error: error instanceof Error ? error.message : String(error),
+        });
         if (
           requestIdRef.current !== requestId ||
           cacheKeyRef.current !== cacheKey

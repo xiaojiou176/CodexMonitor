@@ -119,4 +119,75 @@ describe("useSkills", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(getSkillsList).toHaveBeenCalledTimes(1);
   });
+
+  it("prioritizes result.data bucket skills and preserves metadata", async () => {
+    vi.mocked(getSkillsList).mockResolvedValueOnce({
+      result: {
+        data: [
+          {
+            cwd: "/tmp/workspace-one",
+            errors: [{ message: "bucket error" }],
+            skills: [
+              {
+                name: "first",
+                path: "/skills/first",
+                description: "First skill",
+                enabled: false,
+                scope: "workspace",
+                dependencies: ["dep-1"],
+                interface: { input: "text" },
+                errors: ["skill error"],
+              },
+              {
+                name: "first",
+                path: "/skills/first",
+              },
+              {
+                name: "first",
+                path: "/skills/first-alt",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const { result } = renderHook(() => useSkills({ activeWorkspace: workspace }));
+
+    await waitFor(() => {
+      expect(result.current.skills).toHaveLength(2);
+    });
+
+    const [first, second] = result.current.skills;
+    expect(first).toMatchObject({
+      name: "first",
+      path: "/skills/first",
+      description: "First skill",
+      enabled: false,
+      scope: "workspace",
+      cwd: "/tmp/workspace-one",
+    });
+    expect(first.errors).toEqual(["skill error", "bucket error"]);
+    expect(first.interface).toEqual({ input: "text" });
+    expect(first.dependencies).toEqual(["dep-1"]);
+    expect(second.path).toBe("/skills/first-alt");
+  });
+
+  it("falls back to legacy result.skills and response.skills shapes", async () => {
+    vi.mocked(getSkillsList).mockResolvedValueOnce({
+      result: {
+        skills: [{ name: "legacy-a", path: "/skills/legacy-a" }],
+      },
+      skills: [{ name: "legacy-b", path: "/skills/legacy-b" }],
+    });
+
+    const { result } = renderHook(() => useSkills({ activeWorkspace: workspace }));
+
+    await waitFor(() => {
+      expect(result.current.skills.map((skill) => skill.name)).toEqual([
+        "legacy-a",
+        "legacy-b",
+      ]);
+    });
+  });
 });

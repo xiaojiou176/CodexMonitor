@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GitFileStatus, WorkspaceInfo } from "../../../types";
 import { getGitStatus } from "../../../services/tauri";
+import { BoundedCache } from "../../../utils/boundedCache";
 
 type GitStatusState = {
   branchName: string;
@@ -26,6 +27,8 @@ const FAST_POLL_INTERVAL_MS = 3000;
 const ERROR_POLL_INTERVAL_MS = 5000;
 const IDLE_POLL_INTERVAL_MS = 12000;
 const HIDDEN_POLL_INTERVAL_MS = 20000;
+const GIT_STATUS_CACHE_MAX_ENTRIES = 64;
+const GIT_STATUS_CACHE_TTL_MS = 60 * 1000;
 
 type UseGitStatusOptions = {
   preferFastPolling?: boolean;
@@ -38,7 +41,12 @@ export function useGitStatus(
   const [status, setStatus] = useState<GitStatusState>(emptyStatus);
   const requestIdRef = useRef(0);
   const workspaceIdRef = useRef<string | null>(activeWorkspace?.id ?? null);
-  const cachedStatusRef = useRef<Map<string, GitStatusState>>(new Map());
+  const cachedStatusRef = useRef(
+    new BoundedCache<string, GitStatusState>(
+      GIT_STATUS_CACHE_MAX_ENTRIES,
+      GIT_STATUS_CACHE_TTL_MS,
+    ),
+  );
   const inFlightRefreshRef = useRef<Promise<void> | null>(null);
   const inFlightWorkspaceIdRef = useRef<string | null>(null);
   const statusRef = useRef<GitStatusState>(emptyStatus);

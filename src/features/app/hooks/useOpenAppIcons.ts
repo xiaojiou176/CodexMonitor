@@ -3,6 +3,7 @@ import { getOpenAppIcon } from "../../../services/tauri";
 import type { OpenAppTarget } from "../../../types";
 import { getKnownOpenAppIcon } from "../utils/openAppIcons";
 import { isMacPlatform } from "../../../utils/platformPaths";
+import { BoundedCache } from "../../../utils/boundedCache";
 
 type OpenAppIconMap = Record<string, string>;
 
@@ -11,9 +12,17 @@ type ResolvedAppTarget = {
   appName: string;
 };
 
+const OPEN_APP_ICON_CACHE_MAX_ENTRIES = 256;
+const OPEN_APP_ICON_CACHE_TTL_MS = 60 * 60 * 1000;
+
 export function useOpenAppIcons(openTargets: OpenAppTarget[]): OpenAppIconMap {
   const isMacOS = isMacPlatform();
-  const iconCacheRef = useRef<Map<string, string>>(new Map());
+  const iconCacheRef = useRef(
+    new BoundedCache<string, string>(
+      OPEN_APP_ICON_CACHE_MAX_ENTRIES,
+      OPEN_APP_ICON_CACHE_TTL_MS,
+    ),
+  );
   const inFlightRef = useRef<Map<string, Promise<string | null>>>(new Map());
   const [iconById, setIconById] = useState<OpenAppIconMap>({});
 

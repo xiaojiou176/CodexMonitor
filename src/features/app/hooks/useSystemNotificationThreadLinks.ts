@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useRef } from "react";
 import type { WorkspaceInfo } from "../../../types";
 
 type ThreadDeepLink = {
@@ -22,6 +22,7 @@ type Params = {
 
 type Result = {
   recordPendingThreadLink: (workspaceId: string, threadId: string) => void;
+  openPendingThreadLink: () => Promise<void>;
 };
 
 export function useSystemNotificationThreadLinks({
@@ -98,22 +99,8 @@ export function useSystemNotificationThreadLinks({
     workspacesById,
   ]);
 
-  const focusHandler = useMemo(() => () => void tryNavigateToLink(), [tryNavigateToLink]);
-
-  useEffect(() => {
-    window.addEventListener("focus", focusHandler);
-    return () => window.removeEventListener("focus", focusHandler);
-  }, [focusHandler]);
-
-  useEffect(() => {
-    if (!pendingLinkRef.current) {
-      return;
-    }
-    if (!hasLoadedWorkspaces) {
-      return;
-    }
-    void tryNavigateToLink();
-  }, [hasLoadedWorkspaces, tryNavigateToLink]);
-
-  return { recordPendingThreadLink };
+  return {
+    recordPendingThreadLink,
+    openPendingThreadLink: tryNavigateToLink,
+  };
 }

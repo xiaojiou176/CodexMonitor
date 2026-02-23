@@ -83,6 +83,7 @@ const baseSettings: AppSettings = {
   collaborationModesEnabled: true,
   steerEnabled: true,
   unifiedExecEnabled: true,
+  showSubAgentThreadsInSidebar: true,
   autoArchiveSubAgentThreadsEnabled: true,
   autoArchiveSubAgentThreadsMaxAgeMinutes: 30,
   experimentalAppsEnabled: false,
@@ -244,6 +245,27 @@ describe("SettingsView Features", () => {
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ autoArchiveSubAgentThreadsEnabled: false }),
+      );
+    });
+  });
+
+  it("toggles sub-agent thread visibility in sidebar", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderFeaturesSection({
+      onUpdateAppSettings,
+      appSettings: { showSubAgentThreadsInSidebar: true },
+    });
+
+    const toggleTitle = screen.getByText("侧边栏显示子代理线程");
+    const toggleRow = toggleTitle.closest(".settings-toggle-row");
+    expect(toggleRow).not.toBeNull();
+
+    const toggle = within(toggleRow as HTMLElement).getByRole("button");
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ showSubAgentThreadsInSidebar: false }),
       );
     });
   });

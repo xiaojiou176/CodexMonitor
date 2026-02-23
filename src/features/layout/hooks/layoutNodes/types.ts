@@ -103,6 +103,8 @@ export type LayoutNodesOptions = {
   threadListSortKey: ThreadListSortKey;
   onSetThreadListSortKey: (sortKey: ThreadListSortKey) => void;
   onRefreshAllThreads: () => void;
+  showSubAgentThreadsInSidebar: boolean;
+  onToggleShowSubAgentThreadsInSidebar: () => void;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   activeItems: ConversationItem[];
@@ -142,6 +144,7 @@ export type LayoutNodesOptions = {
   onOpenDebug: () => void;
   showDebugButton: boolean;
   onAddWorkspace: () => void;
+  onAddWorkspaceFromUrl: () => void;
   onSelectHome: () => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onConnectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;

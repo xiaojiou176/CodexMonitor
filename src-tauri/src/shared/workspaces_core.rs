@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::future::Future;
 #[cfg(target_os = "windows")]
 use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Component, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 
@@ -260,6 +260,110 @@ where
         worktree: entry.worktree,
         settings: entry.settings,
     })
+}
+
+fn default_repo_name_from_url(url: &str) -> Option<String> {
+    let trimmed = url.trim().trim_end_matches('/');
+    let tail = trimmed.rsplit('/').next()?.trim();
+    if tail.is_empty() {
+        return None;
+    }
+    let without_git_suffix = tail.strip_suffix(".git").unwrap_or(tail);
+    if without_git_suffix.is_empty() {
+        None
+    } else {
+        Some(without_git_suffix.to_string())
+    }
+}
+
+fn validate_target_folder_name(value: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err("Target folder name is required.".to_string());
+    }
+    if trimmed.contains('/') || trimmed.contains('\\') {
+        return Err(
+            "Target folder name must be a single relative folder name without separators or traversal."
+                .to_string(),
+        );
+    }
+
+    let path = PathBuf::from(trimmed);
+    match (path.components().next(), path.components().nth(1)) {
+        (Some(Component::Normal(_)), None) => Ok(trimmed.to_string()),
+        _ => Err(
+            "Target folder name must be a single relative folder name without separators or traversal."
+                .to_string(),
+        ),
+    }
+}
+
+pub(crate) async fn add_workspace_from_git_url_core<F, Fut>(
+    url: String,
+    destination_path: String,
+    target_folder_name: Option<String>,
+    codex_bin: Option<String>,
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    app_settings: &Mutex<AppSettings>,
+    storage_path: &PathBuf,
+    spawn_session: F,
+) -> Result<WorkspaceInfo, String>
+where
+    F: Fn(WorkspaceEntry, Option<String>, Option<String>, Option<PathBuf>) -> Fut,
+    Fut: Future<Output = Result<Arc<WorkspaceSession>, String>>,
+{
+    let url = url.trim().to_string();
+    if url.is_empty() {
+        return Err("Remote Git URL is required.".to_string());
+    }
+    let destination_path = destination_path.trim().to_string();
+    if destination_path.is_empty() {
+        return Err("Destination folder is required.".to_string());
+    }
+    let destination_parent = PathBuf::from(&destination_path);
+    if !destination_parent.is_dir() {
+        return Err("Destination folder must be an existing directory.".to_string());
+    }
+
+    let folder_name = target_folder_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| default_repo_name_from_url(&url))
+        .ok_or_else(|| "Could not determine target folder name from URL.".to_string())?;
+    let folder_name = validate_target_folder_name(&folder_name)?;
+    let clone_path = destination_parent.join(folder_name);
+
+    if clone_path.exists() {
+        let is_empty = std::fs::read_dir(&clone_path)
+            .map_err(|err| format!("Failed to inspect destination path: {err}"))?
+            .next()
+            .is_none();
+        if !is_empty {
+            return Err("Destination path already exists and is not empty.".to_string());
+        }
+    }
+
+    let clone_path_string = clone_path.to_string_lossy().to_string();
+    if let Err(error) =
+        git_core::run_git_command(&destination_parent, &["clone", &url, &clone_path_string]).await
+    {
+        let _ = tokio::fs::remove_dir_all(&clone_path).await;
+        return Err(error);
+    }
+
+    add_workspace_core(
+        clone_path_string,
+        codex_bin,
+        workspaces,
+        sessions,
+        app_settings,
+        storage_path,
+        spawn_session,
+    )
+    .await
 }
 
 pub(crate) async fn add_clone_core<F, Fut>(

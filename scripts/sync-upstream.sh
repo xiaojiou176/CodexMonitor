@@ -4,7 +4,7 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 
-UPSTREAM_REMOTE=${UPSTREAM_REMOTE:-upstream}
+UPSTREAM_REMOTE=${UPSTREAM_REMOTE:-}
 UPSTREAM_BRANCH=${UPSTREAM_BRANCH:-main}
 VENDOR_BRANCH=${VENDOR_BRANCH:-vendor/upstream}
 CUSTOM_BRANCH=${CUSTOM_BRANCH:-custom/main}
@@ -18,7 +18,7 @@ Usage: $(basename "$0") [options]
 Options:
   --dry-run                 Print planned actions only.
   --allow-dirty             Allow running with local uncommitted changes.
-  --upstream-remote <name>  Upstream remote name (default: upstream).
+  --upstream-remote <name>  Upstream remote name (default: auto-detect upstream, fallback origin).
   --upstream-branch <name>  Upstream branch name (default: main).
   --vendor-branch <name>    Vendor mirror branch (default: vendor/upstream).
   --custom-branch <name>    Local custom patch branch (default: custom/main).
@@ -63,13 +63,25 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-if [ -z "$UPSTREAM_REMOTE" ] || [ -z "$UPSTREAM_BRANCH" ] || [ -z "$VENDOR_BRANCH" ] || [ -z "$CUSTOM_BRANCH" ]; then
+if [ -z "$UPSTREAM_BRANCH" ] || [ -z "$VENDOR_BRANCH" ] || [ -z "$CUSTOM_BRANCH" ]; then
   echo "Error: empty parameter is not allowed." >&2
   usage
   exit 1
 fi
 
 cd "$REPO_ROOT"
+
+if [ -z "$UPSTREAM_REMOTE" ]; then
+  if git remote get-url upstream >/dev/null 2>&1; then
+    UPSTREAM_REMOTE=upstream
+  elif git remote get-url origin >/dev/null 2>&1; then
+    UPSTREAM_REMOTE=origin
+  else
+    echo "Error: could not auto-detect upstream remote (checked: upstream, origin)." >&2
+    echo "Hint: pass --upstream-remote <name> explicitly." >&2
+    exit 1
+  fi
+fi
 
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 IS_DIRTY=0
@@ -97,7 +109,7 @@ if ! git remote get-url "$UPSTREAM_REMOTE" >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ "$IS_DIRTY" -eq 1 ] && [ "$ALLOW_DIRTY" -ne 1 ]; then
+if [ "$IS_DIRTY" -eq 1 ] && [ "$ALLOW_DIRTY" -ne 1 ] && [ "$DRY_RUN" -ne 1 ]; then
   echo "Error: working tree is dirty. Commit/stash changes first, or pass --allow-dirty." >&2
   exit 1
 fi
@@ -129,4 +141,3 @@ echo "[sync-upstream] [5/5] return to original branch"
 run_cmd git switch "$CURRENT_BRANCH"
 
 echo "[sync-upstream] done"
-

@@ -85,8 +85,8 @@ use backend::events::{AppServerEvent, EventSink, TerminalExit, TerminalOutput};
 use shared::codex_core::CodexLoginCancelState;
 use shared::prompts_core::{self, CustomPromptEntry};
 use shared::{
-    codex_aux_core, codex_core, files_core, git_core, git_ui_core, local_usage_core, settings_core,
-    workspaces_core, worktree_core,
+    agents_config_core, codex_aux_core, codex_core, files_core, git_core, git_ui_core,
+    local_usage_core, settings_core, workspaces_core, worktree_core,
 };
 use storage::{read_settings, read_workspaces};
 use types::{
@@ -237,6 +237,38 @@ impl DaemonState {
         let client_version = client_version.clone();
         workspaces_core::add_workspace_core(
             path,
+            codex_bin,
+            &self.workspaces,
+            &self.sessions,
+            &self.app_settings,
+            &self.storage_path,
+            move |entry, default_bin, codex_args, codex_home| {
+                spawn_with_client(
+                    self.event_sink.clone(),
+                    client_version.clone(),
+                    entry,
+                    default_bin,
+                    codex_args,
+                    codex_home,
+                )
+            },
+        )
+        .await
+    }
+
+    async fn add_workspace_from_git_url(
+        &self,
+        url: String,
+        destination_path: String,
+        target_folder_name: Option<String>,
+        codex_bin: Option<String>,
+        client_version: String,
+    ) -> Result<WorkspaceInfo, String> {
+        let client_version = client_version.clone();
+        workspaces_core::add_workspace_from_git_url_core(
+            url,
+            destination_path,
+            target_folder_name,
             codex_bin,
             &self.workspaces,
             &self.sessions,
@@ -661,8 +693,10 @@ impl DaemonState {
         cursor: Option<String>,
         limit: Option<u32>,
         sort_key: Option<String>,
+        cwd: Option<String>,
     ) -> Result<Value, String> {
-        codex_core::list_threads_core(&self.sessions, workspace_id, cursor, limit, sort_key).await
+        codex_core::list_threads_core(&self.sessions, workspace_id, cursor, limit, sort_key, cwd)
+            .await
     }
 
     async fn list_mcp_server_status(
@@ -770,6 +804,8 @@ impl DaemonState {
         effort: Option<String>,
         access_mode: Option<String>,
         images: Option<Vec<String>>,
+        app_mentions: Option<Vec<Value>>,
+        skill_mentions: Option<Vec<Value>>,
         collaboration_mode: Option<Value>,
     ) -> Result<Value, String> {
         codex_core::send_user_message_core(
@@ -781,6 +817,8 @@ impl DaemonState {
             effort,
             access_mode,
             images,
+            app_mentions,
+            skill_mentions,
             collaboration_mode,
         )
         .await
@@ -793,6 +831,8 @@ impl DaemonState {
         turn_id: String,
         text: String,
         images: Option<Vec<String>>,
+        app_mentions: Option<Vec<Value>>,
+        skill_mentions: Option<Vec<Value>>,
     ) -> Result<Value, String> {
         codex_core::turn_steer_core(
             &self.sessions,
@@ -801,6 +841,8 @@ impl DaemonState {
             turn_id,
             text,
             images,
+            app_mentions,
+            skill_mentions,
         )
         .await
     }
@@ -827,6 +869,67 @@ impl DaemonState {
 
     async fn model_list(&self, workspace_id: String) -> Result<Value, String> {
         codex_core::model_list_core(&self.sessions, workspace_id).await
+    }
+
+    async fn experimental_feature_list(
+        &self,
+        workspace_id: String,
+        cursor: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Value, String> {
+        codex_core::experimental_feature_list_core(&self.sessions, workspace_id, cursor, limit).await
+    }
+
+    async fn set_codex_feature_flag(
+        &self,
+        feature_key: String,
+        enabled: bool,
+    ) -> Result<(), String> {
+        codex_config::write_feature_enabled(feature_key.as_str(), enabled)
+    }
+
+    async fn get_agents_settings(&self) -> Result<agents_config_core::AgentsSettingsDto, String> {
+        agents_config_core::get_agents_settings_core()
+    }
+
+    async fn set_agents_core_settings(
+        &self,
+        input: agents_config_core::SetAgentsCoreInput,
+    ) -> Result<agents_config_core::AgentsSettingsDto, String> {
+        agents_config_core::set_agents_core_settings_core(input)
+    }
+
+    async fn create_agent(
+        &self,
+        input: agents_config_core::CreateAgentInput,
+    ) -> Result<agents_config_core::AgentsSettingsDto, String> {
+        agents_config_core::create_agent_core(input)
+    }
+
+    async fn update_agent(
+        &self,
+        input: agents_config_core::UpdateAgentInput,
+    ) -> Result<agents_config_core::AgentsSettingsDto, String> {
+        agents_config_core::update_agent_core(input)
+    }
+
+    async fn delete_agent(
+        &self,
+        input: agents_config_core::DeleteAgentInput,
+    ) -> Result<agents_config_core::AgentsSettingsDto, String> {
+        agents_config_core::delete_agent_core(input)
+    }
+
+    async fn read_agent_config_toml(&self, agent_name: String) -> Result<String, String> {
+        agents_config_core::read_agent_config_toml_core(agent_name.as_str())
+    }
+
+    async fn write_agent_config_toml(
+        &self,
+        agent_name: String,
+        content: String,
+    ) -> Result<(), String> {
+        agents_config_core::write_agent_config_toml_core(agent_name.as_str(), content.as_str())
     }
 
     async fn collaboration_mode_list(&self, workspace_id: String) -> Result<Value, String> {
@@ -859,8 +962,9 @@ impl DaemonState {
         workspace_id: String,
         cursor: Option<String>,
         limit: Option<u32>,
+        thread_id: Option<String>,
     ) -> Result<Value, String> {
-        codex_core::apps_list_core(&self.sessions, workspace_id, cursor, limit).await
+        codex_core::apps_list_core(&self.sessions, workspace_id, cursor, limit, thread_id).await
     }
 
     async fn respond_to_server_request(

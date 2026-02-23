@@ -310,7 +310,14 @@ describe("useThreadActions", () => {
       await result.current.resumeThreadForWorkspace("ws-1", "child-thread", true);
     });
 
-    expect(updateThreadParent).toHaveBeenCalledWith("parent-thread", ["child-thread"]);
+    expect(updateThreadParent).toHaveBeenCalledWith(
+      "parent-thread",
+      ["child-thread"],
+      expect.objectContaining({
+        allowReparent: true,
+        source: expect.any(Object),
+      }),
+    );
   });
 
   it("does not hydrate status from resume when local items are preserved", async () => {
@@ -632,9 +639,9 @@ describe("useThreadActions", () => {
             preview: "Child",
             updated_at: 4500,
             source: {
-              subAgent: {
-                thread_spawn: {
-                  parent_thread_id: "parent-thread",
+              sub_agent: {
+                threadSpawn: {
+                  parentThreadId: "parent-thread",
                   depth: 1,
                 },
               },
@@ -655,7 +662,13 @@ describe("useThreadActions", () => {
       await result.current.listThreadsForWorkspace(workspace);
     });
 
-    expect(updateThreadParent).toHaveBeenCalledWith("parent-thread", ["child-thread"]);
+    expect(updateThreadParent).toHaveBeenCalledWith(
+      "parent-thread",
+      ["child-thread"],
+      expect.objectContaining({
+        allowReparent: true,
+      }),
+    );
   });
 
   it("preserves list state when requested", async () => {

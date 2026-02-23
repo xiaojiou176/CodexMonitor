@@ -9,13 +9,17 @@ import type {
   TurnPlan,
 } from "../../../types";
 import { interruptTurn as interruptTurnService } from "../../../services/tauri";
-import { getThreadTimestamp } from "../../../utils/threadItems";
+import { getThreadCreatedTimestamp, getThreadTimestamp } from "../../../utils/threadItems";
 import {
   asString,
   normalizePlanUpdate,
   normalizeRateLimits,
   normalizeTokenUsage,
 } from "../utils/threadNormalize";
+import {
+  extractSubAgentParentThreadId,
+  isSubAgentSource,
+} from "../utils/subAgentSource";
 import type { ThreadAction } from "./useThreadsReducer";
 
 type UseThreadTurnEventsOptions = {
@@ -39,6 +43,17 @@ type UseThreadTurnEventsOptions = {
   pushThreadErrorMessage: (threadId: string, message: string) => void;
   safeMessageActivity: () => void;
   recordThreadActivity: (workspaceId: string, threadId: string, timestamp?: number) => void;
+  updateThreadParent: (
+    parentId: string,
+    childIds: string[],
+    options?: { source?: unknown; allowReparent?: boolean },
+  ) => void;
+  markSubAgentThread?: (threadId: string) => void;
+  recordThreadCreatedAt?: (
+    threadId: string,
+    createdAt: number,
+    fallbackTimestamp?: number,
+  ) => void;
   resolveCurrentModel?: () => string | null;
 };
 
@@ -60,6 +75,9 @@ export function useThreadTurnEvents({
   pushThreadErrorMessage,
   safeMessageActivity,
   recordThreadActivity,
+  updateThreadParent,
+  markSubAgentThread,
+  recordThreadCreatedAt,
   resolveCurrentModel,
 }: UseThreadTurnEventsOptions) {
   const normalizeNonEmptyString = useCallback((value: string | null | undefined) => {
@@ -94,6 +112,21 @@ export function useThreadTurnEvents({
       const timestamp = getThreadTimestamp(thread);
       const activityTimestamp = timestamp > 0 ? timestamp : Date.now();
       recordThreadActivity(workspaceId, threadId, activityTimestamp);
+      const sourceParentId = extractSubAgentParentThreadId(thread.source);
+      if (sourceParentId) {
+        updateThreadParent(sourceParentId, [threadId], {
+          source: thread.source,
+          allowReparent: true,
+        });
+      }
+      if (isSubAgentSource(thread.source)) {
+        markSubAgentThread?.(threadId);
+      }
+      recordThreadCreatedAt?.(
+        threadId,
+        getThreadCreatedTimestamp(thread),
+        activityTimestamp,
+      );
       dispatch({
         type: "setThreadTimestamp",
         workspaceId,
@@ -111,7 +144,16 @@ export function useThreadTurnEvents({
       }
       safeMessageActivity();
     },
-    [dispatch, getCustomName, isThreadHidden, recordThreadActivity, safeMessageActivity],
+    [
+      dispatch,
+      getCustomName,
+      isThreadHidden,
+      markSubAgentThread,
+      recordThreadActivity,
+      recordThreadCreatedAt,
+      safeMessageActivity,
+      updateThreadParent,
+    ],
   );
 
   const onThreadNameUpdated = useCallback(

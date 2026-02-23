@@ -582,183 +582,185 @@ export const Composer = memo(function Composer({
         onMigrateLegacyQueue={onMigrateLegacyQueue}
         canSteerQueued={canSteerQueued}
       />
-      <ComposerInput
-        text={text}
-        disabled={disabled}
-        sendLabel={sendLabel}
-        canStop={canStop}
-        preferQueueOverStop={isProcessing}
-        canSend={canSend}
-        isProcessing={isProcessing}
-        onStop={onStop}
-        onSend={handleSend}
-        dictationEnabled={dictationEnabled}
-        dictationState={dictationState}
-        dictationLevel={dictationLevel}
-        onToggleDictation={onToggleDictation}
-        onOpenDictationSettings={onOpenDictationSettings}
-        dictationError={dictationError}
-        onDismissDictationError={onDismissDictationError}
-        dictationHint={dictationHint}
-        onDismissDictationHint={onDismissDictationHint}
-        attachments={attachedImages}
-        onAddAttachment={onPickImages}
-        onAttachImages={onAttachImages}
-        onRemoveAttachment={onRemoveImage}
-        onTextChange={handleTextChangeWithHistory}
-        onSelectionChange={handleSelectionChange}
-        onTextPaste={handleTextPaste}
-        isExpanded={editorExpanded}
-        onToggleExpand={onToggleEditorExpanded}
-        onKeyDown={(event) => {
-          if (isComposingEvent(event)) {
-            return;
-          }
-          handleHistoryKeyDown(event);
-          if (event.defaultPrevented) {
-            return;
-          }
-          if (
-            expandFenceOnSpace &&
-            event.key === " " &&
-            !event.shiftKey &&
-            !event.metaKey &&
-            !event.ctrlKey &&
-            !event.altKey
-          ) {
-            const textarea = textareaRef.current;
-            if (!textarea) {
+      <div className="composer-compose-shell">
+        <ComposerInput
+          text={text}
+          disabled={disabled}
+          sendLabel={sendLabel}
+          canStop={canStop}
+          preferQueueOverStop={isProcessing}
+          canSend={canSend}
+          isProcessing={isProcessing}
+          onStop={onStop}
+          onSend={handleSend}
+          dictationEnabled={dictationEnabled}
+          dictationState={dictationState}
+          dictationLevel={dictationLevel}
+          onToggleDictation={onToggleDictation}
+          onOpenDictationSettings={onOpenDictationSettings}
+          dictationError={dictationError}
+          onDismissDictationError={onDismissDictationError}
+          dictationHint={dictationHint}
+          onDismissDictationHint={onDismissDictationHint}
+          attachments={attachedImages}
+          onAddAttachment={onPickImages}
+          onAttachImages={onAttachImages}
+          onRemoveAttachment={onRemoveImage}
+          onTextChange={handleTextChangeWithHistory}
+          onSelectionChange={handleSelectionChange}
+          onTextPaste={handleTextPaste}
+          isExpanded={editorExpanded}
+          onToggleExpand={onToggleEditorExpanded}
+          onKeyDown={(event) => {
+            if (isComposingEvent(event)) {
               return;
             }
-            const start = textarea.selectionStart ?? text.length;
-            const end = textarea.selectionEnd ?? start;
-            if (tryExpandFence(start, end)) {
-              event.preventDefault();
+            handleHistoryKeyDown(event);
+            if (event.defaultPrevented) {
               return;
             }
-          }
-          if (event.key === "Enter" && event.shiftKey) {
-            if (continueListOnShiftEnter && !suggestionsOpen) {
+            if (
+              expandFenceOnSpace &&
+              event.key === " " &&
+              !event.shiftKey &&
+              !event.metaKey &&
+              !event.ctrlKey &&
+              !event.altKey
+            ) {
               const textarea = textareaRef.current;
-              if (textarea) {
-                const start = textarea.selectionStart ?? text.length;
-                const end = textarea.selectionEnd ?? start;
-                if (start === end) {
-                  const marker = getListContinuation(text, start);
-                  if (marker) {
+              if (!textarea) {
+                return;
+              }
+              const start = textarea.selectionStart ?? text.length;
+              const end = textarea.selectionEnd ?? start;
+              if (tryExpandFence(start, end)) {
+                event.preventDefault();
+                return;
+              }
+            }
+            if (event.key === "Enter" && event.shiftKey) {
+              if (continueListOnShiftEnter && !suggestionsOpen) {
+                const textarea = textareaRef.current;
+                if (textarea) {
+                  const start = textarea.selectionStart ?? text.length;
+                  const end = textarea.selectionEnd ?? start;
+                  if (start === end) {
+                    const marker = getListContinuation(text, start);
+                    if (marker) {
+                      event.preventDefault();
+                      const before = text.slice(0, start);
+                      const after = text.slice(end);
+                      const nextText = `${before}\n${marker}${after}`;
+                      const nextCursor = before.length + 1 + marker.length;
+                      applyTextInsertion(nextText, nextCursor);
+                      return;
+                    }
+                  }
+                }
+              }
+              event.preventDefault();
+              const textarea = textareaRef.current;
+              if (!textarea) {
+                return;
+              }
+              const start = textarea.selectionStart ?? text.length;
+              const end = textarea.selectionEnd ?? start;
+              const nextText = `${text.slice(0, start)}\n${text.slice(end)}`;
+              const nextCursor = start + 1;
+              applyTextInsertion(nextText, nextCursor);
+              return;
+            }
+            if (
+              event.key === "Tab" &&
+              !event.shiftKey &&
+              isProcessing &&
+              !suggestionsOpen
+            ) {
+              event.preventDefault();
+              handleQueue();
+              return;
+            }
+            if (reviewPromptOpen && onReviewPromptKeyDown) {
+              const handled = onReviewPromptKeyDown(event);
+              if (handled) {
+                return;
+              }
+            }
+            handleInputKeyDown(event);
+            if (event.defaultPrevented) {
+              return;
+            }
+            if (event.key === "Enter" && !event.shiftKey) {
+              if (expandFenceOnEnter) {
+                const textarea = textareaRef.current;
+                if (textarea) {
+                  const start = textarea.selectionStart ?? text.length;
+                  const end = textarea.selectionEnd ?? start;
+                  if (tryExpandFence(start, end)) {
                     event.preventDefault();
-                    const before = text.slice(0, start);
-                    const after = text.slice(end);
-                    const nextText = `${before}\n${marker}${after}`;
-                    const nextCursor = before.length + 1 + marker.length;
-                    applyTextInsertion(nextText, nextCursor);
                     return;
                   }
                 }
               }
-            }
-            event.preventDefault();
-            const textarea = textareaRef.current;
-            if (!textarea) {
-              return;
-            }
-            const start = textarea.selectionStart ?? text.length;
-            const end = textarea.selectionEnd ?? start;
-            const nextText = `${text.slice(0, start)}\n${text.slice(end)}`;
-            const nextCursor = start + 1;
-            applyTextInsertion(nextText, nextCursor);
-            return;
-          }
-          if (
-            event.key === "Tab" &&
-            !event.shiftKey &&
-            isProcessing &&
-            !suggestionsOpen
-          ) {
-            event.preventDefault();
-            handleQueue();
-            return;
-          }
-          if (reviewPromptOpen && onReviewPromptKeyDown) {
-            const handled = onReviewPromptKeyDown(event);
-            if (handled) {
-              return;
-            }
-          }
-          handleInputKeyDown(event);
-          if (event.defaultPrevented) {
-            return;
-          }
-          if (event.key === "Enter" && !event.shiftKey) {
-            if (expandFenceOnEnter) {
-              const textarea = textareaRef.current;
-              if (textarea) {
-                const start = textarea.selectionStart ?? text.length;
-                const end = textarea.selectionEnd ?? start;
-                if (tryExpandFence(start, end)) {
-                  event.preventDefault();
-                  return;
-                }
+              if (isDictationBusy) {
+                event.preventDefault();
+                return;
+              }
+              event.preventDefault();
+              const dismissKeyboardAfterSend = canSend && isMobilePlatform();
+              handleSend();
+              if (dismissKeyboardAfterSend) {
+                textareaRef.current?.blur();
               }
             }
-            if (isDictationBusy) {
-              event.preventDefault();
-              return;
-            }
-            event.preventDefault();
-            const dismissKeyboardAfterSend = canSend && isMobilePlatform();
-            handleSend();
-            if (dismissKeyboardAfterSend) {
-              textareaRef.current?.blur();
-            }
-          }
-        }}
-        textareaRef={textareaRef}
-        suggestionsOpen={suggestionsOpen}
-        suggestions={suggestions}
-        highlightIndex={highlightIndex}
-        onHighlightIndex={setHighlightIndex}
-        onSelectSuggestion={applyAutocomplete}
-        suggestionsStyle={suggestionsStyle}
-        reviewPrompt={reviewPrompt}
-        onReviewPromptClose={onReviewPromptClose}
-        onReviewPromptShowPreset={onReviewPromptShowPreset}
-        onReviewPromptChoosePreset={onReviewPromptChoosePreset}
-        highlightedPresetIndex={highlightedPresetIndex}
-        onReviewPromptHighlightPreset={onReviewPromptHighlightPreset}
-        highlightedBranchIndex={highlightedBranchIndex}
-        onReviewPromptHighlightBranch={onReviewPromptHighlightBranch}
-        highlightedCommitIndex={highlightedCommitIndex}
-        onReviewPromptHighlightCommit={onReviewPromptHighlightCommit}
-        onReviewPromptSelectBranch={onReviewPromptSelectBranch}
-        onReviewPromptSelectBranchAtIndex={onReviewPromptSelectBranchAtIndex}
-        onReviewPromptConfirmBranch={onReviewPromptConfirmBranch}
-        onReviewPromptSelectCommit={onReviewPromptSelectCommit}
-        onReviewPromptSelectCommitAtIndex={onReviewPromptSelectCommitAtIndex}
-        onReviewPromptConfirmCommit={onReviewPromptConfirmCommit}
-        onReviewPromptUpdateCustomInstructions={onReviewPromptUpdateCustomInstructions}
-        onReviewPromptConfirmCustom={onReviewPromptConfirmCustom}
-      />
-      <ComposerMetaBar
-        disabled={disabled}
-        collaborationModes={collaborationModes}
-        selectedCollaborationModeId={selectedCollaborationModeId}
-        onSelectCollaborationMode={onSelectCollaborationMode}
-        models={models}
-        selectedModelId={selectedModelId}
-        onSelectModel={onSelectModel}
-        reasoningOptions={reasoningOptions}
-        selectedEffort={selectedEffort}
-        onSelectEffort={onSelectEffort}
-        reasoningSupported={reasoningSupported}
-        contextUsage={contextUsage}
-        messageFontSize={messageFontSize}
-        onMessageFontSizeChange={onMessageFontSizeChange}
-        continueModeEnabled={continueModeEnabled}
-        onContinueModeEnabledChange={onContinueModeEnabledChange}
-        continuePrompt={continuePrompt}
-        onContinuePromptChange={onContinuePromptChange}
-      />
+          }}
+          textareaRef={textareaRef}
+          suggestionsOpen={suggestionsOpen}
+          suggestions={suggestions}
+          highlightIndex={highlightIndex}
+          onHighlightIndex={setHighlightIndex}
+          onSelectSuggestion={applyAutocomplete}
+          suggestionsStyle={suggestionsStyle}
+          reviewPrompt={reviewPrompt}
+          onReviewPromptClose={onReviewPromptClose}
+          onReviewPromptShowPreset={onReviewPromptShowPreset}
+          onReviewPromptChoosePreset={onReviewPromptChoosePreset}
+          highlightedPresetIndex={highlightedPresetIndex}
+          onReviewPromptHighlightPreset={onReviewPromptHighlightPreset}
+          highlightedBranchIndex={highlightedBranchIndex}
+          onReviewPromptHighlightBranch={onReviewPromptHighlightBranch}
+          highlightedCommitIndex={highlightedCommitIndex}
+          onReviewPromptHighlightCommit={onReviewPromptHighlightCommit}
+          onReviewPromptSelectBranch={onReviewPromptSelectBranch}
+          onReviewPromptSelectBranchAtIndex={onReviewPromptSelectBranchAtIndex}
+          onReviewPromptConfirmBranch={onReviewPromptConfirmBranch}
+          onReviewPromptSelectCommit={onReviewPromptSelectCommit}
+          onReviewPromptSelectCommitAtIndex={onReviewPromptSelectCommitAtIndex}
+          onReviewPromptConfirmCommit={onReviewPromptConfirmCommit}
+          onReviewPromptUpdateCustomInstructions={onReviewPromptUpdateCustomInstructions}
+          onReviewPromptConfirmCustom={onReviewPromptConfirmCustom}
+        />
+        <ComposerMetaBar
+          disabled={disabled}
+          collaborationModes={collaborationModes}
+          selectedCollaborationModeId={selectedCollaborationModeId}
+          onSelectCollaborationMode={onSelectCollaborationMode}
+          models={models}
+          selectedModelId={selectedModelId}
+          onSelectModel={onSelectModel}
+          reasoningOptions={reasoningOptions}
+          selectedEffort={selectedEffort}
+          onSelectEffort={onSelectEffort}
+          reasoningSupported={reasoningSupported}
+          contextUsage={contextUsage}
+          messageFontSize={messageFontSize}
+          onMessageFontSizeChange={onMessageFontSizeChange}
+          continueModeEnabled={continueModeEnabled}
+          onContinueModeEnabledChange={onContinueModeEnabledChange}
+          continuePrompt={continuePrompt}
+          onContinuePromptChange={onContinuePromptChange}
+        />
+      </div>
     </footer>
   );
 });

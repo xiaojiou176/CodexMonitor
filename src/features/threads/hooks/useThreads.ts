@@ -4,6 +4,7 @@ import type {
   CustomPromptOption,
   DebugEntry,
   ProtocolTurnStatus,
+  SkillOption,
   ThreadListSortKey,
   WorkspaceInfo,
 } from "../../../types";
@@ -51,6 +52,7 @@ type UseThreadsOptions = {
   collaborationMode?: Record<string, unknown> | null;
   reviewDeliveryMode?: "inline" | "detached";
   steerEnabled?: boolean;
+  skills?: SkillOption[];
   autoArchiveSubAgentThreadsEnabled?: boolean;
   autoArchiveSubAgentThreadsMaxAgeMinutes?: number;
   threadTitleAutogenerationEnabled?: boolean;
@@ -74,6 +76,7 @@ export function useThreads({
   collaborationMode,
   reviewDeliveryMode = "inline",
   steerEnabled = false,
+  skills = [],
   autoArchiveSubAgentThreadsEnabled = true,
   autoArchiveSubAgentThreadsMaxAgeMinutes =
     SUB_AGENT_AUTO_ARCHIVE_DEFAULT_MAX_AGE_MINUTES,
@@ -297,10 +300,43 @@ export function useThreads({
     [customNamesRef, dispatch, onDebug, persistThreadDisplayName],
   );
 
+  const markSubAgentThread = useCallback((threadId: string) => {
+    if (!threadId) {
+      return;
+    }
+    subAgentThreadIdsRef.current[threadId] = true;
+  }, []);
+
+  const recordThreadCreatedAt = useCallback((
+    threadId: string,
+    createdAt: number,
+    fallbackTimestamp?: number,
+  ) => {
+    if (!threadId) {
+      return;
+    }
+    const fallback =
+      typeof fallbackTimestamp === "number" && Number.isFinite(fallbackTimestamp)
+        ? fallbackTimestamp
+        : Date.now();
+    const resolvedCreatedAt =
+      Number.isFinite(createdAt) && createdAt > 0 ? createdAt : fallback;
+    const current = threadCreatedAtByIdRef.current[threadId];
+    if (
+      typeof current === "number"
+      && current > 0
+      && current <= resolvedCreatedAt
+    ) {
+      return;
+    }
+    threadCreatedAtByIdRef.current[threadId] = resolvedCreatedAt;
+  }, []);
+
   const { applyCollabThreadLinks, applyCollabThreadLinksFromThread, updateThreadParent } =
     useThreadLinking({
       dispatch,
       threadParentById: state.threadParentById,
+      onCollabLinkedThread: markSubAgentThread,
     });
 
   const handleWorkspaceConnected = useCallback(
@@ -423,6 +459,9 @@ export function useThreads({
     onDebug,
     onWorkspaceConnected: handleWorkspaceConnected,
     applyCollabThreadLinks,
+    updateThreadParent,
+    markSubAgentThread,
+    recordThreadCreatedAt,
     onReviewExited: handleReviewExited,
     approvalAllowlistRef,
     pendingInterruptsRef,
@@ -448,25 +487,6 @@ export function useThreads({
   );
 
   useAppServerEvents(handlers);
-
-  const markSubAgentThread = useCallback((threadId: string) => {
-    if (!threadId) {
-      return;
-    }
-    subAgentThreadIdsRef.current[threadId] = true;
-  }, []);
-
-  const recordThreadCreatedAt = useCallback((threadId: string, createdAt: number) => {
-    if (!threadId || !Number.isFinite(createdAt) || createdAt <= 0) {
-      return;
-    }
-    const current = threadCreatedAtByIdRef.current[threadId];
-    if (typeof current === "number" && current > 0 && current <= createdAt) {
-      return;
-    }
-    threadCreatedAtByIdRef.current[threadId] = createdAt;
-  }, []);
-
   const {
     startThreadForWorkspace,
     forkThreadForWorkspace,
@@ -746,6 +766,7 @@ export function useThreads({
     collaborationMode,
     reviewDeliveryMode,
     steerEnabled,
+    skills,
     customPrompts,
     threadStatusById: state.threadStatusById,
     activeTurnIdByThread: state.activeTurnIdByThread,

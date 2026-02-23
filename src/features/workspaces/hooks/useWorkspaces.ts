@@ -10,6 +10,7 @@ import type {
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import {
   addClone as addCloneService,
+  addWorkspaceFromGitUrl as addWorkspaceFromGitUrlService,
   addWorkspace as addWorkspaceService,
   addWorktree as addWorktreeService,
   connectWorkspace as connectWorkspaceService,
@@ -275,6 +276,66 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     }
     return addWorkspaceFromPath(selection);
   }, [addWorkspaceFromPath]);
+
+  const addWorkspaceFromGitUrl = useCallback(
+    async (
+      url: string,
+      destinationPath: string,
+      targetFolderName?: string | null,
+      options?: { activate?: boolean },
+    ) => {
+      const trimmedUrl = url.trim();
+      const trimmedDestinationPath = destinationPath.trim();
+      const trimmedTargetFolderName = targetFolderName?.trim() || null;
+      if (!trimmedUrl) {
+        throw new Error("Remote Git URL is required.");
+      }
+      if (!trimmedDestinationPath) {
+        throw new Error("Destination folder is required.");
+      }
+      const shouldActivate = options?.activate !== false;
+      onDebug?.({
+        id: `${Date.now()}-client-add-workspace-from-url`,
+        timestamp: Date.now(),
+        source: "client",
+        label: "workspace/add-from-url",
+        payload: {
+          url: trimmedUrl,
+          destinationPath: trimmedDestinationPath,
+          targetFolderName: trimmedTargetFolderName,
+        },
+      });
+      try {
+        const workspace = await addWorkspaceFromGitUrlService(
+          trimmedUrl,
+          trimmedDestinationPath,
+          trimmedTargetFolderName,
+          defaultCodexBin ?? null,
+        );
+        setWorkspaces((prev) => [...prev, workspace]);
+        if (shouldActivate) {
+          setActiveWorkspaceId(workspace.id);
+        }
+        Sentry.metrics.count("workspace_added", 1, {
+          attributes: {
+            workspace_id: workspace.id,
+            workspace_kind: workspace.kind ?? "main",
+          },
+        });
+        return workspace;
+      } catch (error) {
+        onDebug?.({
+          id: `${Date.now()}-client-add-workspace-from-url-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "workspace/add-from-url error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    },
+    [defaultCodexBin, onDebug],
+  );
 
   const filterWorkspacePaths = useCallback(async (paths: string[]) => {
     const trimmed = paths.map((path) => path.trim()).filter(Boolean);
@@ -875,6 +936,7 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     activeWorkspaceId,
     setActiveWorkspaceId,
     addWorkspace,
+    addWorkspaceFromGitUrl,
     addWorkspaceFromPath,
     filterWorkspacePaths,
     addCloneAgent,

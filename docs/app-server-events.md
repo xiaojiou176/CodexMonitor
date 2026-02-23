@@ -1,4 +1,4 @@
-# App-Server Events Reference (Codex `383b45279efda1ef611a4aa286621815fe656b8a`)
+# App-Server Events Reference (Codex `fc810ba045d02edbc1526d71d02e102cec142f7b`)
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
@@ -12,6 +12,18 @@ When updating this document:
 3. Compare Codex client request methods vs CodexMonitor outgoing request methods.
 4. Compare Codex server request methods vs CodexMonitor inbound request handling.
 5. Update supported and missing lists below.
+
+## 0.103 Compatibility Snapshot (2026-02-21)
+
+CodexMonitor now meets the notification compatibility floor required for Codex
+0.103 and avoids false "unsupported protocol event" toasts for:
+
+- `thread/archived`
+- `thread/unarchived`
+- `model/rerouted`
+
+These methods are included in `src/utils/appServerEvents.ts`
+`SUPPORTED_APP_SERVER_METHODS`.
 
 ## Where To Look In CodexMonitor
 
@@ -47,39 +59,67 @@ Primary outgoing request layer:
 
 ## Supported Events (Current)
 
-These are the app-server methods currently supported in
-`src/utils/appServerEvents.ts` (`SUPPORTED_APP_SERVER_METHODS`) and routed in
-`useAppServerEvents.ts`.
+These methods are the canonical `SUPPORTED_APP_SERVER_METHODS` from
+`src/utils/appServerEvents.ts`.
 
-- `codex/connected`
-- `*requestApproval` methods (matched via
-  `isApprovalRequestMethod(method)`; suffix check)
-- `item/tool/requestUserInput`
-- `item/agentMessage/delta`
-- `turn/started`
-- `thread/started`
-- `thread/name/updated`
-- `codex/backgroundThread`
-- `error`
-- `turn/completed`
-- `turn/plan/updated`
-- `turn/diff/updated`
-- `thread/tokenUsage/updated`
+<!-- AUTO-GENERATED:SUPPORTED_APP_SERVER_METHODS:START -->
+- `account/login/completed`
+- `account/chatgptAuthTokens/refresh`
 - `account/rateLimits/updated`
 - `account/updated`
-- `account/login/completed`
-- `item/started`
-- `item/completed`
-- `item/reasoning/summaryTextDelta`
-- `item/reasoning/summaryPartAdded`
-- `item/reasoning/textDelta`
-- `item/plan/delta`
+- `codex/backgroundThread`
+- `codex/connected`
+- `codex/disconnected`
+- `codex/event/exec_command_end`
+- `codex/event/skills_update_available`
+- `codex/stderr`
+- `error`
+- `item/agentMessage/delta`
 - `item/commandExecution/outputDelta`
 - `item/commandExecution/terminalInteraction`
+- `item/completed`
 - `item/fileChange/outputDelta`
-- `item/mcpToolCall/progress` (official `message` payload + legacy numeric compatibility)
-- `codex/event/skills_update_available` (handled via
-  `isSkillsUpdateAvailableEvent(...)` in `useSkills.ts`)
+- `item/mcpToolCall/progress`
+- `item/plan/delta`
+- `item/reasoning/summaryPartAdded`
+- `item/reasoning/summaryTextDelta`
+- `item/reasoning/textDelta`
+- `item/started`
+- `item/tool/call`
+- `item/tool/requestUserInput`
+- `mcpServer/oauthLogin/completed`
+- `app/list/updated`
+- `model/rerouted`
+- `thread/name/updated`
+- `thread/archived`
+- `thread/unarchived`
+- `thread/live_attached`
+- `thread/compacted`
+- `thread/live_detached`
+- `thread/live_heartbeat`
+- `thread/started`
+- `thread/status/changed`
+- `thread/tokenUsage/updated`
+- `turn/completed`
+- `turn/diff/updated`
+- `turn/plan/updated`
+- `turn/started`
+- `rawResponseItem/completed`
+- `deprecationNotice`
+- `configWarning`
+- `fuzzyFileSearch/sessionUpdated`
+- `fuzzyFileSearch/sessionCompleted`
+- `windows/worldWritableWarning`
+- `windowsSandbox/setupCompleted`
+- `sessionConfigured`
+- `authStatusChange`
+- `loginChatGptComplete`
+<!-- AUTO-GENERATED:SUPPORTED_APP_SERVER_METHODS:END -->
+
+Additionally supported in routing logic:
+
+- `*requestApproval` methods (matched via
+  `isApprovalRequestMethod(method)` suffix checks)
 
 ## Conversation Compaction Signals (Codex v2)
 
@@ -92,20 +132,28 @@ CodexMonitor status:
 
 - It routes `item/started` and `item/completed`, so the preferred signal reaches the frontend event layer.
 - It renders/stores `contextCompaction` items via the normal item lifecycle.
-- It no longer routes deprecated `thread/compacted`.
+- It still recognizes deprecated `thread/compacted` for backward compatibility.
 
 ## Missing Events (Codex v2 Notifications)
 
-Compared against Codex app-server protocol v2 notifications, the following
-events are currently not routed:
+Compared against the currently targeted Codex v2 notification set, there are no
+known compatibility-floor gaps in routed method recognition.
 
-- `app/list/updated`
+### Note: Supported As Compatibility No-Op
+
+The following methods are recognized and accepted by the router, but currently
+handled as intentional UI no-ops (no state mutation):
+
 - `rawResponseItem/completed`
 - `mcpServer/oauthLogin/completed`
-- `thread/compacted` (deprecated; intentionally not routed)
 - `deprecationNotice`
 - `configWarning`
+- `fuzzyFileSearch/sessionUpdated`
+- `fuzzyFileSearch/sessionCompleted`
 - `windows/worldWritableWarning`
+
+`item/mcpToolCall/progress` is actively routed and normalized (not a no-op).
+`thread/compacted` is also recognized for backward compatibility.
 
 ## Supported Requests (CodexMonitor -> App-Server, v2)
 
@@ -123,6 +171,7 @@ These are v2 request methods CodexMonitor currently sends to Codex app-server:
 - `turn/interrupt`
 - `review/start`
 - `model/list`
+- `experimentalFeature/list`
 - `collaborationMode/list`
 - `mcpServerStatus/list`
 - `account/login/start`
@@ -138,12 +187,12 @@ Compared against Codex v2 request methods, CodexMonitor currently does not send:
 
 - `thread/unarchive`
 - `thread/rollback`
+- `thread/backgroundTerminals/clean`
 - `thread/loaded/list`
 - `thread/read`
 - `skills/remote/read`
 - `skills/remote/write`
 - `skills/config/write`
-- `experimentalFeature/list`
 - `mock/experimentalMethod`
 - `mcpServer/oauth/login`
 - `config/mcpServer/reload`
@@ -160,11 +209,8 @@ Compared against Codex v2 request methods, CodexMonitor currently does not send:
 Supported server requests:
 
 - `*requestApproval` methods (handled via suffix match in `isApprovalRequestMethod(method)`)
-- `item/tool/requestUserInput`
-
-Missing server requests:
-
 - `item/tool/call`
+- `item/tool/requestUserInput`
 - `account/chatgptAuthTokens/refresh`
 
 ## Where To Look In ../Codex
@@ -190,7 +236,11 @@ Use this workflow to update the lists above:
    - `(rg -N -o '=>\\s*\"[^\"]+\"\\s*\\(v2::[^)]*Notification\\)' ../Codex/codex-rs/app-server-protocol/src/protocol/common.rs | sed -E 's/.*\"([^\"]+)\".*/\\1/'; printf '%s\\n' 'account/login/completed') | sort -u`
 3. List CodexMonitor routed methods:
    - `rg -n \"SUPPORTED_APP_SERVER_METHODS\" src/utils/appServerEvents.ts`
-4. Update the Supported and Missing sections.
+4. Update the controlled block between:
+   - `<!-- AUTO-GENERATED:SUPPORTED_APP_SERVER_METHODS:START -->`
+   - `<!-- AUTO-GENERATED:SUPPORTED_APP_SERVER_METHODS:END -->`
+5. Validate drift check:
+   - `npm run docs:check:app-server-events`
 
 ## Quick Request Comparison Workflow
 
@@ -231,13 +281,6 @@ Use this when the method list is unchanged but behavior looks off.
 
 ## Notes
 
-- Status semantics are now centralized in `src/utils/protocolStatus.ts`:
-  - Turn status: `inProgress/completed/interrupted/failed`
-  - Item status: command/file (`inProgress/completed/failed/declined`), mcp/collab (`inProgress/completed/failed`)
-  - Message phase: `commentary/finalAnswer/unknown`
-  - Error retry: `willRetry` normalization
-- Thread runtime state in `useThreadsReducer.ts` keeps protocol truth (`turnStatus`, `activeItemStatuses`, `messagePhase`, `waitReason`, `retryState`) separate from UI aggregate `phase`.
-- `item/mcpToolCall/progress` is treated as activity heartbeat text and no longer a no-op.
 - Not all missing events must be surfaced in the conversation view; some may
   be better as toasts, settings warnings, or debug-only entries.
 - For conversation view changes, prefer:
@@ -255,3 +298,7 @@ Use this when the method list is unchanged but behavior looks off.
   - CodexMonitor attempts `turn/steer` when steering is enabled and an active turn exists.
   - If the server/daemon reports unknown `turn/steer`/`turn_steer`, CodexMonitor
     degrades to `turn/start` and caches that workspace as steer-unsupported.
+- Feature toggles in Settings:
+  - `experimentalFeature/list` is an app-server request.
+  - Toggle writes use local/daemon command surfaces (`set_codex_feature_flag` and app settings update),
+    which write `config.toml`; they are not app-server `ClientRequest` methods.
