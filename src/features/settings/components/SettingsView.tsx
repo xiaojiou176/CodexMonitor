@@ -586,6 +586,8 @@ export function SettingsView({
     : Number.NaN;
   const parsedScale = Number.isFinite(parsedPercent) ? parsedPercent / 100 : null;
 
+  const [savedCodexSettings, setSavedCodexSettings] = useState(false);
+
   const handleSaveCodexSettings = async () => {
     setIsSavingSettings(true);
     try {
@@ -594,6 +596,8 @@ export function SettingsView({
         codexBin: nextCodexBin,
         codexArgs: nextCodexArgs,
       });
+      setSavedCodexSettings(true);
+      setTimeout(() => setSavedCodexSettings(false), 2000);
     } finally {
       setIsSavingSettings(false);
     }
@@ -1372,7 +1376,25 @@ export function SettingsView({
             )}
             <div className="settings-content">
           {activeSectionGroup.sections.length > 1 && (
-            <div className="settings-group-tabs" role="tablist" aria-label={`${activeSectionGroup.label} 子分区`}>
+            <div
+              className="settings-group-tabs"
+              role="tablist"
+              aria-label={`${activeSectionGroup.label} 子分区`}
+              onKeyDown={(e) => {
+                const tabs = activeSectionGroup.sections;
+                const idx = tabs.indexOf(activeSection as typeof tabs[number]);
+                if (idx === -1) {
+                  return;
+                }
+                if (e.key === "ArrowRight") {
+                  e.preventDefault();
+                  handleSelectSection(tabs[(idx + 1) % tabs.length]);
+                } else if (e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  handleSelectSection(tabs[(idx - 1 + tabs.length) % tabs.length]);
+                }
+              }}
+            >
               {activeSectionGroup.sections.map((section) => (
                 <button
                   key={section}
@@ -1381,6 +1403,7 @@ export function SettingsView({
                   onClick={() => handleSelectSection(section)}
                   role="tab"
                   aria-selected={activeSection === section}
+                  tabIndex={activeSection === section ? 0 : -1}
                 >
                   {SETTINGS_SECTION_LABELS[section]}
                 </button>
@@ -1573,6 +1596,7 @@ export function SettingsView({
               codexArgsDraft={codexArgsDraft}
               codexDirty={codexDirty}
               isSavingSettings={isSavingSettings}
+              savedCodexSettings={savedCodexSettings}
               doctorState={doctorState}
               codexUpdateState={codexUpdateState}
               globalAgentsMeta={globalAgentsMeta}

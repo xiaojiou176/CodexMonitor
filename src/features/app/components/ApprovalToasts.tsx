@@ -37,21 +37,23 @@ export function ApprovalToasts({
     }
 
     const handler = (event: KeyboardEvent) => {
-      if (event.key !== "Enter") {
-        return;
-      }
       const active = document.activeElement;
-      if (
+      const isInInput =
         active instanceof HTMLElement &&
         (active.isContentEditable ||
           active.tagName === "INPUT" ||
           active.tagName === "TEXTAREA" ||
-          active.tagName === "SELECT")
-      ) {
+          active.tagName === "SELECT");
+
+      if (event.key === "Enter" && !isInInput) {
+        event.preventDefault();
+        onDecision(primaryRequest, "accept");
         return;
       }
-      event.preventDefault();
-      onDecision(primaryRequest, "accept");
+      if (event.key === "Escape" && !isInInput) {
+        event.preventDefault();
+        onDecision(primaryRequest, "decline");
+      }
     };
 
     window.addEventListener("keydown", handler);
@@ -91,6 +93,11 @@ export function ApprovalToasts({
 
   return (
     <ToastViewport className="approval-toasts" role="region" ariaLive="assertive">
+      {approvals.length > 1 && (
+        <div className="approval-toasts-count" role="status">
+          {approvals.length} 个待审批请求
+        </div>
+      )}
       {approvals.map((request) => {
         const workspaceName = workspaceLabels.get(request.workspace_id);
         const params = request.params ?? {};
@@ -137,6 +144,13 @@ export function ApprovalToasts({
               )}
             </div>
             <ToastActions className="approval-toast-actions">
+              <button
+                className="ghost approval-toast-skip"
+                onClick={() => onDecision(request, "decline")}
+                title="跳过此请求"
+              >
+                跳过
+              </button>
               <button
                 className="secondary"
                 onClick={() => onDecision(request, "decline")}

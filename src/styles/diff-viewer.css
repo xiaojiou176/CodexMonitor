@@ -636,6 +636,11 @@
   left: 12px;
   right: 12px;
   z-index: 2;
+  opacity: 0.8;
+  background: color-mix(in srgb, var(--surface-right-panel, var(--surface-card-strong)) 72%, transparent);
+  border-radius: 6px;
+  padding: 3px 8px;
+  width: fit-content;
 }
 
 .diff-viewer-item-image {

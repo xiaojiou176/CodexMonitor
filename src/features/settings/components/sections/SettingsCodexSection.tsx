@@ -15,6 +15,7 @@ type SettingsCodexSectionProps = {
   codexArgsDraft: string;
   codexDirty: boolean;
   isSavingSettings: boolean;
+  savedCodexSettings?: boolean;
   doctorState: {
     status: "idle" | "running" | "done";
     result: CodexDoctorResult | null;
@@ -75,6 +76,7 @@ export function SettingsCodexSection({
   codexArgsDraft,
   codexDirty,
   isSavingSettings,
+  savedCodexSettings = false,
   doctorState,
   codexUpdateState,
   globalAgentsMeta,
@@ -181,8 +183,11 @@ export function SettingsCodexSection({
               }}
               disabled={isSavingSettings}
             >
-              {isSavingSettings ? "保存中..." : "保存"}
+              {isSavingSettings ? "保存中..." : savedCodexSettings ? "已保存 ✓" : "保存"}
             </button>
+          )}
+          {!codexDirty && savedCodexSettings && (
+            <span className="settings-save-success">已保存 ✓</span>
           )}
           <button
             type="button"

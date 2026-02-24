@@ -124,10 +124,12 @@ const ImageLightbox = memo(function ImageLightbox({
   images,
   activeIndex,
   onClose,
+  onNavigate,
 }: {
   images: MessageImage[];
   activeIndex: number;
   onClose: () => void;
+  onNavigate?: (index: number) => void;
 }) {
   const activeImage = images[activeIndex];
   const [activeImageDimensions, setActiveImageDimensions] = useState<{
@@ -139,13 +141,17 @@ const ImageLightbox = memo(function ImageLightbox({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onClose();
+      } else if (event.key === "ArrowRight" && onNavigate) {
+        onNavigate(Math.min(activeIndex + 1, images.length - 1));
+      } else if (event.key === "ArrowLeft" && onNavigate) {
+        onNavigate(Math.max(activeIndex - 1, 0));
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose]);
+  }, [onClose, onNavigate, activeIndex, images.length]);
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -206,6 +212,16 @@ const ImageLightbox = memo(function ImageLightbox({
         >
           <X size={16} aria-hidden />
         </button>
+        {onNavigate && images.length > 1 && activeIndex > 0 && (
+          <button
+            type="button"
+            className="message-image-lightbox-nav message-image-lightbox-prev"
+            onClick={(e) => { e.stopPropagation(); onNavigate(activeIndex - 1); }}
+            aria-label="上一张图片"
+          >
+            ‹
+          </button>
+        )}
         <img
           src={activeImage.src}
           srcSet={`${activeImage.src} 1x, ${activeImage.src} 2x`}
@@ -216,6 +232,21 @@ const ImageLightbox = memo(function ImageLightbox({
           sizes="90vw"
           decoding="async"
         />
+        {onNavigate && images.length > 1 && activeIndex < images.length - 1 && (
+          <button
+            type="button"
+            className="message-image-lightbox-nav message-image-lightbox-next"
+            onClick={(e) => { e.stopPropagation(); onNavigate(activeIndex + 1); }}
+            aria-label="下一张图片"
+          >
+            ›
+          </button>
+        )}
+        {images.length > 1 && (
+          <div className="message-image-lightbox-counter" aria-live="polite">
+            {activeIndex + 1} / {images.length}
+          </div>
+        )}
       </div>
     </div>,
     document.body,
@@ -553,6 +584,7 @@ export const MessageRow = memo(function MessageRow({
             <button
               type="button"
               className="ghost message-user-collapse-toggle"
+              aria-expanded={false}
               onClick={() => setIsUserCollapsed(false)}
             >
               展开全文
@@ -565,6 +597,7 @@ export const MessageRow = memo(function MessageRow({
             <button
               type="button"
               className="ghost message-assistant-collapse-toggle"
+              aria-expanded={false}
               onClick={() => setIsAssistantCollapsed(false)}
             >
               展开全文
@@ -589,6 +622,7 @@ export const MessageRow = memo(function MessageRow({
               <button
                 type="button"
                 className="ghost message-user-collapse-toggle"
+                aria-expanded={true}
                 onClick={() => setIsUserCollapsed(true)}
               >
                 收起
@@ -598,6 +632,7 @@ export const MessageRow = memo(function MessageRow({
               <button
                 type="button"
                 className="ghost message-assistant-collapse-toggle"
+                aria-expanded={true}
                 onClick={() => setIsAssistantCollapsed(true)}
               >
                 收起
@@ -610,6 +645,7 @@ export const MessageRow = memo(function MessageRow({
             images={imageItems}
             activeIndex={lightboxIndex}
             onClose={() => setLightboxIndex(null)}
+            onNavigate={setLightboxIndex}
           />
         )}
         <button

@@ -37,4 +37,26 @@
   --ds-diff-lib-bg-dark: color-mix(in srgb, var(--surface-context-core) 35%, transparent);
   --ds-diff-lib-bg-system-light: color-mix(in srgb, var(--surface-card-strong) 35%, transparent);
   --ds-diff-lib-bg-system-dark: color-mix(in srgb, var(--surface-context-core) 35%, transparent);
+
+  /* Spacing scale */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-6: 24px;
+  --ds-space-8: 32px;
+
+  /* Border radius */
+  --ds-radius-sm: 6px;
+  --ds-radius-md: 10px;
+  --ds-radius-lg: 16px;
+
+  /* Motion */
+  --ds-duration-fast: 120ms;
+  --ds-duration-normal: 200ms;
+  --ds-duration-slow: 350ms;
+
+  /* Focus rings */
+  --ds-focus-ring: 2px solid var(--border-accent);
+  --ds-focus-ring-offset: 2px;
 }

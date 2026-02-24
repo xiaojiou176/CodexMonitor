@@ -24,6 +24,7 @@ type GitPanelModeStatusProps = {
   diffStatusLabel: string;
   logCountLabel: string;
   logSyncLabel: string;
+  logSyncTitle?: string;
   logUpstreamLabel: string;
   issuesLoading: boolean;
   issuesTotal: number;
@@ -36,6 +37,7 @@ export function GitPanelModeStatus({
   diffStatusLabel,
   logCountLabel,
   logSyncLabel,
+  logSyncTitle,
   logUpstreamLabel,
   issuesLoading,
   issuesTotal,
@@ -51,7 +53,7 @@ export function GitPanelModeStatus({
       <>
         <div className="diff-status">{logCountLabel}</div>
         <div className="git-log-sync">
-          <span>{logSyncLabel}</span>
+          <span title={logSyncTitle}>{logSyncLabel}</span>
           {logUpstreamLabel && (
             <>
               <span className="git-log-sep">·</span>

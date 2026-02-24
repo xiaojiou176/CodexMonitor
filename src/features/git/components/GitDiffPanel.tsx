@@ -545,6 +545,9 @@ export function GitDiffPanel({
       ? `${logEntries.length} 个提交`
       : "暂无提交";
   const logSyncLabel = logUpstream ? `↑${logAhead} ↓${logBehind}` : "未配置上游分支";
+  const logSyncTitle = logUpstream
+    ? `↑ 领先远程 ${logAhead} 个提交 · ↓ 落后远程 ${logBehind} 个提交`
+    : "未配置上游分支";
   const logUpstreamLabel = logUpstream ? `上游 ${logUpstream}` : "";
   const showAheadSection = Boolean(logUpstream && logAhead > 0);
   const showBehindSection = Boolean(logUpstream && logBehind > 0);
@@ -687,6 +690,7 @@ export function GitDiffPanel({
         diffStatusLabel={diffStatusLabel}
         logCountLabel={logCountLabel}
         logSyncLabel={logSyncLabel}
+        logSyncTitle={logSyncTitle}
         logUpstreamLabel={logUpstreamLabel}
         issuesLoading={issuesLoading}
         issuesTotal={issuesTotal}

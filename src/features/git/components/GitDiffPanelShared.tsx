@@ -210,7 +210,7 @@ export function SidebarError({
   onDismiss,
 }: SidebarErrorProps) {
   return (
-    <div className={`sidebar-error sidebar-error-${variant}`}>
+    <div className={`sidebar-error sidebar-error-${variant}`} role="alert" aria-live="assertive">
       <div className="sidebar-error-body">
         <div className={variant === "commit" ? "commit-message-error" : "diff-error"}>
           {message}

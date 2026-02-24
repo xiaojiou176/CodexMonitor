@@ -187,6 +187,19 @@
   margin-right: 6px;
 }
 
+.settings-save-success {
+  font-size: 13px;
+  color: var(--status-success);
+  opacity: 0;
+  animation: settings-save-fade 2s ease forwards;
+}
+
+@keyframes settings-save-fade {
+  0% { opacity: 1; }
+  60% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 .settings-button-compact {
   padding: 6px 12px;
   font-size: 14px;
