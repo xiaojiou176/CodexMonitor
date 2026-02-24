@@ -63,8 +63,9 @@ pub(crate) async fn update_app_settings_core(
     app_settings: &Mutex<AppSettings>,
     settings_path: &PathBuf,
 ) -> Result<AppSettings, String> {
-    sync_codex_config_from_settings(&settings)?;
     write_settings(settings_path, &settings)?;
+    // Sync to Codex config is best-effort; mobile platforms may not have CODEX_HOME.
+    let _ = sync_codex_config_from_settings(&settings);
     let mut current = app_settings.lock().await;
     *current = settings.clone();
     Ok(settings)
