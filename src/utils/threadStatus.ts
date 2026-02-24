@@ -161,13 +161,15 @@ export function getThreadVisualStatusLabel(status: ThreadVisualStatus): string {
 export function getThreadVisualStatusBadge(status: ThreadVisualStatus): string | null {
   switch (status) {
     case "processing":
-      return "运行";
+      return "运行中";
     case "waiting":
       return "等待";
     case "stalled":
       return "疑似卡住";
     case "reviewing":
       return "审查";
+    case "unread":
+      return "未读";
     case "error":
       return "错误";
     default:

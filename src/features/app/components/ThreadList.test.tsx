@@ -79,6 +79,34 @@ describe("ThreadList", () => {
     );
   });
 
+  it("opens thread menu from keyboard menu shortcuts", () => {
+    const onShowThreadMenu = vi.fn();
+    render(<ThreadList {...baseProps} onShowThreadMenu={onShowThreadMenu} />);
+
+    const row = screen.getByText("Alpha").closest(".thread-row");
+    if (!row) {
+      throw new Error("Missing thread row");
+    }
+
+    fireEvent.keyDown(row, { key: "ContextMenu" });
+    fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+
+    expect(onShowThreadMenu).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      "ws-1",
+      "thread-1",
+      true,
+    );
+    expect(onShowThreadMenu).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      "ws-1",
+      "thread-1",
+      true,
+    );
+  });
+
   it("emits single/cmd/ctrl+shift selection intents", () => {
     const onThreadSelectionChange = vi.fn();
     render(
@@ -153,7 +181,7 @@ describe("ThreadList", () => {
       throw new Error("Missing selected row");
     }
     expect(betaRow.classList.contains("thread-row-selected")).toBe(true);
-    expect(betaRow.classList.contains("active")).toBe(true);
+    expect(betaRow.classList.contains("active")).toBe(false);
   });
 
   it("shows the more button and toggles expanded", () => {

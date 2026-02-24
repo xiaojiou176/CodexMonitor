@@ -117,17 +117,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: color-mix(in srgb, var(--text-muted) 88%, var(--text-faint));
   line-height: 1;
-  border-radius: 0;
+  border-radius: 8px;
   box-shadow: none;
   transform: none;
-  transition: color 0.15s ease;
+  opacity: 0.5;
+  transition: color 0.15s ease, opacity 0.15s ease, background 0.15s ease;
 }
 
 .sidebar-title-add svg {
@@ -139,9 +142,9 @@
 .sidebar-title-add:focus-visible {
   color: var(--text-strong);
   background: var(--surface-hover);
+  opacity: 1;
   box-shadow: none;
   transform: none;
-  border-radius: 8px;
 }
 
 .sidebar-header-actions {
@@ -186,7 +189,6 @@
   top: calc(100% + 8px);
   right: 0;
   min-width: 140px;
-  border-radius: 10px;
   padding: 6px;
   z-index: 10;
   display: flex;
@@ -369,8 +371,10 @@
   right: 14px;
   top: 50%;
   transform: translateY(-50%);
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -381,15 +385,17 @@
   line-height: 1;
   cursor: pointer;
   padding: 0;
-  border-radius: 0;
+  border-radius: 6px;
   font-weight: 600;
-  transition: none;
+  opacity: 0.55;
+  transition: color 0.15s ease, opacity 0.15s ease, background 0.15s ease;
   box-shadow: none;
 }
 
 .sidebar-search-clear:hover {
-  background: transparent;
+  background: var(--surface-hover);
   color: var(--text-strong);
+  opacity: 1;
   transform: translateY(-50%);
   box-shadow: none;
 }
@@ -500,7 +506,7 @@
 .workspace-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   -webkit-app-region: no-drag;
 }
 
@@ -556,7 +562,7 @@
 .workspace-group-content {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   overflow: hidden;
   min-height: 0;
 }
@@ -579,8 +585,8 @@
   line-height: 1;
   padding: 0 4px;
   -webkit-app-region: no-drag;
-  opacity: 0;
-  pointer-events: none;
+  opacity: 0.45;
+  pointer-events: auto;
   transition: opacity 0.15s ease, color 0.15s ease;
 }
 
@@ -591,7 +597,6 @@
 .workspace-group-header:hover .group-toggle,
 .group-toggle:focus-visible {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .group-toggle-icon {
@@ -606,8 +611,18 @@
 .workspace-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
   overflow-x: hidden;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
+  background: color-mix(in srgb, var(--surface-card) 30%, transparent);
+  transition: border-color 0.2s ease;
+  padding-bottom: 4px;
+}
+
+.workspace-card:has(.workspace-row.active) {
+  border-color: color-mix(in srgb, var(--border-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--surface-card) 50%, transparent);
 }
 
 .workspace-card-content {
@@ -624,9 +639,10 @@
 .workspace-card-content-inner {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   overflow: hidden;
   min-height: 0;
+  padding: 0 4px 0 4px;
 }
 
 .workspace-card-content.collapsed {
@@ -640,8 +656,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
-  padding: 8px 4px;
-  border-radius: 0;
+  padding: 8px 8px;
+  border-radius: 8px 8px 0 0;
   border: none;
   background: transparent;
   color: inherit;
@@ -683,8 +699,8 @@
 .workspace-row::before {
   content: "";
   position: absolute;
-  inset: 0 6px 0 0;
-  border-radius: 10px;
+  inset: 2px 4px;
+  border-radius: 6px;
   background: transparent;
   transition: background 0.2s ease;
   z-index: -1;
@@ -692,7 +708,6 @@
 
 .workspace-row.active {
   background: transparent;
-  padding-left: 4px;
 }
 
 .workspace-row:hover {
@@ -700,21 +715,28 @@
 }
 
 .workspace-row:hover::before {
-  background: var(--surface-card);
+  background: color-mix(in srgb, var(--surface-card) 60%, transparent);
 }
 
 .workspace-row.active::before {
-  background: linear-gradient(
-    90deg,
-    var(--border-accent) 0,
-    var(--border-accent) 3px,
-    var(--surface-card) 3px,
-    var(--surface-card) 100%
-  );
+  background: color-mix(in srgb, var(--surface-card) 80%, transparent);
+}
+
+.workspace-row.active::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  border-radius: 2px;
+  background: var(--border-accent);
 }
 
 .workspace-row.active .workspace-name {
   color: var(--text-strong);
+  font-weight: 500;
 }
 
 .workspace-row.active .workspace-name-row {
@@ -811,8 +833,10 @@
 }
 
 .workspace-add {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
   border-radius: 999px;
   border: 1px solid var(--border-stronger);
   background: var(--surface-card-muted);
@@ -823,8 +847,8 @@
   font-size: 14px;
   line-height: 1;
   -webkit-app-region: no-drag;
-  opacity: 0;
-  pointer-events: none;
+  opacity: 0.5;
+  pointer-events: auto;
   transition: opacity 0.15s ease;
 }
 
@@ -836,7 +860,6 @@
 .workspace-row:hover .workspace-add,
 .worktree-row:hover .workspace-add {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .workspace-name-row {
@@ -876,8 +899,8 @@
   line-height: 1;
   padding: 0 4px;
   -webkit-app-region: no-drag;
-  opacity: 0;
-  pointer-events: none;
+  opacity: 0.45;
+  pointer-events: auto;
   transition: opacity 0.15s ease, color 0.15s ease;
 }
 
@@ -897,7 +920,6 @@
 .workspace-row:hover .workspace-toggle,
 .workspace-toggle:focus-visible {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .workspace-add-menu {
@@ -906,7 +928,6 @@
   left: var(--workspace-add-menu-left, 0px);
   width: var(--workspace-add-menu-width, 160px);
   isolation: isolate;
-  border-radius: 10px;
   padding: 6px;
   display: flex;
   flex-direction: column;
@@ -928,6 +949,19 @@
 
 .workspace-add-option:hover {
   background: var(--surface-hover);
+}
+
+:is(.sidebar-sort-dropdown, .workspace-add-menu, .sidebar-account-popover) {
+  border-radius: var(--ds-popover-radius, 10px);
+  border: 1px solid var(--ds-popover-border, var(--border-subtle));
+  background: var(--ds-popover-bg, var(--surface-context-core));
+  box-shadow:
+    var(--ds-popover-shadow, 0 12px 28px color-mix(in srgb, var(--surface-overlay) 38%, transparent)),
+    inset 0 1px 0 color-mix(in srgb, var(--surface-card) 35%, transparent);
+}
+
+:is(.sidebar-sort-option, .workspace-add-option) {
+  border-radius: var(--ds-popover-item-radius, 8px);
 }
 
 .thread-list {
@@ -961,6 +995,44 @@
   margin-left: 6px;
 }
 
+.thread-list-empty {
+  padding: 8px 12px 6px;
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+.thread-selection-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px 5px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface-sidebar) 92%, var(--surface-control));
+  border-bottom: 1px solid var(--border-subtle);
+  gap: 8px;
+}
+
+.thread-selection-bar button {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+.thread-selection-bar button:hover {
+  color: var(--text-strong);
+  background: var(--surface-control-hover);
+}
+
 .thread-skeleton {
   height: 8px;
   width: 62%;
@@ -988,7 +1060,7 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 5px 12px 5px calc(8px + var(--thread-indent, 0px));
+  padding: 6px 12px 6px calc(8px + var(--thread-indent, 0px));
   border-radius: 6px;
   border: none;
   background: transparent;
@@ -1010,8 +1082,8 @@
   content: "";
   position: absolute;
   left: 2px;
-  top: 7px;
-  bottom: 7px;
+  top: 8px;
+  bottom: 8px;
   width: 2px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--border-muted) 45%, transparent);
@@ -1024,8 +1096,10 @@
 }
 
 .thread-collapse-toggle {
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
   padding: 0;
   border: none;
   border-radius: 6px;
@@ -1039,8 +1113,8 @@
 }
 
 .thread-collapse-toggle svg {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 
 .thread-collapse-toggle:hover,
@@ -1057,27 +1131,9 @@
 .thread-status {
   width: 8px;
   height: 8px;
-  border-radius: 2px;
-  display: inline-block;
-  margin-left: 2px;
-  flex-shrink: 0;
-}
-
-.thread-status-marker {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 34px;
-  padding: 2px 6px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border-muted) 75%, transparent);
-  background: color-mix(in srgb, var(--surface-card-muted) 82%, transparent);
-  color: var(--text-faint);
-  font-size: 10px;
-  line-height: 1.1;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  display: inline-block;
+  margin-left: 0;
   flex-shrink: 0;
 }
 
@@ -1085,15 +1141,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  padding: 4px 8px;
+  min-width: 30px;
+  padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid transparent;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.2;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .thread-pin-icon {
@@ -1118,10 +1173,6 @@
   background: color-mix(in srgb, var(--status-warning) 14%, transparent);
 }
 
-.thread-status-marker.processing {
-  color: color-mix(in srgb, var(--status-warning) 82%, var(--text-strong));
-  border-color: color-mix(in srgb, var(--status-warning) 42%, transparent);
-}
 
 .thread-status.waiting {
   background: color-mix(in srgb, var(--status-warning) 76%, var(--text-quiet));
@@ -1134,11 +1185,6 @@
   background: color-mix(in srgb, var(--status-warning) 12%, transparent);
 }
 
-.thread-status-marker.waiting {
-  color: color-mix(in srgb, var(--status-warning) 76%, var(--text-strong));
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--status-warning) 40%, transparent);
-}
 
 .thread-status.stalled {
   background: var(--status-danger);
@@ -1152,10 +1198,6 @@
   background: color-mix(in srgb, var(--status-danger) 12%, transparent);
 }
 
-.thread-status-marker.stalled {
-  color: color-mix(in srgb, var(--status-danger) 84%, var(--text-strong));
-  border-color: color-mix(in srgb, var(--status-danger) 46%, transparent);
-}
 
 .thread-status.error {
   background: var(--status-danger);
@@ -1168,10 +1210,6 @@
   background: color-mix(in srgb, var(--status-danger) 12%, transparent);
 }
 
-.thread-status-marker.error {
-  color: color-mix(in srgb, var(--status-danger) 82%, var(--text-strong));
-  border-color: color-mix(in srgb, var(--status-danger) 45%, transparent);
-}
 
 .thread-status.reviewing {
   background: var(--message-link-color);
@@ -1185,29 +1223,16 @@
   background: color-mix(in srgb, var(--message-link-color) 10%, transparent);
 }
 
-.thread-status-marker.reviewing {
-  color: color-mix(in srgb, var(--message-link-color) 72%, var(--text-strong));
-  border-color: color-mix(in srgb, var(--message-link-color) 38%, transparent);
-}
 
 .thread-status.unread {
   background: var(--message-link-color);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--message-link-color) 22%, var(--border-subtle));
 }
 
-.thread-status-marker.unread {
-  color: color-mix(in srgb, var(--message-link-color) 70%, var(--text-strong));
-  border-color: color-mix(in srgb, var(--message-link-color) 36%, transparent);
-}
 
 .thread-status.ready {
   background: var(--status-success);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--status-success) 22%, var(--border-subtle));
-}
-
-.thread-status-marker.ready {
-  color: color-mix(in srgb, var(--status-success) 80%, var(--text-strong));
-  border-color: color-mix(in srgb, var(--status-success) 36%, transparent);
 }
 
 .thread-row:hover {
@@ -1215,15 +1240,25 @@
   color: var(--text-strong);
 }
 
-.thread-row:hover .thread-status-marker {
-  color: var(--text-strong);
-  border-color: color-mix(in srgb, var(--border-strong) 78%, transparent);
-}
-
 .thread-row.active {
   background: var(--surface-active);
   color: var(--text-strong);
   box-shadow: inset 2px 0 0 var(--accent-primary);
+}
+
+.thread-row.active .thread-name {
+  font-weight: 700;
+}
+
+.thread-row.thread-row-selected {
+  background: color-mix(in srgb, var(--surface-hover) 85%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-accent) 45%, transparent);
+}
+
+.thread-row.thread-row-selected.active {
+  box-shadow:
+    inset 2px 0 0 var(--accent-primary),
+    inset 0 0 0 1px color-mix(in srgb, var(--border-accent) 52%, transparent);
 }
 
 .thread-row.thread-row-draggable {
@@ -1282,9 +1317,11 @@
 }
 
 .thread-time {
-  color: var(--text-faint);
-  font-size: 14px;
+  color: color-mix(in srgb, var(--text-faint) 88%, var(--text-muted));
+  font-size: 12px;
   white-space: nowrap;
+  opacity: 0.72;
+  transition: opacity 0.15s ease, color 0.15s ease;
 }
 
 .thread-menu {
@@ -1296,21 +1333,38 @@
   background: transparent;
   color: var(--text-faint);
   font-size: 14px;
-  padding: 4px 4px;
+  padding: 4px 6px;
+  min-width: 24px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   -webkit-app-region: no-drag;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, color 0.15s ease;
 }
 
-.thread-menu-trigger:hover {
+.thread-menu-trigger:hover,
+.thread-menu-trigger:focus-visible {
   color: var(--text-strong);
+  opacity: 1;
+}
+
+.thread-menu-trigger:focus-visible {
+  outline: 2px solid var(--border-accent-soft);
+  outline-offset: 1px;
+  border-radius: 4px;
 }
 
 .thread-row:hover .thread-menu-trigger {
   opacity: 1;
-  pointer-events: auto;
+}
+
+.thread-row:hover .thread-time,
+.thread-row.active .thread-time {
+  opacity: 0.96;
+  color: var(--text-muted);
 }
 
 .thread-more {
@@ -1514,8 +1568,8 @@
   line-height: 1;
   padding: 0 4px;
   -webkit-app-region: no-drag;
-  opacity: 0;
-  pointer-events: none;
+  opacity: 0.45;
+  pointer-events: auto;
   transition: opacity 0.15s ease, color 0.15s ease;
 }
 
@@ -1535,7 +1589,6 @@
 .worktree-row:hover .worktree-toggle,
 .worktree-toggle:focus-visible {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .sidebar-account-menu {
@@ -1690,4 +1743,158 @@
     animation: none;
     transition: none;
   }
+}
+
+/* ── Phone-layout sidebar overrides ──────────────────────────────────
+   The sidebar was designed for desktop hover/cursor interaction.
+   On phone: no hover, fat-finger touch targets (≥ 44px recommended),
+   always-visible controls, and tighter info density.
+   ──────────────────────────────────────────────────────────────────── */
+
+/* Thread rows: increase vertical padding for touch target ≥ 44px */
+.app.layout-phone .thread-row {
+  padding-top: 11px;
+  padding-bottom: 11px;
+  border-radius: 10px;
+  cursor: default;
+}
+
+/* Never show grab cursor on phone (no drag-to-reorder on touch) */
+.app.layout-phone .thread-row.thread-row-draggable {
+  cursor: default;
+}
+
+/* Thread name: slightly larger for readability */
+.app.layout-phone .thread-name {
+  font-size: 15px;
+}
+
+/* Thread time: hide to save horizontal space — name needs room */
+.app.layout-phone .thread-time {
+  display: none;
+}
+
+/* Thread menu trigger: always visible on phone (no hover available) */
+.app.layout-phone .thread-menu-trigger {
+  opacity: 1;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 8px;
+  color: var(--text-muted);
+  border-radius: 8px;
+}
+
+/* Workspace row: bigger touch target */
+.app.layout-phone .workspace-row {
+  padding: 4px 0;
+  cursor: default;
+}
+
+.app.layout-phone .workspace-row-main {
+  padding: 8px 0;
+  min-height: 44px;
+}
+
+/* Workspace name: larger for readability */
+.app.layout-phone .workspace-name {
+  font-size: 15px;
+}
+
+/* Workspace toggle (›): always visible, bigger touch target */
+.app.layout-phone .workspace-toggle {
+  opacity: 1;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 8px;
+  font-size: 18px;
+  border-radius: 8px;
+}
+
+/* Workspace add (+): always visible, bigger touch target */
+.app.layout-phone .workspace-add {
+  opacity: 1;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  font-size: 18px;
+}
+
+/* Connect button: easier to tap */
+.app.layout-phone .connect {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+/* Workspace add-menu options: bigger touch targets */
+.app.layout-phone .workspace-add-option {
+  padding: 12px 12px;
+  font-size: 15px;
+}
+
+/* Sidebar sort / add-menu popup: wider for phone */
+.app.layout-phone .workspace-add-menu {
+  min-width: 200px;
+}
+
+/* Thread status dot: slightly bigger for visibility */
+.app.layout-phone .thread-status {
+  width: 9px;
+  height: 9px;
+}
+
+/* Collapse toggle for sub-agents: bigger tap area */
+.app.layout-phone .thread-collapse-toggle {
+  min-width: 36px;
+  min-height: 36px;
+}
+
+/* ── Worktree rows on phone ── */
+.app.layout-phone .worktree-row {
+  padding: 8px 4px;
+  min-height: 44px;
+  cursor: default;
+}
+
+.app.layout-phone .worktree-row-main {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.app.layout-phone .worktree-label {
+  font-size: 15px;
+}
+
+.app.layout-phone .worktree-toggle {
+  opacity: 1;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 8px;
+  font-size: 18px;
+  border-radius: 8px;
+}
+
+/* ── Sidebar body: smooth iOS scroll ── */
+.app.layout-phone .sidebar-body {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Sidebar corner buttons: bigger tap area ── */
+.app.layout-phone .sidebar-corner-button {
+  padding: 10px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* ── Compact topbar back button: bigger tap area ── */
+.app.layout-phone .main-topbar-left .back-button {
+  padding: 10px 8px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* ── Messages area: smooth iOS scroll ── */
+.app.layout-phone .messages {
+  -webkit-overflow-scrolling: touch;
 }

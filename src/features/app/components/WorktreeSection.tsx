@@ -1,7 +1,7 @@
 import Layers from "lucide-react/dist/esm/icons/layers";
-import type { MouseEvent } from "react";
 
 import type { ThreadSummary, WorkspaceInfo } from "../../../types";
+import type { SidebarMenuTriggerEvent } from "../hooks/useSidebarMenus";
 import { ThreadList } from "./ThreadList";
 import { ThreadLoading } from "./ThreadLoading";
 import { WorktreeCard } from "./WorktreeCard";
@@ -74,12 +74,15 @@ type WorktreeSectionProps = {
   selectedWorkspaceId?: string | null;
   selectedThreadIds?: ReadonlySet<string>;
   onShowThreadMenu: (
-    event: MouseEvent,
+    event: SidebarMenuTriggerEvent,
     workspaceId: string,
     threadId: string,
     canPin: boolean,
   ) => void;
-  onShowWorktreeMenu: (event: MouseEvent, worktree: WorkspaceInfo) => void;
+  onShowWorktreeMenu: (
+    event: SidebarMenuTriggerEvent,
+    worktree: WorkspaceInfo,
+  ) => void;
   onToggleExpanded: (workspaceId: string) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
 };

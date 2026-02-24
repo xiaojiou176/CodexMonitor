@@ -41,6 +41,7 @@ import successSoundUrl from "./assets/success-notification.mp3";
 import errorSoundUrl from "./assets/error-notification.mp3";
 import { AppLayout } from "./features/app/components/AppLayout";
 import { AppModals } from "./features/app/components/AppModals";
+import { useConfirmModal } from "./features/app/hooks/useConfirmModal";
 import { MainHeaderActions } from "./features/app/components/MainHeaderActions";
 import { CommandPalette, useCommandPalette, type CommandItem } from "./features/app/components/CommandPalette";
 import { useLayoutNodes } from "./features/layout/hooks/useLayoutNodes";
@@ -996,6 +997,8 @@ function MainApp() {
     threadSortKey: threadListSortKey,
     persistThreadDisplayName,
   });
+
+  const { openConfirm, ConfirmModalNode } = useConfirmModal();
 
   const remoteBackgroundThreadIds = useMemo(() => {
     if (!activeWorkspace) {
@@ -2569,18 +2572,22 @@ function MainApp() {
     },
     onOpenThreadLink: handleOpenThreadLink,
     onDeleteThread: (workspaceId, threadId) => {
-      void removeThreads(workspaceId, [threadId]).then((result) => {
-        result.okIds.forEach((okId) => {
-          clearDraftForThread(okId);
-          removeImagesForThread(okId);
+      openConfirm("确认归档此对话？", () => {
+        void removeThreads(workspaceId, [threadId]).then((result) => {
+          result.okIds.forEach((okId) => {
+            clearDraftForThread(okId);
+            removeImagesForThread(okId);
+          });
         });
       });
     },
     onDeleteThreads: (workspaceId, threadIds) => {
-      void removeThreads(workspaceId, threadIds).then((result) => {
-        result.okIds.forEach((okId) => {
-          clearDraftForThread(okId);
-          removeImagesForThread(okId);
+      openConfirm(`确认归档所选 ${threadIds.length} 条对话？`, () => {
+        void removeThreads(workspaceId, threadIds).then((result) => {
+          result.okIds.forEach((okId) => {
+            clearDraftForThread(okId);
+            removeImagesForThread(okId);
+          });
         });
       });
     },
@@ -2592,7 +2599,9 @@ function MainApp() {
       handleRenameThread(workspaceId, threadId);
     },
     onDeleteWorkspace: (workspaceId) => {
-      void removeWorkspace(workspaceId);
+      openConfirm("确认删除工作区？此操作不可撤销。", () => {
+        void removeWorkspace(workspaceId);
+      });
     },
     onDeleteWorktree: (workspaceId) => {
       void removeWorktree(workspaceId);
@@ -3292,6 +3301,7 @@ function MainApp() {
       {showMobileSetupWizard && (
         <MobileServerSetupWizard {...mobileSetupWizardProps} />
       )}
+      {ConfirmModalNode}
     </div>
   );
 }

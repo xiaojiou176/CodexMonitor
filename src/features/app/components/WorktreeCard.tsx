@@ -1,17 +1,24 @@
-import type { MouseEvent } from "react";
-
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { WorkspaceInfo } from "../../../types";
+import type { SidebarMenuTriggerEvent } from "../hooks/useSidebarMenus";
 
 type WorktreeCardProps = {
   worktree: WorkspaceInfo;
   isActive: boolean;
   isDeleting?: boolean;
   onSelectWorkspace: (id: string) => void;
-  onShowWorktreeMenu: (event: MouseEvent, worktree: WorkspaceInfo) => void;
+  onShowWorktreeMenu: (
+    event: SidebarMenuTriggerEvent,
+    worktree: WorkspaceInfo,
+  ) => void;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
   onConnectWorkspace: (workspace: WorkspaceInfo) => void;
   children?: React.ReactNode;
 };
+
+function isKeyboardMenuTrigger(event: ReactKeyboardEvent<HTMLElement>) {
+  return event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey);
+}
 
 export function WorktreeCard({
   worktree,
@@ -44,6 +51,11 @@ export function WorktreeCard({
           disabled={isDeleting}
           onClick={() => {
             onSelectWorkspace(worktree.id);
+          }}
+          onKeyDown={(event) => {
+            if (!isDeleting && isKeyboardMenuTrigger(event)) {
+              onShowWorktreeMenu(event, worktree);
+            }
           }}
           aria-label={`切换到工作树 ${worktreeLabel}`}
         >

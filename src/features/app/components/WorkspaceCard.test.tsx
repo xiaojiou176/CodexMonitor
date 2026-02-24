@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { WorkspaceCard } from "./WorkspaceCard";
 
@@ -13,6 +13,47 @@ const workspace = {
 };
 
 describe("WorkspaceCard", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("opens workspace menu from keyboard menu shortcuts", () => {
+    const onShowWorkspaceMenu = vi.fn();
+
+    render(
+      <WorkspaceCard
+        workspace={workspace}
+        workspaceName="Workspace"
+        isActive={false}
+        isCollapsed={false}
+        addMenuOpen={false}
+        addMenuWidth={200}
+        onSelectWorkspace={vi.fn()}
+        onShowWorkspaceMenu={onShowWorkspaceMenu}
+        onToggleWorkspaceCollapse={vi.fn()}
+        onConnectWorkspace={vi.fn()}
+        onToggleAddMenu={vi.fn()}
+      />,
+    );
+
+    const mainButton = screen.getByRole("button", {
+      name: "切换到工作区 Workspace",
+    });
+    fireEvent.keyDown(mainButton, { key: "ContextMenu" });
+    fireEvent.keyDown(mainButton, { key: "F10", shiftKey: true });
+
+    expect(onShowWorkspaceMenu).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      "ws-1",
+    );
+    expect(onShowWorkspaceMenu).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      "ws-1",
+    );
+  });
+
   it("opens inline alias editing from workspace name double-click", () => {
     const onStartAliasEdit = vi.fn();
 

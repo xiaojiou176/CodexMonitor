@@ -103,6 +103,20 @@ describe("useThreadActions", () => {
     };
   }
 
+  function createDeferred<T>() {
+    let resolve: ((value: T) => void) | null = null;
+    let reject: ((reason?: unknown) => void) | null = null;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return {
+      promise,
+      resolve: (value: T) => resolve?.(value),
+      reject: (reason?: unknown) => reject?.(reason),
+    };
+  }
+
   it("starts a thread and activates it by default", async () => {
     vi.mocked(startThread).mockResolvedValue({
       result: { thread: { id: "thread-1" } },
@@ -709,6 +723,59 @@ describe("useThreadActions", () => {
     });
 
     expect(listThreads).toHaveBeenCalledWith("ws-1", null, 100, "created_at");
+  });
+
+  it("ignores stale list responses when a newer sort request is in-flight", async () => {
+    const first = createDeferred<Record<string, unknown>>();
+    const second = createDeferred<Record<string, unknown>>();
+    vi.mocked(listThreads)
+      .mockReturnValueOnce(first.promise as Promise<any>)
+      .mockReturnValueOnce(second.promise as Promise<any>);
+    vi.mocked(getThreadTimestamp).mockReturnValue(0);
+
+    const { result, dispatch } = renderActions({ threadSortKey: "updated_at" });
+
+    let firstCall: Promise<void> | null = null;
+    let secondCall: Promise<void> | null = null;
+    await act(async () => {
+      firstCall = result.current.listThreadsForWorkspace(workspace, {
+        sortKey: "created_at",
+      });
+      secondCall = result.current.listThreadsForWorkspace(workspace, {
+        sortKey: "updated_at",
+      });
+    });
+
+    await act(async () => {
+      second.resolve({
+        result: {
+          data: [{ id: "thread-new", cwd: "/tmp/codex", updated_at: 2000 }],
+          nextCursor: null,
+        },
+      });
+      await second.promise;
+    });
+
+    await act(async () => {
+      first.resolve({
+        result: {
+          data: [{ id: "thread-old", cwd: "/tmp/codex", updated_at: 1000 }],
+          nextCursor: null,
+        },
+      });
+      await Promise.all([firstCall, secondCall]);
+    });
+
+    const setThreadsCalls = dispatch.mock.calls
+      .map(([action]) => action)
+      .filter((action) => action?.type === "setThreads");
+    expect(setThreadsCalls).toHaveLength(1);
+    expect(setThreadsCalls[0]).toMatchObject({
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "updated_at",
+      threads: [{ id: "thread-new" }],
+    });
   });
 
   it("loads older threads when a cursor is available", async () => {

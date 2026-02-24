@@ -1877,11 +1877,22 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     case "setThreads": {
       const hidden = state.hiddenThreadIdsByWorkspace[action.workspaceId] ?? {};
       const visibleThreads = action.threads.filter((thread) => !hidden[thread.id]);
+      const activeThreadId = state.activeThreadIdByWorkspace[action.workspaceId] ?? null;
+      const activeStillVisible =
+        activeThreadId !== null &&
+        visibleThreads.some((thread) => thread.id === activeThreadId);
+      const nextActiveThreadId = activeStillVisible
+        ? activeThreadId
+        : (visibleThreads[0]?.id ?? null);
       return {
         ...state,
         threadsByWorkspace: {
           ...state.threadsByWorkspace,
           [action.workspaceId]: visibleThreads,
+        },
+        activeThreadIdByWorkspace: {
+          ...state.activeThreadIdByWorkspace,
+          [action.workspaceId]: nextActiveThreadId,
         },
         threadSortKeyByWorkspace: {
           ...state.threadSortKeyByWorkspace,

@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties, MouseEvent } from "react";
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import Pin from "lucide-react/dist/esm/icons/pin";
 
 import type { ThreadSummary } from "../../../types";
+import type { SidebarMenuTriggerEvent } from "../hooks/useSidebarMenus";
 import {
   deriveThreadVisualStatus,
   getThreadVisualStatusBadge,
@@ -52,7 +57,7 @@ type PinnedThreadListProps = {
     shiftKey: boolean;
   }) => void;
   onShowThreadMenu: (
-    event: MouseEvent,
+    event: SidebarMenuTriggerEvent,
     workspaceId: string,
     threadId: string,
     canPin: boolean,
@@ -60,6 +65,10 @@ type PinnedThreadListProps = {
   onToggleRootCollapse?: (workspaceId: string, rootId: string) => void;
   showSubAgentCollapseToggles?: boolean;
 };
+
+function isKeyboardMenuTrigger(event: ReactKeyboardEvent<HTMLElement>) {
+  return event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey);
+}
 
 export function PinnedThreadList({
   rows,
@@ -140,9 +149,10 @@ export function PinnedThreadList({
         return (
           <div
             key={`${workspaceId}:${thread.id}`}
-            className={`thread-row ${
-              isActive || isSelected ? "active" : ""
-            }${isSelected ? " thread-row-selected" : ""}`}
+            data-thread-id={thread.id}
+            className={`thread-row${isActive ? " active" : ""}${
+              isSelected ? " thread-row-selected" : ""
+            }`}
             style={indentStyle}
             onClick={(event) => {
               onThreadSelectionChange?.({
@@ -172,6 +182,10 @@ export function PinnedThreadList({
                   shiftKey: false,
                 });
                 onSelectThread(workspaceId, thread.id);
+                return;
+              }
+              if (isKeyboardMenuTrigger(event)) {
+                onShowThreadMenu(event, workspaceId, thread.id, canPin);
               }
             }}
           >
@@ -195,19 +209,32 @@ export function PinnedThreadList({
               aria-label={statusLabel}
               title={statusLabel}
             />
+            <span className="sr-only">{`线程状态：${statusLabel}`}</span>
             {statusBadge ? (
               <span className={`thread-status-badge ${statusClass}`}>{statusBadge}</span>
             ) : null}
-            {isPinned && (
-              <span className="thread-pin-icon" aria-label="已置顶">
-                📌
-              </span>
-            )}
-            <span className="thread-name">{thread.name}</span>
+            {isPinned && <Pin size={12} className="thread-pin-icon" aria-label="已置顶" />}
+            <span className="thread-name" title={thread.name}>{thread.name}</span>
             <div className="thread-meta">
               {relativeTime && <span className="thread-time">{relativeTime}</span>}
               <div className="thread-menu">
-                <div className="thread-menu-trigger" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="thread-menu-trigger"
+                  aria-label="更多操作"
+                  tabIndex={-1}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onShowThreadMenu(e, workspaceId, thread.id, canPin);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onShowThreadMenu(e, workspaceId, thread.id, canPin);
+                    }
+                  }}
+                />
               </div>
             </div>
           </div>

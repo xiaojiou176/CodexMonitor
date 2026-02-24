@@ -730,4 +730,29 @@ describe("threadReducer", () => {
     expect(ids).toContain("thread-visible");
     expect(ids).not.toContain("thread-bg");
   });
+
+  it("falls back active thread to first visible thread when current active disappears after sync", () => {
+    const base: ThreadState = {
+      ...initialState,
+      activeThreadIdByWorkspace: { "ws-1": "thread-gone" },
+      threadsByWorkspace: {
+        "ws-1": [
+          { id: "thread-gone", name: "Old", updatedAt: 200 },
+          { id: "thread-keep", name: "Keep", updatedAt: 100 },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "updated_at",
+      threads: [
+        { id: "thread-new-1", name: "New 1", updatedAt: 300 },
+        { id: "thread-new-2", name: "New 2", updatedAt: 250 },
+      ],
+    });
+
+    expect(next.activeThreadIdByWorkspace["ws-1"]).toBe("thread-new-1");
+  });
 });

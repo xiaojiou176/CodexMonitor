@@ -1,4 +1,4 @@
-import { useCallback, type MouseEvent } from "react";
+import { useCallback, type KeyboardEvent, type MouseEvent } from "react";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -21,6 +21,45 @@ type SidebarMenuHandlers = {
   onDeleteWorktree: (workspaceId: string) => void;
 };
 
+type SyntheticMenuCoordinates = {
+  clientX: number;
+  clientY: number;
+  currentTarget?: EventTarget | null;
+  preventDefault?: () => void;
+  stopPropagation?: () => void;
+};
+
+export type SidebarMenuTriggerEvent =
+  | MouseEvent<HTMLElement>
+  | KeyboardEvent<HTMLElement>
+  | SyntheticMenuCoordinates;
+
+function stopMenuTriggerEvent(event: SidebarMenuTriggerEvent) {
+  event.preventDefault?.();
+  event.stopPropagation?.();
+}
+
+function resolveMenuPosition(event: SidebarMenuTriggerEvent) {
+  if (
+    "clientX" in event &&
+    typeof event.clientX === "number" &&
+    typeof event.clientY === "number" &&
+    (event.clientX !== 0 || event.clientY !== 0)
+  ) {
+    return new LogicalPosition(event.clientX, event.clientY);
+  }
+
+  const target = "currentTarget" in event ? event.currentTarget : null;
+  if (target instanceof HTMLElement) {
+    const rect = target.getBoundingClientRect();
+    return new LogicalPosition(
+      rect.left + rect.width / 2,
+      rect.top + Math.min(rect.height, 24),
+    );
+  }
+  return new LogicalPosition(0, 0);
+}
+
 export function useSidebarMenus({
   onDeleteThread,
   onDeleteThreads,
@@ -36,13 +75,12 @@ export function useSidebarMenus({
 }: SidebarMenuHandlers) {
   const showThreadMenu = useCallback(
     async (
-      event: MouseEvent,
+      event: SidebarMenuTriggerEvent,
       workspaceId: string,
       threadId: string,
       canPin: boolean,
     ) => {
-      event.preventDefault();
-      event.stopPropagation();
+      stopMenuTriggerEvent(event);
       const selectedThreadIds = Array.from(
         new Set(getSelectedThreadIds?.(workspaceId) ?? []),
       );
@@ -102,7 +140,7 @@ export function useSidebarMenus({
       items.push(copyItem, archiveItem);
       const menu = await Menu.new({ items });
       const window = getCurrentWindow();
-      const position = new LogicalPosition(event.clientX, event.clientY);
+      const position = resolveMenuPosition(event);
       await menu.popup(position, window);
     },
     [
@@ -117,9 +155,8 @@ export function useSidebarMenus({
   );
 
   const showWorkspaceMenu = useCallback(
-    async (event: MouseEvent, workspaceId: string) => {
-      event.preventDefault();
-      event.stopPropagation();
+    async (event: SidebarMenuTriggerEvent, workspaceId: string) => {
+      stopMenuTriggerEvent(event);
       const renameAliasItem = await MenuItem.new({
         text: "自定义名称",
         action: () => onRenameWorkspaceAlias(workspaceId),
@@ -136,16 +173,15 @@ export function useSidebarMenus({
         items: [renameAliasItem, reloadItem, deleteItem],
       });
       const window = getCurrentWindow();
-      const position = new LogicalPosition(event.clientX, event.clientY);
+      const position = resolveMenuPosition(event);
       await menu.popup(position, window);
     },
     [onDeleteWorkspace, onReloadWorkspaceThreads, onRenameWorkspaceAlias],
   );
 
   const showWorktreeMenu = useCallback(
-    async (event: MouseEvent, worktree: WorkspaceInfo) => {
-      event.preventDefault();
-      event.stopPropagation();
+    async (event: SidebarMenuTriggerEvent, worktree: WorkspaceInfo) => {
+      stopMenuTriggerEvent(event);
       const fileManagerLabel = fileManagerName();
       const reloadItem = await MenuItem.new({
         text: "刷新对话",
@@ -182,7 +218,7 @@ export function useSidebarMenus({
       });
       const menu = await Menu.new({ items: [reloadItem, revealItem, deleteItem] });
       const window = getCurrentWindow();
-      const position = new LogicalPosition(event.clientX, event.clientY);
+      const position = resolveMenuPosition(event);
       await menu.popup(position, window);
     },
     [onReloadWorkspaceThreads, onDeleteWorktree],

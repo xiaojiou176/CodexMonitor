@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, DragEvent, MouseEvent } from "react";
+import type {
+  CSSProperties,
+  DragEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import Pin from "lucide-react/dist/esm/icons/pin";
 
 import type { ThreadSummary } from "../../../types";
+import type { SidebarMenuTriggerEvent } from "../hooks/useSidebarMenus";
 import {
   deriveThreadVisualStatus,
   getThreadVisualStatusBadge,
   getThreadVisualStatusLabel,
-  type ThreadVisualStatus,
 } from "../../../utils/threadStatus";
 
 type ThreadStatusMap = Record<
@@ -61,7 +66,7 @@ type ThreadListProps = {
   }) => void;
   selectedThreadIds?: ReadonlySet<string>;
   onShowThreadMenu: (
-    event: MouseEvent,
+    event: SidebarMenuTriggerEvent,
     workspaceId: string,
     threadId: string,
     canPin: boolean,
@@ -76,23 +81,8 @@ type ThreadListProps = {
   showSubAgentCollapseToggles?: boolean;
 };
 
-function getThreadVisualStatusMarker(status: ThreadVisualStatus): string {
-  switch (status) {
-    case "processing":
-      return "RUN";
-    case "waiting":
-      return "WAIT";
-    case "stalled":
-      return "STUCK";
-    case "reviewing":
-      return "REVIEW";
-    case "unread":
-      return "NEW";
-    case "error":
-      return "ERR";
-    default:
-      return "OK";
-  }
+function isKeyboardMenuTrigger(event: ReactKeyboardEvent<HTMLElement>) {
+  return event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey);
 }
 
 export function ThreadList({
@@ -261,7 +251,6 @@ export function ThreadList({
     const statusClass = visualStatus;
     const statusLabel = getThreadVisualStatusLabel(visualStatus);
     const statusBadge = getThreadVisualStatusBadge(visualStatus);
-    const statusMarker = getThreadVisualStatusMarker(visualStatus);
     const canPin = depth === 0;
     const isPinned = canPin && isThreadPinned(workspaceId, thread.id);
     const isReorderableRoot =
@@ -289,9 +278,10 @@ export function ThreadList({
     return (
       <div
         key={thread.id}
-        className={`thread-row ${
-          isActive || isSelected ? "active" : ""
-        }${isSelected ? " thread-row-selected" : ""}${
+        data-thread-id={thread.id}
+        className={`thread-row${isActive ? " active" : ""}${
+          isSelected ? " thread-row-selected" : ""
+        }${
           isReorderableRoot ? " thread-row-draggable" : ""
         }${isDragging ? " thread-row-dragging" : ""}${
           isDropTarget ? " thread-row-drop-target" : ""
@@ -327,6 +317,10 @@ export function ThreadList({
             event.preventDefault();
             emitThreadSelection(thread.id, false, false, false);
             onSelectThread(workspaceId, thread.id);
+            return;
+          }
+          if (isKeyboardMenuTrigger(event)) {
+            onShowThreadMenu(event, workspaceId, thread.id, canPin);
           }
         }}
       >
@@ -350,19 +344,32 @@ export function ThreadList({
           aria-label={statusLabel}
           title={statusLabel}
         />
-        <span className={`thread-status-marker ${statusClass}`} aria-hidden="true">
-          {statusMarker}
-        </span>
         <span className="sr-only">{`线程状态：${statusLabel}`}</span>
         {statusBadge ? (
           <span className={`thread-status-badge ${statusClass}`}>{statusBadge}</span>
         ) : null}
-        {isPinned && <span className="thread-pin-icon" aria-label="已置顶">📌</span>}
-        <span className="thread-name">{thread.name}</span>
+        {isPinned && <Pin size={12} className="thread-pin-icon" aria-label="已置顶" />}
+        <span className="thread-name" title={thread.name}>{thread.name}</span>
         <div className="thread-meta">
           {relativeTime && <span className="thread-time">{relativeTime}</span>}
           <div className="thread-menu">
-            <div className="thread-menu-trigger" aria-hidden="true" />
+            <button
+              type="button"
+              className="thread-menu-trigger"
+              aria-label="更多操作"
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowThreadMenu(e, workspaceId, thread.id, canPin);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onShowThreadMenu(e, workspaceId, thread.id, canPin);
+                }
+              }}
+            />
           </div>
         </div>
       </div>

@@ -249,6 +249,21 @@ export function useThreadActions({
   recordThreadCreatedAt,
 }: UseThreadActionsOptions) {
   const resumeInFlightByThreadRef = useRef<Record<string, number>>({});
+  const threadListRequestEpochByWorkspaceRef = useRef<Record<string, number>>({});
+
+  const beginThreadListRequest = useCallback((workspaceId: string) => {
+    const nextEpoch =
+      (threadListRequestEpochByWorkspaceRef.current[workspaceId] ?? 0) + 1;
+    threadListRequestEpochByWorkspaceRef.current[workspaceId] = nextEpoch;
+    return nextEpoch;
+  }, []);
+
+  const isLatestThreadListRequest = useCallback(
+    (workspaceId: string, requestEpoch: number) =>
+      (threadListRequestEpochByWorkspaceRef.current[workspaceId] ?? 0) ===
+      requestEpoch,
+    [],
+  );
 
   const extractThreadId = useCallback((response: Record<string, any>) => {
     const thread = response.result?.thread ?? response.thread ?? null;
@@ -581,6 +596,7 @@ export function useThreadActions({
     ) => {
       const preserveState = options?.preserveState ?? false;
       const requestedSortKey = options?.sortKey ?? threadSortKey;
+      const requestEpoch = beginThreadListRequest(workspace.id);
       const workspacePath = normalizeRootPath(workspace.path);
       if (!preserveState) {
         dispatch({
@@ -747,6 +763,9 @@ export function useThreadActions({
             };
           })
           .filter((entry) => entry.id);
+        if (!isLatestThreadListRequest(workspace.id, requestEpoch)) {
+          return;
+        }
         dispatch({
           type: "setThreads",
           workspaceId: workspace.id,
@@ -792,7 +811,10 @@ export function useThreadActions({
           payload: error instanceof Error ? error.message : String(error),
         });
       } finally {
-        if (!preserveState) {
+        if (
+          !preserveState &&
+          isLatestThreadListRequest(workspace.id, requestEpoch)
+        ) {
           dispatch({
             type: "setThreadListLoading",
             workspaceId: workspace.id,
@@ -803,8 +825,10 @@ export function useThreadActions({
     },
     [
       dispatch,
+      beginThreadListRequest,
       getCustomName,
       getPersistedThreadDisplayName,
+      isLatestThreadListRequest,
       onDebug,
       threadActivityRef,
       threadSortKey,
@@ -818,6 +842,7 @@ export function useThreadActions({
   const loadOlderThreadsForWorkspace = useCallback(
     async (workspace: WorkspaceInfo) => {
       const requestedSortKey = threadSortKey;
+      const requestEpoch = beginThreadListRequest(workspace.id);
       const nextCursor = threadListCursorByWorkspace[workspace.id] ?? null;
       if (!nextCursor) {
         return;
@@ -914,6 +939,9 @@ export function useThreadActions({
         });
 
         if (additions.length > 0) {
+          if (!isLatestThreadListRequest(workspace.id, requestEpoch)) {
+            return;
+          }
           dispatch({
             type: "setThreads",
             workspaceId: workspace.id,
@@ -921,11 +949,13 @@ export function useThreadActions({
             sortKey: requestedSortKey,
           });
         }
-        dispatch({
-          type: "setThreadListCursor",
-          workspaceId: workspace.id,
-          cursor,
-        });
+        if (isLatestThreadListRequest(workspace.id, requestEpoch)) {
+          dispatch({
+            type: "setThreadListCursor",
+            workspaceId: workspace.id,
+            cursor,
+          });
+        }
         const lastAgentUpdates = matchingThreads
           .map((thread) => {
             const threadId = String(thread?.id ?? "");
@@ -946,6 +976,9 @@ export function useThreadActions({
               Boolean(entry),
           );
         if (lastAgentUpdates.length > 0) {
+          if (!isLatestThreadListRequest(workspace.id, requestEpoch)) {
+            return;
+          }
           dispatch({
             type: "setLastAgentMessagesBulk",
             updates: lastAgentUpdates,
@@ -960,17 +993,21 @@ export function useThreadActions({
           payload: error instanceof Error ? error.message : String(error),
         });
       } finally {
-        dispatch({
-          type: "setThreadListPaging",
-          workspaceId: workspace.id,
-          isLoading: false,
-        });
+        if (isLatestThreadListRequest(workspace.id, requestEpoch)) {
+          dispatch({
+            type: "setThreadListPaging",
+            workspaceId: workspace.id,
+            isLoading: false,
+          });
+        }
       }
     },
     [
+      beginThreadListRequest,
       dispatch,
       getCustomName,
       getPersistedThreadDisplayName,
+      isLatestThreadListRequest,
       onDebug,
       threadListCursorByWorkspace,
       threadsByWorkspace,

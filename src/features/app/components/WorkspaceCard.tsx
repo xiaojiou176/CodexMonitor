@@ -1,7 +1,11 @@
 import Folder from "lucide-react/dist/esm/icons/folder";
-import type { DragEvent, MouseEvent } from "react";
+import type {
+  DragEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 
 import type { WorkspaceInfo } from "../../../types";
+import type { SidebarMenuTriggerEvent } from "../hooks/useSidebarMenus";
 
 type WorkspaceCardProps = {
   workspace: WorkspaceInfo;
@@ -12,7 +16,10 @@ type WorkspaceCardProps = {
   addMenuOpen: boolean;
   addMenuWidth: number;
   onSelectWorkspace: (id: string) => void;
-  onShowWorkspaceMenu: (event: MouseEvent, workspaceId: string) => void;
+  onShowWorkspaceMenu: (
+    event: SidebarMenuTriggerEvent,
+    workspaceId: string,
+  ) => void;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
   onConnectWorkspace: (workspace: WorkspaceInfo) => void;
   onToggleAddMenu: (anchor: {
@@ -39,6 +46,10 @@ type WorkspaceCardProps = {
   onStartAliasEdit?: (workspaceId: string) => void;
   children?: React.ReactNode;
 };
+
+function isKeyboardMenuTrigger(event: ReactKeyboardEvent<HTMLElement>) {
+  return event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey);
+}
 
 export function WorkspaceCard({
   workspace,
@@ -134,6 +145,11 @@ export function WorkspaceCard({
             type="button"
             className="workspace-row-main"
             onClick={() => onSelectWorkspace(workspace.id)}
+            onKeyDown={(event) => {
+              if (isKeyboardMenuTrigger(event)) {
+                onShowWorkspaceMenu(event, workspace.id);
+              }
+            }}
             aria-label={`切换到工作区 ${workspace.name}`}
           >
             <span className="workspace-name-row">

@@ -812,9 +812,15 @@ export const Sidebar = memo(function Sidebar({
       if (displayName.includes(normalizedQuery)) {
         return true;
       }
-      return workspace.name.toLowerCase().includes(normalizedQuery);
+      if (workspace.name.toLowerCase().includes(normalizedQuery)) {
+        return true;
+      }
+      const threads = orderedThreadsByWorkspace[workspace.id] ?? [];
+      return threads.some((thread) =>
+        thread.name.toLowerCase().includes(normalizedQuery),
+      );
     },
-    [getWorkspaceDisplayName, normalizedQuery],
+    [getWorkspaceDisplayName, normalizedQuery, orderedThreadsByWorkspace],
   );
 
   const renderHighlightedName = useCallback(
@@ -964,6 +970,20 @@ export const Sidebar = memo(function Sidebar({
   );
   const { sidebarBodyRef, scrollFade, updateScrollFade } =
     useSidebarScrollFade(scrollFadeDeps);
+
+  useEffect(() => {
+    if (!activeThreadId || !sidebarBodyRef.current) {
+      return;
+    }
+    const escapedId =
+      typeof CSS !== "undefined" && CSS.escape
+        ? CSS.escape(activeThreadId)
+        : activeThreadId.replace(/"/g, '\\"');
+    const el = sidebarBodyRef.current.querySelector<HTMLElement>(
+      `[data-thread-id="${escapedId}"]`,
+    );
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeThreadId, sidebarBodyRef]);
 
   const isSearchActive = Boolean(normalizedQuery);
 
@@ -1620,6 +1640,23 @@ export const Sidebar = memo(function Sidebar({
         onScroll={updateScrollFade}
         ref={sidebarBodyRef}
       >
+        {threadSelection.threadIds.size > 1 && (
+          <div className="thread-selection-bar">
+            <span>已选 {threadSelection.threadIds.size} 条</span>
+            <button
+              type="button"
+              onClick={() =>
+                setThreadSelection({
+                  workspaceId: null,
+                  threadIds: new Set(),
+                  anchorThreadId: null,
+                })
+              }
+            >
+              取消
+            </button>
+          </div>
+        )}
         <div className="workspace-list">
           {pinnedThreadRows.length > 0 && (
             <div className="pinned-section">
@@ -1868,6 +1905,11 @@ export const Sidebar = memo(function Sidebar({
                         />
                       )}
                       {showThreadLoader && <ThreadLoading />}
+                      {!showThreadLoader && !showThreadList && (
+                        <div className="thread-list-empty">
+                          暂无对话，点击 + 新建
+                        </div>
+                      )}
                     </WorkspaceCard>
                   );
                 })}
