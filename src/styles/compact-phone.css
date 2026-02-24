@@ -33,6 +33,23 @@
 
 .app.layout-phone .messages-full {
   padding: 12px 16px 12px;
+  overflow-x: hidden;
+}
+
+.app.layout-phone .messages {
+  overflow-x: hidden;
+}
+
+/* Constrain code blocks on phone so they scroll internally, not at page level */
+.app.layout-phone .message .markdown-codeblock,
+.app.layout-phone .message .markdown-codeblock-single {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.app.layout-phone .message .markdown-codeblock pre,
+.app.layout-phone .message .markdown-codeblock-single {
+  font-size: 12px;
 }
 
 .app.layout-phone .composer {

@@ -863,6 +863,34 @@
   opacity: 0.4;
 }
 
+/* ── Phone layout overrides ── */
+.app.layout-phone .home {
+  padding: 20px 16px 16px;
+  gap: 16px;
+}
+
+.app.layout-phone .home-title {
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+
+.app.layout-phone .home-subtitle {
+  font-size: 13px;
+}
+
+.app.layout-phone .home-hero-shortcuts {
+  /* Limit to two lines max; individually scrolls on overflow */
+  max-width: 100%;
+}
+
+.app.layout-phone .home-suggestions-grid {
+  grid-template-columns: 1fr;
+}
+
+.app.layout-phone .home-button {
+  min-height: 48px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   [class^="home-"],
   [class*=" home-"] {

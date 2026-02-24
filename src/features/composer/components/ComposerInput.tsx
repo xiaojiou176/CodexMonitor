@@ -6,6 +6,7 @@ import type {
   RefObject,
   SyntheticEvent,
 } from "react";
+import { isMobilePlatform } from "../../../utils/platformPaths";
 import type { AutocompleteItem } from "../hooks/useComposerAutocomplete";
 import ImagePlus from "lucide-react/dist/esm/icons/image-plus";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
@@ -521,7 +522,9 @@ export function ComposerInput({
             placeholder={
               disabled
                 ? "审查进行中，完成后聊天将重新启用。"
-                : "Ask Codex anything，@ 添加文件，/ 输入命令，$ 调用技能（⌘K）"
+                : isMobilePlatform()
+                  ? "Ask Codex anything，@ 添加文件，/ 输入命令，$ 调用技能"
+                  : "Ask Codex anything，@ 添加文件，/ 输入命令，$ 调用技能（⌘K）"
             }
             value={text}
             onChange={handleTextareaChange}

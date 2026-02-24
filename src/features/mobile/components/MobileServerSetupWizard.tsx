@@ -75,6 +75,10 @@ export function MobileServerSetupWizard({
               className="mobile-setup-wizard-input"
               value={remoteHostDraft}
               placeholder="macbook.your-tailnet.ts.net:4732"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               onChange={(event) => onRemoteHostChange(event.target.value)}
               disabled={busy || checking}
             />
@@ -102,10 +106,14 @@ export function MobileServerSetupWizard({
         </label>
         <input
           id="mobile-setup-token"
-          type="password"
+          type="text"
           className="mobile-setup-wizard-input"
           value={remoteTokenDraft}
           placeholder="令牌"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
           onChange={(event) => onRemoteTokenChange(event.target.value)}
           disabled={busy || checking}
         />

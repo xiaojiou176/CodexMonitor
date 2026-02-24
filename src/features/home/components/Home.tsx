@@ -5,6 +5,7 @@ import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 import type { LocalUsageSnapshot } from "../../../types";
 import { UI_LOCALE } from "../../../i18n/locale";
 import { formatRelativeTime } from "../../../utils/time";
+import { isMobilePlatform } from "../../../utils/platformPaths";
 
 type LatestAgentRun = {
   message: string;
@@ -212,12 +213,20 @@ export function Home({
         <div className="home-subtitle">
           对话优先、文档优先的 AI 编码工作台。
         </div>
-        <div className="home-hero-shortcuts" aria-label="快捷入口">
-          <span>⌘K 命令菜单</span>
-          <span>/ Slash 命令</span>
-          <span>$ Skills</span>
-          <span>@ 文件上下文</span>
-        </div>
+        {isMobilePlatform() ? (
+          <div className="home-hero-shortcuts" aria-label="快捷入口">
+            <span>/ Slash 命令</span>
+            <span>$ Skills</span>
+            <span>@ 文件上下文</span>
+          </div>
+        ) : (
+          <div className="home-hero-shortcuts" aria-label="快捷入口">
+            <span>⌘K 命令菜单</span>
+            <span>/ Slash 命令</span>
+            <span>$ Skills</span>
+            <span>@ 文件上下文</span>
+          </div>
+        )}
       </div>
       <div className="home-suggestions">
         <div className="home-suggestions-header">
