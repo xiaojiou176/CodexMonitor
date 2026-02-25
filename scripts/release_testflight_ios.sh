@@ -216,8 +216,9 @@ fi
 log "Using app id: $APP_ID"
 
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
-  NPM_BIN="$(resolve_npm || true)"
-  [[ -n "$NPM_BIN" ]] || fail "Unable to find npm in PATH or common install locations"
+  if ! NPM_BIN="$(resolve_npm)"; then
+    fail "Unable to find npm in PATH or common install locations"
+  fi
 
   if [[ -z "$BUILD_NUMBER" ]]; then
     BUILD_NUMBER="$(date +%s)"
@@ -235,13 +236,39 @@ fi
 [[ -f "$IPA_PATH" ]] || fail "IPA not found at: $IPA_PATH"
 
 log "Uploading IPA to ASC"
-asc builds upload --app "$APP_ID" --ipa "$IPA_PATH" --wait --output json >/dev/null
+UPLOAD_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+upload_json="$(asc builds upload --app "$APP_ID" --ipa "$IPA_PATH" --wait --output json)"
 
-latest_json="$(asc builds latest --app "$APP_ID" --platform IOS --output json)"
-BUILD_ID="$(json_get "$latest_json" '.data.id // empty')"
-BUILD_VERSION="$(json_get "$latest_json" '.data.attributes.version // empty')"
-BUILD_UPLOADED_AT="$(json_get "$latest_json" '.data.attributes.uploadedDate // empty')"
+BUILD_ID="$(json_get "$upload_json" '.data.id // .data[0].id // empty')"
+if [[ -z "$BUILD_ID" ]]; then
+  log "Upload response missing build id; resolving from build list"
+  builds_json="$(asc builds list --app "$APP_ID" --platform IOS --output json)"
+  if [[ -n "$BUILD_NUMBER" ]]; then
+    BUILD_ID="$(jq -r --arg build "$BUILD_NUMBER" --arg started "$UPLOAD_STARTED_AT" '
+      .data
+      | map(select(
+          (.attributes.uploadedDate // "") >= $started
+          and ((.attributes.buildNumber // "") == $build)
+        ))
+      | sort_by(.attributes.uploadedDate // "")
+      | last
+      | .id // empty
+    ' <<<"$builds_json")"
+  else
+    BUILD_ID="$(jq -r --arg started "$UPLOAD_STARTED_AT" '
+      .data
+      | map(select((.attributes.uploadedDate // "") >= $started))
+      | sort_by(.attributes.uploadedDate // "")
+      | last
+      | .id // empty
+    ' <<<"$builds_json")"
+  fi
+fi
 [[ -n "$BUILD_ID" ]] || fail "Unable to resolve uploaded build id"
+
+builds_json="$(asc builds list --app "$APP_ID" --platform IOS --output json)"
+BUILD_VERSION="$(jq -r --arg id "$BUILD_ID" '.data[] | select(.id == $id) | .attributes.version // empty' <<<"$builds_json" | head -n 1)"
+BUILD_UPLOADED_AT="$(jq -r --arg id "$BUILD_ID" '.data[] | select(.id == $id) | .attributes.uploadedDate // empty' <<<"$builds_json" | head -n 1)"
 
 log "Latest uploaded build: id=$BUILD_ID version=$BUILD_VERSION uploaded=$BUILD_UPLOADED_AT"
 
@@ -269,7 +296,18 @@ if [[ "$internal_state" == "MISSING_EXPORT_COMPLIANCE" || "$external_state" == "
     log "Reusing encryption declaration: $declaration_id"
   fi
 
-  asc encryption declarations assign-builds --id "$declaration_id" --build "$BUILD_ID" --output json >/dev/null || true
+  set +e
+  assign_output="$(asc encryption declarations assign-builds --id "$declaration_id" --build "$BUILD_ID" --output json 2>&1)"
+  assign_status=$?
+  set -e
+  if [[ "$assign_status" -ne 0 ]]; then
+    if grep -qiE "already|exists|assigned|duplicate" <<<"$assign_output"; then
+      log "Encryption declaration already assigned to build; continuing"
+    else
+      echo "$assign_output" >&2
+      fail "Failed to assign encryption declaration to build"
+    fi
+  fi
 
   for _ in {1..12}; do
     beta_detail_json="$(asc builds build-beta-detail get --build "$BUILD_ID" --output json)"
@@ -295,7 +333,18 @@ if [[ -z "$BETA_GROUP_ID" ]]; then
 fi
 
 log "Using beta group: $BETA_GROUP_NAME ($BETA_GROUP_ID)"
-asc builds add-groups --build "$BUILD_ID" --group "$BETA_GROUP_ID" --output json >/dev/null || true
+set +e
+add_group_output="$(asc builds add-groups --build "$BUILD_ID" --group "$BETA_GROUP_ID" --output json 2>&1)"
+add_group_status=$?
+set -e
+if [[ "$add_group_status" -ne 0 ]]; then
+  if grep -qiE "already|exists|assigned|duplicate" <<<"$add_group_output"; then
+    log "Build already associated with beta group; continuing"
+  else
+    echo "$add_group_output" >&2
+    fail "Failed to add build to beta group"
+  fi
+fi
 
 if [[ -z "$FEEDBACK_EMAIL" ]]; then
   FEEDBACK_EMAIL="$REVIEW_CONTACT_EMAIL"
