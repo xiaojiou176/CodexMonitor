@@ -16,6 +16,10 @@ import type {
   RequestUserInputResponse,
   ThreadPhase,
 } from "../../../types";
+import {
+  flushScheduledLocalStorageWrites,
+  scheduleLocalStorageWrite,
+} from "../../../utils/localStorageWriteScheduler";
 import { isPlanReadyTaggedMessage } from "../../../utils/internalPlanReadyMessages";
 import { PlanReadyFollowupMessage } from "../../app/components/PlanReadyFollowupMessage";
 import { RequestUserInputMessage } from "../../app/components/RequestUserInputMessage";
@@ -351,7 +355,13 @@ export const Messages = memo(function Messages({
         [storageKey]: normalizedTop,
       };
       persistedThreadScrollPositionsRef.current = nextState;
-      savePersistedThreadScrollPositions(nextState);
+      scheduleLocalStorageWrite(
+        THREAD_SCROLL_POSITION_STORAGE_KEY,
+        () => {
+          savePersistedThreadScrollPositions(nextState);
+        },
+        { debounceMs: 120, maxWaitMs: 1_000 },
+      );
     },
     [],
   );
@@ -389,6 +399,7 @@ export const Messages = memo(function Messages({
       if (pendingScrollPersistRafRef.current !== null) {
         window.cancelAnimationFrame(pendingScrollPersistRafRef.current);
       }
+      flushScheduledLocalStorageWrites(THREAD_SCROLL_POSITION_STORAGE_KEY);
     };
   }, [persistThreadScrollPositionNow]);
 
@@ -1014,6 +1025,7 @@ export const Messages = memo(function Messages({
               <div
                 key={entry.key}
                 ref={rowVirtualizer.measureElement}
+                data-index={virtualRow.index}
                 className={`messages-virtual-row is-virtualized ${entry.rowClassName}`}
                 style={
                   {

@@ -976,7 +976,7 @@ fn default_system_notifications_enabled() -> bool {
 }
 
 fn default_preload_git_diffs() -> bool {
-    true
+    false
 }
 
 fn default_git_diff_ignore_whitespace_changes() -> bool {
@@ -1425,7 +1425,7 @@ mod tests {
         assert_eq!(settings.code_font_size, 11);
         assert!(settings.notification_sounds_enabled);
         assert!(settings.system_notifications_enabled);
-        assert!(settings.preload_git_diffs);
+        assert!(!settings.preload_git_diffs);
         assert!(!settings.git_diff_ignore_whitespace_changes);
         assert!(settings.commit_message_prompt.contains("{diff}"));
         assert!(settings.collaboration_modes_enabled);

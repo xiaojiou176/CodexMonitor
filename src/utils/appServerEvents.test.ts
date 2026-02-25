@@ -64,20 +64,20 @@ describe("appServerEvents", () => {
   });
 
   it("checks supported method and approval requests", () => {
-    expect(isSupportedAppServerMethod("turn/started")).toBe(true);
-    expect(isSupportedAppServerMethod("thread/compacted")).toBe(true);
-    expect(isSupportedAppServerMethod("model/rerouted")).toBe(true);
-    expect(isSupportedAppServerMethod("thread/archived")).toBe(true);
-    expect(isSupportedAppServerMethod("thread/unarchived")).toBe(true);
-    expect(isSupportedAppServerMethod("thread/status/changed")).toBe(true);
-    expect(isSupportedAppServerMethod("windowsSandbox/setupCompleted")).toBe(true);
-    expect(isSupportedAppServerMethod("account/chatgptAuthTokens/refresh")).toBe(true);
+    expect(isSupportedAppServerMethod("turn/started")).toBeTruthy();
+    expect(isSupportedAppServerMethod("thread/compacted")).toBeTruthy();
+    expect(isSupportedAppServerMethod("model/rerouted")).toBeTruthy();
+    expect(isSupportedAppServerMethod("thread/archived")).toBeTruthy();
+    expect(isSupportedAppServerMethod("thread/unarchived")).toBeTruthy();
+    expect(isSupportedAppServerMethod("thread/status/changed")).toBeTruthy();
+    expect(isSupportedAppServerMethod("windowsSandbox/setupCompleted")).toBeTruthy();
+    expect(isSupportedAppServerMethod("account/chatgptAuthTokens/refresh")).toBeTruthy();
     expect(isSupportedAppServerMethod("unknown/method")).toBe(false);
-    expect(isCompatPassthroughAppServerMethod("codex/stderr")).toBe(true);
-    expect(isCompatPassthroughAppServerMethod("codex/event/mcp_startup_update")).toBe(true);
-    expect(isCompatPassthroughAppServerMethod("codex/eventStreamLagged")).toBe(true);
+    expect(isCompatPassthroughAppServerMethod("codex/stderr")).toBeTruthy();
+    expect(isCompatPassthroughAppServerMethod("codex/event/mcp_startup_update")).toBeTruthy();
+    expect(isCompatPassthroughAppServerMethod("codex/eventStreamLagged")).toBeTruthy();
     expect(isCompatPassthroughAppServerMethod("turn/unknownFutureMethod")).toBe(false);
-    expect(isApprovalRequestMethod("workspace/requestApproval")).toBe(true);
+    expect(isApprovalRequestMethod("workspace/requestApproval")).toBeTruthy();
     expect(isApprovalRequestMethod("workspace/request")).toBe(false);
   });
 
@@ -91,7 +91,7 @@ describe("appServerEvents", () => {
       params: {},
     });
 
-    expect(isSkillsUpdateAvailableEvent(canonicalEvent)).toBe(true);
+    expect(isSkillsUpdateAvailableEvent(canonicalEvent)).toBeTruthy();
     expect(isSkillsUpdateAvailableEvent(nonCanonicalMethod)).toBe(false);
   });
 

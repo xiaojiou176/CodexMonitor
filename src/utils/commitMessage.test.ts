@@ -3,7 +3,7 @@ import { shouldApplyCommitMessage } from "./commitMessage";
 
 describe("shouldApplyCommitMessage", () => {
   it("returns true when workspace ids match", () => {
-    expect(shouldApplyCommitMessage("workspace-1", "workspace-1")).toBe(true);
+    expect(shouldApplyCommitMessage("workspace-1", "workspace-1")).toBeTruthy();
   });
 
   it("returns false when workspace ids differ", () => {

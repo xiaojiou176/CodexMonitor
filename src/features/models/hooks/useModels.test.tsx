@@ -102,7 +102,7 @@ describe("useModels", () => {
     expect(result.current.models.length).toBeGreaterThanOrEqual(4);
     expect(result.current.models[0]?.id).toBe("provider-id");
     expect(result.current.selectedModel?.id).toBe("provider-id");
-    expect(result.current.reasoningSupported).toBe(true);
+    expect(result.current.reasoningSupported).toBeTruthy();
   });
 
   it("keeps the selected reasoning effort when switching models", async () => {

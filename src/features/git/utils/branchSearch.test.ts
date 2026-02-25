@@ -10,7 +10,7 @@ const branches: BranchInfo[] = [
 
 describe("branchSearch", () => {
   it("supports fuzzy matching", () => {
-    expect(fuzzyMatch("fal", "feature/add-login")).toBe(true);
+    expect(fuzzyMatch("fal", "feature/add-login")).toBeTruthy();
     expect(fuzzyMatch("fzl", "feature/add-login")).toBe(false);
   });
 

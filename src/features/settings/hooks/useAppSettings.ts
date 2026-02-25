@@ -131,7 +131,7 @@ function buildDefaultSettings(): AppSettings {
     codeFontSize: CODE_FONT_SIZE_DEFAULT,
     notificationSoundsEnabled: true,
     systemNotificationsEnabled: true,
-    preloadGitDiffs: true,
+    preloadGitDiffs: false,
     gitDiffIgnoreWhitespaceChanges: false,
     commitMessagePrompt: DEFAULT_COMMIT_MESSAGE_PROMPT,
     experimentalCollabEnabled: false,

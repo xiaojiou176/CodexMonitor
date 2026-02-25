@@ -37,14 +37,14 @@ describe("shortcuts", () => {
         ctrlKey: true,
         altKey: true,
       });
-      expect(matchesShortcut(ctrlAlt, "cmd+ctrl+a")).toBe(true);
+      expect(matchesShortcut(ctrlAlt, "cmd+ctrl+a")).toBeTruthy();
     });
   });
 
   it("keeps cmd as CmdOrCtrl on non-mac platforms", () => {
     withNavigatorPlatform("Win32", () => {
       const ctrlEvent = new KeyboardEvent("keydown", { key: "n", ctrlKey: true });
-      expect(matchesShortcut(ctrlEvent, "cmd+n")).toBe(true);
+      expect(matchesShortcut(ctrlEvent, "cmd+n")).toBeTruthy();
     });
   });
 
@@ -58,7 +58,7 @@ describe("shortcuts", () => {
         metaKey: true,
         ctrlKey: true,
       });
-      expect(matchesShortcut(cmdCtrl, "cmd+ctrl+a")).toBe(true);
+      expect(matchesShortcut(cmdCtrl, "cmd+ctrl+a")).toBeTruthy();
 
       const ctrlOnly = new KeyboardEvent("keydown", { key: "a", ctrlKey: true });
       expect(matchesShortcut(ctrlOnly, "cmd+ctrl+a")).toBe(false);

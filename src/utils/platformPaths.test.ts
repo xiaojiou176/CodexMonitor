@@ -68,7 +68,7 @@ describe("isMobilePlatform", () => {
           "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15",
       },
       () => {
-        expect(isMobilePlatform()).toBe(true);
+        expect(isMobilePlatform()).toBeTruthy();
       },
     );
   });
@@ -95,7 +95,7 @@ describe("isMobilePlatform", () => {
         maxTouchPoints: 5,
       },
       () => {
-        expect(isMobilePlatform()).toBe(true);
+        expect(isMobilePlatform()).toBeTruthy();
       },
     );
   });

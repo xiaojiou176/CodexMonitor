@@ -270,4 +270,48 @@ describe("GitDiffPanel", () => {
     expect(panelQuery.queryAllByText("未暂存 (1)").length).toBeGreaterThan(0);
   });
 
+  it("applies stage and unstage actions only to matching files in multi-selection", async () => {
+    menuNew.mockClear();
+    const onStageFile = vi.fn(async () => {});
+    const onUnstageFile = vi.fn(async () => {});
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        stagedFiles={[
+          { path: "src/alpha-staged.ts", status: "M", additions: 1, deletions: 0 },
+        ]}
+        unstagedFiles={[
+          { path: "src/beta-unstaged.ts", status: "M", additions: 1, deletions: 0 },
+        ]}
+        onStageFile={onStageFile}
+        onUnstageFile={onUnstageFile}
+      />,
+    );
+
+    const stagedFileButton = screen.getByRole("button", { name: /alpha-staged/i });
+    const unstagedFileButton = screen.getByRole("button", { name: /beta-unstaged/i });
+    fireEvent.click(stagedFileButton);
+    fireEvent.click(unstagedFileButton, { ctrlKey: true });
+
+    const stagedRow = stagedFileButton.closest(".diff-row");
+    expect(stagedRow).not.toBeNull();
+    fireEvent.contextMenu(stagedRow as Element);
+
+    await waitFor(() => expect(menuNew).toHaveBeenCalled());
+    const menuArgs = menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
+    const unstageItem = menuArgs.items.find((item: { text: string }) => item.text === "取消暂存");
+    const stageItem = menuArgs.items.find((item: { text: string }) => item.text === "暂存文件");
+
+    expect(unstageItem).not.toBeUndefined();
+    expect(stageItem).not.toBeUndefined();
+
+    await unstageItem.action();
+    await stageItem.action();
+
+    expect(onUnstageFile).toHaveBeenCalledTimes(1);
+    expect(onUnstageFile).toHaveBeenCalledWith("src/alpha-staged.ts");
+    expect(onStageFile).toHaveBeenCalledTimes(1);
+    expect(onStageFile).toHaveBeenCalledWith("src/beta-unstaged.ts");
+  });
+
 });

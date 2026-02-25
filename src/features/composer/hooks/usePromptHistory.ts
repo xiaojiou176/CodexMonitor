@@ -45,6 +45,13 @@ function writeStoredHistory(key: string, value: string[]) {
   }
 }
 
+function serializeHistoryForStorage(value: string[]): string | null {
+  if (value.length === 0) {
+    return null;
+  }
+  return JSON.stringify(value);
+}
+
 type UsePromptHistoryOptions = {
   historyKey?: string | null;
   text: string;
@@ -78,6 +85,7 @@ export function usePromptHistory({
   const draftBeforeHistoryRef = useRef("");
   const loadedKeysRef = useRef<Set<string>>(new Set());
   const skipNextWriteRef = useRef(false);
+  const lastPersistedRawByKeyRef = useRef<Record<string, string | null>>({});
   const historyByKeyRef = useRef(historyByKey);
   const previousKeyRef = useRef(historyKey ?? DEFAULT_HISTORY_KEY);
   const activeKey = historyKey ?? DEFAULT_HISTORY_KEY;
@@ -91,6 +99,7 @@ export function usePromptHistory({
     const previousKey = previousKeyRef.current;
     previousKeyRef.current = activeKey;
     const stored = readStoredHistory(activeKey);
+    lastPersistedRawByKeyRef.current[activeKey] = serializeHistoryForStorage(stored);
     const previousHistory = historyByKeyRef.current[previousKey] ?? [];
     const shouldMigrateDefault =
       previousKey === DEFAULT_HISTORY_KEY &&
@@ -102,6 +111,8 @@ export function usePromptHistory({
     if (shouldMigrateDefault) {
       writeStoredHistory(activeKey, nextHistory);
       writeStoredHistory(previousKey, []);
+      lastPersistedRawByKeyRef.current[activeKey] = serializeHistoryForStorage(nextHistory);
+      lastPersistedRawByKeyRef.current[previousKey] = null;
     }
     setHistoryByKey((prev) => {
       const existingActive = prev[activeKey];
@@ -127,7 +138,12 @@ export function usePromptHistory({
       skipNextWriteRef.current = false;
       return;
     }
+    const nextRaw = serializeHistoryForStorage(history);
+    if (lastPersistedRawByKeyRef.current[activeKey] === nextRaw) {
+      return;
+    }
     writeStoredHistory(activeKey, history);
+    lastPersistedRawByKeyRef.current[activeKey] = nextRaw;
   }, [activeKey, history]);
 
   const resetHistoryNavigation = useCallback(() => {
@@ -146,7 +162,11 @@ export function usePromptHistory({
       }
       const next = [...existing, trimmed].slice(-HISTORY_LIMIT);
       // Persist synchronously to avoid losing entries on fast key switches.
-      writeStoredHistory(activeKey, next);
+      const nextRaw = serializeHistoryForStorage(next);
+      if (lastPersistedRawByKeyRef.current[activeKey] !== nextRaw) {
+        writeStoredHistory(activeKey, next);
+        lastPersistedRawByKeyRef.current[activeKey] = nextRaw;
+      }
       loadedKeysRef.current.add(activeKey);
       setHistoryByKey((prev) => {
         const current = prev[activeKey] ?? [];

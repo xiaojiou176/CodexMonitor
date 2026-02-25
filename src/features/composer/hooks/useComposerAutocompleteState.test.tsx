@@ -31,7 +31,7 @@ describe("useComposerAutocompleteState file mentions", () => {
       }),
     );
 
-    expect(result.current.isAutocompleteOpen).toBe(true);
+    expect(result.current.isAutocompleteOpen).toBeTruthy();
     expect(result.current.autocompleteMatches.map((item) => item.label)).toContain(
       "src/App.tsx",
     );

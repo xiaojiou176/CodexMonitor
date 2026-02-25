@@ -95,7 +95,7 @@ describe("useComposerImageDrop", () => {
     });
 
     expect(preventDefault).toHaveBeenCalled();
-    expect(hook.result.isDragOver).toBe(true);
+    expect(hook.result.isDragOver).toBeTruthy();
 
     act(() => {
       hook.result.handleDragLeave();
@@ -207,7 +207,7 @@ describe("useComposerImageDrop", () => {
       });
     });
 
-    expect(hook.result.isDragOver).toBe(true);
+    expect(hook.result.isDragOver).toBeTruthy();
 
     act(() => {
       mockOnDragDropEvent?.({

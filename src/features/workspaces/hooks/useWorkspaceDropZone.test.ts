@@ -83,7 +83,7 @@ describe("useWorkspaceDropZone", () => {
     });
 
     expect(preventDefault).toHaveBeenCalled();
-    expect(hook.result.isDragOver).toBe(true);
+    expect(hook.result.isDragOver).toBeTruthy();
 
     act(() => {
       hook.result.handleDragLeave({} as React.DragEvent<HTMLElement>);
@@ -206,7 +206,7 @@ describe("useWorkspaceDropZone", () => {
     });
 
     expect(preventDefault).toHaveBeenCalled();
-    expect(hook.result.isDragOver).toBe(true);
+    expect(hook.result.isDragOver).toBeTruthy();
 
     hook.unmount();
   });

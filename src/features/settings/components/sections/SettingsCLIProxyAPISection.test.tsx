@@ -71,8 +71,8 @@ describe("SettingsCLIProxyAPISection", () => {
     });
 
     const toastTitles = pushErrorToastMock.mock.calls.map((call) => String(call[0]?.title ?? ""));
-    expect(toastTitles.includes("读取配置失败")).toBe(true);
-    expect(toastTitles.includes("加载模型失败")).toBe(true);
+    expect(toastTitles.includes("读取配置失败")).toBeTruthy();
+    expect(toastTitles.includes("加载模型失败")).toBeTruthy();
   });
 
   it("renders model cards and saves selected model to config.toml", async () => {
@@ -104,13 +104,13 @@ describe("SettingsCLIProxyAPISection", () => {
       const modelCards = screen
         .getAllByRole("button")
         .filter((entry) => entry.textContent?.includes("gpt-5.3-codex"));
-      expect(modelCards.length > 0).toBe(true);
+      expect(modelCards.length > 0).toBeTruthy();
     });
 
     const candidateCards = screen
       .getAllByRole("button")
       .filter((entry) => entry.textContent?.includes("gpt-5.3-codex"));
-    expect(candidateCards.length > 0).toBe(true);
+    expect(candidateCards.length > 0).toBeTruthy();
     fireEvent.click(candidateCards[0]);
     expect(onModelChange).toHaveBeenCalledWith("gpt-5.3-codex");
 
@@ -123,7 +123,7 @@ describe("SettingsCLIProxyAPISection", () => {
       expect(writeGlobalCodexConfigTomlMock).toHaveBeenCalledTimes(1);
     });
     const savedToml = String(writeGlobalCodexConfigTomlMock.mock.calls[0]?.[0] ?? "");
-    expect(savedToml.includes('model = "gpt-5.3-codex"')).toBe(true);
+    expect(savedToml.includes('model = "gpt-5.3-codex"')).toBeTruthy();
     expect(screen.getByText(/已将默认模型设置为 gpt-5.3-codex/)).not.toBeNull();
   });
 

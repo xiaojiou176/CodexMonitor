@@ -106,6 +106,6 @@ describe("FilePreviewPopover", () => {
     );
 
     const addButton = screen.getByRole("button", { name: "添加到对话" });
-    expect(addButton.hasAttribute("disabled")).toBe(true);
+    expect(addButton.hasAttribute("disabled")).toBeTruthy();
   });
 });

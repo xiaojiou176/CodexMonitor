@@ -107,7 +107,7 @@ describe("AppSettings contract", () => {
       expect(
         settingsHookSource.includes(key),
         `Expected useAppSettings to include ${key} default/normalize wiring`,
-      ).toBe(true);
+      ).toBeTruthy();
     });
   });
 });

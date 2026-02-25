@@ -33,7 +33,7 @@ describe("useWorktreePrompt", () => {
       result.current.openPrompt(parentWorkspace);
     });
 
-    expect(result.current.worktreePrompt?.copyAgentsMd).toBe(true);
+    expect(result.current.worktreePrompt?.copyAgentsMd).toBeTruthy();
 
     act(() => {
       result.current.updateName("My New Feature!");
@@ -72,7 +72,7 @@ describe("useWorktreePrompt", () => {
       result.current.openPrompt(parentWorkspace);
     });
 
-    expect(result.current.worktreePrompt?.copyAgentsMd).toBe(true);
+    expect(result.current.worktreePrompt?.copyAgentsMd).toBeTruthy();
 
     const originalBranch = result.current.worktreePrompt?.branch;
 

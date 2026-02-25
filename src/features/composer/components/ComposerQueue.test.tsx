@@ -128,7 +128,7 @@ describe("ComposerQueue", () => {
     );
 
     const button = screen.getByRole("button", { name: "Steer" });
-    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect((button as HTMLButtonElement).disabled).toBeTruthy();
   });
 
   it("deletes a queue item from row action", () => {

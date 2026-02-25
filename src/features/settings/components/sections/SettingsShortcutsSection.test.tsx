@@ -44,16 +44,16 @@ describe("SettingsShortcutsSection", () => {
     ).not.toBeNull();
 
     const searchInput = screen.getByRole("searchbox", { name: "搜索快捷键" });
-    expect(searchInput.hasAttribute("disabled")).toBe(true);
+    expect(searchInput.hasAttribute("disabled")).toBeTruthy();
 
     const shortcutInputs = screen.getAllByPlaceholderText("输入快捷键");
-    expect(shortcutInputs.length > 0).toBe(true);
+    expect(shortcutInputs.length > 0).toBeTruthy();
     fireEvent.keyDown(shortcutInputs[0], { key: "x" });
     expect(onShortcutKeyDown).not.toHaveBeenCalled();
 
     const clearButtons = screen.getAllByRole("button", { name: "清除" });
-    expect(clearButtons.length > 0).toBe(true);
-    expect(clearButtons.every((button) => button.hasAttribute("disabled"))).toBe(true);
+    expect(clearButtons.length > 0).toBeTruthy();
+    expect(clearButtons.every((button) => button.hasAttribute("disabled"))).toBeTruthy();
     fireEvent.click(clearButtons[0]);
     expect(onClearShortcut).not.toHaveBeenCalled();
   });

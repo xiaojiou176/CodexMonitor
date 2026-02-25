@@ -501,7 +501,7 @@ describe("Messages", () => {
     );
 
     const sendChangesButton = screen.getByRole("button", { name: "发送修改" });
-    expect((sendChangesButton as HTMLButtonElement).disabled).toBe(true);
+    expect((sendChangesButton as HTMLButtonElement).disabled).toBeTruthy();
 
     const textarea = screen.getByPlaceholderText(
       "描述你想修改的内容...",

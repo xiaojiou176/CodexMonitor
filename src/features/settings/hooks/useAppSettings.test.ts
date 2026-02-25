@@ -56,8 +56,8 @@ describe("useAppSettings", () => {
     expect(result.current.settings.uiFontFamily).toContain("system-ui");
     expect(result.current.settings.codeFontFamily).toContain("ui-monospace");
     expect(result.current.settings.codeFontSize).toBe(16);
-    expect(result.current.settings.showSubAgentThreadsInSidebar).toBe(true);
-    expect(result.current.settings.autoArchiveSubAgentThreadsEnabled).toBe(true);
+    expect(result.current.settings.showSubAgentThreadsInSidebar).toBeTruthy();
+    expect(result.current.settings.autoArchiveSubAgentThreadsEnabled).toBeTruthy();
     expect(result.current.settings.autoArchiveSubAgentThreadsMaxAgeMinutes).toBe(240);
     expect(result.current.settings.personality).toBe("friendly");
     expect(result.current.settings.threadScrollRestoreMode).toBe("latest");
@@ -78,6 +78,7 @@ describe("useAppSettings", () => {
     expect(result.current.settings.codeFontFamily).toContain("ui-monospace");
     expect(result.current.settings.backendMode).toBe("local");
     expect(result.current.settings.dictationModelId).toBe("base");
+    expect(result.current.settings.preloadGitDiffs).toBe(false);
     expect(result.current.settings.interruptShortcut).toEqual(expect.any(String));
     expect(result.current.settings.interruptShortcut?.length ?? 0).toBeGreaterThan(0);
   });

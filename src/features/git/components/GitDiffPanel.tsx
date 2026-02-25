@@ -259,6 +259,11 @@ export function GitDiffPanel({
     unstagedFiles,
     onSelectFile,
   });
+  const stagedFilePathSet = useMemo(() => new Set(stagedFiles.map((file) => file.path)), [stagedFiles]);
+  const unstagedFilePathSet = useMemo(
+    () => new Set(unstagedFiles.map((file) => file.path)),
+    [unstagedFiles],
+  );
 
   const ModeIcon = useMemo(() => {
     switch (mode) {
@@ -414,12 +419,8 @@ export function GitDiffPanel({
       const fallbackRoot = normalizeRootPath(workspacePath);
       const resolvedRoot = normalizedRoot || inferredRoot || fallbackRoot;
 
-      const stagedPaths = targetPaths.filter((targetPath) =>
-        stagedFiles.some((file) => file.path === targetPath),
-      );
-      const unstagedPaths = targetPaths.filter((targetPath) =>
-        unstagedFiles.some((file) => file.path === targetPath),
-      );
+      const stagedPaths = targetPaths.filter((targetPath) => stagedFilePathSet.has(targetPath));
+      const unstagedPaths = targetPaths.filter((targetPath) => unstagedFilePathSet.has(targetPath));
 
       const items: MenuItem[] = [];
 
@@ -527,8 +528,8 @@ export function GitDiffPanel({
     [
       selectedFiles,
       selectOnlyFile,
-      stagedFiles,
-      unstagedFiles,
+      stagedFilePathSet,
+      unstagedFilePathSet,
       onUnstageFile,
       onStageFile,
       onRevertFile,

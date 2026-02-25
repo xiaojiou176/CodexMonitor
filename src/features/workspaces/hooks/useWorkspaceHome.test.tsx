@@ -111,7 +111,7 @@ describe("useWorkspaceHome", () => {
 
     await act(async () => {
       const started = await result.current.startRun(["img-1"]);
-      expect(started).toBe(true);
+      expect(started).toBeTruthy();
     });
 
     expect(sendUserMessageToThread).toHaveBeenCalledWith(

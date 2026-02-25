@@ -58,7 +58,7 @@ describe("threadItems", () => {
     const firstOutput = prepared[0].kind === "tool" ? prepared[0].output : undefined;
     const secondOutput = prepared[1].kind === "tool" ? prepared[1].output : undefined;
     expect(firstOutput).not.toBe(output);
-    expect(firstOutput?.endsWith("...")).toBe(true);
+    expect(firstOutput?.endsWith("...")).toBeTruthy();
     expect(secondOutput).toBe(output);
   });
 

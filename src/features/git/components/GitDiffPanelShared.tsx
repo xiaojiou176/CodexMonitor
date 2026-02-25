@@ -29,20 +29,26 @@ type DiffTreeNode = {
   stats: { additions: number; deletions: number };
 };
 
+type FolderBuilderNode = DiffTreeNode & {
+  type: "folder";
+  childFolders: Map<string, FolderBuilderNode>;
+};
+
 /** Build a nested tree from a flat list of diff files. Single-child
  *  folder chains are collapsed into one node (e.g. "src/features/app"). */
-function buildDiffTree(files: DiffFile[]): DiffTreeNode[] {
-  const root: DiffTreeNode = {
+export function buildDiffTree(files: DiffFile[]): DiffTreeNode[] {
+  const root: FolderBuilderNode = {
     name: "",
     path: "",
     type: "folder",
     children: [],
     stats: { additions: 0, deletions: 0 },
+    childFolders: new Map<string, FolderBuilderNode>(),
   };
 
   for (const file of files) {
     const parts = file.path.split("/");
-    let current = root;
+    let current: FolderBuilderNode = root;
     let pathSoFar = "";
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
@@ -58,9 +64,7 @@ function buildDiffTree(files: DiffFile[]): DiffTreeNode[] {
           stats: { additions: file.additions, deletions: file.deletions },
         });
       } else {
-        let child = current.children.find(
-          (c) => c.type === "folder" && c.name === part,
-        );
+        let child = current.childFolders.get(part);
         if (!child) {
           child = {
             name: part,
@@ -68,7 +72,9 @@ function buildDiffTree(files: DiffFile[]): DiffTreeNode[] {
             type: "folder",
             children: [],
             stats: { additions: 0, deletions: 0 },
+            childFolders: new Map<string, FolderBuilderNode>(),
           };
+          current.childFolders.set(part, child);
           current.children.push(child);
         }
         current = child;
@@ -113,8 +119,28 @@ function buildDiffTree(files: DiffFile[]): DiffTreeNode[] {
     return node;
   }
 
+  function stripBuilderMetadata(node: DiffTreeNode): DiffTreeNode {
+    if (node.type === "file") {
+      return {
+        name: node.name,
+        path: node.path,
+        type: "file",
+        file: node.file,
+        children: [],
+        stats: node.stats,
+      };
+    }
+    return {
+      name: node.name,
+      path: node.path,
+      type: "folder",
+      children: node.children.map(stripBuilderMetadata),
+      stats: node.stats,
+    };
+  }
+
   root.children = root.children.map(collapse);
-  return root.children;
+  return root.children.map(stripBuilderMetadata);
 }
 
 export type DiffFile = {

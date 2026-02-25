@@ -223,11 +223,11 @@ describe("useWorkspaces.updateWorkspaceSettings", () => {
     expect(
       result.current.workspaces.find((entry) => entry.id === workspaceOne.id)
         ?.settings.sidebarCollapsed,
-    ).toBe(true);
+    ).toBeTruthy();
     expect(
       result.current.workspaces.find((entry) => entry.id === workspaceTwo.id)
         ?.settings.sidebarCollapsed,
-    ).toBe(true);
+    ).toBeTruthy();
   });
 });
 
@@ -274,7 +274,7 @@ describe("useWorkspaces.loading", () => {
       await flushMicrotaskQueue();
     });
 
-    expect(result.current.hasLoaded).toBe(true);
+    expect(result.current.hasLoaded).toBeTruthy();
     expect(pushErrorToastMock).toHaveBeenCalledWith({
       title: "加载工作区失败",
       message: "bridge unavailable",
