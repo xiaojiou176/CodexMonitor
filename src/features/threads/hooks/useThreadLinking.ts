@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
 import type { Dispatch } from "react";
-import type { ThreadAction } from "./useThreadsReducer";
+import type { ThreadAction, ThreadParentOrdering } from "./useThreadsReducer";
 import { asString, normalizeStringList } from "../utils/threadNormalize";
 import { isSubAgentSource } from "../utils/subAgentSource";
 
@@ -13,7 +13,29 @@ type UseThreadLinkingOptions = {
 type UpdateThreadParentOptions = {
   source?: unknown;
   allowReparent?: boolean;
+  ordering?: ThreadParentOrdering;
 };
+
+function asPositiveNumber(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  return value;
+}
+
+function extractOrderingTimestamp(payload: unknown): number | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  return (
+    asPositiveNumber(record.timestamp)
+    ?? asPositiveNumber(record.updatedAt)
+    ?? asPositiveNumber(record.updated_at)
+    ?? asPositiveNumber(record.createdAt)
+    ?? asPositiveNumber(record.created_at)
+  );
+}
 
 export function useThreadLinking({
   dispatch,
@@ -49,6 +71,15 @@ export function useThreadLinking({
       }
       const allowReparent =
         options?.allowReparent ?? isSubAgentSource(options?.source);
+      const orderingTimestamp =
+        options?.ordering?.timestamp ?? extractOrderingTimestamp(options?.source);
+      const ordering =
+        orderingTimestamp && orderingTimestamp > 0
+          ? {
+              ...options?.ordering,
+              timestamp: orderingTimestamp,
+            }
+          : options?.ordering;
       childIds.forEach((childId) => {
         if (!childId || childId === parentId) {
           return;
@@ -68,7 +99,13 @@ export function useThreadLinking({
         if (existingParent && existingParent !== parentId) {
           reparentedThreadIdsRef.current[childId] = true;
         }
-        dispatch({ type: "setThreadParent", threadId: childId, parentId });
+        const action: ThreadAction = {
+          type: "setThreadParent",
+          threadId: childId,
+          parentId,
+          ...(ordering ? { ordering } : {}),
+        };
+        dispatch(action);
       });
     },
     [dispatch, threadParentById, wouldCreateThreadCycle],
@@ -93,7 +130,7 @@ export function useThreadLinking({
       receivers.forEach((childId) => {
         onCollabLinkedThread?.(childId);
       });
-      updateThreadParent(parentId, receivers);
+      updateThreadParent(parentId, receivers, { source: item });
     },
     [onCollabLinkedThread, updateThreadParent],
   );

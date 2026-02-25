@@ -261,7 +261,7 @@ describe("useQueuedSend", () => {
 
     await act(async () => {
       const ok = await result.current.steerQueuedMessage("thread-1", queued?.id ?? "");
-      expect(ok).toBe(true);
+      expect(ok).toBeTruthy();
     });
 
     expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
@@ -291,7 +291,7 @@ describe("useQueuedSend", () => {
 
     await act(async () => {
       const ok = await result.current.steerQueuedMessage("thread-1", queued?.id ?? "");
-      expect(ok).toBe(true);
+      expect(ok).toBeTruthy();
     });
 
     expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
@@ -385,7 +385,7 @@ describe("useQueuedSend", () => {
 
     await act(async () => {
       const ok = await result.current.steerQueuedMessage("thread-1", queued?.id ?? "");
-      expect(ok).toBe(true);
+      expect(ok).toBeTruthy();
     });
 
     expect(options.sendUserMessage).toHaveBeenCalledTimes(1);

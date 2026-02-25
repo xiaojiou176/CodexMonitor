@@ -16,7 +16,7 @@ import { useThreadApprovalEvents } from "./useThreadApprovalEvents";
 import { useThreadItemEvents } from "./useThreadItemEvents";
 import { useThreadTurnEvents } from "./useThreadTurnEvents";
 import { useThreadUserInputEvents } from "./useThreadUserInputEvents";
-import type { ThreadAction } from "./useThreadsReducer";
+import type { ThreadAction, ThreadParentOrdering } from "./useThreadsReducer";
 
 const STDERR_BATCH_WINDOW_MS = 350;
 const STDERR_SAMPLE_LIMIT = 3;
@@ -132,7 +132,11 @@ type ThreadEventHandlersOptions = {
   updateThreadParent: (
     parentId: string,
     childIds: string[],
-    options?: { source?: unknown; allowReparent?: boolean },
+    options?: {
+      source?: unknown;
+      allowReparent?: boolean;
+      ordering?: ThreadParentOrdering;
+    },
   ) => void;
   markSubAgentThread?: (threadId: string) => void;
   recordThreadCreatedAt?: (

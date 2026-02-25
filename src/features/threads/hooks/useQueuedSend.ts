@@ -7,6 +7,10 @@ import type {
   WorkspaceInfo,
 } from "../../../types";
 import {
+  flushScheduledLocalStorageWrites,
+  scheduleLocalStorageWrite,
+} from "../../../utils/localStorageWriteScheduler";
+import {
   evaluateThreadStaleState,
   hasRunningCommandExecution,
 } from "./threadStalePolicy";
@@ -112,18 +116,24 @@ function persistQueuedMessagesByThread(
   }
   const sanitized = sanitizeQueuedByThread(queuedByThread);
 
-  try {
-    if (Object.keys(sanitized).length === 0) {
-      window.localStorage.removeItem(QUEUED_MESSAGES_STORAGE_KEY);
-      return;
-    }
-    window.localStorage.setItem(
-      QUEUED_MESSAGES_STORAGE_KEY,
-      JSON.stringify(sanitized),
-    );
-  } catch {
-    // Best-effort persistence.
-  }
+  scheduleLocalStorageWrite(
+    QUEUED_MESSAGES_STORAGE_KEY,
+    () => {
+      try {
+        if (Object.keys(sanitized).length === 0) {
+          window.localStorage.removeItem(QUEUED_MESSAGES_STORAGE_KEY);
+          return;
+        }
+        window.localStorage.setItem(
+          QUEUED_MESSAGES_STORAGE_KEY,
+          JSON.stringify(sanitized),
+        );
+      } catch {
+        // Best-effort persistence.
+      }
+    },
+    { debounceMs: 0, maxWaitMs: 1_000 },
+  );
 }
 
 type UseQueuedSendOptions = {
@@ -572,6 +582,12 @@ export function useQueuedSend({
   useEffect(() => {
     persistQueuedMessagesByThread(queuedByThread);
   }, [queuedByThread]);
+
+  useEffect(() => {
+    return () => {
+      flushScheduledLocalStorageWrites(QUEUED_MESSAGES_STORAGE_KEY);
+    };
+  }, []);
 
   useEffect(() => {
     if (!threadWorkspaceById) {

@@ -20,7 +20,7 @@ import {
   extractSubAgentParentThreadId,
   isSubAgentSource,
 } from "../utils/subAgentSource";
-import type { ThreadAction } from "./useThreadsReducer";
+import type { ThreadAction, ThreadParentOrdering } from "./useThreadsReducer";
 
 type UseThreadTurnEventsOptions = {
   dispatch: Dispatch<ThreadAction>;
@@ -46,7 +46,11 @@ type UseThreadTurnEventsOptions = {
   updateThreadParent: (
     parentId: string,
     childIds: string[],
-    options?: { source?: unknown; allowReparent?: boolean },
+    options?: {
+      source?: unknown;
+      allowReparent?: boolean;
+      ordering?: ThreadParentOrdering;
+    },
   ) => void;
   markSubAgentThread?: (threadId: string) => void;
   recordThreadCreatedAt?: (
@@ -117,6 +121,7 @@ export function useThreadTurnEvents({
         updateThreadParent(sourceParentId, [threadId], {
           source: thread.source,
           allowReparent: true,
+          ordering: { timestamp: activityTimestamp },
         });
       }
       if (isSubAgentSource(thread.source)) {

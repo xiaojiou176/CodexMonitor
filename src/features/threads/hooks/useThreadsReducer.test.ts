@@ -665,6 +665,59 @@ describe("threadReducer", () => {
     expect(next.threadParentById["thread-sibling"]).toBe("thread-other");
   });
 
+  it("allows newer parent ordering updates to override older links", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadParentById: { "thread-child": "thread-parent-old" },
+      threadParentRankById: { "thread-child": 100 },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadParent",
+      threadId: "thread-child",
+      parentId: "thread-parent-new",
+      ordering: { timestamp: 200 },
+    });
+
+    expect(next.threadParentById["thread-child"]).toBe("thread-parent-new");
+    expect(next.threadParentRankById["thread-child"]).toBe(200);
+  });
+
+  it("blocks stale parent ordering updates from overwriting newer links", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadParentById: { "thread-child": "thread-parent-new" },
+      threadParentRankById: { "thread-child": 200 },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadParent",
+      threadId: "thread-child",
+      parentId: "thread-parent-old",
+      ordering: { timestamp: 100 },
+    });
+
+    expect(next.threadParentById["thread-child"]).toBe("thread-parent-new");
+    expect(next.threadParentRankById["thread-child"]).toBe(200);
+  });
+
+  it("keeps setThreadParent calls without ordering backward compatible", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadParentById: { "thread-child": "thread-parent-a" },
+      threadParentRankById: { "thread-child": 200 },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadParent",
+      threadId: "thread-child",
+      parentId: "thread-parent-b",
+    });
+
+    expect(next.threadParentById["thread-child"]).toBe("thread-parent-b");
+    expect(next.threadParentRankById["thread-child"]).toBeUndefined();
+  });
+
   it("applies bulk last-agent updates with timestamp guard", () => {
     const base: ThreadState = {
       ...initialState,
@@ -708,7 +761,7 @@ describe("threadReducer", () => {
       workspaceId: "ws-1",
       threadId: "thread-bg",
     });
-    expect(withThread.threadsByWorkspace["ws-1"]?.some((t) => t.id === "thread-bg")).toBe(true);
+    expect(withThread.threadsByWorkspace["ws-1"]?.some((t) => t.id === "thread-bg")).toBeTruthy();
 
     const hidden = threadReducer(withThread, {
       type: "hideThread",
@@ -731,7 +784,7 @@ describe("threadReducer", () => {
     expect(ids).not.toContain("thread-bg");
   });
 
-  it("falls back active thread to first visible thread when current active disappears after sync", () => {
+  it("anchors active thread into visible list when sync omits it", () => {
     const base: ThreadState = {
       ...initialState,
       activeThreadIdByWorkspace: { "ws-1": "thread-gone" },
@@ -753,6 +806,42 @@ describe("threadReducer", () => {
       ],
     });
 
+    expect(next.activeThreadIdByWorkspace["ws-1"]).toBe("thread-gone");
+    expect(next.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toEqual([
+      "thread-gone",
+      "thread-new-1",
+      "thread-new-2",
+    ]);
+  });
+
+  it("does not anchor hidden active thread when sync omits it", () => {
+    const base: ThreadState = {
+      ...initialState,
+      activeThreadIdByWorkspace: { "ws-1": "thread-hidden" },
+      hiddenThreadIdsByWorkspace: {
+        "ws-1": {
+          "thread-hidden": true,
+        },
+      },
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-hidden", name: "Hidden", updatedAt: 200 }],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "updated_at",
+      threads: [
+        { id: "thread-new-1", name: "New 1", updatedAt: 300 },
+        { id: "thread-new-2", name: "New 2", updatedAt: 250 },
+      ],
+    });
+
     expect(next.activeThreadIdByWorkspace["ws-1"]).toBe("thread-new-1");
+    expect(next.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toEqual([
+      "thread-new-1",
+      "thread-new-2",
+    ]);
   });
 });

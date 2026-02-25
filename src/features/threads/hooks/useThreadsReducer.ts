@@ -148,12 +148,19 @@ type ThreadTurnRuntimeMeta = {
   contextWindow: number | null;
 };
 
+export type ThreadParentOrdering = {
+  timestamp?: number | null;
+  version?: number | null;
+  source?: string | null;
+};
+
 export type ThreadState = {
   activeThreadIdByWorkspace: Record<string, string | null>;
   itemsByThread: Record<string, ConversationItem[]>;
   threadsByWorkspace: Record<string, ThreadSummary[]>;
   hiddenThreadIdsByWorkspace: Record<string, Record<string, true>>;
   threadParentById: Record<string, string>;
+  threadParentRankById: Record<string, number>;
   threadStatusById: Record<string, ThreadActivityStatus>;
   threadResumeLoadingById: Record<string, boolean>;
   threadListLoadingByWorkspace: Record<string, boolean>;
@@ -174,11 +181,17 @@ export type ThreadState = {
 };
 
 export type ThreadAction =
+  | { type: "batch"; actions: ThreadAction[] }
   | { type: "setActiveThreadId"; workspaceId: string; threadId: string | null }
   | { type: "ensureThread"; workspaceId: string; threadId: string }
   | { type: "hideThread"; workspaceId: string; threadId: string }
   | { type: "removeThread"; workspaceId: string; threadId: string }
-  | { type: "setThreadParent"; threadId: string; parentId: string }
+  | {
+      type: "setThreadParent";
+      threadId: string;
+      parentId: string;
+      ordering?: ThreadParentOrdering;
+    }
   | {
       type: "markProcessing";
       threadId: string;
@@ -372,6 +385,7 @@ export const initialState: ThreadState = {
   threadsByWorkspace: {},
   hiddenThreadIdsByWorkspace: {},
   threadParentById: {},
+  threadParentRankById: {},
   threadStatusById: {},
   threadResumeLoadingById: {},
   threadListLoadingByWorkspace: {},
@@ -422,6 +436,27 @@ function normalizeNonEmptyString(value: string | null | undefined) {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeThreadParentRank(ordering?: ThreadParentOrdering): number | null {
+  if (!ordering) {
+    return null;
+  }
+  if (
+    typeof ordering.timestamp === "number"
+    && Number.isFinite(ordering.timestamp)
+    && ordering.timestamp > 0
+  ) {
+    return ordering.timestamp;
+  }
+  if (
+    typeof ordering.version === "number"
+    && Number.isFinite(ordering.version)
+    && ordering.version > 0
+  ) {
+    return ordering.version;
+  }
+  return null;
 }
 
 function normalizeContextWindow(value: number | null | undefined) {
@@ -743,6 +778,16 @@ function isSameThreadStatus(
 
 export function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
   switch (action.type) {
+    case "batch": {
+      if (!action.actions.length) {
+        return state;
+      }
+      let nextState = state;
+      for (const batchedAction of action.actions) {
+        nextState = threadReducer(nextState, batchedAction);
+      }
+      return nextState;
+    }
     case "setActiveThreadId":
       return {
         ...state,
@@ -843,10 +888,17 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       const { [action.threadId]: ____, ...restDiffs } = state.turnDiffByThread;
       const { [action.threadId]: _____, ...restPlans } = state.planByThread;
       const { [action.threadId]: ______, ...restParents } = state.threadParentById;
+      const { [action.threadId]: _______, ...restParentRanks } = state.threadParentRankById;
       const restParentsWithoutRemovedParent = Object.fromEntries(
         Object.entries(restParents).filter(([, parentId]) => parentId !== action.threadId),
       );
-      const { [action.threadId]: _______, ...restTurnMetaByThread } = state.turnMetaByThread;
+      const restParentRanksWithoutRemovedParent = Object.fromEntries(
+        Object.entries(restParentRanks).filter(([threadId]) => {
+          const parentId = restParentsWithoutRemovedParent[threadId];
+          return typeof parentId === "string" && parentId.length > 0;
+        }),
+      );
+      const { [action.threadId]: ________, ...restTurnMetaByThread } = state.turnMetaByThread;
       const restTurnMetaByTurnId = Object.fromEntries(
         Object.entries(state.turnMetaByTurnId).filter(
           ([, meta]) => meta.threadId !== action.threadId,
@@ -864,6 +916,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         turnDiffByThread: restDiffs,
         planByThread: restPlans,
         threadParentById: restParentsWithoutRemovedParent,
+        threadParentRankById: restParentRanksWithoutRemovedParent,
         turnMetaByThread: restTurnMetaByThread,
         turnMetaByTurnId: restTurnMetaByTurnId,
         activeThreadIdByWorkspace: {
@@ -876,14 +929,39 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       if (!action.parentId || action.parentId === action.threadId) {
         return state;
       }
-      if (state.threadParentById[action.threadId] === action.parentId) {
+      const currentParentId = state.threadParentById[action.threadId];
+      const currentRank = state.threadParentRankById[action.threadId] ?? null;
+      const incomingRank = normalizeThreadParentRank(action.ordering);
+      if (
+        incomingRank !== null
+        && currentRank !== null
+        && currentRank > incomingRank
+      ) {
         return state;
+      }
+      const parentUnchanged = currentParentId === action.parentId;
+      const rankUnchanged = incomingRank === currentRank;
+      if (parentUnchanged && (incomingRank === null || rankUnchanged)) {
+        return state;
+      }
+      const nextParentById = {
+        ...state.threadParentById,
+        [action.threadId]: action.parentId,
+      };
+      if (incomingRank === null) {
+        const { [action.threadId]: _, ...restParentRanks } = state.threadParentRankById;
+        return {
+          ...state,
+          threadParentById: nextParentById,
+          threadParentRankById: restParentRanks,
+        };
       }
       return {
         ...state,
-        threadParentById: {
-          ...state.threadParentById,
-          [action.threadId]: action.parentId,
+        threadParentById: nextParentById,
+        threadParentRankById: {
+          ...state.threadParentRankById,
+          [action.threadId]: incomingRank,
         },
       };
     }
@@ -1877,18 +1955,36 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     case "setThreads": {
       const hidden = state.hiddenThreadIdsByWorkspace[action.workspaceId] ?? {};
       const visibleThreads = action.threads.filter((thread) => !hidden[thread.id]);
+      const currentThreads = state.threadsByWorkspace[action.workspaceId] ?? [];
       const activeThreadId = state.activeThreadIdByWorkspace[action.workspaceId] ?? null;
       const activeStillVisible =
         activeThreadId !== null &&
         visibleThreads.some((thread) => thread.id === activeThreadId);
-      const nextActiveThreadId = activeStillVisible
+      const shouldAnchorActive =
+        activeThreadId !== null &&
+        !hidden[activeThreadId] &&
+        !activeStillVisible;
+      const anchoredActiveThread =
+        shouldAnchorActive && activeThreadId
+          ? (currentThreads.find((thread) => thread.id === activeThreadId) ?? {
+              id: activeThreadId,
+              name: "New Agent",
+              updatedAt: 0,
+            })
+          : null;
+      const nextVisibleThreads = anchoredActiveThread
+        ? [anchoredActiveThread, ...visibleThreads]
+        : visibleThreads;
+      const nextActiveThreadId = shouldAnchorActive
         ? activeThreadId
-        : (visibleThreads[0]?.id ?? null);
+        : activeStillVisible
+          ? activeThreadId
+          : (visibleThreads[0]?.id ?? null);
       return {
         ...state,
         threadsByWorkspace: {
           ...state.threadsByWorkspace,
-          [action.workspaceId]: visibleThreads,
+          [action.workspaceId]: nextVisibleThreads,
         },
         activeThreadIdByWorkspace: {
           ...state.activeThreadIdByWorkspace,

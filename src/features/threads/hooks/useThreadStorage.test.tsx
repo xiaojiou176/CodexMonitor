@@ -98,8 +98,8 @@ describe("useThreadStorage", () => {
       pinResult = result.current.pinThread("ws-1", "thread-1");
     });
 
-    expect(pinResult).toBe(true);
-    expect(result.current.isThreadPinned("ws-1", "thread-1")).toBe(true);
+    expect(pinResult).toBeTruthy();
+    expect(result.current.isThreadPinned("ws-1", "thread-1")).toBeTruthy();
     expect(savePinnedThreads).toHaveBeenCalledWith({
       "ws-1:thread-1": expect.any(Number),
     });
@@ -142,6 +142,6 @@ describe("useThreadStorage", () => {
     await waitFor(() => {
       expect(result.current.pinnedThreadsVersion).toBe(versionBefore + 1);
     });
-    expect(result.current.isThreadPinned("ws-1", "thread-2")).toBe(true);
+    expect(result.current.isThreadPinned("ws-1", "thread-2")).toBeTruthy();
   });
 });

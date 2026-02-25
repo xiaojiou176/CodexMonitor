@@ -153,7 +153,7 @@ describe("useThreads UX integration", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.threadStatusById["thread-2"]?.isReviewing).toBe(true);
+      expect(result.current.threadStatusById["thread-2"]?.isReviewing).toBeTruthy();
     });
 
     const activeItems = result.current.activeItems;
@@ -289,8 +289,8 @@ describe("useThreads UX integration", () => {
       const hasRemote = activeItems.some(
         (item) => item.kind === "message" && item.id === "server-user-1",
       );
-      expect(hasLocal).toBe(true);
-      expect(hasRemote).toBe(false);
+      expect(hasLocal).toBeTruthy();
+      expect(hasRemote).toBeFalsy();
     });
   });
 
@@ -602,8 +602,8 @@ describe("useThreads UX integration", () => {
       await result.current.startReview("/review check this");
     });
 
-    expect(result.current.threadStatusById["thread-parent"]?.isReviewing).toBe(true);
-    expect(result.current.threadStatusById["thread-parent"]?.isProcessing).toBe(true);
+    expect(result.current.threadStatusById["thread-parent"]?.isReviewing).toBeTruthy();
+    expect(result.current.threadStatusById["thread-parent"]?.isProcessing).toBeTruthy();
 
     act(() => {
       handlers?.onItemCompleted?.("ws-1", "thread-review-1", {
@@ -612,8 +612,8 @@ describe("useThreads UX integration", () => {
       });
     });
 
-    expect(result.current.threadStatusById["thread-parent"]?.isReviewing).toBe(false);
-    expect(result.current.threadStatusById["thread-parent"]?.isProcessing).toBe(false);
+    expect(result.current.threadStatusById["thread-parent"]?.isReviewing).toBeFalsy();
+    expect(result.current.threadStatusById["thread-parent"]?.isProcessing).toBeFalsy();
     expect(
       result.current.activeItems.some(
         (item) =>
@@ -621,7 +621,7 @@ describe("useThreads UX integration", () => {
           item.role === "assistant" &&
           item.text.includes("[Open review thread](/thread/thread-review-1)"),
       ),
-    ).toBe(true);
+    ).toBeTruthy();
   });
 
   it("does not stack detached completion messages when exit is emitted multiple times", async () => {
@@ -764,8 +764,114 @@ describe("useThreads UX integration", () => {
     });
   });
 
-  it("auto archives sub-agent threads when unread and idle for more than 30 minutes", async () => {
+  it("does not auto archive main-session thread when misflagged as sub-agent", async () => {
     now = 2_000_000;
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "thread-main-misflagged",
+            preview: "Main misflagged",
+            cwd: workspace.path,
+            created_at: 1,
+            updated_at: 1,
+            source: {
+              subAgent: {
+                thread_spawn: {
+                  parent_thread_id: "thread-main-misflagged",
+                  depth: 1,
+                },
+              },
+            },
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(archiveThreads).mockResolvedValue({
+      allSucceeded: true,
+      okIds: ["thread-main-misflagged"],
+      failed: [],
+      total: 1,
+    });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+    await act(async () => {
+      await flushMacrotask();
+    });
+
+    expect(result.current.isSubAgentThread("ws-1", "thread-main-misflagged")).toBeTruthy();
+    expect(result.current.threadParentById["thread-main-misflagged"]).toBeUndefined();
+    expect(vi.mocked(archiveThreads)).not.toHaveBeenCalled();
+  });
+
+  it("blocks auto archive during pre-remove revalidation when thread becomes active", async () => {
+    now = 1_000_000;
+    vi.mocked(listThreads).mockResolvedValue(buildThreadListPayload());
+    vi.mocked(archiveThreads).mockResolvedValue({
+      allSucceeded: true,
+      okIds: ["thread-child"],
+      failed: [],
+      total: 1,
+    });
+    const intervalCallbacks: Array<() => void> = [];
+    const setIntervalSpy = vi.spyOn(window, "setInterval").mockImplementation((...args) => {
+      const [handler, delay] = args;
+      if (typeof handler === "function" && delay === 60 * 1000) {
+        intervalCallbacks.push(handler as () => void);
+      }
+      return 1;
+    });
+    const clearIntervalSpy = vi.spyOn(window, "clearInterval").mockImplementation(() => undefined);
+    try {
+      const { result } = renderHook(() =>
+        useThreads({
+          activeWorkspace: workspace,
+          onWorkspaceConnected: vi.fn(),
+        }),
+      );
+
+      await act(async () => {
+        await result.current.listThreadsForWorkspace(workspace);
+      });
+      await waitFor(() => {
+        expect(result.current.threadParentById["thread-child"]).toBe(
+          "thread-parent",
+        );
+      });
+      act(() => {
+        result.current.setActiveThreadId("thread-parent");
+      });
+      expect(vi.mocked(archiveThreads)).not.toHaveBeenCalled();
+
+      now += 31 * 60 * 1000;
+      act(() => {
+        intervalCallbacks.forEach((callback) => callback());
+        result.current.setActiveThreadId("thread-child");
+      });
+      await act(async () => {
+        await flushMacrotask();
+      });
+
+      expect(result.current.activeThreadId).toBe("thread-child");
+      expect(vi.mocked(archiveThreads)).not.toHaveBeenCalled();
+    } finally {
+      setIntervalSpy.mockRestore();
+      clearIntervalSpy.mockRestore();
+    }
+  });
+
+  it("blocks auto archive during pre-remove revalidation when thread becomes pinned", async () => {
+    now = 1_000_000;
     vi.mocked(listThreads).mockResolvedValue(buildThreadListPayload());
     vi.mocked(archiveThreads).mockResolvedValue({
       allSucceeded: true,
@@ -796,6 +902,62 @@ describe("useThreads UX integration", () => {
       act(() => {
         result.current.setActiveThreadId("thread-parent");
       });
+      expect(vi.mocked(archiveThreads)).not.toHaveBeenCalled();
+
+      now += 31 * 60 * 1000;
+      act(() => {
+        intervalCallbacks.forEach((callback) => callback());
+        result.current.pinThread("ws-1", "thread-child");
+      });
+      await act(async () => {
+        await flushMacrotask();
+      });
+
+      expect(result.current.isThreadPinned("ws-1", "thread-child")).toBeTruthy();
+      expect(vi.mocked(archiveThreads)).not.toHaveBeenCalled();
+    } finally {
+      setIntervalSpy.mockRestore();
+      clearIntervalSpy.mockRestore();
+    }
+  });
+
+  it("auto archives sub-agent threads when unread and idle for more than 30 minutes", async () => {
+    now = 2_000_000;
+    vi.mocked(listThreads).mockResolvedValue(buildThreadListPayload());
+    vi.mocked(archiveThreads).mockResolvedValue({
+      allSucceeded: true,
+      okIds: ["thread-child"],
+      failed: [],
+      total: 1,
+    });
+    const minuteIntervalCallbacks: Array<() => void> = [];
+    const setIntervalSpy = vi.spyOn(window, "setInterval").mockImplementation((...args) => {
+      const [handler, delay] = args;
+      if (typeof handler === "function" && delay === 60 * 1000) {
+        minuteIntervalCallbacks.push(handler as () => void);
+      }
+      return 1;
+    });
+    const clearIntervalSpy = vi.spyOn(window, "clearInterval").mockImplementation(() => undefined);
+    try {
+      const { result } = renderHook(() =>
+        useThreads({
+          activeWorkspace: workspace,
+          onWorkspaceConnected: vi.fn(),
+        }),
+      );
+
+      await act(async () => {
+        await result.current.listThreadsForWorkspace(workspace);
+      });
+      await waitFor(() => {
+        expect(result.current.threadParentById["thread-child"]).toBe(
+          "thread-parent",
+        );
+      });
+      act(() => {
+        result.current.setActiveThreadId("thread-parent");
+      });
 
       act(() => {
         handlers?.onAgentMessageCompleted?.({
@@ -810,25 +972,32 @@ describe("useThreads UX integration", () => {
         await flushMacrotask();
       });
 
-      expect(result.current.threadStatusById["thread-child"]?.hasUnread).toBe(true);
-      expect(result.current.threadStatusById["thread-child"]?.isProcessing).toBe(false);
-      expect(result.current.threadStatusById["thread-child"]?.isReviewing).toBe(false);
-      expect(result.current.isSubAgentThread("ws-1", "thread-child")).toBe(true);
+      expect(result.current.threadStatusById["thread-child"]?.hasUnread).toBeTruthy();
+      expect(result.current.threadStatusById["thread-child"]?.isProcessing).toBeFalsy();
+      expect(result.current.threadStatusById["thread-child"]?.isReviewing).toBeFalsy();
+      expect(result.current.isSubAgentThread("ws-1", "thread-child")).toBeTruthy();
       expect(result.current.activeThreadId).toBe("thread-parent");
-      const persistedActivityRaw = localStorage.getItem(
-        "codexmonitor.threadLastUserActivity",
-      );
-      expect(persistedActivityRaw).toBeTruthy();
-      const persistedActivity = JSON.parse(persistedActivityRaw ?? "{}") as Record<
-        string,
-        Record<string, number>
-      >;
-      expect(persistedActivity["ws-1"]?.["thread-child"]).toBeGreaterThan(0);
+      await waitFor(() => {
+        const persistedActivityRaw = localStorage.getItem(
+          "codexmonitor.threadLastUserActivity",
+        );
+        expect(persistedActivityRaw).toBeTruthy();
+        const persistedActivity = JSON.parse(persistedActivityRaw ?? "{}") as Record<
+          string,
+          Record<string, number>
+        >;
+        expect(persistedActivity["ws-1"]?.["thread-child"]).toBeGreaterThan(0);
+      });
+      await waitFor(() => {
+        expect(minuteIntervalCallbacks.length).toBeGreaterThan(0);
+      });
 
-      expect(intervalCallbacks.length).toBeGreaterThan(0);
       now += 31 * 60 * 1000;
       act(() => {
-        intervalCallbacks.forEach((callback) => callback());
+        minuteIntervalCallbacks[minuteIntervalCallbacks.length - 1]?.();
+      });
+      await act(async () => {
+        await flushMacrotask();
       });
 
       await waitFor(() => {
@@ -880,9 +1049,9 @@ describe("useThreads UX integration", () => {
       await flushMacrotask();
     });
 
-    expect(result.current.threadStatusById["thread-child"]?.hasUnread).toBe(true);
-    expect(result.current.threadStatusById["thread-child"]?.isProcessing).toBe(false);
-    expect(result.current.threadStatusById["thread-child"]?.isReviewing).toBe(false);
+    expect(result.current.threadStatusById["thread-child"]?.hasUnread).toBeTruthy();
+    expect(result.current.threadStatusById["thread-child"]?.isProcessing).toBeFalsy();
+    expect(result.current.threadStatusById["thread-child"]?.isReviewing).toBeFalsy();
 
     now += 30 * 60 * 1000;
 
@@ -942,9 +1111,9 @@ describe("useThreads UX integration", () => {
       await flushMacrotask();
     });
 
-    expect(result.current.threadStatusById["thread-child"]?.isProcessing).toBe(true);
-    expect(result.current.threadStatusById["thread-child"]?.isReviewing).toBe(true);
-    expect(result.current.threadStatusById["thread-child"]?.hasUnread).toBe(true);
+    expect(result.current.threadStatusById["thread-child"]?.isProcessing).toBeTruthy();
+    expect(result.current.threadStatusById["thread-child"]?.isReviewing).toBeTruthy();
+    expect(result.current.threadStatusById["thread-child"]?.hasUnread).toBeTruthy();
     expect(vi.mocked(archiveThreads)).not.toHaveBeenCalled();
   });
 
@@ -987,9 +1156,9 @@ describe("useThreads UX integration", () => {
       await flushMacrotask();
     });
 
-    expect(result.current.threadStatusById["thread-child"]?.hasUnread).toBe(true);
-    expect(result.current.threadStatusById["thread-child"]?.isProcessing).toBe(false);
-    expect(result.current.threadStatusById["thread-child"]?.isReviewing).toBe(false);
+    expect(result.current.threadStatusById["thread-child"]?.hasUnread).toBeTruthy();
+    expect(result.current.threadStatusById["thread-child"]?.isProcessing).toBeFalsy();
+    expect(result.current.threadStatusById["thread-child"]?.isReviewing).toBeFalsy();
     expect(result.current.threadParentById["thread-child"]).toBeUndefined();
 
     now += 31 * 60 * 1000;

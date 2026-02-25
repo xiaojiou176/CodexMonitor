@@ -1,4 +1,5 @@
 import type { AccessMode } from "../../../types";
+import { scheduleLocalStorageWrite } from "../../../utils/localStorageWriteScheduler";
 
 const STORAGE_KEY_THREAD_ACTIVITY = "codexmonitor.threadLastUserActivity";
 export const STORAGE_KEY_PINNED_THREADS = "codexmonitor.pinnedThreads";
@@ -88,14 +89,20 @@ export function saveThreadActivity(activity: ThreadActivityMap) {
   if (typeof window === "undefined") {
     return;
   }
-  try {
-    window.localStorage.setItem(
-      STORAGE_KEY_THREAD_ACTIVITY,
-      JSON.stringify(activity),
-    );
-  } catch {
-    // Best-effort persistence; ignore write failures.
-  }
+  scheduleLocalStorageWrite(
+    STORAGE_KEY_THREAD_ACTIVITY,
+    () => {
+      try {
+        window.localStorage.setItem(
+          STORAGE_KEY_THREAD_ACTIVITY,
+          JSON.stringify(activity),
+        );
+      } catch {
+        // Best-effort persistence; ignore write failures.
+      }
+    },
+    { debounceMs: 0, maxWaitMs: 1_000 },
+  );
 }
 
 export function makeCustomNameKey(workspaceId: string, threadId: string): string {

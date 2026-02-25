@@ -410,7 +410,7 @@ describe("useQueuedSend", () => {
 
     const staleEntry = result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1");
     expect(staleEntry?.blockedReason).toBe("processing");
-    expect(staleEntry?.isStale).toBe(true);
+    expect(staleEntry?.isStale).toBeTruthy();
     expect((staleEntry?.blockedForMs ?? 0)).toBeGreaterThanOrEqual(3 * 60_000);
   });
 

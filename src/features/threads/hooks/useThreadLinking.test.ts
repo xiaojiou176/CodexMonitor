@@ -112,4 +112,30 @@ describe("useThreadLinking", () => {
     expect(onCollabLinkedThread).toHaveBeenNthCalledWith(1, "thread-child-a");
     expect(onCollabLinkedThread).toHaveBeenNthCalledWith(2, "thread-child-b");
   });
+
+  it("forwards available ordering timestamp to setThreadParent", () => {
+    const dispatch = vi.fn();
+
+    const { result } = renderHook(() =>
+      useThreadLinking({
+        dispatch,
+        threadParentById: {},
+      }),
+    );
+
+    act(() => {
+      result.current.updateThreadParent("thread-parent", ["thread-child"], {
+        source: {
+          updated_at: 1234,
+        },
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadParent",
+      threadId: "thread-child",
+      parentId: "thread-parent",
+      ordering: { timestamp: 1234 },
+    });
+  });
 });

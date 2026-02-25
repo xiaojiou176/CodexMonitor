@@ -30,7 +30,11 @@ import {
 } from "../utils/threadNormalize";
 import { saveThreadActivity } from "../utils/threadStorage";
 import { extractSubAgentParentThreadId, isSubAgentSource } from "../utils/subAgentSource";
-import type { ThreadAction, ThreadState } from "./useThreadsReducer";
+import type {
+  ThreadAction,
+  ThreadParentOrdering,
+  ThreadState,
+} from "./useThreadsReducer";
 
 const THREAD_LIST_TARGET_COUNT = 20;
 const THREAD_LIST_PAGE_SIZE = 100;
@@ -219,7 +223,11 @@ type UseThreadActionsOptions = {
   updateThreadParent: (
     parentId: string,
     childIds: string[],
-    options?: { source?: unknown; allowReparent?: boolean },
+    options?: {
+      source?: unknown;
+      allowReparent?: boolean;
+      ordering?: ThreadParentOrdering;
+    },
   ) => void;
   markSubAgentThread?: (threadId: string) => void;
   recordThreadCreatedAt?: (
@@ -372,18 +380,19 @@ export function useThreadActions({
         if (thread) {
           dispatch({ type: "ensureThread", workspaceId, threadId });
           applyCollabThreadLinksFromThread(threadId, thread);
+          const threadTimestamp = getThreadTimestamp(thread);
+          const fallbackTimestamp = threadTimestamp > 0 ? threadTimestamp : Date.now();
           const sourceParentId = extractSubAgentParentThreadId(thread.source);
           if (sourceParentId) {
             updateThreadParent(sourceParentId, [threadId], {
               source: thread.source,
               allowReparent: true,
+              ordering: { timestamp: fallbackTimestamp },
             });
           }
           if (isSubAgentSource(thread.source)) {
             markSubAgentThread?.(threadId);
           }
-          const threadTimestamp = getThreadTimestamp(thread);
-          const fallbackTimestamp = threadTimestamp > 0 ? threadTimestamp : Date.now();
           recordThreadCreatedAt?.(
             threadId,
             getThreadCreatedTimestamp(thread),
@@ -687,18 +696,19 @@ export function useThreadActions({
           if (!threadId) {
             return;
           }
+          const threadTimestamp = getThreadTimestamp(thread);
+          const fallbackTimestamp = threadTimestamp > 0 ? threadTimestamp : Date.now();
           const sourceParentId = extractSubAgentParentThreadId(thread.source);
           if (sourceParentId) {
             updateThreadParent(sourceParentId, [threadId], {
               source: thread.source,
               allowReparent: true,
+              ordering: { timestamp: fallbackTimestamp },
             });
           }
           if (isSubAgentSource(thread.source)) {
             markSubAgentThread?.(threadId);
           }
-          const threadTimestamp = getThreadTimestamp(thread);
-          const fallbackTimestamp = threadTimestamp > 0 ? threadTimestamp : Date.now();
           recordThreadCreatedAt?.(
             threadId,
             getThreadCreatedTimestamp(thread),
@@ -910,18 +920,19 @@ export function useThreadActions({
           if (!id || existingIds.has(id)) {
             return;
           }
+          const threadTimestamp = getThreadTimestamp(thread);
+          const fallbackTimestamp = threadTimestamp > 0 ? threadTimestamp : Date.now();
           const sourceParentId = extractSubAgentParentThreadId(thread.source);
           if (sourceParentId) {
             updateThreadParent(sourceParentId, [id], {
               source: thread.source,
               allowReparent: true,
+              ordering: { timestamp: fallbackTimestamp },
             });
           }
           if (isSubAgentSource(thread.source)) {
             markSubAgentThread?.(id);
           }
-          const threadTimestamp = getThreadTimestamp(thread);
-          const fallbackTimestamp = threadTimestamp > 0 ? threadTimestamp : Date.now();
           recordThreadCreatedAt?.(
             id,
             getThreadCreatedTimestamp(thread),

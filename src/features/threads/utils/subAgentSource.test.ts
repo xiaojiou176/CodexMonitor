@@ -50,7 +50,7 @@ describe("subAgentSource", () => {
           thread_spawn: { parent_thread_id: "parent-a" },
         },
       }),
-    ).toBe(true);
+    ).toBeTruthy();
 
     expect(
       isSubAgentSource({
@@ -58,7 +58,7 @@ describe("subAgentSource", () => {
           threadSpawn: { parentThreadId: "parent-b" },
         },
       }),
-    ).toBe(true);
+    ).toBeTruthy();
 
     expect(
       isSubAgentSource({
@@ -66,7 +66,7 @@ describe("subAgentSource", () => {
           thread_spawn: {},
         },
       }),
-    ).toBe(true);
+    ).toBeTruthy();
 
     expect(isSubAgentSource({ source: "vscode" })).toBe(false);
   });

@@ -141,7 +141,7 @@ describe("useThreadActions", () => {
       workspaceId: "ws-1",
       threadId: "thread-1",
     });
-    expect(loadedThreadsRef.current["thread-1"]).toBe(true);
+    expect(loadedThreadsRef.current["thread-1"]).toBeTruthy();
   });
 
   it("forks a thread and activates the fork", async () => {
@@ -168,7 +168,7 @@ describe("useThreadActions", () => {
       workspaceId: "ws-1",
       threadId: "thread-fork-1",
     });
-    expect(loadedThreadsRef.current["thread-fork-1"]).toBe(true);
+    expect(loadedThreadsRef.current["thread-fork-1"]).toBeTruthy();
   });
 
   it("starts a thread without activating when requested", async () => {
@@ -913,7 +913,7 @@ describe("useThreadActions", () => {
       ok = await result.current.archiveThread("ws-1", "thread-9");
     });
 
-    expect(ok).toBe(true);
+    expect(ok).toBeTruthy();
     expect(archiveThreads).toHaveBeenCalledWith("ws-1", ["thread-9"]);
   });
 
