@@ -276,6 +276,30 @@ function extractCodeFromPre(node?: PreProps["node"]) {
   };
 }
 
+function copyWithExecCommand(value: string) {
+  if (typeof document.execCommand !== "function") {
+    return false;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  textarea.style.top = "0";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  try {
+    return document.execCommand("copy");
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
 function LinkBlock({ urls }: LinkBlockProps) {
   return (
     <div className="markdown-linkblock">
@@ -669,7 +693,18 @@ function CodeBlock({ className, value, copyUseModifier }: CodeBlockProps) {
     try {
       const shouldFence = copyUseModifier ? event.altKey : true;
       const nextValue = shouldFence ? fencedValue : value;
-      await navigator.clipboard.writeText(nextValue);
+      let copiedWithClipboardApi = false;
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(nextValue);
+          copiedWithClipboardApi = true;
+        } catch {
+          copiedWithClipboardApi = false;
+        }
+      }
+      if (!copiedWithClipboardApi && !copyWithExecCommand(nextValue)) {
+        return;
+      }
       setCopied(true);
       if (copyTimeoutRef.current) {
         window.clearTimeout(copyTimeoutRef.current);
