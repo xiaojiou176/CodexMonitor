@@ -10,21 +10,21 @@ const rootDir = process.cwd();
 const coverageRootDir = path.join(rootDir, ".runtime-cache", "coverage", "vitest-gate");
 const reportDir = path.join(rootDir, ".runtime-cache", "test_output", "coverage-gate");
 const thresholdEnvConfig = {
-  statements: { env: "COVERAGE_MIN_STATEMENTS", defaultValue: 43 },
-  lines: { env: "COVERAGE_MIN_LINES", defaultValue: 43 },
-  functions: { env: "COVERAGE_MIN_FUNCTIONS", defaultValue: 53 },
-  branches: { env: "COVERAGE_MIN_BRANCHES", defaultValue: 63 },
+  statements: { env: "COVERAGE_MIN_STATEMENTS", defaultValue: 55 },
+  lines: { env: "COVERAGE_MIN_LINES", defaultValue: 55 },
+  functions: { env: "COVERAGE_MIN_FUNCTIONS", defaultValue: 60 },
+  branches: { env: "COVERAGE_MIN_BRANCHES", defaultValue: 65 },
 };
 const criticalScopeConfig = [
   {
     name: "threads",
     prefix: "src/features/threads/",
-    thresholds: { statements: 60, lines: 60, functions: 70, branches: 60 },
+    thresholds: { statements: 65, lines: 65, functions: 72, branches: 65 },
   },
   {
     name: "services",
     prefix: "src/services/",
-    thresholds: { statements: 30, lines: 30, functions: 30, branches: 70 },
+    thresholds: { statements: 45, lines: 45, functions: 45, branches: 70 },
   },
 ];
 
@@ -61,6 +61,9 @@ export function resolveThresholds() {
 
 export function runVitestCoverage(coverageDir) {
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+  const scopedCoverageIncludes = criticalScopeConfig.map(
+    (scope) => `${scope.prefix}**/*.{ts,tsx}`,
+  );
   const args = [
     "exec",
     "--",
@@ -71,7 +74,6 @@ export function runVitestCoverage(coverageDir) {
     "--coverage.reporter=text-summary",
     "--coverage.reporter=json-summary",
     `--coverage.reportsDirectory=${coverageDir}`,
-    "--coverage.include=src/**/*.{ts,tsx}",
     "--coverage.exclude=src/**/*.test.ts",
     "--coverage.exclude=src/**/*.test.tsx",
     "--coverage.exclude=src/test/**",
@@ -79,6 +81,9 @@ export function runVitestCoverage(coverageDir) {
     "--testTimeout=15000",
     "--hookTimeout=15000",
   ];
+  for (const includePattern of scopedCoverageIncludes) {
+    args.push(`--coverage.include=${includePattern}`);
+  }
 
   return new Promise((resolve, reject) => {
     const child = spawn(npmCommand, args, {

@@ -3,23 +3,29 @@ name: Release
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
+env:
+  NODE_VERSION: "20.17.0"
+  RUST_VERSION: "1.80.1"
+
+permissions: {}
 
 jobs:
   quality_gate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
       - name: Install frontend dependencies
         run: npm ci
       - name: Lint
@@ -40,16 +46,20 @@ jobs:
 
   security_gate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
       - name: Install frontend dependencies
         run: npm ci
       - name: npm audit (high+)
@@ -67,6 +77,8 @@ jobs:
     runs-on: macos-latest
     environment: release
     needs: [quality_gate, security_gate]
+    permissions:
+      contents: read
     env:
       CODESIGN_IDENTITY: ${{ vars.CODESIGN_IDENTITY }}
       NOTARY_PROFILE_NAME: ${{ vars.NOTARY_PROFILE_NAME }}
@@ -83,11 +95,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
@@ -221,6 +235,8 @@ jobs:
     runs-on: ${{ matrix.platform }}
     environment: release
     needs: [quality_gate, security_gate]
+    permissions:
+      contents: read
     env:
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       TAURI_SIGNING_PRIVATE_KEY_B64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_B64 }}
@@ -243,11 +259,13 @@ jobs:
       - name: setup node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
@@ -296,6 +314,8 @@ jobs:
     runs-on: windows-latest
     environment: release
     needs: [quality_gate, security_gate]
+    permissions:
+      contents: read
     env:
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       TAURI_SIGNING_PRIVATE_KEY_B64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_B64 }}
@@ -305,11 +325,13 @@ jobs:
       - name: setup node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
@@ -366,6 +388,9 @@ jobs:
       - build_macos
       - build_linux
       - build_windows
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -439,9 +464,13 @@ jobs:
           )
 
           SIGNATURE=$(cat release-artifacts/CodexMonitor.app.tar.gz.sig)
-          LAST_TAG=$(git tag --sort=-version:refname \
-            | grep -v "^v${VERSION}$" \
-            | head -n 1 || true)
+          LAST_TAG=""
+          while IFS= read -r tag_name; do
+            if [ "$tag_name" != "v${VERSION}" ]; then
+              LAST_TAG="$tag_name"
+              break
+            fi
+          done < <(git tag --sort=-version:refname)
           RANGE_END="${GITHUB_SHA}"
           if [ -n "$LAST_TAG" ]; then
             git log "${LAST_TAG}..${RANGE_END}" --pretty=format:"%s" > release-artifacts/release-commits.txt
@@ -601,7 +630,22 @@ jobs:
           print(f"Validated {len(payload.get('platforms', {}))} latest.json platform URL(s).")
           PY
 
-      - name: Create GitHub release
+      - name: Generate artifact digest manifest
+        run: |
+          set -euo pipefail
+          mapfile -t artifacts < <(find release-artifacts -type f | sort)
+          if [ ${#artifacts[@]} -eq 0 ]; then
+            echo "No artifacts found to hash"
+            exit 1
+          fi
+          sha256sum "${artifacts[@]}" > release-artifacts/SHA256SUMS
+
+      - name: Verify artifact digest manifest
+        run: |
+          set -euo pipefail
+          (cd release-artifacts && sha256sum -c SHA256SUMS)
+
+      - name: Create GitHub release atomically
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -614,12 +658,25 @@ jobs:
           print(data["version"])
           PY
           )
+          TAG="v${VERSION}"
+          cleanup_release() {
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release delete "$TAG" -y --cleanup-tag >/dev/null 2>&1
+            fi
+          }
+          trap cleanup_release ERR
 
           shopt -s nullglob globstar
+          mapfile -t dmgs < <(find release-artifacts -type f -name 'CodexMonitor_*_aarch64.dmg' | sort)
           appimages=(release-artifacts/**/*.AppImage*)
           mapfile -t rpms < <(find release-artifacts -type f -name '*.rpm' | sort)
           mapfile -t windows_exes < <(find release-artifacts -type f -name '*.exe*' | sort)
           mapfile -t windows_msis < <(find release-artifacts -type f -name '*.msi*' | sort)
+          if [ ${#dmgs[@]} -eq 0 ]; then
+            echo "No macOS DMG artifacts found for release upload"
+            find release-artifacts -type f | sort
+            exit 1
+          fi
           if [ ${#rpms[@]} -eq 0 ]; then
             echo "No RPM artifacts found for release upload"
             find release-artifacts -type f | sort
@@ -636,19 +693,40 @@ jobs:
             exit 1
           fi
 
-          gh release create "v${VERSION}" \
-            --title "v${VERSION}" \
+          release_assets=(
+            release-artifacts/CodexMonitor.zip
+            "${dmgs[@]}"
+            release-artifacts/CodexMonitor.app.tar.gz
+            release-artifacts/CodexMonitor.app.tar.gz.sig
+            "${appimages[@]}"
+            "${rpms[@]}"
+            "${windows_exes[@]}"
+            "${windows_msis[@]}"
+            release-artifacts/latest.json
+            release-artifacts/SHA256SUMS
+          )
+
+          gh release create "$TAG" \
+            --title "$TAG" \
             --notes-file release-artifacts/release-notes.md \
             --target "$GITHUB_SHA" \
-            release-artifacts/CodexMonitor.zip \
-            release-artifacts/CodexMonitor_*_aarch64.dmg \
-            release-artifacts/CodexMonitor.app.tar.gz \
-            release-artifacts/CodexMonitor.app.tar.gz.sig \
-            "${appimages[@]}" \
-            "${rpms[@]}" \
-            "${windows_exes[@]}" \
-            "${windows_msis[@]}" \
-            release-artifacts/latest.json
+            --draft
+
+          gh release upload "$TAG" "${release_assets[@]}"
+
+          mapfile -t uploaded_assets < <(gh release view "$TAG" --json assets --jq '.assets[].name' | sort -u)
+          mapfile -t expected_assets < <(printf '%s\n' "${release_assets[@]##*/}" | sort -u)
+          if [ "${#uploaded_assets[@]}" -ne "${#expected_assets[@]}" ]; then
+            echo "Uploaded asset count mismatch: expected ${#expected_assets[@]}, got ${#uploaded_assets[@]}"
+            exit 1
+          fi
+          if [ "$(printf '%s\n' "${uploaded_assets[@]}")" != "$(printf '%s\n' "${expected_assets[@]}")" ]; then
+            echo "Uploaded asset names do not match expected list"
+            exit 1
+          fi
+
+          gh release edit "$TAG" --draft=false
+          trap - ERR
 
       - name: Bump version and open PR
         env:

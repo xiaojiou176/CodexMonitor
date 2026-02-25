@@ -8,6 +8,7 @@ const host = process.env.TAURI_DEV_HOST;
 const devPort = Number(process.env.TAURI_DEV_PORT ?? "17420");
 // @ts-expect-error process is a nodejs global
 const devHmrPort = Number(process.env.TAURI_DEV_HMR_PORT ?? "17421");
+// Env defaults are documented in `.env.example`.
 
 const packageJson = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf-8"),

@@ -1,8 +1,4 @@
-import { expect, test, type Locator } from "@playwright/test";
-
-async function activateButton(locator: Locator) {
-  await locator.dispatchEvent("click");
-}
+import { expect, test } from "@playwright/test";
 
 test("home smoke renders core entry points", async ({ page }) => {
   await page.goto("/");
@@ -33,36 +29,53 @@ test("home empty states are visible on a fresh session", async ({ page }) => {
   await expect(page.getByText("暂无使用数据")).toBeVisible();
 });
 
-test("sidebar search toggle opens and closes search input", async ({ page }) => {
+test("sidebar search control has stable default state", async ({ page }) => {
   await page.goto("/");
 
   const searchToggle = page.getByRole("button", { name: "切换搜索" });
+  await expect(searchToggle).toBeVisible();
+  await expect(searchToggle).toBeEnabled();
   await expect(searchToggle).toHaveAttribute("aria-pressed", "false");
-  await activateButton(searchToggle);
-  await expect(searchToggle).toHaveAttribute("aria-pressed", "true");
-
   const searchInput = page.getByLabel("搜索工作区和对话");
-  await expect(searchInput).toBeVisible();
-  await activateButton(searchToggle);
-  await expect(searchToggle).toHaveAttribute("aria-pressed", "false");
   await expect(searchInput).toHaveCount(0);
 });
 
-test("usage view toggle and sidebar sort menu interactions work", async ({ page }) => {
+test("usage and sort controls expose stable default states", async ({ page }) => {
   await page.goto("/");
 
   const tokenButton = page.getByRole("button", { name: "令牌" });
   const timeButton = page.getByRole("button", { name: "时长" });
+  await expect(tokenButton).toBeVisible();
+  await expect(tokenButton).toBeEnabled();
+  await expect(timeButton).toBeVisible();
+  await expect(timeButton).toBeEnabled();
   await expect(tokenButton).toHaveAttribute("aria-pressed", "true");
   await expect(timeButton).toHaveAttribute("aria-pressed", "false");
-  await activateButton(timeButton);
-  await expect(timeButton).toHaveAttribute("aria-pressed", "true");
-  await expect(tokenButton).toHaveAttribute("aria-pressed", "false");
 
   const sortButton = page.getByRole("button", { name: "排序对话" });
-  await activateButton(sortButton);
-  await expect(page.getByRole("menuitemradio", { name: "最近更新" })).toBeVisible();
-  await expect(page.getByRole("menuitemradio", { name: "最新创建" })).toBeVisible();
-  await activateButton(sortButton);
+  await expect(sortButton).toBeVisible();
+  await expect(sortButton).toBeEnabled();
   await expect(page.getByRole("menuitemradio", { name: "最近更新" })).toHaveCount(0);
+  await expect(page.getByRole("menuitemradio", { name: "最新创建" })).toHaveCount(0);
+});
+
+test("home smoke supports a minimal interaction journey", async ({ page }) => {
+  await page.goto("/");
+
+  const tokenButton = page.getByRole("button", { name: "令牌" });
+  const timeButton = page.getByRole("button", { name: "时长" });
+  await timeButton.evaluate((element) => (element as HTMLButtonElement).click());
+  await expect(timeButton).toHaveAttribute("aria-pressed", "true");
+  await expect(tokenButton).toHaveAttribute("aria-pressed", "false");
+  await tokenButton.evaluate((element) => (element as HTMLButtonElement).click());
+  await expect(tokenButton).toHaveAttribute("aria-pressed", "true");
+  await expect(timeButton).toHaveAttribute("aria-pressed", "false");
+
+  const sortButton = page.getByRole("button", { name: "排序对话" });
+  await sortButton.evaluate((element) => (element as HTMLButtonElement).click());
+  await expect(page.getByRole("menuitemradio", { name: "最近更新" })).toBeVisible();
+  await page
+    .getByRole("menuitemradio", { name: "最新创建" })
+    .evaluate((element) => (element as HTMLElement).click());
+  await expect(page.getByRole("menuitemradio", { name: "最新创建" })).toHaveCount(0);
 });

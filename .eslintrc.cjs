@@ -1,3 +1,53 @@
+const hasJestPlugin = (() => {
+  try {
+    require.resolve("eslint-plugin-jest");
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+const antiFalseGreenTestRules = {
+  "no-restricted-syntax": [
+    "error",
+    {
+      selector:
+        "CallExpression[callee.object.callee.name='expect'][callee.property.name=/^(toBe|toEqual|toStrictEqual)$/][arguments.0.value=true]",
+      message:
+        "Avoid placebo assertions like expect(true).toBe(true); assert real behavior instead.",
+    },
+    {
+      selector:
+        "CallExpression[callee.object.callee.name='expect'][callee.property.name='not'][parent.type='MemberExpression']",
+      message:
+        "Avoid weak negative assertion chains that can mask false-green tests; assert concrete outcomes.",
+    },
+    {
+      selector:
+        "AwaitExpression > CallExpression[callee.object.name='page'][callee.property.name='waitForTimeout']",
+      message:
+        "Avoid hard sleeps in tests; use deterministic waits like expect(...).toBeVisible() or waitForResponse().",
+    },
+  ],
+  "no-restricted-properties": [
+    "error",
+    { object: "it", property: "only", message: "Do not commit focused tests (`it.only`)." },
+    { object: "test", property: "only", message: "Do not commit focused tests (`test.only`)." },
+    { object: "describe", property: "only", message: "Do not commit focused suites (`describe.only`)." },
+    { object: "it", property: "skip", message: "Do not commit skipped tests (`it.skip`)." },
+    { object: "test", property: "skip", message: "Do not commit skipped tests (`test.skip`)." },
+  ],
+  ...(hasJestPlugin
+    ? {
+        "jest/expect-expect": "error",
+        "jest/no-commented-out-tests": "error",
+        "jest/no-conditional-expect": "error",
+        "jest/valid-expect-in-promise": "error",
+        "jest/valid-expect": "error",
+      }
+    : {}),
+};
+
 module.exports = {
   root: true,
   env: {
@@ -15,7 +65,7 @@ module.exports = {
       version: 'detect',
     },
   },
-  plugins: ['@typescript-eslint', 'react', 'react-hooks'],
+  plugins: ['@typescript-eslint', 'react', 'react-hooks', ...(hasJestPlugin ? ['jest'] : [])],
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
@@ -39,6 +89,16 @@ module.exports = {
   overrides: [
     {
       files: ['**/*.ts', '**/*.tsx'],
+    },
+    {
+      files: [
+        '**/*.test.ts',
+        '**/*.test.tsx',
+        '**/*.spec.ts',
+        '**/*.spec.tsx',
+        'e2e/**/*.ts',
+      ],
+      rules: antiFalseGreenTestRules,
     },
     {
       files: [
@@ -187,7 +247,7 @@ module.exports = {
             selector:
               "JSXOpeningElement[name.name='div'] > JSXAttribute[name.name='role'][value.value=/^(menu|listbox)$/]",
             message:
-              'Use `PopoverSurface` for popover/dropdown shell semantics instead of raw `<div role=\"menu|listbox\">` wrappers.',
+              'Use `PopoverSurface` for popover/dropdown shell semantics instead of raw `<div role="menu|listbox">` wrappers.',
           },
           {
             selector:

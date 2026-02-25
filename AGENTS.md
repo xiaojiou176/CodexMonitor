@@ -10,6 +10,37 @@ CodexMonitor is a Tauri app that orchestrates Codex agents across local workspac
 - Backend (daemon): `src-tauri/src/bin/codex_monitor_daemon.rs`
 - Shared backend domain logic: `src-tauri/src/shared/*`
 
+## Environment Variables
+
+Use `CodexMonitor/.env.example` as the canonical template.
+
+- `VITE_SENTRY_DSN`: optional frontend telemetry DSN.
+- `TAURI_DEV_HOST` / `TAURI_DEV_PORT` / `TAURI_DEV_HMR_PORT`: local dev host and ports.
+- `PLAYWRIGHT_WEB_PORT` / `PLAYWRIGHT_BASE_URL`: E2E target port/base URL.
+
+### Env Safety Policy
+
+- Commit only template-safe values in tracked `.env*` files.
+- Never commit real secrets, API keys, or production tokens.
+- Use empty placeholders for sensitive keys and inject real values via local/devops environment.
+
+### Package Manager and Lockfile Policy
+
+- `AionUi` uses npm as the source of truth (`packageManager: npm`).
+- Keep `AionUi/package-lock.json` in sync with `AionUi/package.json` via `npm install --package-lock-only`.
+- Do not maintain mixed lock strategies for the same package (`bun.lock` vs `package-lock.json`) in `AionUi`.
+
+### App-Server Boolean Parsing Policy
+
+- Never use `Boolean(rawValue)` for app-server payload fields.
+- Parse booleans explicitly (`"true"`/`"false"`, `1`/`0`, or boolean literals) to avoid string coercion bugs.
+
+### Terminal Tabs A11y Contract
+
+- Use a real button element with `role="tab"` for each terminal tab trigger.
+- Do not nest other interactive controls inside a tab trigger.
+- Keep close actions as separate focusable controls so keyboard users can select and close tabs predictably.
+
 ## Backend Architecture
 
 The backend separates shared domain logic from environment wiring.
