@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { spawn } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 const rootDir = process.cwd();
 const coverageRootDir = path.join(rootDir, ".runtime-cache", "coverage", "vitest-gate");
@@ -27,12 +28,12 @@ const criticalScopeConfig = [
   },
 ];
 
-function buildRunId() {
+export function buildRunId() {
   const random = Math.random().toString(36).slice(2, 8);
   return `${Date.now()}-${process.pid}-${random}`;
 }
 
-function parseThresholdValue(metric, envKey, defaultValue) {
+export function parseThresholdValue(metric, envKey, defaultValue) {
   const raw = process.env[envKey];
   if (raw === undefined || raw.trim() === "") {
     return { value: defaultValue, source: "default" };
@@ -47,7 +48,7 @@ function parseThresholdValue(metric, envKey, defaultValue) {
   return { value: parsed, source: "env" };
 }
 
-function resolveThresholds() {
+export function resolveThresholds() {
   const thresholds = {};
   const thresholdSources = {};
   for (const [metric, config] of Object.entries(thresholdEnvConfig)) {
@@ -58,7 +59,7 @@ function resolveThresholds() {
   return { thresholds, thresholdSources };
 }
 
-function runVitestCoverage(coverageDir) {
+export function runVitestCoverage(coverageDir) {
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
   const args = [
     "exec",
@@ -93,7 +94,7 @@ function runVitestCoverage(coverageDir) {
   });
 }
 
-function readPct(total, metric) {
+export function readPct(total, metric) {
   const value = total?.[metric]?.pct;
   if (typeof value !== "number" || Number.isNaN(value)) {
     throw new Error(`coverage-summary missing metric: ${metric}`);
@@ -101,11 +102,11 @@ function readPct(total, metric) {
   return Number(value.toFixed(2));
 }
 
-function normalizePath(value) {
+export function normalizePath(value) {
   return String(value).replaceAll("\\", "/");
 }
 
-function aggregateScopeCoverage(summary, prefix) {
+export function aggregateScopeCoverage(summary, prefix) {
   const normalizedPrefix = normalizePath(prefix);
   const metricTotals = {
     statements: { covered: 0, total: 0 },
@@ -147,7 +148,7 @@ function aggregateScopeCoverage(summary, prefix) {
   };
 }
 
-function collectGlobalFailures(thresholds, actualValues) {
+export function collectGlobalFailures(thresholds, actualValues) {
   const failures = [];
   for (const [metric, minValue] of Object.entries(thresholds)) {
     const actual = actualValues[metric];
@@ -158,7 +159,7 @@ function collectGlobalFailures(thresholds, actualValues) {
   return failures;
 }
 
-function collectCriticalScopeFailures(criticalScopes) {
+export function collectCriticalScopeFailures(criticalScopes) {
   const failures = [];
   for (const scope of criticalScopes) {
     if (scope.fileCount === 0) {
@@ -187,7 +188,7 @@ function collectCriticalScopeFailures(criticalScopes) {
   return failures;
 }
 
-async function main() {
+export async function main() {
   await mkdir(reportDir, { recursive: true });
   const runId = buildRunId();
   const coverageDir = path.join(coverageRootDir, runId);
@@ -302,8 +303,18 @@ async function main() {
   console.log("✅ Coverage gate passed");
 }
 
-main().catch((error) => {
-  console.error("❌ Coverage gate crashed");
-  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
-  process.exit(4);
-});
+function isMainModule() {
+  const entryArg = process.argv[1];
+  if (!entryArg) {
+    return false;
+  }
+  return import.meta.url === pathToFileURL(entryArg).href;
+}
+
+if (isMainModule()) {
+  main().catch((error) => {
+    console.error("❌ Coverage gate crashed");
+    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+    process.exit(4);
+  });
+}

@@ -32,6 +32,12 @@ export default defineConfig(async () => ({
       provider: "v8",
       reporter: ["text-summary", "json-summary"],
       reportsDirectory: ".runtime-cache/coverage/vitest",
+      thresholds: {
+        statements: 43,
+        lines: 43,
+        functions: 53,
+        branches: 63,
+      },
       include: ["src/**/*.{ts,tsx}"],
       exclude: [
         "src/**/*.test.ts",

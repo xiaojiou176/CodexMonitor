@@ -28,12 +28,14 @@ describe("SkillsPanel", () => {
       />,
     );
 
-    expect(screen.getByText("深度调试模式")).toBeTruthy();
-    expect(screen.getByText("Disabled")).toBeTruthy();
-    expect(screen.getByText("workspace")).toBeTruthy();
-    expect(screen.getByText("依赖 2")).toBeTruthy();
-    expect(screen.getByText("接口")).toBeTruthy();
-    expect(screen.getByText("missing dependency: dep-a")).toBeTruthy();
+    expect(screen.getByText("深度调试模式").textContent).toBe("深度调试模式");
+    expect(screen.getByText("Disabled").textContent).toBe("Disabled");
+    expect(screen.getByText("workspace").textContent).toBe("workspace");
+    expect(screen.getByText("依赖 2").textContent).toBe("依赖 2");
+    expect(screen.getByText("接口").textContent).toBe("接口");
+    expect(screen.getByText("missing dependency: dep-a").textContent).toBe(
+      "missing dependency: dep-a",
+    );
   });
 
   it("invokes callback with selected skill", () => {

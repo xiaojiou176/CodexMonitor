@@ -1,4 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
+
+async function activateButton(locator: Locator) {
+  await locator.dispatchEvent("click");
+}
 
 test("home smoke renders core entry points", async ({ page }) => {
   await page.goto("/");
@@ -34,16 +38,12 @@ test("sidebar search toggle opens and closes search input", async ({ page }) => 
 
   const searchToggle = page.getByRole("button", { name: "切换搜索" });
   await expect(searchToggle).toHaveAttribute("aria-pressed", "false");
-  await searchToggle.evaluate((node) => {
-    (node as HTMLButtonElement).click();
-  });
+  await activateButton(searchToggle);
   await expect(searchToggle).toHaveAttribute("aria-pressed", "true");
 
   const searchInput = page.getByLabel("搜索工作区和对话");
   await expect(searchInput).toBeVisible();
-  await searchToggle.evaluate((node) => {
-    (node as HTMLButtonElement).click();
-  });
+  await activateButton(searchToggle);
   await expect(searchToggle).toHaveAttribute("aria-pressed", "false");
   await expect(searchInput).toHaveCount(0);
 });
@@ -55,20 +55,14 @@ test("usage view toggle and sidebar sort menu interactions work", async ({ page 
   const timeButton = page.getByRole("button", { name: "时长" });
   await expect(tokenButton).toHaveAttribute("aria-pressed", "true");
   await expect(timeButton).toHaveAttribute("aria-pressed", "false");
-  await timeButton.evaluate((node) => {
-    (node as HTMLButtonElement).click();
-  });
+  await activateButton(timeButton);
   await expect(timeButton).toHaveAttribute("aria-pressed", "true");
   await expect(tokenButton).toHaveAttribute("aria-pressed", "false");
 
   const sortButton = page.getByRole("button", { name: "排序对话" });
-  await sortButton.evaluate((node) => {
-    (node as HTMLButtonElement).click();
-  });
+  await activateButton(sortButton);
   await expect(page.getByRole("menuitemradio", { name: "最近更新" })).toBeVisible();
   await expect(page.getByRole("menuitemradio", { name: "最新创建" })).toBeVisible();
-  await sortButton.evaluate((node) => {
-    (node as HTMLButtonElement).click();
-  });
+  await activateButton(sortButton);
   await expect(page.getByRole("menuitemradio", { name: "最近更新" })).toHaveCount(0);
 });

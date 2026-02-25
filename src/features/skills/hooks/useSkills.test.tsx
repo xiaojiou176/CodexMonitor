@@ -91,9 +91,10 @@ describe("useSkills", () => {
       });
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(getSkillsList).toHaveBeenCalledTimes(1);
-    expect(result.current.skills.map((skill) => skill.name)).toEqual(["first"]);
+    await waitFor(() => {
+      expect(getSkillsList).toHaveBeenCalledTimes(1);
+      expect(result.current.skills.map((skill) => skill.name)).toEqual(["first"]);
+    });
   });
 
   it("ignores skills update events from other workspaces", async () => {
@@ -116,8 +117,9 @@ describe("useSkills", () => {
       });
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(getSkillsList).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(getSkillsList).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("prioritizes result.data bucket skills and preserves metadata", async () => {
