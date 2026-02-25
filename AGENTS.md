@@ -364,7 +364,7 @@ The app uses a shared event hub so each native event has one `listen` and many s
 
 ```bash
 npm install
-npm run tauri dev
+npm run start:dev
 ```
 
 Tauri/Vite dev port defaults:
@@ -394,7 +394,7 @@ Tauri/Vite dev port defaults:
 ## Release Build
 
 ```bash
-npm run tauri build
+npm run tauri:build
 ```
 
 ## Type Checking
@@ -423,6 +423,34 @@ At the end of a task:
 4. Run `npm run typecheck`.
 5. If you changed Rust backend code, run `npm run check:rust`.
 6. Keep Husky hooks enabled (`pre-commit` and `pre-push`) so these checks run before pushing.
+
+## 测试与质量铁律（2026-02）
+
+This section is mandatory for all future AI code changes in this repository.
+
+### 强制执行规范（MUST / 禁止）
+
+1. Live 测试在具备条件时（真实 Key、外部服务可访问）必须读取真实 Key，并与真实外部 API/网页进行交互验证；禁止仅用本地 mock 替代该类验证。
+2. Pre-Commit 前必须确保 lint 全绿；任何 error 或 warning 未清零都禁止提交。
+3. Unit Test 覆盖率必须满足：全局 `>= 80%`，关键模块 `>= 95%`；任一阈值不达标视为未完成。
+4. 禁止安慰剂断言（例如无业务价值断言、恒真断言）；Commit 前必须通过 assertion guard（`npm run test:assertions:guard`）。
+5. 可并发执行的检查必须并发执行，禁止无理由串行；并发执行不得牺牲结果准确性与流程稳健性。
+6. 长耗时测试（含 E2E/集成/端到端链路）必须输出心跳日志，持续报告当前阶段与进度，避免“静默运行”。
+7. 执行长测试前，必须先执行短测试（lint、快速单测、核心 smoke）；短测试未通过时禁止进入长测试阶段。
+8. Pre-Commit 必须执行文档漂移检查；凡代码行为、配置、命令、接口有变更，必须同步更新对应文档（含 README/参考文档/操作说明）。
+9. AGENTS/CLAUDE 导航文档覆盖必须满足：根目录必须有导航入口；主要模块目录必须有可达导航或明确跳转说明，确保人类与 AI 可快速定位规则与入口。
+
+### 验收标准（Gate）
+
+1. Live 验证 Gate：有条件时必须提供真实外部交互证据（请求记录、响应摘要或测试日志）。
+2. Lint Gate：`npm run lint:strict` 结果为零错误、零警告。
+3. Coverage Gate：覆盖率报告显示全局 `>= 80%`，关键模块 `>= 95%`。
+4. Assertion Gate：`npm run test:assertions:guard` 必须通过。
+5. 并发 Gate：可并发检查任务需有并发执行记录或等价日志证据。
+6. Long-Test Heartbeat Gate：长测试日志必须出现连续心跳信息（阶段、时间、进度）。
+7. Test-Order Gate：日志中能证明“短测试先于长测试”执行顺序。
+8. Doc-Drift Gate：代码变更 PR/提交包含对应文档更新，或显式说明“无文档影响”的可审计理由。
+9. 导航覆盖 Gate：根目录与主要模块目录导航文档齐备，路径可达且未失效。
 
 ## Notes
 

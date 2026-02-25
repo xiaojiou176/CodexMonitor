@@ -265,13 +265,38 @@ npm run test:assertions:guard
 npm run test
 npm run typecheck
 npm run test:coverage:gate
+npm run test:coverage:gate:strict
 npm run check:rust
 ```
 
+Coverage gate policy (`scripts/coverage-gate.mjs`):
+
+- Global thresholds are hard-gated at `>=80` for `statements`, `lines`, `functions`, and `branches`.
+- Critical modules are hard-gated at `>=95` for all four metrics:
+  - `src/features/threads/`
+  - `src/services/`
+- Gate is fail-fast:
+  - If tests fail, the gate exits immediately.
+  - If a threshold env override is set below the enforced baseline, the gate exits with config error.
+- Failure output includes metric/module + exact shortfall (`required - actual`).
+
 Git hooks are enforced with Husky:
 
-- `pre-commit`: runs `npm run precommit:repo`
-- `pre-push`: runs `npm run prepush:repo`
+- `pre-commit`: runs `npm run precommit:orchestrated`
+  - Phase 1: `preflight:doc-drift` checks staged files and requires staged docs updates for doc-sensitive changes (`README.md`, `AGENTS.md`, `CLAUDE.md`, `src/{AGENTS,CLAUDE}.md`, `src-tauri/{AGENTS,CLAUDE}.md`, `CHANGELOG.md`, or `docs/*`).
+  - Phase 2: runs `test:assertions:guard` and `lint:strict` in parallel.
+- `pre-push`: runs `npm run preflight:orchestrated`
+  - Phase 1 (short first): `preflight:quick` (`test:assertions:guard` then `typecheck`).
+  - Phase 2 (parallel long jobs): `test`, `test:coverage:gate` (strict 80/95), `check:rust`, and `test:e2e:smoke`, each with heartbeat logs every ~20s.
+  - Parallel failure output preserves task names, so gate failures are directly attributable to the failing job.
+
+Dry-run commands:
+
+```bash
+npm run preflight:doc-drift:dry
+npm run precommit:orchestrated:dry
+npm run preflight:orchestrated:dry
+```
 
 Assertion guard policy:
 
@@ -285,9 +310,75 @@ One-shot full-repo quality gate (TS/React + tests + Rust):
 npm run test:repo
 ```
 
+Optional live preflight for real integrations (non-default, non-gating):
+
+```bash
+npm run test:live:preflight
+```
+
+- Checks live prerequisites for both external browser test and real LLM smoke.
+- Verifies variable presence and source (`process env` / `.env.local` / `.env` / `~/.zshrc`) without printing secret values.
+- Preflight report now includes `envDiagnostics` with per-variable `present`, `source`, `runnable`, and key-safe preview fields (API key stays redacted).
+- Performs network reachability checks:
+  - `REAL_EXTERNAL_URL` target URL (if configured)
+  - `REAL_LLM_BASE_URL/v1/models` with auth (if LLM vars are configured)
+- Writes a machine-readable report to `.runtime-cache/test_output/live-preflight/latest.json`.
+- In GitHub Actions, exports `run_any`, `run_external`, `run_llm`, `status`, and `reason` outputs for conditional workflow steps.
+
+Optional real external Playwright check (non-default, non-gating):
+
+```bash
+npm run test:e2e:external
+```
+
+- Uses `REAL_EXTERNAL_URL` from your environment.
+- If `REAL_EXTERNAL_URL` is not set, the test exits early with a visible reason.
+- Uses `playwright.external.config.ts`, so it does not boot the local Vite dev server.
+- Intended for real-world integration probing and scheduled/manual CI runs, not required local or PR gates.
+
+Optional real LLM/API key smoke test (non-default, non-gating):
+
+```bash
+npm run test:real:llm
+```
+
+- Required env:
+  - `REAL_LLM_BASE_URL` (OpenAI-compatible base URL, example: `https://api.openai.com`)
+  - `REAL_LLM_API_KEY`
+- Env source resolution:
+  - First uses current process environment (including exported zsh variables).
+  - If missing, falls back to repo `.env.local`, then repo `.env`, then `~/.zshrc`.
+  - Supports aliases: `OPENAI_API_KEY`/`OPENAI_BASE_URL`/`OPENAI_MODEL`/`OPENAI_TIMEOUT_MS`.
+  - If only key is present, base URL defaults to `https://api.openai.com`.
+- Optional env:
+  - `REAL_LLM_MODEL` (if omitted, script auto-selects the first model from `/v1/models`)
+  - `REAL_LLM_TIMEOUT_MS` (default `20000`)
+- Flow:
+  - Calls `/v1/models` first to validate connectivity and resolve model.
+  - Sends a minimal generation request via `/v1/responses`.
+  - Falls back to `/v1/chat/completions` if `/v1/responses` is unavailable.
+  - Fails unless a non-empty generated text/output is returned (HTTP 200 alone is not enough).
+- Safety:
+  - If required env vars are missing, script prints a clear `SKIP` reason and exits `0`.
+  - Script logs each LLM env source/presence/runnability; `REAL_LLM_API_KEY` is always redacted.
+  - Writes a machine-readable report to `.runtime-cache/test_output/real-llm/latest.json`.
+
+Combined optional real checks:
+
+```bash
+npm run test:real
+```
+
+- Runs external Playwright check, then runs real LLM smoke test.
+- Optional workflow: `.github/workflows/real-integration.yml` (manual/weekly) runs `test:live:preflight` first, then conditionally runs external E2E and/or real LLM checks.
+- Long-running workflow steps emit 20s heartbeat logs to avoid no-output timeout ambiguity.
+
 ## Documentation
 
 - Docs index: `docs/README.md`
+- Agent docs (root): `AGENTS.md`, `CLAUDE.md`
+- Agent docs (frontend): `src/AGENTS.md`, `src/CLAUDE.md`
+- Agent docs (backend): `src-tauri/AGENTS.md`, `src-tauri/CLAUDE.md`
 - App-server compatibility reference: `docs/app-server-events.md`
 - Configuration reference: `docs/reference/configuration.md`
 - Logging/cache governance: `docs/reference/logging-cache-governance.md`
