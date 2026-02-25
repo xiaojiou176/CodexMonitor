@@ -57,7 +57,7 @@ pub(super) async fn handle_client(
 
         if !authenticated {
             if method != "auth" {
-                if let Some(response) = build_error_response(id, "unauthorized") {
+                if let Some(response) = build_error_response(id, "UNAUTHORIZED", "unauthorized") {
                     if out_tx.send(response).is_err() {
                         eprintln!("[daemon] failed to send unauthorized response");
                         break;
@@ -69,7 +69,7 @@ pub(super) async fn handle_client(
             let expected = config.token.clone().unwrap_or_default();
             let provided = parse_auth_token(&params).unwrap_or_default();
             if expected != provided {
-                if let Some(response) = build_error_response(id, "invalid token") {
+                if let Some(response) = build_error_response(id, "UNAUTHORIZED", "invalid token") {
                     if out_tx.send(response).is_err() {
                         eprintln!("[daemon] failed to send invalid-token response");
                         break;

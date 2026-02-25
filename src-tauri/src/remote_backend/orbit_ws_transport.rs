@@ -23,8 +23,9 @@ impl RemoteTransport for OrbitWsTransport {
                 return Err("invalid transport config for orbit websocket transport".to_string());
             };
 
-            let ws_url = orbit_core::build_orbit_ws_url(&ws_url, auth_token.as_deref())?;
-            let (stream, _response) = connect_async(&ws_url)
+            let ws_url = orbit_core::build_orbit_ws_url(&ws_url, None)?;
+            let request = orbit_core::build_orbit_ws_request(&ws_url, auth_token.as_deref())?;
+            let (stream, _response) = connect_async(request)
                 .await
                 .map_err(|err| format!("Failed to connect to Orbit relay at {ws_url}: {err}"))?;
             let (mut writer, mut reader) = stream.split();

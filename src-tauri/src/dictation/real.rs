@@ -1251,9 +1251,7 @@ fn start_capture_thread(
                 .send(Err("Unsupported microphone sample format.".to_string()))
                 .is_err()
             {
-                eprintln!(
-                    "[dictation] ready signal receiver dropped on unsupported sample format"
-                );
+                eprintln!("[dictation] ready signal receiver dropped on unsupported sample format");
             }
             if stopped_tx.send(()).is_err() {
                 eprintln!(

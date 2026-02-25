@@ -1,15 +1,23 @@
 use super::*;
 use serde::de::DeserializeOwned;
 
-pub(super) fn build_error_response(id: Option<u64>, message: &str) -> Option<String> {
+const MAX_PAGINATION_LIMIT: u32 = 500;
+const MAX_GIT_ROOT_DEPTH: u32 = 64;
+const MAX_LOCAL_USAGE_DAYS: u32 = 366;
+const MAX_GITHUB_PR_NUMBER: u64 = 10_000_000;
+
+pub(super) fn build_error_response(id: Option<u64>, code: &str, message: &str) -> Option<String> {
     let id = id?;
     Some(
         serde_json::to_string(&json!({
             "id": id,
-            "error": { "message": message }
+            "error": {
+                "code": code,
+                "message": message
+            }
         }))
         .unwrap_or_else(|_| {
-            "{\"id\":0,\"error\":{\"message\":\"serialization failed\"}}".to_string()
+            "{\"id\":0,\"error\":{\"code\":\"INTERNAL_ERROR\",\"message\":\"serialization failed\"}}".to_string()
         }),
     )
 }
@@ -18,7 +26,7 @@ pub(super) fn build_result_response(id: Option<u64>, result: Value) -> Option<St
     let id = id?;
     Some(
         serde_json::to_string(&json!({ "id": id, "result": result })).unwrap_or_else(|_| {
-            "{\"id\":0,\"error\":{\"message\":\"serialization failed\"}}".to_string()
+            "{\"id\":0,\"error\":{\"code\":\"INTERNAL_ERROR\",\"message\":\"serialization failed\"}}".to_string()
         }),
     )
 }
@@ -89,17 +97,36 @@ fn parse_optional_string(value: &Value, key: &str) -> Option<String> {
     }
 }
 
-fn parse_optional_u32(value: &Value, key: &str) -> Option<u32> {
-    match value {
-        Value::Object(map) => map.get(key).and_then(|value| value.as_u64()).and_then(|v| {
-            if v > u32::MAX as u64 {
-                None
-            } else {
-                Some(v as u32)
-            }
-        }),
-        _ => None,
+fn parse_optional_bounded_u32(value: &Value, key: &str, max: u32) -> Result<Option<u32>, String> {
+    let Value::Object(map) = value else {
+        return Ok(None);
+    };
+
+    let Some(raw) = map.get(key) else {
+        return Ok(None);
+    };
+
+    let number = raw
+        .as_u64()
+        .ok_or_else(|| format!("invalid `{key}`: expected unsigned integer"))?;
+    if number > u32::MAX as u64 {
+        return Err(format!("invalid `{key}`: value is too large"));
     }
+    let number = number as u32;
+    if number > max {
+        return Err(format!("invalid `{key}`: must be <= {max}"));
+    }
+
+    Ok(Some(number))
+}
+
+fn parse_required_bounded_u64(value: &Value, key: &str, max: u64) -> Result<u64, String> {
+    let number =
+        parse_optional_u64(value, key).ok_or_else(|| format!("missing or invalid `{key}`"))?;
+    if number > max {
+        return Err(format!("invalid `{key}`: must be <= {max}"));
+    }
+    Ok(number)
 }
 
 fn parse_optional_bool(value: &Value, key: &str) -> Option<bool> {
@@ -109,23 +136,47 @@ fn parse_optional_bool(value: &Value, key: &str) -> Option<bool> {
     }
 }
 
-fn parse_optional_string_array(value: &Value, key: &str) -> Option<Vec<String>> {
-    match value {
-        Value::Object(map) => map
-            .get(key)
-            .and_then(|value| value.as_array())
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(|item| item.as_str().map(|value| value.to_string()))
-                    .collect::<Vec<_>>()
-            }),
-        _ => None,
+fn parse_optional_string_array(value: &Value, key: &str) -> Result<Option<Vec<String>>, String> {
+    let Value::Object(map) = value else {
+        return Ok(None);
+    };
+
+    let Some(raw) = map.get(key) else {
+        return Ok(None);
+    };
+
+    let items = raw
+        .as_array()
+        .ok_or_else(|| format!("invalid `{key}`: expected array of strings"))?;
+
+    let mut values = Vec::with_capacity(items.len());
+    for (index, item) in items.iter().enumerate() {
+        let Some(item) = item.as_str() else {
+            return Err(format!(
+                "invalid `{key}`: element at index {index} must be a string"
+            ));
+        };
+        values.push(item.to_string());
     }
+
+    Ok(Some(values))
 }
 
 fn parse_string_array(value: &Value, key: &str) -> Result<Vec<String>, String> {
-    parse_optional_string_array(value, key).ok_or_else(|| format!("missing `{key}`"))
+    parse_optional_string_array(value, key)?.ok_or_else(|| format!("missing `{key}`"))
+}
+
+fn classify_rpc_error_code(message: &str) -> &'static str {
+    if message.starts_with("unknown method:") {
+        "METHOD_NOT_FOUND"
+    } else if message.starts_with("missing ")
+        || message.starts_with("invalid ")
+        || message.contains("missing or invalid")
+    {
+        "INVALID_PARAMS"
+    } else {
+        "INTERNAL_ERROR"
+    }
 }
 
 fn parse_optional_value(value: &Value, key: &str) -> Option<Value> {
@@ -371,7 +422,7 @@ pub(super) async fn handle_rpc_request(
         "list_threads" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let cursor = parse_optional_string(&params, "cursor");
-            let limit = parse_optional_u32(&params, "limit");
+            let limit = parse_optional_bounded_u32(&params, "limit", MAX_PAGINATION_LIMIT)?;
             let sort_key = parse_optional_string(&params, "sortKey");
             let cwd = parse_optional_string(&params, "cwd");
             state
@@ -381,7 +432,7 @@ pub(super) async fn handle_rpc_request(
         "list_mcp_server_status" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let cursor = parse_optional_string(&params, "cursor");
-            let limit = parse_optional_u32(&params, "limit");
+            let limit = parse_optional_bounded_u32(&params, "limit", MAX_PAGINATION_LIMIT)?;
             state
                 .list_mcp_server_status(workspace_id, cursor, limit)
                 .await
@@ -424,9 +475,9 @@ pub(super) async fn handle_rpc_request(
             let model = parse_optional_string(&params, "model");
             let effort = parse_optional_string(&params, "effort");
             let access_mode = parse_optional_string(&params, "accessMode");
-            let images = parse_optional_string_array(&params, "images");
-            let app_mentions =
-                parse_optional_value(&params, "appMentions").and_then(|value| value.as_array().cloned());
+            let images = parse_optional_string_array(&params, "images")?;
+            let app_mentions = parse_optional_value(&params, "appMentions")
+                .and_then(|value| value.as_array().cloned());
             let skill_mentions = parse_optional_value(&params, "skillMentions")
                 .and_then(|value| value.as_array().cloned());
             let collaboration_mode = parse_optional_value(&params, "collaborationMode");
@@ -456,9 +507,9 @@ pub(super) async fn handle_rpc_request(
             let thread_id = parse_string(&params, "threadId")?;
             let turn_id = parse_string(&params, "turnId")?;
             let text = parse_string(&params, "text")?;
-            let images = parse_optional_string_array(&params, "images");
-            let app_mentions =
-                parse_optional_value(&params, "appMentions").and_then(|value| value.as_array().cloned());
+            let images = parse_optional_string_array(&params, "images")?;
+            let app_mentions = parse_optional_value(&params, "appMentions")
+                .and_then(|value| value.as_array().cloned());
             let skill_mentions = parse_optional_value(&params, "skillMentions")
                 .and_then(|value| value.as_array().cloned());
             state
@@ -493,8 +544,10 @@ pub(super) async fn handle_rpc_request(
         "experimental_feature_list" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let cursor = parse_optional_string(&params, "cursor");
-            let limit = parse_optional_u32(&params, "limit");
-            state.experimental_feature_list(workspace_id, cursor, limit).await
+            let limit = parse_optional_bounded_u32(&params, "limit", MAX_PAGINATION_LIMIT)?;
+            state
+                .experimental_feature_list(workspace_id, cursor, limit)
+                .await
         }
         "set_codex_feature_flag" => {
             let feature_key = parse_string(&params, "featureKey")?;
@@ -579,9 +632,11 @@ pub(super) async fn handle_rpc_request(
         "apps_list" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let cursor = parse_optional_string(&params, "cursor");
-            let limit = parse_optional_u32(&params, "limit");
+            let limit = parse_optional_bounded_u32(&params, "limit", MAX_PAGINATION_LIMIT)?;
             let thread_id = parse_optional_string(&params, "threadId");
-            state.apps_list(workspace_id, cursor, limit, thread_id).await
+            state
+                .apps_list(workspace_id, cursor, limit, thread_id)
+                .await
         }
         "respond_to_server_request" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
@@ -624,7 +679,7 @@ pub(super) async fn handle_rpc_request(
             let path = parse_string(&params, "path")?;
             let app = parse_optional_string(&params, "app");
             let command = parse_optional_string(&params, "command");
-            let args = parse_optional_string_array(&params, "args").unwrap_or_default();
+            let args = parse_optional_string_array(&params, "args")?.unwrap_or_default();
             state.open_workspace_in(path, app, args, command).await?;
             Ok(json!({ "ok": true }))
         }
@@ -639,7 +694,8 @@ pub(super) async fn handle_rpc_request(
         }
         "list_git_roots" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
-            let depth = parse_optional_u32(&params, "depth").map(|value| value as usize);
+            let depth = parse_optional_bounded_u32(&params, "depth", MAX_GIT_ROOT_DEPTH)?
+                .map(|value| value as usize);
             let roots = state.list_git_roots(workspace_id, depth).await?;
             serde_json::to_value(roots).map_err(|err| err.to_string())
         }
@@ -650,7 +706,8 @@ pub(super) async fn handle_rpc_request(
         }
         "get_git_log" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
-            let limit = parse_optional_u32(&params, "limit").map(|value| value as usize);
+            let limit = parse_optional_bounded_u32(&params, "limit", MAX_PAGINATION_LIMIT)?
+                .map(|value| value as usize);
             let log = state.get_git_log(workspace_id, limit).await?;
             serde_json::to_value(log).map_err(|err| err.to_string())
         }
@@ -731,8 +788,7 @@ pub(super) async fn handle_rpc_request(
         }
         "get_github_pull_request_diff" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
-            let pr_number =
-                parse_optional_u64(&params, "prNumber").ok_or("missing or invalid `prNumber`")?;
+            let pr_number = parse_required_bounded_u64(&params, "prNumber", MAX_GITHUB_PR_NUMBER)?;
             let diff = state
                 .get_github_pull_request_diff(workspace_id, pr_number)
                 .await?;
@@ -740,8 +796,7 @@ pub(super) async fn handle_rpc_request(
         }
         "get_github_pull_request_comments" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
-            let pr_number =
-                parse_optional_u64(&params, "prNumber").ok_or("missing or invalid `prNumber`")?;
+            let pr_number = parse_required_bounded_u64(&params, "prNumber", MAX_GITHUB_PR_NUMBER)?;
             let comments = state
                 .get_github_pull_request_comments(workspace_id, pr_number)
                 .await?;
@@ -850,7 +905,7 @@ pub(super) async fn handle_rpc_request(
             state.generate_run_metadata(workspace_id, prompt).await
         }
         "local_usage_snapshot" => {
-            let days = parse_optional_u32(&params, "days");
+            let days = parse_optional_bounded_u32(&params, "days", MAX_LOCAL_USAGE_DAYS)?;
             let workspace_path = parse_optional_string(&params, "workspacePath");
             let snapshot = state.local_usage_snapshot(days, workspace_path).await?;
             serde_json::to_value(snapshot).map_err(|err| err.to_string())
@@ -927,7 +982,7 @@ pub(super) fn spawn_rpc_response_task(
         let result = handle_rpc_request(&state, &method, params, client_version).await;
         let response = match result {
             Ok(result) => build_result_response(id, result),
-            Err(message) => build_error_response(id, &message),
+            Err(message) => build_error_response(id, classify_rpc_error_code(&message), &message),
         };
         if let Some(response) = response {
             if out_tx.send(response).is_err() {
@@ -939,7 +994,10 @@ pub(super) fn spawn_rpc_response_task(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_event_stream_lagged_notification, parse_string_array};
+    use super::{
+        build_error_response, build_event_stream_lagged_notification, parse_optional_bounded_u32,
+        parse_optional_string_array, parse_string_array, MAX_LOCAL_USAGE_DAYS,
+    };
     use serde_json::json;
 
     #[test]
@@ -963,9 +1021,65 @@ mod tests {
     }
 
     #[test]
+    fn parse_string_array_rejects_non_string_items() {
+        let params = json!({
+            "threadIds": ["thread-1", 2]
+        });
+
+        let err = parse_string_array(&params, "threadIds")
+            .expect_err("non-string array element should fail");
+        assert_eq!(
+            err,
+            "invalid `threadIds`: element at index 1 must be a string"
+        );
+    }
+
+    #[test]
+    fn parse_optional_string_array_rejects_non_array() {
+        let params = json!({
+            "images": "not-an-array"
+        });
+
+        let err =
+            parse_optional_string_array(&params, "images").expect_err("non-array should fail");
+        assert_eq!(err, "invalid `images`: expected array of strings");
+    }
+
+    #[test]
+    fn parse_optional_bounded_u32_enforces_upper_bound() {
+        let params = json!({
+            "days": MAX_LOCAL_USAGE_DAYS + 1
+        });
+
+        let err = parse_optional_bounded_u32(&params, "days", MAX_LOCAL_USAGE_DAYS)
+            .expect_err("out-of-range value should fail");
+        assert_eq!(
+            err,
+            format!("invalid `days`: must be <= {MAX_LOCAL_USAGE_DAYS}")
+        );
+    }
+
+    #[test]
+    fn build_error_response_includes_error_code() {
+        let payload = build_error_response(Some(7), "INVALID_PARAMS", "missing `workspaceId`")
+            .expect("response should be present");
+        let value: serde_json::Value =
+            serde_json::from_str(&payload).expect("payload should parse");
+        assert_eq!(
+            value.pointer("/error/code").and_then(|node| node.as_str()),
+            Some("INVALID_PARAMS")
+        );
+        assert_eq!(
+            value
+                .pointer("/error/message")
+                .and_then(|node| node.as_str()),
+            Some("missing `workspaceId`")
+        );
+    }
+
+    #[test]
     fn build_event_stream_lagged_notification_reports_dropped_count() {
-        let payload =
-            build_event_stream_lagged_notification(42).expect("payload should serialize");
+        let payload = build_event_stream_lagged_notification(42).expect("payload should serialize");
         let value: serde_json::Value =
             serde_json::from_str(&payload).expect("payload should parse");
         assert_eq!(

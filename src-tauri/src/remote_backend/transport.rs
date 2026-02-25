@@ -171,13 +171,8 @@ pub(crate) async fn mark_disconnected(
     connected.store(false, Ordering::SeqCst);
     let mut pending = pending.lock().await;
     for (id, sender) in pending.drain() {
-        if sender
-            .send(Err(DISCONNECTED_MESSAGE.to_string()))
-            .is_err()
-        {
-            eprintln!(
-                "remote backend pending receiver already dropped during disconnect: id={id}"
-            );
+        if sender.send(Err(DISCONNECTED_MESSAGE.to_string())).is_err() {
+            eprintln!("remote backend pending receiver already dropped during disconnect: id={id}");
         }
     }
 }

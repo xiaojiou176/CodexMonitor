@@ -1,8 +1,9 @@
-use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::http::{header::AUTHORIZATION, HeaderValue, Request};
 
 use crate::types::{
     AppSettings, OrbitConnectTestResult, OrbitDeviceCodeStart, OrbitSignInPollResult,
@@ -72,51 +73,56 @@ fn response_body_excerpt(text: &str) -> String {
     output
 }
 
-fn encode_query_component(value: &str) -> String {
-    let mut output = String::with_capacity(value.len());
-    for byte in value.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
-            output.push(char::from(byte));
-        } else {
-            let _ = write!(&mut output, "%{byte:02X}");
-        }
-    }
-    output
+fn is_sensitive_orbit_query_key(key: &str) -> bool {
+    matches!(
+        key.trim().to_ascii_lowercase().as_str(),
+        "token" | "access_token" | "id_token" | "auth_token" | "jwt"
+    )
 }
 
-fn append_query(url: &str, key: &str, value: &str) -> String {
+fn sanitize_orbit_ws_query(url: &str) -> String {
     let (base, fragment) = match url.split_once('#') {
         Some((before_fragment, after_fragment)) => (before_fragment, Some(after_fragment)),
         None => (url, None),
     };
+    let (path, query) = match base.split_once('?') {
+        Some((before_query, after_query)) => (before_query, Some(after_query)),
+        None => (base, None),
+    };
 
-    let has_key = base
-        .split_once('?')
-        .map(|(_, query)| {
-            query
-                .split('&')
-                .filter(|entry| !entry.is_empty())
-                .any(|entry| {
-                    entry
-                        .split('=')
-                        .next()
-                        .map(|candidate| candidate == key)
-                        .unwrap_or(false)
-                })
-        })
-        .unwrap_or(false);
-    if has_key {
-        return url.to_string();
+    let filtered_query = query.and_then(|query| {
+        let entries = query
+            .split('&')
+            .filter(|entry| !entry.is_empty())
+            .filter(|entry| {
+                let key = entry.split_once('=').map(|(key, _)| key).unwrap_or(entry);
+                !is_sensitive_orbit_query_key(key)
+            })
+            .collect::<Vec<_>>();
+        if entries.is_empty() {
+            None
+        } else {
+            Some(entries.join("&"))
+        }
+    });
+
+    let mut output = path.to_string();
+    if let Some(query) = filtered_query {
+        output.push('?');
+        output.push_str(&query);
     }
-    let separator = if base.contains('?') { '&' } else { '?' };
-    let encoded_key = encode_query_component(key);
-    let encoded_value = encode_query_component(value);
-    let mut output = format!("{base}{separator}{encoded_key}={encoded_value}");
     if let Some(fragment) = fragment {
         output.push('#');
         output.push_str(fragment);
     }
     output
+}
+
+fn orbit_ws_details_url(url: &str) -> String {
+    sanitize_orbit_ws_query(url)
+        .split_once('?')
+        .map(|(path, _)| path.to_string())
+        .unwrap_or_else(|| sanitize_orbit_ws_query(url))
 }
 
 pub(crate) fn orbit_auth_url_from_settings(settings: &AppSettings) -> Result<String, String> {
@@ -153,7 +159,10 @@ pub(crate) fn remote_backend_token_optional(settings: &AppSettings) -> Option<St
         .filter(|value| !value.is_empty())
 }
 
-pub(crate) fn build_orbit_ws_url(ws_url: &str, auth_token: Option<&str>) -> Result<String, String> {
+pub(crate) fn build_orbit_ws_url(
+    ws_url: &str,
+    _auth_token: Option<&str>,
+) -> Result<String, String> {
     let raw_url = ws_url.trim();
     if raw_url.is_empty() {
         return Err("Orbit provider requires orbitWsUrl in app settings.".to_string());
@@ -169,21 +178,37 @@ pub(crate) fn build_orbit_ws_url(ws_url: &str, auth_token: Option<&str>) -> Resu
         return Err("orbitWsUrl must start with https://, http://, wss://, or ws://".to_string());
     };
 
-    let Some(token) = auth_token.map(str::trim).filter(|value| !value.is_empty()) else {
-        return Ok(normalized);
-    };
+    Ok(sanitize_orbit_ws_query(&normalized))
+}
 
-    Ok(append_query(&normalized, "token", token))
+pub(crate) fn build_orbit_ws_request(
+    ws_url: &str,
+    auth_token: Option<&str>,
+) -> Result<Request<()>, String> {
+    let sanitized_url = build_orbit_ws_url(ws_url, None)?;
+    let mut request = sanitized_url
+        .as_str()
+        .into_client_request()
+        .map_err(|err| format!("Invalid Orbit websocket URL: {err}"))?;
+
+    if let Some(token) = auth_token.map(str::trim).filter(|value| !value.is_empty()) {
+        let value = HeaderValue::from_str(&format!("Bearer {token}"))
+            .map_err(|_| "Orbit token contains invalid header characters.".to_string())?;
+        request.headers_mut().insert(AUTHORIZATION, value);
+    }
+
+    Ok(request)
 }
 
 pub(crate) async fn orbit_connect_test_core(
     ws_url: &str,
     auth_token: Option<&str>,
 ) -> Result<OrbitConnectTestResult, String> {
-    let ws_url = build_orbit_ws_url(ws_url, auth_token)?;
+    let ws_url = build_orbit_ws_url(ws_url, None)?;
+    let request = build_orbit_ws_request(&ws_url, auth_token)?;
     let started = Instant::now();
 
-    let _socket = connect_async(&ws_url)
+    let _socket = connect_async(request)
         .await
         .map_err(|err| format!("Failed to connect to Orbit relay: {err}"))?;
 
@@ -191,7 +216,7 @@ pub(crate) async fn orbit_connect_test_core(
         ok: true,
         latency_ms: Some(started.elapsed().as_millis() as u64),
         message: "Connected to Orbit relay.".to_string(),
-        details: Some(ws_url),
+        details: Some(orbit_ws_details_url(&ws_url)),
     })
 }
 
@@ -400,7 +425,11 @@ pub(crate) async fn orbit_sign_out_core(auth_url: &str, token: &str) -> Result<(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_orbit_ws_url, response_body_excerpt, MAX_ERROR_BODY_BYTES};
+    use tokio_tungstenite::tungstenite::http::header::AUTHORIZATION;
+
+    use super::{
+        build_orbit_ws_request, build_orbit_ws_url, response_body_excerpt, MAX_ERROR_BODY_BYTES,
+    };
 
     #[test]
     fn build_orbit_ws_url_converts_http_scheme() {
@@ -409,40 +438,38 @@ mod tests {
     }
 
     #[test]
-    fn build_orbit_ws_url_appends_token_query() {
+    fn build_orbit_ws_url_does_not_append_token_query() {
         let value = build_orbit_ws_url("wss://example.com/ws/client", Some("abc")).expect("ws url");
-        assert_eq!(value, "wss://example.com/ws/client?token=abc");
+        assert_eq!(value, "wss://example.com/ws/client");
     }
 
     #[test]
-    fn build_orbit_ws_url_appends_token_when_id_token_present() {
-        let value = build_orbit_ws_url("wss://example.com/ws/client?id_token=abc", Some("def"))
-            .expect("ws url");
-        assert_eq!(value, "wss://example.com/ws/client?id_token=abc&token=def");
-    }
-
-    #[test]
-    fn build_orbit_ws_url_does_not_append_duplicate_token_query() {
+    fn build_orbit_ws_url_strips_sensitive_query_keys() {
         let value = build_orbit_ws_url(
-            "wss://example.com/ws/client?token=abc&id_token=def",
-            Some("xyz"),
+            "wss://example.com/ws/client?id_token=abc&foo=bar&token=def",
+            Some("zzz"),
         )
         .expect("ws url");
-        assert_eq!(value, "wss://example.com/ws/client?token=abc&id_token=def");
+        assert_eq!(value, "wss://example.com/ws/client?foo=bar");
     }
 
     #[test]
-    fn build_orbit_ws_url_appends_token_before_fragment() {
-        let value =
-            build_orbit_ws_url("wss://example.com/ws/client#frag", Some("abc")).expect("ws url");
-        assert_eq!(value, "wss://example.com/ws/client?token=abc#frag");
+    fn build_orbit_ws_request_sets_bearer_header() {
+        let request =
+            build_orbit_ws_request("wss://example.com/ws/client", Some("abc")).expect("request");
+        assert_eq!(
+            request
+                .headers()
+                .get(AUTHORIZATION)
+                .and_then(|value| value.to_str().ok()),
+            Some("Bearer abc")
+        );
     }
 
     #[test]
-    fn build_orbit_ws_url_encodes_query_token() {
-        let value =
-            build_orbit_ws_url("wss://example.com/ws/client", Some("a&b#c+d%e")).expect("ws url");
-        assert_eq!(value, "wss://example.com/ws/client?token=a%26b%23c%2Bd%25e");
+    fn build_orbit_ws_request_omits_auth_header_when_token_missing() {
+        let request = build_orbit_ws_request("wss://example.com/ws/client", None).expect("request");
+        assert!(request.headers().get(AUTHORIZATION).is_none());
     }
 
     #[test]

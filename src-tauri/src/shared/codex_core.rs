@@ -493,7 +493,9 @@ pub(crate) async fn experimental_feature_list_core(
 ) -> Result<Value, String> {
     let session = get_session_clone(sessions, &workspace_id).await?;
     let params = json!({ "cursor": cursor, "limit": limit });
-    session.send_request("experimentalFeature/list", params).await
+    session
+        .send_request("experimentalFeature/list", params)
+        .await
 }
 
 pub(crate) async fn account_rate_limits_core(
@@ -828,7 +830,9 @@ mod tests {
             "run".to_string(),
             None,
             None,
-            Some(vec![json!({ "name": "deep_debug", "path": "skills/deep.md" })]),
+            Some(vec![
+                json!({ "name": "deep_debug", "path": "skills/deep.md" }),
+            ]),
         )
         .expect_err("relative skill paths should be rejected");
         assert_eq!(error, "invalid skill mention path");
@@ -840,7 +844,9 @@ mod tests {
             "run".to_string(),
             None,
             None,
-            Some(vec![json!({ "name": " ", "path": "/Users/me/.codex/skills/deep.md" })]),
+            Some(vec![
+                json!({ "name": " ", "path": "/Users/me/.codex/skills/deep.md" }),
+            ]),
         )
         .expect_err("empty skill names should be rejected");
         assert_eq!(error, "invalid skill mention name");

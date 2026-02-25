@@ -6,6 +6,7 @@ use crate::types::{TailscaleDaemonCommandPreview, TailscaleStatus};
 
 const DEFAULT_DAEMON_LISTEN_ADDR: &str = "0.0.0.0:4732";
 const REMOTE_TOKEN_PLACEHOLDER: &str = "<remote-backend-token>";
+const DAEMON_TOKEN_ENV_KEY: &str = "CODEX_MONITOR_DAEMON_TOKEN";
 
 pub(crate) fn unavailable_status(version: Option<String>, message: String) -> TailscaleStatus {
     TailscaleStatus {
@@ -141,15 +142,18 @@ pub(crate) fn daemon_command_preview(
         DEFAULT_DAEMON_LISTEN_ADDR.to_string(),
         "--data-dir".to_string(),
         data_dir_str.clone(),
-        "--token".to_string(),
-        REMOTE_TOKEN_PLACEHOLDER.to_string(),
     ];
     let mut rendered = Vec::with_capacity(args.len() + 1);
     rendered.push(shell_quote(&daemon_path_str));
     rendered.extend(args.iter().map(|value| shell_quote(value)));
+    let command = render_command_with_env(
+        DAEMON_TOKEN_ENV_KEY,
+        REMOTE_TOKEN_PLACEHOLDER,
+        rendered.join(" "),
+    );
 
     TailscaleDaemonCommandPreview {
-        command: rendered.join(" "),
+        command,
         daemon_path: daemon_path_str,
         args,
         token_configured,
@@ -168,6 +172,14 @@ fn shell_quote(value: &str) -> String {
         format!("\"{}\"", value.replace('"', "\\\""))
     } else {
         format!("'{}'", value.replace('\'', "'\"'\"'"))
+    }
+}
+
+fn render_command_with_env(env_key: &str, env_value: &str, command: String) -> String {
+    if cfg!(windows) {
+        format!("set {env_key}={} && {command}", shell_quote(env_value))
+    } else {
+        format!("{env_key}={} {command}", shell_quote(env_value))
     }
 }
 
@@ -216,9 +228,11 @@ mod tests {
             Path::new("/tmp/data-dir"),
             true,
         );
+        assert!(preview.command.contains("CODEX_MONITOR_DAEMON_TOKEN"));
         assert!(preview.command.contains("--listen"));
         assert!(preview.command.contains("0.0.0.0:4732"));
         assert!(preview.command.contains("<remote-backend-token>"));
+        assert!(!preview.command.contains("--token"));
         assert!(preview.token_configured);
     }
 }

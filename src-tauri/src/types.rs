@@ -456,6 +456,8 @@ pub(crate) struct AppSettings {
     pub(crate) remote_backend_provider: RemoteBackendProvider,
     #[serde(default = "default_remote_backend_host", rename = "remoteBackendHost")]
     pub(crate) remote_backend_host: String,
+    // Persisted out-of-band by storage.rs into data-dir/remote_backend_token.
+    // Kept here so IPC payloads still carry the runtime token value.
     #[serde(default, rename = "remoteBackendToken")]
     pub(crate) remote_backend_token: Option<String>,
     #[serde(default, rename = "orbitWsUrl")]
@@ -1227,7 +1229,8 @@ impl Default for AppSettings {
             steer_enabled: true,
             unified_exec_enabled: true,
             show_sub_agent_threads_in_sidebar: default_show_sub_agent_threads_in_sidebar(),
-            auto_archive_sub_agent_threads_enabled: default_auto_archive_sub_agent_threads_enabled(),
+            auto_archive_sub_agent_threads_enabled: default_auto_archive_sub_agent_threads_enabled(
+            ),
             auto_archive_sub_agent_threads_max_age_minutes:
                 default_auto_archive_sub_agent_threads_max_age_minutes(),
             experimental_apps_enabled: false,

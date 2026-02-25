@@ -4,7 +4,11 @@ use std::process::Command;
 use tauri::Manager;
 
 fn normalized_badge_count(count: i64) -> Option<i64> {
-    if count <= 0 { None } else { Some(count) }
+    if count <= 0 {
+        None
+    } else {
+        Some(count)
+    }
 }
 
 fn is_unsupported_badge_error_message(message: &str) -> bool {
@@ -23,8 +27,9 @@ pub(crate) fn set_app_badge_count(app: tauri::AppHandle, count: i64) -> Result<(
     #[cfg(desktop)]
     {
         let badge_count = normalized_badge_count(count);
-        let window = preferred_badge_window(&app)
-            .ok_or_else(|| "Failed to set app badge: no webview window is available.".to_string())?;
+        let window = preferred_badge_window(&app).ok_or_else(|| {
+            "Failed to set app badge: no webview window is available.".to_string()
+        })?;
 
         match window.set_badge_count(badge_count) {
             Ok(()) => Ok(()),

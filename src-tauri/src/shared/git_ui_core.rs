@@ -67,7 +67,11 @@ fn store_cached_git_status(workspace_id: &str, value: &Value) {
     if cache.len() > GIT_STATUS_CACHE_MAX_ENTRIES {
         cache.retain(|_, entry| entry.captured_at.elapsed() <= GIT_STATUS_CACHE_TTL * 4);
         if cache.len() > GIT_STATUS_CACHE_MAX_ENTRIES {
-            let mut keys = cache.keys().take(cache.len() - GIT_STATUS_CACHE_MAX_ENTRIES).cloned().collect::<Vec<_>>();
+            let mut keys = cache
+                .keys()
+                .take(cache.len() - GIT_STATUS_CACHE_MAX_ENTRIES)
+                .cloned()
+                .collect::<Vec<_>>();
             for key in keys.drain(..) {
                 cache.remove(&key);
             }

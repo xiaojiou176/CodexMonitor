@@ -77,8 +77,13 @@ impl WorkspaceSession {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let (tx, rx) = oneshot::channel();
         self.pending.lock().await.insert(id, tx);
-        self.write_message(json!({ "id": id, "method": method, "params": params }))
-            .await?;
+        if let Err(error) = self
+            .write_message(json!({ "id": id, "method": method, "params": params }))
+            .await
+        {
+            self.pending.lock().await.remove(&id);
+            return Err(error);
+        }
         rx.await.map_err(|_| "request canceled".to_string())
     }
 
@@ -99,6 +104,10 @@ impl WorkspaceSession {
         self.write_message(json!({ "id": id, "result": result }))
             .await
     }
+}
+
+fn clear_pending_requests(pending: &mut HashMap<u64, oneshot::Sender<Value>>) {
+    pending.clear();
 }
 
 pub(crate) fn build_codex_path_env(codex_bin: Option<&str>) -> Option<String> {
@@ -458,6 +467,8 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
             }),
         };
         event_sink_clone.emit_app_server_event(payload);
+        let mut pending = session_clone.pending.lock().await;
+        clear_pending_requests(&mut pending);
     });
 
     let workspace_id = entry.id.clone();
@@ -513,8 +524,9 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_initialize_params, extract_thread_id};
+    use super::{build_initialize_params, clear_pending_requests, extract_thread_id};
     use serde_json::json;
+    use tokio::sync::oneshot;
 
     #[test]
     fn extract_thread_id_reads_camel_case() {
@@ -544,5 +556,20 @@ mod tests {
                 .and_then(|value| value.as_bool()),
             Some(true)
         );
+    }
+
+    #[test]
+    fn clear_pending_requests_drops_waiters() {
+        let (tx, mut rx) = oneshot::channel();
+        let mut pending = std::collections::HashMap::new();
+        pending.insert(1, tx);
+
+        clear_pending_requests(&mut pending);
+
+        assert!(pending.is_empty());
+        assert!(matches!(
+            rx.try_recv(),
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed)
+        ));
     }
 }

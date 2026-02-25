@@ -877,7 +877,8 @@ impl DaemonState {
         cursor: Option<String>,
         limit: Option<u32>,
     ) -> Result<Value, String> {
-        codex_core::experimental_feature_list_core(&self.sessions, workspace_id, cursor, limit).await
+        codex_core::experimental_feature_list_core(&self.sessions, workspace_id, cursor, limit)
+            .await
     }
 
     async fn set_codex_feature_flag(
