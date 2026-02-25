@@ -9,22 +9,28 @@ import { pathToFileURL } from "node:url";
 const rootDir = process.cwd();
 const coverageRootDir = path.join(rootDir, ".runtime-cache", "coverage", "vitest-gate");
 const reportDir = path.join(rootDir, ".runtime-cache", "test_output", "coverage-gate");
+const globalMinimumThresholds = {
+  statements: 80,
+  lines: 80,
+  functions: 80,
+  branches: 80,
+};
 const thresholdEnvConfig = {
-  statements: { env: "COVERAGE_MIN_STATEMENTS", defaultValue: 55 },
-  lines: { env: "COVERAGE_MIN_LINES", defaultValue: 55 },
-  functions: { env: "COVERAGE_MIN_FUNCTIONS", defaultValue: 60 },
-  branches: { env: "COVERAGE_MIN_BRANCHES", defaultValue: 65 },
+  statements: { env: "COVERAGE_MIN_STATEMENTS", defaultValue: 80 },
+  lines: { env: "COVERAGE_MIN_LINES", defaultValue: 80 },
+  functions: { env: "COVERAGE_MIN_FUNCTIONS", defaultValue: 80 },
+  branches: { env: "COVERAGE_MIN_BRANCHES", defaultValue: 80 },
 };
 const criticalScopeConfig = [
   {
     name: "threads",
     prefix: "src/features/threads/",
-    thresholds: { statements: 65, lines: 65, functions: 72, branches: 65 },
+    thresholds: { statements: 95, lines: 95, functions: 95, branches: 95 },
   },
   {
     name: "services",
     prefix: "src/services/",
-    thresholds: { statements: 45, lines: 45, functions: 45, branches: 70 },
+    thresholds: { statements: 95, lines: 95, functions: 95, branches: 95 },
   },
 ];
 
@@ -44,6 +50,12 @@ export function parseThresholdValue(metric, envKey, defaultValue) {
   }
   if (parsed < 0 || parsed > 100) {
     throw new Error(`Invalid ${envKey} value: "${raw}" must be between 0 and 100`);
+  }
+  const floorValue = globalMinimumThresholds[metric];
+  if (parsed < floorValue) {
+    throw new Error(
+      `Invalid ${envKey} value: "${raw}" is below enforced minimum ${floorValue}`,
+    );
   }
   return { value: parsed, source: "env" };
 }
@@ -158,7 +170,12 @@ export function collectGlobalFailures(thresholds, actualValues) {
   for (const [metric, minValue] of Object.entries(thresholds)) {
     const actual = actualValues[metric];
     if (actual < minValue) {
-      failures.push({ metric, min: minValue, actual });
+      failures.push({
+        metric,
+        min: minValue,
+        actual,
+        shortfall: Number((minValue - actual).toFixed(2)),
+      });
     }
   }
   return failures;
@@ -174,6 +191,7 @@ export function collectCriticalScopeFailures(criticalScopes) {
         metric: "files",
         min: 1,
         actual: 0,
+        shortfall: 1,
       });
       continue;
     }
@@ -186,6 +204,7 @@ export function collectCriticalScopeFailures(criticalScopes) {
           metric,
           min: minValue,
           actual,
+          shortfall: Number((minValue - actual).toFixed(2)),
         });
       }
     }
@@ -253,6 +272,7 @@ export async function main() {
       hour12: false,
     }),
     thresholds,
+    globalMinimumThresholds,
     thresholdSources,
     coverage: actualValues,
     criticalScopes,
@@ -294,12 +314,12 @@ export async function main() {
     failures.forEach((failure) => {
       if (failure.scope) {
         console.error(
-          `  - scope:${failure.scope} (${failure.prefix}) ${failure.metric}: actual ${failure.actual}% < required ${failure.min}%`,
+          `  - scope:${failure.scope} (${failure.prefix}) ${failure.metric}: actual ${failure.actual}% < required ${failure.min}% (shortfall ${failure.shortfall}%)`,
         );
         return;
       }
       console.error(
-        `  - global ${failure.metric}: actual ${failure.actual}% < required ${failure.min}%`,
+        `  - global ${failure.metric}: actual ${failure.actual}% < required ${failure.min}% (shortfall ${failure.shortfall}%)`,
       );
     });
     process.exit(3);

@@ -1,0 +1,112 @@
+name: Real Integrations
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  real-integrations:
+    runs-on: ubuntu-latest
+    env:
+      REAL_EXTERNAL_URL: ${{ vars.REAL_EXTERNAL_URL != '' && vars.REAL_EXTERNAL_URL || secrets.REAL_EXTERNAL_URL }}
+      REAL_LLM_BASE_URL: ${{ vars.REAL_LLM_BASE_URL != '' && vars.REAL_LLM_BASE_URL || secrets.REAL_LLM_BASE_URL }}
+      REAL_LLM_API_KEY: ${{ secrets.REAL_LLM_API_KEY }}
+      REAL_LLM_MODEL: ${{ vars.REAL_LLM_MODEL }}
+      REAL_LLM_TIMEOUT_MS: ${{ vars.REAL_LLM_TIMEOUT_MS }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][install] $(date -u +'%Y-%m-%dT%H:%M:%SZ') npm ci running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          npm ci
+
+      - name: Live preflight
+        id: preflight
+        run: npm run test:live:preflight
+
+      - name: Skip notice (optional workflow)
+        if: steps.preflight.outputs.run_any != 'true'
+        run: |
+          echo "::notice::${{ steps.preflight.outputs.reason }}"
+          {
+            echo "## Real Integrations"
+            echo ""
+            echo "Status: skipped (optional)"
+            echo ""
+            echo "Reason: ${{ steps.preflight.outputs.reason }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install Playwright browser
+        if: steps.preflight.outputs.run_external == 'true'
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][external-install] $(date -u +'%Y-%m-%dT%H:%M:%SZ') playwright install running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          npm run test:e2e:install
+
+      - name: Run external E2E
+        if: steps.preflight.outputs.run_external == 'true'
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][external-e2e] $(date -u +'%Y-%m-%dT%H:%M:%SZ') external e2e running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          npm run test:e2e:external
+
+      - name: External E2E skip notice
+        if: steps.preflight.outputs.run_external != 'true'
+        run: |
+          echo "::notice::REAL_EXTERNAL_URL missing, external E2E not executed."
+
+      - name: Run real LLM smoke
+        if: steps.preflight.outputs.run_llm == 'true'
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][real-llm] $(date -u +'%Y-%m-%dT%H:%M:%SZ') real llm smoke running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          npm run test:real:llm
+
+      - name: Upload real LLM report
+        if: steps.preflight.outputs.run_llm == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: real-llm-report
+          path: .runtime-cache/test_output/real-llm/latest.json
+          if-no-files-found: ignore
+      - name: Upload live preflight report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: live-preflight-report
+          path: .runtime-cache/test_output/live-preflight/latest.json
+          if-no-files-found: ignore
+
+      - name: Real LLM skip notice
+        if: steps.preflight.outputs.run_llm != 'true'
+        run: |
+          echo "::notice::REAL_LLM_BASE_URL/REAL_LLM_API_KEY missing, LLM smoke not executed."
