@@ -18,6 +18,24 @@ const workspace: WorkspaceInfo = {
   settings: { sidebarCollapsed: false },
 };
 
+const workspace2: WorkspaceInfo = {
+  id: "workspace-2",
+  name: "CodexMonitor 2",
+  path: "/tmp/codex-2",
+  connected: true,
+  settings: { sidebarCollapsed: false },
+};
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("useModels", () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -122,5 +140,68 @@ describe("useModels", () => {
       expect(result.current.selectedModelId).toBe("custom-model");
       expect(result.current.selectedEffort).toBe("high");
     });
+  });
+
+  it("drops stale model responses when workspace switches", async () => {
+    const ws1Models = createDeferred<any>();
+    const ws2Models = createDeferred<any>();
+    const ws1Config = createDeferred<string | null>();
+    const ws2Config = createDeferred<string | null>();
+
+    vi.mocked(getModelList).mockImplementation((id: string) =>
+      id === "workspace-1" ? ws1Models.promise : ws2Models.promise,
+    );
+    vi.mocked(getConfigModel).mockImplementation((id: string) =>
+      id === "workspace-1" ? ws1Config.promise : ws2Config.promise,
+    );
+
+    const { result, rerender } = renderHook(
+      ({ activeWorkspace }: { activeWorkspace: WorkspaceInfo }) =>
+        useModels({ activeWorkspace }),
+      { initialProps: { activeWorkspace: workspace } },
+    );
+
+    rerender({ activeWorkspace: workspace2 });
+
+    ws2Models.resolve({
+      result: {
+        data: [
+          {
+            id: "ws2-model",
+            model: "ws2-model",
+            displayName: "WS2 Model",
+            supportedReasoningEfforts: [],
+            defaultReasoningEffort: null,
+            isDefault: true,
+          },
+        ],
+      },
+    });
+    ws2Config.resolve("ws2-model");
+
+    await waitFor(() => expect(result.current.selectedModel?.id).toBe("ws2-model"));
+
+    ws1Models.resolve({
+      result: {
+        data: [
+          {
+            id: "ws1-model",
+            model: "ws1-model",
+            displayName: "WS1 Model",
+            supportedReasoningEfforts: [],
+            defaultReasoningEffort: null,
+            isDefault: true,
+          },
+        ],
+      },
+    });
+    ws1Config.resolve("ws1-model");
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.selectedModel?.id).toBe("ws2-model");
+    expect(result.current.models.some((model) => model.id === "ws1-model")).toBe(false);
   });
 });

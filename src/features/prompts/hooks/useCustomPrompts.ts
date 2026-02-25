@@ -19,9 +19,16 @@ export function useCustomPrompts({ activeWorkspace, onDebug }: UseCustomPromptsO
   const [prompts, setPrompts] = useState<CustomPromptOption[]>([]);
   const lastFetchedWorkspaceId = useRef<string | null>(null);
   const inFlight = useRef(false);
+  const inFlightCount = useRef(0);
+  const latestRequestId = useRef(0);
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
+  const currentWorkspaceId = useRef<string | null>(workspaceId);
+
+  useEffect(() => {
+    currentWorkspaceId.current = workspaceId;
+  }, [workspaceId]);
 
   const logPromptError = useCallback(
     (idSuffix: string, label: string, error: unknown) => {
@@ -41,9 +48,9 @@ export function useCustomPrompts({ activeWorkspace, onDebug }: UseCustomPromptsO
     if (!workspaceId || !isConnected) {
       return;
     }
-    if (inFlight.current) {
-      return;
-    }
+    const requestId = ++latestRequestId.current;
+    const requestWorkspaceId = workspaceId;
+    inFlightCount.current += 1;
     inFlight.current = true;
     onDebug?.({
       id: `${Date.now()}-client-prompts-list`,
@@ -94,12 +101,19 @@ export function useCustomPrompts({ activeWorkspace, onDebug }: UseCustomPromptsO
           scope,
         };
       });
+      const isLatestRequest =
+        latestRequestId.current === requestId &&
+        currentWorkspaceId.current === requestWorkspaceId;
+      if (!isLatestRequest) {
+        return;
+      }
       setPrompts(data);
       lastFetchedWorkspaceId.current = workspaceId;
     } catch (error) {
       logPromptError("client-prompts-list-error", "prompts/list error", error);
     } finally {
-      inFlight.current = false;
+      inFlightCount.current = Math.max(0, inFlightCount.current - 1);
+      inFlight.current = inFlightCount.current > 0;
     }
   }, [isConnected, logPromptError, onDebug, workspaceId]);
 

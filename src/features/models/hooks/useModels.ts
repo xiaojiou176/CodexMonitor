@@ -166,23 +166,27 @@ export function useModels({
   preferredModelId = null,
   preferredEffort = null,
 }: UseModelsOptions) {
+  const workspaceId = activeWorkspace?.id ?? null;
+  const isConnected = Boolean(activeWorkspace?.connected);
+
   const [models, setModels] = useState<ModelOption[]>([]);
   const [configModel, setConfigModel] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelIdState] = useState<string | null>(null);
   const [selectedEffort, setSelectedEffortState] = useState<string | null>(null);
   const lastFetchedWorkspaceId = useRef<string | null>(null);
   const inFlight = useRef(false);
+  const inFlightCount = useRef(0);
+  const latestRequestId = useRef(0);
+  const currentWorkspaceId = useRef<string | null>(workspaceId);
   const hasUserSelectedModel = useRef(false);
   const hasUserSelectedEffort = useRef(false);
   const lastWorkspaceId = useRef<string | null>(null);
-
-  const workspaceId = activeWorkspace?.id ?? null;
-  const isConnected = Boolean(activeWorkspace?.connected);
 
   useEffect(() => {
     if (workspaceId === lastWorkspaceId.current) {
       return;
     }
+    currentWorkspaceId.current = workspaceId;
     hasUserSelectedModel.current = false;
     hasUserSelectedEffort.current = false;
     lastWorkspaceId.current = workspaceId;
@@ -261,9 +265,9 @@ export function useModels({
     if (!workspaceId || !isConnected) {
       return;
     }
-    if (inFlight.current) {
-      return;
-    }
+    const requestId = ++latestRequestId.current;
+    const requestWorkspaceId = workspaceId;
+    inFlightCount.current += 1;
     inFlight.current = true;
     onDebug?.({
       id: `${Date.now()}-client-model-list`,
@@ -314,6 +318,12 @@ export function useModels({
         label: "model/list response",
         payload: response,
       });
+      const isLatestRequest =
+        latestRequestId.current === requestId &&
+        currentWorkspaceId.current === requestWorkspaceId;
+      if (!isLatestRequest) {
+        return;
+      }
       setConfigModel(configModelFromConfig);
       const rawData = response?.result?.data ?? response?.data ?? [];
       const dataFromServer: ModelOption[] = rawData.map((item: any) => ({
@@ -393,7 +403,8 @@ export function useModels({
         }
       }
     } finally {
-      inFlight.current = false;
+      inFlightCount.current = Math.max(0, inFlightCount.current - 1);
+      inFlight.current = inFlightCount.current > 0;
     }
   }, [
     isConnected,
