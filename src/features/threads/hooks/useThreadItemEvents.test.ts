@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildConversationItem } from "../../../utils/threadItems";
 import { useThreadItemEvents } from "./useThreadItemEvents";
 
@@ -15,6 +15,7 @@ type SetupOverrides = {
   getCustomName?: (workspaceId: string, threadId: string) => string | undefined;
   onUserMessageCreated?: (workspaceId: string, threadId: string, text: string) => void;
   onReviewExited?: (workspaceId: string, threadId: string) => void;
+  getThreadTurnStatus?: (threadId: string) => "completed" | null;
 };
 
 const makeOptions = (overrides: SetupOverrides = {}) => {
@@ -26,7 +27,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const setActiveItemStatus = vi.fn();
   const clearActiveItemStatus = vi.fn();
   const setMcpProgressMessage = vi.fn();
-  const getThreadTurnStatus = vi.fn(() => null);
+  const getThreadTurnStatus = overrides.getThreadTurnStatus ?? vi.fn(() => null);
   const touchThreadActivity = vi.fn();
   const safeMessageActivity = vi.fn();
   const recordThreadActivity = vi.fn();
@@ -34,7 +35,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const getCustomName =
     overrides.getCustomName ?? vi.fn(() => undefined);
 
-  const { result } = renderHook(() =>
+  const { result, unmount } = renderHook(() =>
     useThreadItemEvents({
       activeThreadId: overrides.activeThreadId ?? null,
       dispatch,
@@ -58,6 +59,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
 
   return {
     result,
+    unmount,
     dispatch,
     markProcessing,
     markReviewing,
@@ -86,6 +88,10 @@ describe("useThreadItemEvents", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(buildConversationItem).mockReturnValue(convertedItem);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("dispatches item updates and marks review mode on item start", () => {
@@ -321,5 +327,150 @@ describe("useThreadItemEvents", () => {
       itemId: "plan-1",
       delta: "- Step 1",
     });
+  });
+
+  it("ignores empty stdin terminal interaction payloads", () => {
+    const { result, dispatch, markProcessing } = makeOptions();
+
+    act(() => {
+      result.current.onTerminalInteraction("ws-1", "thread-1", "tool-1", "");
+    });
+
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "appendToolOutput" }),
+    );
+    expect(markProcessing).not.toHaveBeenCalled();
+  });
+
+  it("avoids processing phase changes for terminal turns on tool output and mcp progress", () => {
+    const { result, markProcessing, setThreadPhase, setActiveItemStatus, setMcpProgressMessage } =
+      makeOptions({
+        getThreadTurnStatus: () => "completed",
+      });
+
+    act(() => {
+      result.current.onCommandOutputDelta("ws-1", "thread-1", "tool-1", "delta");
+      result.current.onMcpToolCallProgress("ws-1", "thread-1", "tool-1", "50%");
+    });
+
+    expect(markProcessing).not.toHaveBeenCalled();
+    expect(setThreadPhase).not.toHaveBeenCalled();
+    expect(setActiveItemStatus).toHaveBeenCalledWith("thread-1", "tool-1", "inProgress");
+    expect(setMcpProgressMessage).toHaveBeenCalledWith("thread-1", "50%");
+  });
+
+  it("merges pending agent deltas for the same key before a single flush", async () => {
+    const { result, dispatch } = makeOptions({
+      getCustomName: () => "Custom Name",
+    });
+
+    act(() => {
+      result.current.onAgentMessageDelta({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        itemId: "assistant-1",
+        delta: "Hello ",
+        turnId: "turn-1",
+      });
+      result.current.onAgentMessageDelta({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        itemId: "assistant-1",
+        delta: "World",
+      });
+    });
+
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-1",
+      delta: "Hello World",
+      hasCustomName: true,
+      turnId: "turn-1",
+    });
+  });
+
+  it("falls back to setTimeout when requestAnimationFrame is unavailable", () => {
+    vi.useFakeTimers();
+    const originalRaf = window.requestAnimationFrame;
+    const originalCancelRaf = window.cancelAnimationFrame;
+    // Force the fallback path in schedulePendingAgentDeltaFlush.
+    Object.assign(window, {
+      requestAnimationFrame: undefined,
+      cancelAnimationFrame: undefined,
+    });
+
+    const { result, dispatch } = makeOptions();
+
+    act(() => {
+      result.current.onAgentMessageDelta({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        itemId: "assistant-timeout",
+        delta: "timeout flush",
+      });
+      vi.advanceTimersByTime(17);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-timeout",
+      delta: "timeout flush",
+      hasCustomName: false,
+      turnId: null,
+    });
+
+    Object.assign(window, {
+      requestAnimationFrame: originalRaf,
+      cancelAnimationFrame: originalCancelRaf,
+    });
+  });
+
+  it("flushes pending deltas on unmount via cleanup unsubscribe", () => {
+    const cancelAnimationFrameSpy = vi.spyOn(window, "cancelAnimationFrame");
+    const { result, dispatch, unmount } = makeOptions();
+
+    act(() => {
+      result.current.onAgentMessageDelta({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        itemId: "assistant-cleanup",
+        delta: "cleanup",
+      });
+    });
+
+    unmount();
+
+    expect(cancelAnimationFrameSpy).toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-cleanup",
+      delta: "cleanup",
+      hasCustomName: false,
+      turnId: null,
+    });
+  });
+
+  it("handles invalid item payload conversion without upserting", () => {
+    vi.mocked(buildConversationItem).mockReturnValue(null);
+    const { result, dispatch, safeMessageActivity } = makeOptions();
+
+    act(() => {
+      result.current.onItemCompleted("ws-1", "thread-1", { type: "agentMessage" });
+    });
+
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "upsertItem" }),
+    );
+    expect(safeMessageActivity).toHaveBeenCalled();
   });
 });

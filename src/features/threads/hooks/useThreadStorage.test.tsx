@@ -144,4 +144,46 @@ describe("useThreadStorage", () => {
     });
     expect(result.current.isThreadPinned("ws-1", "thread-2")).toBeTruthy();
   });
+
+  it("returns null timestamp for missing pin and no-ops when unpinning absent key", () => {
+    vi.mocked(loadThreadActivity).mockReturnValue({});
+    vi.mocked(loadPinnedThreads).mockReturnValue({});
+    vi.mocked(loadCustomNames).mockReturnValue({});
+
+    const { result } = renderHook(() => useThreadStorage());
+    const versionBefore = result.current.pinnedThreadsVersion;
+
+    expect(result.current.getPinTimestamp("ws-missing", "thread-missing")).toBeNull();
+
+    act(() => {
+      result.current.unpinThread("ws-missing", "thread-missing");
+    });
+
+    expect(savePinnedThreads).not.toHaveBeenCalled();
+    expect(result.current.pinnedThreadsVersion).toBe(versionBefore);
+  });
+
+  it("warns when pin soft limit is reached and returns saved timestamp", () => {
+    vi.mocked(loadThreadActivity).mockReturnValue({});
+    vi.mocked(loadPinnedThreads).mockReturnValue({
+      "ws-1:thread-1": 111,
+      "ws-1:thread-2": 222,
+    });
+    vi.mocked(loadCustomNames).mockReturnValue({});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { result } = renderHook(() => useThreadStorage());
+
+    let pinResult = false;
+    act(() => {
+      pinResult = result.current.pinThread("ws-1", "thread-3");
+    });
+
+    expect(pinResult).toBe(true);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toContain("Pin limit reached (2)");
+    expect(result.current.getPinTimestamp("ws-1", "thread-3")).toEqual(expect.any(Number));
+
+    warnSpy.mockRestore();
+  });
 });

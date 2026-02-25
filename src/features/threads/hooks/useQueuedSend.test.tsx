@@ -4,6 +4,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
 import { useQueuedSend } from "./useQueuedSend";
 
+const { flushScheduledLocalStorageWritesMock } = vi.hoisted(() => ({
+  flushScheduledLocalStorageWritesMock: vi.fn(),
+}));
+
+vi.mock("../../../utils/localStorageWriteScheduler", () => ({
+  scheduleLocalStorageWrite: (_key: string, write: () => void) => {
+    write();
+  },
+  flushScheduledLocalStorageWrites: flushScheduledLocalStorageWritesMock,
+}));
+
 const workspace: WorkspaceInfo = {
   id: "workspace-1",
   name: "CodexMonitor",
@@ -50,6 +61,7 @@ async function flushAsyncTicks(ticks = 1): Promise<void> {
 describe("useQueuedSend", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    flushScheduledLocalStorageWritesMock.mockClear();
   });
 
   it("sends queued messages one at a time after processing completes", async () => {
@@ -983,6 +995,230 @@ describe("useQueuedSend", () => {
       connected: false,
     });
     expect(options.sendUserMessage).toHaveBeenCalledWith("Connect", []);
+  });
+
+  it("returns empty queue state when no queued items exist", () => {
+    const options = makeOptions({
+      activeThreadId: "thread-empty",
+      threadStatusById: {},
+    });
+
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    expect(result.current.activeQueue).toEqual([]);
+    expect(result.current.queueHealthEntries).toEqual([]);
+  });
+
+  it("supports duplicate enqueue requests for the same text", async () => {
+    const options = makeOptions({ isProcessing: true });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("duplicate");
+      await result.current.queueMessage("duplicate");
+    });
+
+    expect(result.current.activeQueue.map((item) => item.text)).toEqual([
+      "duplicate",
+      "duplicate",
+    ]);
+  });
+
+  it("requeues an in-flight message when retryThreadQueue is triggered", async () => {
+    const options = makeOptions({
+      sendUserMessage: vi.fn().mockImplementation(
+        () => new Promise<void>(() => {
+          // keep in-flight unresolved for retry path
+        }),
+      ),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("first");
+    });
+    await flushAsyncTicks(2);
+
+    await act(async () => {
+      result.current.retryThreadQueue("thread-1");
+    });
+    await flushAsyncTicks(2);
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(options.sendUserMessage).toHaveBeenNthCalledWith(2, "first", []);
+  });
+
+  it("stops auto-dispatching after max retry threshold and keeps item queued", async () => {
+    const options = makeOptions({
+      sendUserMessage: vi.fn().mockRejectedValue(new Error("always-fail")),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("stuck message");
+    });
+
+    await flushAsyncTicks(4);
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(result.current.activeQueue.map((item) => item.text)).toEqual([
+      "stuck message",
+    ]);
+
+    await flushAsyncTicks(2);
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(2);
+
+    const threadHealth = result.current.queueHealthEntries.find(
+      (entry) => entry.threadId === "thread-1",
+    );
+    expect(threadHealth?.lastFailureReason).toBe("always-fail");
+  });
+
+  it("allows manual retry after auto-retry threshold is reached", async () => {
+    const options = makeOptions({
+      sendUserMessage: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("fail-1"))
+        .mockRejectedValueOnce(new Error("fail-2"))
+        .mockResolvedValueOnce(undefined),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("manual retry");
+    });
+
+    await flushAsyncTicks(4);
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(result.current.activeQueue).toHaveLength(1);
+
+    await act(async () => {
+      result.current.retryThreadQueue("thread-1");
+    });
+    await flushAsyncTicks(2);
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(3);
+    expect(options.sendUserMessage).toHaveBeenLastCalledWith("manual retry", []);
+    expect(result.current.activeQueue).toEqual([]);
+  });
+
+  it("ignores empty input and empty thread id branches", async () => {
+    const options = makeOptions();
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("   ");
+      await result.current.queueMessageForThread("", "content");
+      await result.current.queueMessageForThread("thread-1", "    ");
+    });
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(result.current.activeQueue).toEqual([]);
+  });
+
+  it("flushes scheduled localStorage writes on cleanup", () => {
+    const options = makeOptions();
+    const { unmount } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    unmount();
+
+    expect(flushScheduledLocalStorageWritesMock).toHaveBeenCalledWith(
+      "codexmonitor.queuedMessagesByThread",
+    );
+  });
+
+  it("keeps subsequent queued message blocked while first dispatch is still in flight", async () => {
+    const sendFirstPending = new Promise<void>(() => {
+      // keep first dispatch pending to verify serialized queue behavior
+    });
+    const options = makeOptions({
+      sendUserMessage: vi
+        .fn()
+        .mockImplementationOnce(() => sendFirstPending)
+        .mockResolvedValue(undefined),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("first-in-flight");
+      await result.current.queueMessage("second-queued");
+    });
+    await flushAsyncTicks(3);
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenCalledWith("first-in-flight", []);
+    expect(result.current.activeQueue.map((item) => item.text)).toEqual(["second-queued"]);
+    expect(
+      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-1")
+        ?.blockedReason,
+    ).toBe("awaiting_turn_start_event");
+  });
+
+  it("supports dropping a single queued message and clearing whole thread queue", async () => {
+    const onRecoverStaleThread = vi.fn();
+    const options = makeOptions({
+      isProcessing: true,
+      onRecoverStaleThread,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("keep-me");
+      await result.current.queueMessage("remove-me");
+    });
+
+    const removeId = result.current.activeQueue.find((item) => item.text === "remove-me")?.id ?? "";
+    await act(async () => {
+      result.current.removeQueuedMessage("thread-1", removeId);
+    });
+    expect(result.current.activeQueue.map((item) => item.text)).toEqual(["keep-me"]);
+
+    await act(async () => {
+      result.current.clearThreadQueue("thread-1");
+    });
+
+    expect(result.current.activeQueue).toEqual([]);
+    expect(onRecoverStaleThread).toHaveBeenCalledWith("thread-1");
+  });
+
+  it("invokes recovery callback for manual retry even when thread has no in-flight message", async () => {
+    const onRecoverStaleThread = vi.fn();
+    const options = makeOptions({
+      isProcessing: true,
+      onRecoverStaleThread,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("manual-retry-target");
+    });
+
+    await act(async () => {
+      result.current.retryThreadQueue("thread-1");
+    });
+
+    expect(result.current.activeQueue.map((item) => item.text)).toEqual(["manual-retry-target"]);
+    expect(onRecoverStaleThread).toHaveBeenCalledWith("thread-1");
   });
 
 });

@@ -45,6 +45,57 @@ describe("cliproxyapi service", () => {
     expect(localStorage.getItem("cliproxyapi_config")).toBeNull();
   });
 
+  it("prefers the new baseUrl storage key over legacy config", () => {
+    saveCLIProxyAPIConfig({
+      baseUrl: "http://seed.local:18317",
+      apiKey: "session-key",
+    });
+    localStorage.setItem("cliproxyapi_base_url", "http://next.local:18317");
+    localStorage.setItem(
+      "cliproxyapi_config",
+      JSON.stringify({
+        baseUrl: "http://legacy.local:18317",
+      }),
+    );
+
+    expect(getCLIProxyAPIConfig()).toEqual({
+      baseUrl: "http://next.local:18317",
+      apiKey: "session-key",
+    });
+  });
+
+  it("falls back to default baseUrl when saved value is blank", () => {
+    saveCLIProxyAPIConfig({
+      baseUrl: "   ",
+      apiKey: "token-abc",
+    });
+
+    expect(getCLIProxyAPIConfig()).toEqual({
+      baseUrl: "http://all.local:18317",
+      apiKey: "token-abc",
+    });
+    expect(localStorage.getItem("cliproxyapi_base_url")).toBe("http://all.local:18317");
+  });
+
+  it("reads legacy persisted baseUrl when next storage key is absent", () => {
+    saveCLIProxyAPIConfig({
+      baseUrl: "http://temp.local:18317",
+      apiKey: "token-legacy",
+    });
+    localStorage.removeItem("cliproxyapi_base_url");
+    localStorage.setItem(
+      "cliproxyapi_config",
+      JSON.stringify({
+        baseUrl: "  http://legacy.local:18317  ",
+      }),
+    );
+
+    expect(getCLIProxyAPIConfig()).toEqual({
+      baseUrl: "http://legacy.local:18317",
+      apiKey: "token-legacy",
+    });
+  });
+
   it("does not persist api key across module reloads", async () => {
     saveCLIProxyAPIConfig({
       baseUrl: "http://proxy.local:18317",
@@ -96,6 +147,53 @@ describe("cliproxyapi service", () => {
     await expect(fetchCLIProxyAPIModels()).rejects.toThrow("network down");
   });
 
+  it("throws detailed HTTP errors when model fetch returns non-ok status", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response("forbidden", { status: 403, statusText: "Forbidden" }),
+    );
+
+    await expect(fetchCLIProxyAPIModels()).rejects.toThrow("HTTP 403: Forbidden");
+  });
+
+  it("returns an empty list when response data shape is missing", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ object: "list", data: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await expect(fetchCLIProxyAPIModels()).resolves.toEqual([]);
+  });
+
+  it("uses explicit config argument instead of persisted runtime config", async () => {
+    saveCLIProxyAPIConfig({
+      baseUrl: "http://persisted.local:18317",
+      apiKey: "persisted-token",
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ object: "list", data: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await expect(
+      fetchCLIProxyAPIModels({
+        baseUrl: "http://explicit.local:18317",
+        apiKey: "explicit-token",
+      }),
+    ).resolves.toEqual([]);
+
+    expect(fetchMock).toHaveBeenCalledWith("http://explicit.local:18317/v1/models", {
+      method: "GET",
+      headers: {
+        Authorization: "Bearer explicit-token",
+        "Content-Type": "application/json",
+      },
+    });
+  });
+
   it("returns success and model count when connection test passes", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(
@@ -134,6 +232,39 @@ describe("cliproxyapi service", () => {
     expect(result.success).toBe(false);
     expect(result.modelCount).toBe(0);
     expect(String(result.error ?? "")).toContain("HTTP 401");
+  });
+
+  it("returns a stringified error payload for non-Error rejections", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce("raw failure");
+
+    const result = await testCLIProxyAPIConnection({
+      baseUrl: "http://all.local:18317",
+      apiKey: "bad-token",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      modelCount: 0,
+      error: "raw failure",
+    });
+  });
+
+  it("uses persisted config in connection test and handles missing data arrays", async () => {
+    saveCLIProxyAPIConfig({
+      baseUrl: "http://persisted.local:18317",
+      apiKey: "persisted-token",
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ object: "list" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await expect(testCLIProxyAPIConnection()).resolves.toEqual({
+      success: true,
+      modelCount: 0,
+    });
   });
 
   it("categorizes models by provider and returns display names", () => {

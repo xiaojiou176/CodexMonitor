@@ -38,6 +38,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const setThreadMessagePhase = vi.fn();
   const setThreadWaitReason = vi.fn();
   const setThreadRetryState = vi.fn();
+  const markThreadError = vi.fn();
   const setActiveTurnId = vi.fn();
   const pushThreadErrorMessage = vi.fn();
   const safeMessageActivity = vi.fn();
@@ -65,6 +66,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
       setThreadMessagePhase,
       setThreadWaitReason,
       setThreadRetryState,
+      markThreadError,
       setActiveTurnId,
       pendingInterruptsRef,
       pushThreadErrorMessage,
@@ -88,6 +90,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
     setThreadMessagePhase,
     setThreadWaitReason,
     setThreadRetryState,
+    markThreadError,
     setActiveTurnId,
     pushThreadErrorMessage,
     safeMessageActivity,
@@ -305,6 +308,20 @@ describe("useThreadTurnEvents", () => {
     expect(setActiveTurnId).not.toHaveBeenCalled();
   });
 
+  it("cleans queued interrupt without service call when turn id is missing", () => {
+    const { result, markProcessing, setActiveTurnId, pendingInterruptsRef } =
+      makeOptions({ pendingInterrupts: ["thread-1"] });
+
+    act(() => {
+      result.current.onTurnStarted("ws-1", "thread-1", "");
+    });
+
+    expect(pendingInterruptsRef.current.has("thread-1")).toBe(false);
+    expect(interruptTurn).not.toHaveBeenCalled();
+    expect(markProcessing).not.toHaveBeenCalled();
+    expect(setActiveTurnId).not.toHaveBeenCalled();
+  });
+
   it("clears pending interrupt and active turn on turn completed", () => {
     const { result, markProcessing, setActiveTurnId, pendingInterruptsRef } =
       makeOptions({ pendingInterrupts: ["thread-1"] });
@@ -316,6 +333,46 @@ describe("useThreadTurnEvents", () => {
     expect(markProcessing).toHaveBeenCalledWith("thread-1", false);
     expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", null);
     expect(pendingInterruptsRef.current.has("thread-1")).toBe(false);
+  });
+
+  it("classifies failed turn completion and uses fallback error message", () => {
+    const {
+      result,
+      markThreadError,
+      pushThreadErrorMessage,
+      setThreadPhase,
+      markProcessing,
+      setActiveTurnId,
+    } = makeOptions();
+
+    act(() => {
+      result.current.onTurnCompleted("ws-1", "thread-1", "turn-1", {
+        status: "failed",
+        errorMessage: null,
+      });
+    });
+
+    expect(markThreadError).toHaveBeenCalledWith("thread-1", "Turn failed.");
+    expect(pushThreadErrorMessage).toHaveBeenCalledWith("thread-1", "Turn failed.");
+    expect(setThreadPhase).toHaveBeenCalledWith("thread-1", "failed");
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", false);
+    expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", null);
+  });
+
+  it("classifies interrupted turn completion", () => {
+    const { result, setThreadPhase, markThreadError, pushThreadErrorMessage } =
+      makeOptions();
+
+    act(() => {
+      result.current.onTurnCompleted("ws-1", "thread-1", "turn-1", {
+        status: "interrupted",
+        errorMessage: null,
+      });
+    });
+
+    expect(setThreadPhase).toHaveBeenCalledWith("thread-1", "interrupted");
+    expect(markThreadError).not.toHaveBeenCalled();
+    expect(pushThreadErrorMessage).not.toHaveBeenCalled();
   });
 
   it("clears the active plan when all plan steps are completed", () => {
@@ -521,6 +578,30 @@ describe("useThreadTurnEvents", () => {
     });
   });
 
+  it("ignores invalid turn id for token usage context window update", () => {
+    const { result, dispatch } = makeOptions();
+    vi.mocked(normalizeTokenUsage).mockReturnValue({ total: 1 } as never);
+
+    act(() => {
+      result.current.onThreadTokenUsageUpdated("ws-1", "thread-1", {
+        turnId: "   ",
+        tokenUsage: { total: 1 },
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadTokenUsage",
+      threadId: "thread-1",
+      tokenUsage: { total: 1 },
+    });
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setThreadTurnContextWindow",
+        threadId: "thread-1",
+      }),
+    );
+  });
+
   it("dispatches normalized rate limits updates", () => {
     const { result, dispatch } = makeOptions();
     const normalized = { primary: { usedPercent: 10 } };
@@ -571,6 +652,20 @@ describe("useThreadTurnEvents", () => {
     expect(safeMessageActivity).toHaveBeenCalled();
   });
 
+  it("uses fallback error message when turn error payload message is empty", () => {
+    const { result, markThreadError, pushThreadErrorMessage } = makeOptions();
+
+    act(() => {
+      result.current.onTurnError("ws-1", "thread-1", "turn-1", {
+        message: "",
+        willRetry: false,
+      });
+    });
+
+    expect(markThreadError).toHaveBeenCalledWith("thread-1", "Turn failed.");
+    expect(pushThreadErrorMessage).toHaveBeenCalledWith("thread-1", "Turn failed.");
+  });
+
   it("ignores turn errors that will retry", () => {
     const {
       result,
@@ -599,6 +694,38 @@ describe("useThreadTurnEvents", () => {
     expect(setThreadWaitReason).toHaveBeenCalledWith("thread-1", "retry");
     expect(setThreadRetryState).toHaveBeenCalledWith("thread-1", "retrying");
     expect(setThreadPhase).toHaveBeenCalledWith("thread-1", "starting");
+  });
+
+  it("ignores thread started payloads with missing thread id", () => {
+    const { result, dispatch, recordThreadActivity, safeMessageActivity } = makeOptions();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", {
+        id: null,
+        preview: "ignored",
+      });
+    });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(recordThreadActivity).not.toHaveBeenCalled();
+    expect(safeMessageActivity).not.toHaveBeenCalled();
+  });
+
+  it("ignores thread name updates when payload is incomplete", () => {
+    const { result, dispatch } = makeOptions();
+
+    act(() => {
+      result.current.onThreadNameUpdated("ws-1", {
+        threadId: "",
+        threadName: "name",
+      });
+      result.current.onThreadNameUpdated("ws-1", {
+        threadId: "thread-1",
+        threadName: null,
+      });
+    });
+
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
 });

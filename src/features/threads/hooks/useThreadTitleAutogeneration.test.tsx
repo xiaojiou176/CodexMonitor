@@ -196,4 +196,189 @@ describe("useThreadTitleAutogeneration", () => {
       }),
     );
   });
+
+  it("records non-Error failures as string payloads", async () => {
+    vi.mocked(generateRunMetadata).mockRejectedValue("branch suggestion unavailable");
+    const onDebug = vi.fn();
+
+    const { result } = renderHook(() =>
+      useThreadTitleAutogeneration({
+        enabled: true,
+        itemsByThreadRef: { current: { "thread-1": [] } },
+        threadsByWorkspaceRef: {
+          current: {
+            "ws-1": [{ id: "thread-1", name: "New Agent", updatedAt: 0 }],
+          },
+        },
+        getCustomName: vi.fn(() => undefined),
+        renameThread: vi.fn(),
+        onDebug,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.onUserMessageCreated("ws-1", "thread-1", "trigger non-error failure");
+    });
+
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "error",
+        label: "thread/title autogen error",
+        payload: "branch suggestion unavailable",
+      }),
+    );
+  });
+
+  it("skips generation when workspace or thread id is missing", async () => {
+    const { result } = setup();
+
+    await act(async () => {
+      await result.current.onUserMessageCreated("", "thread-1", "hello");
+      await result.current.onUserMessageCreated("ws-1", "", "hello");
+    });
+
+    expect(generateRunMetadata).not.toHaveBeenCalled();
+  });
+
+  it("cleans image and skill markers before metadata generation", async () => {
+    vi.mocked(generateRunMetadata).mockResolvedValue({
+      title: "Generated clean title",
+      worktreeName: "feat/clean",
+    });
+    const { result } = setup({ threadName: "Agent 12" });
+
+    await act(async () => {
+      await result.current.onUserMessageCreated(
+        "ws-1",
+        "thread-1",
+        "   [image x2]   summarize   $debug_mode   this   change  ",
+      );
+    });
+
+    expect(generateRunMetadata).toHaveBeenCalledWith("ws-1", "summarize this change");
+  });
+
+  it("cleans mixed multimedia markers before metadata generation", async () => {
+    vi.mocked(generateRunMetadata).mockResolvedValue({
+      title: "Generated clean title",
+      worktreeName: "feat/clean-media",
+    });
+    const { result } = setup({ threadName: "Agent AB12" });
+
+    await act(async () => {
+      await result.current.onUserMessageCreated(
+        "ws-1",
+        "thread-1",
+        " [IMAGE] [image] please inspect this clip $branch_hint ",
+      );
+    });
+
+    expect(generateRunMetadata).toHaveBeenCalledWith("ws-1", "please inspect this clip");
+  });
+
+  it("skips generation when thread name is not auto-generated", async () => {
+    const { result } = setup({ threadName: "Manual project planning" });
+
+    await act(async () => {
+      await result.current.onUserMessageCreated("ws-1", "thread-1", "hello world");
+    });
+
+    expect(generateRunMetadata).not.toHaveBeenCalled();
+  });
+
+  it("skips generation when cleaned prompt becomes empty", async () => {
+    const { result } = setup();
+
+    await act(async () => {
+      await result.current.onUserMessageCreated(
+        "ws-1",
+        "thread-1",
+        "   [image x2]   $debug_mode   $safe_mode   ",
+      );
+    });
+
+    expect(generateRunMetadata).not.toHaveBeenCalled();
+  });
+
+  it("keeps autogeneration enabled when thread snapshot is missing", async () => {
+    vi.mocked(generateRunMetadata).mockResolvedValue({
+      title: "Recovered title",
+      worktreeName: "feat/recovered",
+    });
+    const renameThread = vi.fn();
+    const { result } = renderHook(() =>
+      useThreadTitleAutogeneration({
+        enabled: true,
+        itemsByThreadRef: { current: { "thread-1": [] } },
+        threadsByWorkspaceRef: { current: { "ws-1": [] } },
+        getCustomName: vi.fn(() => undefined),
+        renameThread,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.onUserMessageCreated("ws-1", "thread-1", "name this");
+    });
+
+    expect(generateRunMetadata).toHaveBeenCalledWith("ws-1", "name this");
+    expect(renameThread).toHaveBeenCalledWith("ws-1", "thread-1", "Recovered title");
+  });
+
+  it("truncates long cleaned prompts before metadata generation", async () => {
+    vi.mocked(generateRunMetadata).mockResolvedValue({
+      title: "Long prompt title",
+      worktreeName: "feat/long-prompt",
+    });
+    const { result, renameThread } = setup();
+    const longPrompt = `start ${"x".repeat(1300)}`;
+
+    await act(async () => {
+      await result.current.onUserMessageCreated("ws-1", "thread-1", longPrompt);
+    });
+
+    const calledPrompt = vi.mocked(generateRunMetadata).mock.calls[0]?.[1];
+    expect(calledPrompt).toHaveLength(1200);
+    expect(renameThread).toHaveBeenCalledWith("ws-1", "thread-1", "Long prompt title");
+  });
+
+  it("truncates generated titles longer than the max thread name length", async () => {
+    vi.mocked(generateRunMetadata).mockResolvedValue({
+      title: "This generated title is definitely longer than thirty eight chars",
+      worktreeName: "feat/long-title",
+    });
+    const { result, renameThread } = setup();
+
+    await act(async () => {
+      await result.current.onUserMessageCreated("ws-1", "thread-1", "title me");
+    });
+
+    const renamedTitle = renameThread.mock.calls[0]?.[2];
+    expect(renamedTitle).toHaveLength(39);
+    expect(renamedTitle.endsWith("…")).toBe(true);
+  });
+
+  it("skips generation for empty user text", async () => {
+    const { result } = setup();
+
+    await act(async () => {
+      await result.current.onUserMessageCreated("ws-1", "thread-1", "");
+    });
+
+    expect(generateRunMetadata).not.toHaveBeenCalled();
+  });
+
+  it("skips rename when branch suggestion succeeds but title is absent", async () => {
+    vi.mocked(generateRunMetadata).mockResolvedValue({
+      title: "",
+      worktreeName: "feat/suggested-branch",
+    });
+    const { result, renameThread } = setup();
+
+    await act(async () => {
+      await result.current.onUserMessageCreated("ws-1", "thread-1", "plan branch only");
+    });
+
+    expect(generateRunMetadata).toHaveBeenCalledWith("ws-1", "plan branch only");
+    expect(renameThread).not.toHaveBeenCalled();
+  });
 });
