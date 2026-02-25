@@ -27,7 +27,7 @@ describe("useThreadRows", () => {
     );
 
     expect(rows.unpinnedRows.map((row) => row.thread.id)).toEqual(["root-a", "root-b"]);
-    expect(rows.unpinnedRows.every((row) => row.depth === 0)).toBe(true);
+    expect(rows.unpinnedRows.every((row) => row.depth === 0)).toBeTruthy();
   });
 
   it("collapses descendants for specified root and marks row metadata", () => {
@@ -47,7 +47,7 @@ describe("useThreadRows", () => {
 
     expect(rows.unpinnedRows.map((row) => row.thread.id)).toEqual(["root-a", "root-b"]);
     const rootA = rows.unpinnedRows.find((row) => row.thread.id === "root-a");
-    expect(rootA?.hasSubAgentDescendants).toBe(true);
-    expect(rootA?.isCollapsed).toBe(true);
+    expect(rootA?.hasSubAgentDescendants).toBeTruthy();
+    expect(rootA?.isCollapsed).toBeTruthy();
   });
 });

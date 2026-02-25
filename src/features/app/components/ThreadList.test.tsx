@@ -3,6 +3,7 @@ import { cleanup, createEvent, fireEvent, render, screen } from "@testing-librar
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ThreadSummary } from "../../../types";
 import { ThreadList } from "./ThreadList";
+import type { SidebarTicker } from "../hooks/useSidebarTicker";
 
 const nestedThread: ThreadSummary = {
   id: "thread-2",
@@ -19,6 +20,11 @@ const thread: ThreadSummary = {
 const statusMap = {
   "thread-1": { isProcessing: false, hasUnread: true, isReviewing: false },
   "thread-2": { isProcessing: false, hasUnread: false, isReviewing: false },
+};
+const staticTicker: SidebarTicker = {
+  getSnapshot: () => Date.now(),
+  subscribe: () => () => undefined,
+  dispose: () => undefined,
 };
 
 const baseProps = {
@@ -40,6 +46,7 @@ const baseProps = {
   onSelectThread: vi.fn(),
   onShowThreadMenu: vi.fn(),
   onReorderThreads: vi.fn(),
+  sidebarTicker: staticTicker,
 };
 
 describe("ThreadList", () => {
@@ -64,7 +71,7 @@ describe("ThreadList", () => {
     if (!row) {
       throw new Error("Missing thread row");
     }
-    expect(row.classList.contains("active")).toBe(true);
+    expect(row.classList.contains("active")).toBeTruthy();
     expect(row.querySelector(".thread-status")?.className).toContain("unread");
 
     fireEvent.click(row);
@@ -171,8 +178,8 @@ describe("ThreadList", () => {
     if (!betaRow) {
       throw new Error("Missing selected row");
     }
-    expect(betaRow.classList.contains("thread-row-selected")).toBe(true);
-    expect(betaRow.classList.contains("active")).toBe(false);
+    expect(betaRow.classList.contains("thread-row-selected")).toBeTruthy();
+    expect(betaRow.classList.contains("active")).toBeFalsy();
   });
 
   it("shows the more button and toggles expanded", () => {
@@ -228,12 +235,13 @@ describe("ThreadList", () => {
     const betaRow = rows.find(
       (row) => row.querySelector(".thread-name")?.textContent === "Beta",
     );
-    expect(alphaRow?.getAttribute("draggable")).toBe("true");
-    expect(betaRow?.getAttribute("draggable")).toBe("true");
-
     if (!alphaRow || !betaRow) {
       throw new Error("Missing rows for drag reorder test");
     }
+    const alphaRowElement = alphaRow as HTMLElement;
+    const betaRowElement = betaRow as HTMLElement;
+    expect(alphaRowElement.draggable).toBeTruthy();
+    expect(betaRowElement.draggable).toBeTruthy();
 
     vi.spyOn(betaRow, "getBoundingClientRect").mockReturnValue({
       x: 0,

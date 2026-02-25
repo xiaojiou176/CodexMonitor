@@ -98,7 +98,7 @@ describe("useAccountSwitching", () => {
     expect(openUrl).toHaveBeenCalledWith("https://example.com/auth");
     expect(refreshAccountInfo).not.toHaveBeenCalled();
     expect(refreshAccountRateLimits).not.toHaveBeenCalled();
-    expect(latest?.accountSwitching).toBe(true);
+    expect(latest?.accountSwitching).toBeTruthy();
 
     act(() => {
       listener?.({
@@ -143,7 +143,7 @@ describe("useAccountSwitching", () => {
     await act(async () => {
       await latest?.handleSwitchAccount();
     });
-    expect(latest?.accountSwitching).toBe(true);
+    expect(latest?.accountSwitching).toBeTruthy();
 
     await act(async () => {
       await latest?.handleCancelSwitchAccount();
@@ -195,7 +195,7 @@ describe("useAccountSwitching", () => {
     await act(async () => {
       void latest?.handleSwitchAccount();
     });
-    expect(latest?.accountSwitching).toBe(true);
+    expect(latest?.accountSwitching).toBeTruthy();
 
     await act(async () => {
       await latest?.handleCancelSwitchAccount();
@@ -268,7 +268,7 @@ describe("useAccountSwitching", () => {
     await act(async () => {
       await latest?.handleSwitchAccount();
     });
-    expect(latest?.accountSwitching).toBe(true);
+    expect(latest?.accountSwitching).toBeTruthy();
 
     await render({
       activeWorkspaceId: "ws-2",

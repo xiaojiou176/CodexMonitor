@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ThreadSummary } from "../../../types";
 import { PinnedThreadList } from "./PinnedThreadList";
+import type { SidebarTicker } from "../hooks/useSidebarTicker";
 
 const thread: ThreadSummary = {
   id: "thread-1",
@@ -20,6 +21,11 @@ const statusMap = {
   "thread-1": { isProcessing: false, hasUnread: false, isReviewing: true },
   "thread-2": { isProcessing: true, hasUnread: false, isReviewing: false },
 };
+const staticTicker: SidebarTicker = {
+  getSnapshot: () => Date.now(),
+  subscribe: () => () => undefined,
+  dispose: () => undefined,
+};
 
 const baseProps = {
   rows: [{ thread, depth: 0, workspaceId: "ws-1" }],
@@ -30,6 +36,7 @@ const baseProps = {
   isThreadPinned: () => true,
   onSelectThread: vi.fn(),
   onShowThreadMenu: vi.fn(),
+  sidebarTicker: staticTicker,
 };
 
 describe("PinnedThreadList", () => {
@@ -50,7 +57,7 @@ describe("PinnedThreadList", () => {
     if (!row) {
       throw new Error("Missing pinned row");
     }
-    expect(row.classList.contains("active")).toBe(true);
+    expect(row.classList.contains("active")).toBeTruthy();
     expect(row.querySelector(".thread-status")?.className).toContain(
       "reviewing",
     );

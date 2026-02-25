@@ -218,6 +218,58 @@ describe("Sidebar", () => {
     expect(onRefreshAllThreads).toHaveBeenCalledTimes(1);
   });
 
+  it("uses one shared ticker interval for pinned and workspace thread lists", () => {
+    vi.useFakeTimers();
+    const setIntervalSpy = vi.spyOn(window, "setInterval");
+    const clearIntervalSpy = vi.spyOn(window, "clearInterval");
+
+    const workspace = {
+      id: "ws-1",
+      name: "Workspace",
+      path: "/tmp/workspace",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+    const { unmount } = render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspace],
+          },
+        ]}
+        threadsByWorkspace={{
+          "ws-1": [
+            { id: "thread-pinned", name: "Pinned", updatedAt: 1000 },
+            { id: "thread-regular", name: "Regular", updatedAt: 900 },
+          ],
+        }}
+        threadStatusById={{
+          "thread-pinned": { isProcessing: true, hasUnread: false, isReviewing: false },
+          "thread-regular": { isProcessing: true, hasUnread: false, isReviewing: false },
+        }}
+        getPinTimestamp={vi.fn((workspaceId: string, threadId: string) =>
+          workspaceId === "ws-1" && threadId === "thread-pinned" ? 1 : null,
+        )}
+        isThreadPinned={vi.fn((workspaceId: string, threadId: string) =>
+          workspaceId === "ws-1" && threadId === "thread-pinned",
+        )}
+      />,
+    );
+
+    expect(screen.getByText("Pinned")).not.toBeNull();
+    expect(screen.getByText("Regular")).not.toBeNull();
+    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+
+    unmount();
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+    setIntervalSpy.mockRestore();
+    clearIntervalSpy.mockRestore();
+  });
+
   it("toggles global sub-agent visibility from the header button", () => {
     const onToggleShowSubAgentThreadsInSidebar = vi.fn();
     render(
@@ -264,7 +316,7 @@ describe("Sidebar", () => {
     );
 
     const refreshButton = screen.getByRole("button", { name: "刷新全部工作区对话" });
-    expect(refreshButton.getAttribute("aria-busy")).toBe("true");
+    expect(refreshButton.getAttribute("aria-busy") === "true").toBeTruthy();
     const icon = refreshButton.querySelector("svg");
     expect(icon?.getAttribute("class") ?? "").toContain("spinning");
   });

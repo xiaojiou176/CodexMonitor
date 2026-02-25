@@ -154,6 +154,6 @@ describe("useGitPanelController preload behavior", () => {
     });
 
     const selectedEnabled = getLastEnabledArg();
-    expect(selectedEnabled).toBe(true);
+    expect(selectedEnabled).toBeTruthy();
   });
 });

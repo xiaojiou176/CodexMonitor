@@ -2,6 +2,7 @@ import Layers from "lucide-react/dist/esm/icons/layers";
 
 import type { ThreadSummary, WorkspaceInfo } from "../../../types";
 import type { SidebarMenuTriggerEvent } from "../hooks/useSidebarMenus";
+import type { SidebarTicker } from "../hooks/useSidebarTicker";
 import { ThreadList } from "./ThreadList";
 import { ThreadLoading } from "./ThreadLoading";
 import { WorktreeCard } from "./WorktreeCard";
@@ -85,6 +86,7 @@ type WorktreeSectionProps = {
   ) => void;
   onToggleExpanded: (workspaceId: string) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
+  sidebarTicker: SidebarTicker;
 };
 
 export function WorktreeSection({
@@ -116,6 +118,7 @@ export function WorktreeSection({
   onShowWorktreeMenu,
   onToggleExpanded,
   onLoadOlderThreads,
+  sidebarTicker,
 }: WorktreeSectionProps) {
   if (!worktrees.length) {
     return null;
@@ -192,6 +195,7 @@ export function WorktreeSection({
                   onShowThreadMenu={onShowThreadMenu}
                   onToggleRootCollapse={onToggleRootCollapse}
                   showSubAgentCollapseToggles={showSubAgentThreadsInSidebar}
+                  sidebarTicker={sidebarTicker}
                 />
               )}
               {showWorktreeLoader && <ThreadLoading nested />}

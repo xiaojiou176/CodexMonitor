@@ -117,6 +117,10 @@ import { useWorkspaceHome } from "./features/workspaces/hooks/useWorkspaceHome";
 import { useWorkspaceAgentMd } from "./features/workspaces/hooks/useWorkspaceAgentMd";
 import { isMobilePlatform } from "./utils/platformPaths";
 import { normalizeCodexArgsInput } from "./utils/codexArgsInput";
+import {
+  persistWorkspaceOrderWithWal,
+  replayPendingWorkspaceReorder,
+} from "./utils/workspaceOrderRecovery";
 import type {
   ComposerEditorSettings,
   GitFileStatus,
@@ -2333,7 +2337,7 @@ function MainApp() {
       ? entry.settings.sortOrder
       : Number.MAX_SAFE_INTEGER;
 
-  const persistWorkspaceOrder = useCallback(
+  const persistWorkspaceOrderToBackend = useCallback(
     async (orderedWorkspaces: WorkspaceInfo[], groupId: string | null) => {
       if (orderedWorkspaces.length <= 1) {
         return;
@@ -2349,6 +2353,31 @@ function MainApp() {
     },
     [updateWorkspaceSettings],
   );
+
+  const persistWorkspaceOrder = useCallback(
+    async (orderedWorkspaces: WorkspaceInfo[], groupId: string | null) => {
+      await persistWorkspaceOrderWithWal(
+        orderedWorkspaces,
+        groupId,
+        persistWorkspaceOrderToBackend,
+      );
+    },
+    [persistWorkspaceOrderToBackend],
+  );
+
+  const hasReplayedWorkspaceOrderWalRef = useRef(false);
+  useEffect(() => {
+    if (hasReplayedWorkspaceOrderWalRef.current || !hasLoaded || workspaces.length === 0) {
+      return;
+    }
+    hasReplayedWorkspaceOrderWalRef.current = true;
+    void replayPendingWorkspaceReorder(
+      workspacesById,
+      persistWorkspaceOrderToBackend,
+    ).catch((error) => {
+      console.error("Failed to replay pending workspace reorder", error);
+    });
+  }, [hasLoaded, persistWorkspaceOrderToBackend, workspaces.length, workspacesById]);
 
   const handleMoveWorkspace = async (
     workspaceId: string,

@@ -2,6 +2,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
+import type { SidebarTicker } from "../hooks/useSidebarTicker";
 import { WorktreeSection } from "./WorktreeSection";
 
 const worktree: WorkspaceInfo = {
@@ -12,6 +13,11 @@ const worktree: WorkspaceInfo = {
   kind: "worktree",
   worktree: { branch: "feature/test" },
   settings: { sidebarCollapsed: false },
+};
+const staticTicker: SidebarTicker = {
+  getSnapshot: () => Date.now(),
+  subscribe: () => () => undefined,
+  dispose: () => undefined,
 };
 
 describe("WorktreeSection", () => {
@@ -48,6 +54,7 @@ describe("WorktreeSection", () => {
         onShowWorktreeMenu={vi.fn()}
         onToggleExpanded={vi.fn()}
         onLoadOlderThreads={vi.fn()}
+        sidebarTicker={staticTicker}
       />,
     );
 

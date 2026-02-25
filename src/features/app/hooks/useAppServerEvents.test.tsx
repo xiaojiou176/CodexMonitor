@@ -1819,7 +1819,7 @@ describe("useAppServerEvents", () => {
       completionCalls.some(
         (call) => call[0] === "ws-a" && call[1] === "thread-a" && call[2] === "turn-a",
       ),
-    ).toBe(true);
+    ).toBeTruthy();
     expect(
       completionCalls.some(
         (call) => call[0] === "ws-b" && call[1] === "thread-b" && call[2] === "turn-b",

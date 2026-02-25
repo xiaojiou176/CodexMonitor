@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, DragEvent } from "react";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
-import Pin from "lucide-react/dist/esm/icons/pin";
+import { useCallback, useMemo, useRef, useState } from "react";
+import type { DragEvent } from "react";
 
 import type { ThreadSummary } from "../../../types";
 import type { SidebarMenuTriggerEvent } from "../hooks/useSidebarMenus";
@@ -11,6 +8,9 @@ import {
   getThreadVisualStatusBadge,
   getThreadVisualStatusLabel,
 } from "../../../utils/threadStatus";
+import type { SidebarTicker } from "../hooks/useSidebarTicker";
+import { useSidebarTickerNow } from "../hooks/useSidebarTicker";
+import { ThreadRowItem } from "./ThreadRowItem";
 
 type ThreadStatusMap = Record<
   string,
@@ -75,6 +75,7 @@ type ThreadListProps = {
   ) => void;
   onToggleRootCollapse?: (workspaceId: string, rootId: string) => void;
   showSubAgentCollapseToggles?: boolean;
+  sidebarTicker: SidebarTicker;
 };
 
 export function ThreadList({
@@ -101,6 +102,7 @@ export function ThreadList({
   onReorderThreads,
   onToggleRootCollapse,
   showSubAgentCollapseToggles = true,
+  sidebarTicker,
 }: ThreadListProps) {
   const [draggingRootId, setDraggingRootId] = useState<string | null>(null);
   const [dropTargetRootId, setDropTargetRootId] = useState<string | null>(null);
@@ -109,7 +111,6 @@ export function ThreadList({
   >(null);
   const draggingRootIdRef = useRef<string | null>(null);
   const indentUnit = nested ? 10 : 14;
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const orderedThreadIds = useMemo(
     () => [...pinnedRows, ...unpinnedRows].map((row) => row.thread.id),
     [pinnedRows, unpinnedRows],
@@ -122,20 +123,16 @@ export function ThreadList({
     [pinnedRows, threadStatusById, unpinnedRows],
   );
 
-  useEffect(() => {
-    if (!hasProcessingRows) {
-      return undefined;
-    }
-    const timer = window.setInterval(() => {
-      setNowMs(Date.now());
-    }, 1000);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [hasProcessingRows]);
+  const nowMs = useSidebarTickerNow(sidebarTicker, hasProcessingRows);
 
   const emitThreadSelection = useCallback(
-    (threadId: string, metaKey: boolean, ctrlKey: boolean, shiftKey: boolean) => {
+    (
+      _workspaceId: string,
+      threadId: string,
+      metaKey: boolean,
+      ctrlKey: boolean,
+      shiftKey: boolean,
+    ) => {
       onThreadSelectionChange?.({
         workspaceId,
         threadId,
@@ -234,10 +231,6 @@ export function ThreadList({
   const renderThreadRow = (row: ThreadRow) => {
     const { thread, depth } = row;
     const relativeTime = getThreadTime(thread);
-    const indentStyle =
-      depth > 0
-        ? ({ "--thread-indent": `${depth * indentUnit}px` } as CSSProperties)
-        : undefined;
     const status = threadStatusById[thread.id];
     const visualStatus = deriveThreadVisualStatus(status, nowMs);
     const statusClass = visualStatus;
@@ -268,91 +261,39 @@ export function ThreadList({
     const isCollapsed = row.isCollapsed ?? false;
 
     return (
-      <div
+      <ThreadRowItem
         key={thread.id}
-        data-thread-id={thread.id}
-        className={`thread-row${isActive ? " active" : ""}${
-          isSelected ? " thread-row-selected" : ""
-        }${
-          isReorderableRoot ? " thread-row-draggable" : ""
-        }${row.isSubAgent ? " thread-row-subagent" : ""}${
-          isDragging ? " thread-row-dragging" : ""
-        }${
-          isDropTarget ? " thread-row-drop-target" : ""
-        }${
-          isDropTargetBefore ? " thread-row-drop-target-before" : ""
-        }${isDropTargetAfter ? " thread-row-drop-target-after" : ""}`}
-        style={indentStyle}
-        onClick={(event) => {
-          emitThreadSelection(
-            thread.id,
-            event.metaKey,
-            event.ctrlKey,
-            event.shiftKey,
-          );
-          onSelectThread(workspaceId, thread.id);
-        }}
-        onContextMenu={(event) =>
-          onShowThreadMenu(event, workspaceId, thread.id, canPin)
-        }
+        workspaceId={workspaceId}
+        threadId={thread.id}
+        threadName={thread.name}
+        depth={depth}
+        indentUnit={indentUnit}
+        relativeTime={relativeTime}
+        statusClass={statusClass}
+        statusLabel={statusLabel}
+        statusBadge={statusBadge}
+        canPin={canPin}
+        isPinned={isPinned}
+        isSelected={isSelected}
+        isActive={isActive}
+        isSubAgent={Boolean(row.isSubAgent)}
+        isReorderableRoot={isReorderableRoot}
+        isDragging={isDragging}
+        isDropTargetBefore={isDropTargetBefore}
+        isDropTargetAfter={isDropTargetAfter}
         draggable={isReorderableRoot}
-        onDragStart={(event) =>
-          handleDragStart(event, thread.id, isReorderableRoot)
-        }
-        onDragOver={(event) =>
-          handleDragOver(event, thread.id, isReorderableRoot)
-        }
-        onDrop={(event) => handleDrop(event, thread.id, isReorderableRoot)}
+        isRootCollapseToggleVisible={isRootCollapseToggleVisible}
+        isCollapsed={isCollapsed}
+        rootId={rootId}
+        onEmitSelection={emitThreadSelection}
+        onSelectThread={onSelectThread}
+        onShowThreadMenu={onShowThreadMenu}
+        onToggleRootCollapse={onToggleRootCollapse}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
         onDragEnd={resetDragState}
-      >
-        {isRootCollapseToggleVisible && (
-          <button
-            type="button"
-            className={`thread-collapse-toggle${isCollapsed ? " is-collapsed" : ""}`}
-            aria-label={isCollapsed ? "展开子代理" : "折叠子代理"}
-            title={isCollapsed ? "展开子代理" : "折叠子代理"}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onToggleRootCollapse?.(workspaceId, rootId);
-            }}
-          >
-            {isCollapsed ? <ChevronRight aria-hidden /> : <ChevronDown aria-hidden />}
-          </button>
-        )}
-        <span
-          className={`thread-status ${statusClass}`}
-          aria-label={statusLabel}
-          title={statusLabel}
-        />
-        <span className="sr-only">{`线程状态：${statusLabel}`}</span>
-        {statusBadge ? (
-          <span className={`thread-status-badge ${statusClass}`}>{statusBadge}</span>
-        ) : null}
-        {isPinned && <Pin size={12} className="thread-pin-icon" aria-label="已置顶" />}
-        <span className="thread-name" title={thread.name}>{thread.name}</span>
-        <div className="thread-meta">
-          {relativeTime && <span className="thread-time">{relativeTime}</span>}
-          <div className="thread-menu">
-            <button
-              type="button"
-              className="thread-menu-trigger"
-              aria-label="更多操作"
-              onClick={(e) => {
-                e.stopPropagation();
-                onShowThreadMenu(e, workspaceId, thread.id, canPin);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onShowThreadMenu(e, workspaceId, thread.id, canPin);
-                }
-              }}
-            />
-          </div>
-        </div>
-      </div>
+      />
     );
   };
 

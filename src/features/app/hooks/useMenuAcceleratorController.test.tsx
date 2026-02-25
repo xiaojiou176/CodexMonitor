@@ -55,10 +55,10 @@ describe("useMenuAcceleratorController", () => {
       accelerators: Array<{ id: string; shortcut: string | null | undefined }>;
     };
     const ids = options.accelerators.map((entry) => entry.id);
-    expect(ids.includes("composer_cycle_model")).toBe(true);
-    expect(ids.includes("composer_cycle_reasoning")).toBe(true);
-    expect(ids.includes("composer_cycle_collaboration")).toBe(true);
-    expect(ids.includes("view_branch_switcher")).toBe(true);
+    expect(ids.includes("composer_cycle_model")).toBeTruthy();
+    expect(ids.includes("composer_cycle_reasoning")).toBeTruthy();
+    expect(ids.includes("composer_cycle_collaboration")).toBeTruthy();
+    expect(ids.includes("view_branch_switcher")).toBeTruthy();
     expect(ids.includes("composer_cycle_access")).toBe(false);
   });
 

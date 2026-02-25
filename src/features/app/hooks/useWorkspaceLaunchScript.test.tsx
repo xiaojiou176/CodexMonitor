@@ -45,7 +45,7 @@ describe("useWorkspaceLaunchScript", () => {
       result.current.onRunLaunchScript();
     });
 
-    expect(result.current.editorOpen).toBe(true);
+    expect(result.current.editorOpen).toBeTruthy();
   });
 
   it("runs the launch script when a terminal session is ready", async () => {

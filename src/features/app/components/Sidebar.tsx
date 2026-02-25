@@ -29,6 +29,7 @@ import { useSidebarMenus } from "../hooks/useSidebarMenus";
 import { useSidebarScrollFade } from "../hooks/useSidebarScrollFade";
 import { useThreadRows } from "../hooks/useThreadRows";
 import { useDismissibleMenu } from "../hooks/useDismissibleMenu";
+import { createSidebarTicker } from "../hooks/useSidebarTicker";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { formatRelativeTimeShort } from "../../../utils/time";
 import { setWorkspaceReorderDragging } from "../../../services/dragDrop";
@@ -483,6 +484,8 @@ export const Sidebar = memo(function Sidebar({
   onWorkspaceDrop,
   onReorderWorkspaceGroup,
 }: SidebarProps) {
+  const sidebarTicker = useMemo(() => createSidebarTicker(1000), []);
+  useEffect(() => () => sidebarTicker.dispose(), [sidebarTicker]);
   const [expandedWorkspaces, setExpandedWorkspaces] = useState(
     new Set<string>(),
   );
@@ -1677,6 +1680,7 @@ export const Sidebar = memo(function Sidebar({
                 onShowThreadMenu={showThreadMenu}
                 onToggleRootCollapse={handleToggleRootCollapse}
                 showSubAgentCollapseToggles={showSubAgentThreadsInSidebar}
+                sidebarTicker={sidebarTicker}
               />
             </div>
           )}
@@ -1873,6 +1877,7 @@ export const Sidebar = memo(function Sidebar({
                           onShowWorktreeMenu={showWorktreeMenu}
                           onToggleExpanded={handleToggleExpanded}
                           onLoadOlderThreads={onLoadOlderThreads}
+                          sidebarTicker={sidebarTicker}
                         />
                       )}
                       {showThreadList && (
@@ -1902,6 +1907,7 @@ export const Sidebar = memo(function Sidebar({
                           onReorderThreads={handleReorderThreads}
                           onToggleRootCollapse={handleToggleRootCollapse}
                           showSubAgentCollapseToggles={showSubAgentThreadsInSidebar}
+                          sidebarTicker={sidebarTicker}
                         />
                       )}
                       {showThreadLoader && <ThreadLoading />}
