@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type {
-  CSSProperties,
-  KeyboardEvent as ReactKeyboardEvent,
-} from "react";
+import type { CSSProperties } from "react";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import Pin from "lucide-react/dist/esm/icons/pin";
@@ -65,10 +62,6 @@ type PinnedThreadListProps = {
   onToggleRootCollapse?: (workspaceId: string, rootId: string) => void;
   showSubAgentCollapseToggles?: boolean;
 };
-
-function isKeyboardMenuTrigger(event: ReactKeyboardEvent<HTMLElement>) {
-  return event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey);
-}
 
 export function PinnedThreadList({
   rows,
@@ -168,26 +161,6 @@ export function PinnedThreadList({
             onContextMenu={(event) =>
               onShowThreadMenu(event, workspaceId, thread.id, canPin)
             }
-            role="button"
-            tabIndex={0}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onThreadSelectionChange?.({
-                  workspaceId,
-                  threadId: thread.id,
-                  orderedThreadIds,
-                  metaKey: false,
-                  ctrlKey: false,
-                  shiftKey: false,
-                });
-                onSelectThread(workspaceId, thread.id);
-                return;
-              }
-              if (isKeyboardMenuTrigger(event)) {
-                onShowThreadMenu(event, workspaceId, thread.id, canPin);
-              }
-            }}
           >
             {isRootCollapseToggleVisible && (
               <button
@@ -222,7 +195,6 @@ export function PinnedThreadList({
                   type="button"
                   className="thread-menu-trigger"
                   aria-label="更多操作"
-                  tabIndex={-1}
                   onClick={(e) => {
                     e.stopPropagation();
                     onShowThreadMenu(e, workspaceId, thread.id, canPin);

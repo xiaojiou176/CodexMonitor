@@ -174,7 +174,16 @@ export function ClonePrompt({
           </div>
         </div>
       )}
-      {error && <div className="ds-modal-error clone-modal-error">{error}</div>}
+      {error && (
+        <div
+          className="ds-modal-error clone-modal-error"
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
+        >
+          {error}
+        </div>
+      )}
       <div className="ds-modal-actions clone-modal-actions">
         <button
           className="ghost ds-modal-button clone-modal-button"

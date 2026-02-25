@@ -66,4 +66,9 @@ describe("ClonePrompt", () => {
       expect(onConfirm).toHaveBeenCalled();
     });
   });
+
+  it("announces errors with alert semantics", () => {
+    render(<ClonePrompt {...baseProps} error="路径不可写" />);
+    expect(screen.getByRole("alert").textContent).toContain("路径不可写");
+  });
 });

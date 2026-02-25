@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type {
-  CSSProperties,
-  DragEvent,
-  KeyboardEvent as ReactKeyboardEvent,
-} from "react";
+import type { CSSProperties, DragEvent } from "react";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import Pin from "lucide-react/dist/esm/icons/pin";
@@ -80,10 +76,6 @@ type ThreadListProps = {
   onToggleRootCollapse?: (workspaceId: string, rootId: string) => void;
   showSubAgentCollapseToggles?: boolean;
 };
-
-function isKeyboardMenuTrigger(event: ReactKeyboardEvent<HTMLElement>) {
-  return event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey);
-}
 
 export function ThreadList({
   workspaceId,
@@ -301,8 +293,6 @@ export function ThreadList({
         onContextMenu={(event) =>
           onShowThreadMenu(event, workspaceId, thread.id, canPin)
         }
-        role="button"
-        tabIndex={0}
         draggable={isReorderableRoot}
         onDragStart={(event) =>
           handleDragStart(event, thread.id, isReorderableRoot)
@@ -312,17 +302,6 @@ export function ThreadList({
         }
         onDrop={(event) => handleDrop(event, thread.id, isReorderableRoot)}
         onDragEnd={resetDragState}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            emitThreadSelection(thread.id, false, false, false);
-            onSelectThread(workspaceId, thread.id);
-            return;
-          }
-          if (isKeyboardMenuTrigger(event)) {
-            onShowThreadMenu(event, workspaceId, thread.id, canPin);
-          }
-        }}
       >
         {isRootCollapseToggleVisible && (
           <button
@@ -357,7 +336,6 @@ export function ThreadList({
               type="button"
               className="thread-menu-trigger"
               aria-label="更多操作"
-              tabIndex={-1}
               onClick={(e) => {
                 e.stopPropagation();
                 onShowThreadMenu(e, workspaceId, thread.id, canPin);

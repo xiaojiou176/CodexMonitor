@@ -79,27 +79,18 @@ describe("ThreadList", () => {
     );
   });
 
-  it("opens thread menu from keyboard menu shortcuts", () => {
+  it("keeps menu trigger in tab order and opens menu from keyboard", () => {
     const onShowThreadMenu = vi.fn();
     render(<ThreadList {...baseProps} onShowThreadMenu={onShowThreadMenu} />);
 
     const row = screen.getByText("Alpha").closest(".thread-row");
-    if (!row) {
-      throw new Error("Missing thread row");
-    }
+    const trigger = screen.getByRole("button", { name: "更多操作" });
+    expect(trigger.getAttribute("tabindex")).not.toBe("-1");
+    expect(row?.getAttribute("role")).not.toBe("button");
 
-    fireEvent.keyDown(row, { key: "ContextMenu" });
-    fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+    fireEvent.keyDown(trigger, { key: "Enter" });
 
-    expect(onShowThreadMenu).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      "ws-1",
-      "thread-1",
-      true,
-    );
-    expect(onShowThreadMenu).toHaveBeenNthCalledWith(
-      2,
+    expect(onShowThreadMenu).toHaveBeenCalledWith(
       expect.anything(),
       "ws-1",
       "thread-1",

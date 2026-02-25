@@ -325,7 +325,14 @@ export function MainHeader({
                         </button>
                       </div>
                       {worktreeRename.error && (
-                        <div className="worktree-info-error">{worktreeRename.error}</div>
+                        <div
+                          className="worktree-info-error"
+                          role="alert"
+                          aria-live="assertive"
+                          aria-atomic="true"
+                        >
+                          {worktreeRename.error}
+                        </div>
                       )}
                       {worktreeRename.notice && (
                         <span className="worktree-info-subtle">
@@ -347,7 +354,12 @@ export function MainHeader({
                             更新上游
                           </button>
                           {worktreeRename.upstream.error && (
-                            <div className="worktree-info-error">
+                            <div
+                              className="worktree-info-error"
+                              role="alert"
+                              aria-live="assertive"
+                              aria-atomic="true"
+                            >
                               {worktreeRename.upstream.error}
                             </div>
                           )}
@@ -499,7 +511,14 @@ export function MainHeader({
                       </button>
                     </div>
                     {branchValidationMessage && (
-                      <div className="branch-error">{branchValidationMessage}</div>
+                      <div
+                        className="branch-error"
+                        role="alert"
+                        aria-live="assertive"
+                        aria-atomic="true"
+                      >
+                        {branchValidationMessage}
+                      </div>
                     )}
                     {canCreate && !branchValidationMessage && (
                       <div className="branch-create-hint">
@@ -532,7 +551,16 @@ export function MainHeader({
                       }
                     }}
                   />
-                  {error && <div className="branch-error">{error}</div>}
+                  {error && (
+                    <div
+                      className="branch-error"
+                      role="alert"
+                      aria-live="assertive"
+                      aria-atomic="true"
+                    >
+                      {error}
+                    </div>
+                  )}
                 </PopoverSurface>
               )}
             </div>
