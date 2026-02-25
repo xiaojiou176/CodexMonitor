@@ -4,7 +4,7 @@
     {
       "identifier": "desktop-default",
       "description": "Capability for desktop windows",
-      "windows": ["main", "about"],
+      "windows": ["main"],
       "platforms": ["macOS", "windows", "linux"],
       "permissions": [
         "core:default",
@@ -17,6 +17,17 @@
         "liquid-glass:default",
         "notification:default",
         "core:window:allow-set-effects",
+        "core:window:allow-start-dragging"
+      ]
+    },
+    {
+      "identifier": "desktop-about",
+      "description": "Minimal capability for about window",
+      "windows": ["about"],
+      "platforms": ["macOS", "windows", "linux"],
+      "permissions": [
+        "core:default",
+        "core:webview:allow-set-webview-zoom",
         "core:window:allow-start-dragging"
       ]
     },

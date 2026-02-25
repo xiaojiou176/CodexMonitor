@@ -1,7 +1,5 @@
-#[cfg(desktop)]
-use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Manager;
-#[cfg(desktop)]
+#[cfg(target_os = "macos")]
 use tauri::RunEvent;
 #[cfg(target_os = "macos")]
 use tauri::WindowEvent;
@@ -40,35 +38,6 @@ mod types;
 mod utils;
 mod window;
 mod workspaces;
-
-#[cfg(desktop)]
-static EXIT_CLEANUP_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
-
-#[cfg(desktop)]
-fn keep_daemon_running_after_close(app_handle: &tauri::AppHandle) -> bool {
-    let state = app_handle.state::<state::AppState>();
-    tauri::async_runtime::block_on(async {
-        state
-            .app_settings
-            .lock()
-            .await
-            .keep_daemon_running_after_app_close
-    })
-}
-
-#[cfg(desktop)]
-fn has_active_codex_sessions(app_handle: &tauri::AppHandle) -> bool {
-    let state = app_handle.state::<state::AppState>();
-    tauri::async_runtime::block_on(async { !state.sessions.lock().await.is_empty() })
-}
-
-#[cfg(desktop)]
-async fn stop_managed_daemons_for_exit(app_handle: tauri::AppHandle) {
-    let state = app_handle.state::<state::AppState>();
-    let _ = orbit::orbit_runner_stop(state).await;
-    let state = app_handle.state::<state::AppState>();
-    let _ = tailscale::tailscale_daemon_stop(state).await;
-}
 
 #[tauri::command]
 fn is_mobile_runtime() -> bool {
@@ -340,29 +309,6 @@ pub fn run() {
         .expect("error while running tauri application");
 
     app.run(|app_handle, event| {
-        #[cfg(desktop)]
-        if let RunEvent::ExitRequested { api, .. } = event {
-            if has_active_codex_sessions(app_handle) {
-                api.prevent_exit();
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.hide();
-                }
-                return;
-            }
-            if !EXIT_CLEANUP_IN_PROGRESS.load(Ordering::SeqCst)
-                && !keep_daemon_running_after_close(app_handle)
-            {
-                api.prevent_exit();
-                EXIT_CLEANUP_IN_PROGRESS.store(true, Ordering::SeqCst);
-                let app_handle = app_handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    stop_managed_daemons_for_exit(app_handle.clone()).await;
-                    app_handle.exit(0);
-                });
-            }
-            return;
-        }
-
         #[cfg(target_os = "macos")]
         if let RunEvent::Reopen { .. } = event {
             if let Some(window) = app_handle.get_webview_window("main") {

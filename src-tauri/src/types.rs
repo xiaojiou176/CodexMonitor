@@ -585,6 +585,21 @@ pub(crate) struct AppSettings {
     pub(crate) thread_scroll_restore_mode: String,
     #[serde(default, rename = "threadTitleAutogenerationEnabled")]
     pub(crate) thread_title_autogeneration_enabled: bool,
+    #[serde(
+        default = "default_thread_copy_include_user_input",
+        rename = "threadCopyIncludeUserInput"
+    )]
+    pub(crate) thread_copy_include_user_input: bool,
+    #[serde(
+        default = "default_thread_copy_include_assistant_messages",
+        rename = "threadCopyIncludeAssistantMessages"
+    )]
+    pub(crate) thread_copy_include_assistant_messages: bool,
+    #[serde(
+        default = "default_thread_copy_tool_output_mode",
+        rename = "threadCopyToolOutputMode"
+    )]
+    pub(crate) thread_copy_tool_output_mode: String,
     #[serde(default = "default_ui_font_family", rename = "uiFontFamily")]
     pub(crate) ui_font_family: String,
     #[serde(default = "default_code_font_family", rename = "codeFontFamily")]
@@ -778,6 +793,18 @@ fn default_show_message_file_path() -> bool {
 
 fn default_thread_scroll_restore_mode() -> String {
     "latest".to_string()
+}
+
+fn default_thread_copy_include_user_input() -> bool {
+    true
+}
+
+fn default_thread_copy_include_assistant_messages() -> bool {
+    true
+}
+
+fn default_thread_copy_tool_output_mode() -> String {
+    "detailed".to_string()
 }
 
 fn default_ui_font_family() -> String {
@@ -1216,6 +1243,10 @@ impl Default for AppSettings {
             show_message_file_path: default_show_message_file_path(),
             thread_scroll_restore_mode: default_thread_scroll_restore_mode(),
             thread_title_autogeneration_enabled: false,
+            thread_copy_include_user_input: default_thread_copy_include_user_input(),
+            thread_copy_include_assistant_messages:
+                default_thread_copy_include_assistant_messages(),
+            thread_copy_tool_output_mode: default_thread_copy_tool_output_mode(),
             ui_font_family: default_ui_font_family(),
             code_font_family: default_code_font_family(),
             code_font_size: default_code_font_size(),
@@ -1386,6 +1417,9 @@ mod tests {
         assert!(settings.show_message_file_path);
         assert_eq!(settings.thread_scroll_restore_mode, "latest");
         assert!(!settings.thread_title_autogeneration_enabled);
+        assert!(settings.thread_copy_include_user_input);
+        assert!(settings.thread_copy_include_assistant_messages);
+        assert_eq!(settings.thread_copy_tool_output_mode, "detailed");
         assert!(settings.ui_font_family.contains("system-ui"));
         assert!(settings.code_font_family.contains("ui-monospace"));
         assert_eq!(settings.code_font_size, 11);

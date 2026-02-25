@@ -8,6 +8,7 @@ use tokio::time::timeout;
 
 use crate::backend::app_server::{
     build_codex_command_with_bin, build_codex_path_env, check_codex_installation, WorkspaceSession,
+    BACKGROUND_THREAD_EVENT_BUFFER,
 };
 use crate::shared::process_core::tokio_command;
 use crate::types::AppSettings;
@@ -310,7 +311,7 @@ where
 
     on_hide_thread(&workspace_id, &thread_id);
 
-    let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
+    let (tx, mut rx) = mpsc::channel::<Value>(BACKGROUND_THREAD_EVENT_BUFFER);
     {
         let mut callbacks = session.background_thread_callbacks.lock().await;
         callbacks.insert(thread_id.clone(), tx);

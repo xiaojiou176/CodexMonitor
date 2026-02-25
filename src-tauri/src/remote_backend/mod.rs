@@ -6,9 +6,12 @@ mod transport;
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::OnceLock;
+use std::time::Duration;
 
 use tauri::AppHandle;
 use tokio::sync::Mutex;
+use tokio::time::timeout;
 
 use crate::state::AppState;
 use crate::types::{BackendMode, RemoteBackendProvider};
@@ -64,6 +67,14 @@ struct RemoteBackendInner {
     connected: Arc<std::sync::atomic::AtomicBool>,
 }
 
+const REMOTE_BACKEND_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+const REMOTE_BACKEND_MAX_IN_FLIGHT: usize = 256;
+
+fn remote_backend_init_lock() -> &'static Mutex<()> {
+    static INIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    INIT_LOCK.get_or_init(|| Mutex::new(()))
+}
+
 impl RemoteBackend {
     pub(crate) async fn call(&self, method: &str, params: Value) -> Result<Value, String> {
         if !self.inner.connected.load(Ordering::SeqCst) {
@@ -72,7 +83,16 @@ impl RemoteBackend {
 
         let id = self.inner.next_id.fetch_add(1, Ordering::SeqCst);
         let (tx, rx) = tokio::sync::oneshot::channel();
-        self.inner.pending.lock().await.insert(id, tx);
+        {
+            let mut pending = self.inner.pending.lock().await;
+            if pending.len() >= REMOTE_BACKEND_MAX_IN_FLIGHT {
+                return Err(format!(
+                    "remote backend backpressure: too many in-flight requests ({})",
+                    REMOTE_BACKEND_MAX_IN_FLIGHT
+                ));
+            }
+            pending.insert(id, tx);
+        }
 
         let message = build_request_line(id, method, params)?;
         if self.inner.out_tx.send(message).is_err() {
@@ -80,7 +100,20 @@ impl RemoteBackend {
             return Err(DISCONNECTED_MESSAGE.to_string());
         }
 
-        rx.await.map_err(|_| DISCONNECTED_MESSAGE.to_string())?
+        match timeout(REMOTE_BACKEND_REQUEST_TIMEOUT, rx).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => {
+                self.inner.pending.lock().await.remove(&id);
+                Err(DISCONNECTED_MESSAGE.to_string())
+            }
+            Err(_) => {
+                self.inner.pending.lock().await.remove(&id);
+                Err(format!(
+                    "remote backend request timed out after {}s",
+                    REMOTE_BACKEND_REQUEST_TIMEOUT.as_secs()
+                ))
+            }
+        }
     }
 }
 
@@ -157,6 +190,14 @@ fn can_retry_after_disconnect(method: &str) -> bool {
 }
 
 async fn ensure_remote_backend(state: &AppState, app: AppHandle) -> Result<RemoteBackend, String> {
+    {
+        let guard = state.remote_backend.lock().await;
+        if let Some(client) = guard.as_ref() {
+            return Ok(client.clone());
+        }
+    }
+
+    let _init_guard = remote_backend_init_lock().lock().await;
     {
         let guard = state.remote_backend.lock().await;
         if let Some(client) = guard.as_ref() {

@@ -6,6 +6,36 @@ const MAX_GIT_ROOT_DEPTH: u32 = 64;
 const MAX_LOCAL_USAGE_DAYS: u32 = 366;
 const MAX_GITHUB_PR_NUMBER: u64 = 10_000_000;
 
+fn is_valid_event_request_id(value: &Value) -> bool {
+    match value {
+        Value::Number(_) => true,
+        Value::String(raw) => !raw.trim().is_empty(),
+        _ => false,
+    }
+}
+
+fn sanitize_app_server_event(payload: &AppServerEvent) -> Option<Value> {
+    if payload.workspace_id.trim().is_empty() {
+        return None;
+    }
+
+    let message = payload.message.as_object()?;
+    let method = message.get("method").and_then(Value::as_str)?;
+    if method.trim().is_empty() {
+        return None;
+    }
+    if let Some(id) = message.get("id") {
+        if !is_valid_event_request_id(id) {
+            return None;
+        }
+    }
+
+    Some(json!({
+        "workspace_id": payload.workspace_id,
+        "message": payload.message,
+    }))
+}
+
 pub(super) fn build_error_response(id: Option<u64>, code: &str, message: &str) -> Option<String> {
     let id = id?;
     Some(
@@ -35,7 +65,7 @@ fn build_event_notification(event: DaemonEvent) -> Option<String> {
     let payload = match event {
         DaemonEvent::AppServer(payload) => json!({
             "method": "app-server-event",
-            "params": payload,
+            "params": sanitize_app_server_event(&payload)?,
         }),
         DaemonEvent::TerminalOutput(payload) => json!({
             "method": "terminal-output",
@@ -184,6 +214,46 @@ fn parse_optional_value(value: &Value, key: &str) -> Option<Value> {
         Value::Object(map) => map.get(key).cloned(),
         _ => None,
     }
+}
+
+fn normalize_request_id(value: &Value) -> Result<Value, String> {
+    match value {
+        Value::Number(number) => Ok(Value::Number(number.clone())),
+        Value::String(raw) => {
+            if raw.trim().is_empty() {
+                Err("invalid `requestId`: must not be empty".to_string())
+            } else {
+                Ok(Value::String(raw.clone()))
+            }
+        }
+        _ => Err("invalid `requestId`: expected number or non-empty string".to_string()),
+    }
+}
+
+fn validate_response_workspace_binding(
+    params: &serde_json::Map<String, Value>,
+    workspace_id: &str,
+    request_id: &Value,
+) -> Result<(), String> {
+    let request_workspace_id = params
+        .get("requestWorkspaceId")
+        .and_then(Value::as_str)
+        .ok_or("missing or invalid `requestWorkspaceId`")?;
+
+    if request_workspace_id != workspace_id {
+        return Err("workspace/request binding mismatch".to_string());
+    }
+
+    let request_id_echo = params
+        .get("requestIdEcho")
+        .ok_or_else(|| "missing `requestIdEcho`".to_string())
+        .and_then(normalize_request_id)?;
+
+    if request_id_echo != *request_id {
+        return Err("request id binding mismatch".to_string());
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]
@@ -643,9 +713,9 @@ pub(super) async fn handle_rpc_request(
             let map = params.as_object().ok_or("missing requestId")?;
             let request_id = map
                 .get("requestId")
-                .cloned()
-                .filter(|value| value.is_number() || value.is_string())
-                .ok_or("missing requestId")?;
+                .ok_or_else(|| "missing requestId".to_string())
+                .and_then(normalize_request_id)?;
+            validate_response_workspace_binding(map, &workspace_id, &request_id)?;
             let result = map.get("result").cloned().ok_or("missing `result`")?;
             state
                 .respond_to_server_request(workspace_id, request_id, result)
@@ -995,9 +1065,12 @@ pub(super) fn spawn_rpc_response_task(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_error_response, build_event_stream_lagged_notification, parse_optional_bounded_u32,
-        parse_optional_string_array, parse_string_array, MAX_LOCAL_USAGE_DAYS,
+        build_error_response, build_event_notification, build_event_stream_lagged_notification,
+        normalize_request_id,
+        parse_optional_bounded_u32, parse_optional_string_array, parse_string_array,
+        validate_response_workspace_binding, DaemonEvent, MAX_LOCAL_USAGE_DAYS,
     };
+    use crate::backend::events::AppServerEvent;
     use serde_json::json;
 
     #[test]
@@ -1098,5 +1171,36 @@ mod tests {
                 .and_then(|node| node.as_u64()),
             Some(42)
         );
+    }
+
+    #[test]
+    fn normalize_request_id_rejects_empty_string() {
+        let err = normalize_request_id(&json!("   ")).expect_err("empty requestId should fail");
+        assert_eq!(err, "invalid `requestId`: must not be empty");
+    }
+
+    #[test]
+    fn validate_response_workspace_binding_rejects_mismatch() {
+        let params = json!({
+            "requestWorkspaceId": "ws-2",
+            "requestIdEcho": "req-1"
+        });
+        let map = params.as_object().expect("params should be map");
+        let err = validate_response_workspace_binding(map, "ws-1", &json!("req-1"))
+            .expect_err("workspace mismatch should fail");
+        assert_eq!(err, "workspace/request binding mismatch");
+    }
+
+    #[test]
+    fn build_event_notification_drops_invalid_app_server_event_schema() {
+        let event = DaemonEvent::AppServer(AppServerEvent {
+            workspace_id: "ws-1".to_string(),
+            message: json!({
+                "id": {"bad": true},
+                "method": "approval/request",
+                "params": {}
+            }),
+        });
+        assert!(build_event_notification(event).is_none());
     }
 }

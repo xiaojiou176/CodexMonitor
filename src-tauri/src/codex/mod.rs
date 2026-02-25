@@ -53,6 +53,20 @@ fn emit_thread_live_event(app: &AppHandle, workspace_id: &str, method: &str, par
     }
 }
 
+fn normalize_request_id_for_response(request_id: Value) -> Result<Value, String> {
+    match request_id {
+        Value::Number(number) => Ok(Value::Number(number)),
+        Value::String(raw) => {
+            if raw.trim().is_empty() {
+                Err("requestId must not be empty".to_string())
+            } else {
+                Ok(Value::String(raw))
+            }
+        }
+        _ => Err("requestId must be a number or non-empty string".to_string()),
+    }
+}
+
 #[tauri::command]
 pub(crate) async fn codex_doctor(
     codex_bin: Option<String>,
@@ -837,12 +851,25 @@ pub(crate) async fn respond_to_server_request(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
+    if workspace_id.trim().is_empty() {
+        return Err("workspaceId must not be empty".to_string());
+    }
+    let request_id = normalize_request_id_for_response(request_id)?;
+
     if remote_backend::is_remote_mode(&*state).await {
+        let request_id_echo = request_id.clone();
+        let request_workspace_id = workspace_id.clone();
         remote_backend::call_remote(
             &*state,
             app,
             "respond_to_server_request",
-            json!({ "workspaceId": workspace_id, "requestId": request_id, "result": result }),
+            json!({
+                "workspaceId": workspace_id,
+                "requestId": request_id,
+                "requestWorkspaceId": request_workspace_id,
+                "requestIdEcho": request_id_echo,
+                "result": result
+            }),
         )
         .await?;
         return Ok(());

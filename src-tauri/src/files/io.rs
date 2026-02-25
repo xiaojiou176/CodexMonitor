@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -48,14 +48,34 @@ fn resolve_or_create_root(root: &Path, root_context: &str) -> Result<PathBuf, St
     Ok(canonical_root)
 }
 
+fn validate_filename(filename: &str, file_context: &str) -> Result<(), String> {
+    if filename.trim().is_empty() {
+        return Err(format!("Invalid {file_context} path"));
+    }
+    let path = Path::new(filename);
+    if path.is_absolute() {
+        return Err(format!("Invalid {file_context} path"));
+    }
+    let mut components = path.components();
+    let Some(component) = components.next() else {
+        return Err(format!("Invalid {file_context} path"));
+    };
+    if components.next().is_some() || !matches!(component, Component::Normal(_)) {
+        return Err(format!("Invalid {file_context} path"));
+    }
+    Ok(())
+}
+
 pub(crate) fn read_text_file_within(
     root: &Path,
     filename: &str,
     root_may_be_missing: bool,
     root_context: &str,
     file_context: &str,
-    allow_external_symlink_target: bool,
+    _allow_external_symlink_target: bool,
 ) -> Result<TextFileResponse, String> {
+    validate_filename(filename, file_context)?;
+
     let Some(canonical_root) = resolve_root(root, root_context, root_may_be_missing)? else {
         return Ok(missing_response());
     };
@@ -72,9 +92,7 @@ pub(crate) fn read_text_file_within(
     let canonical_path = candidate
         .canonicalize()
         .map_err(|err| format!("Failed to open {file_context}: {err}"))?;
-    if !canonical_path.starts_with(&canonical_root)
-        && !(allow_external_symlink_target && candidate_is_symlink)
-    {
+    if candidate_is_symlink || !canonical_path.starts_with(&canonical_root) {
         return Err(format!("Invalid {file_context} path"));
     }
 
@@ -100,8 +118,10 @@ pub(crate) fn write_text_file_within(
     create_root: bool,
     root_context: &str,
     file_context: &str,
-    allow_external_symlink_target: bool,
+    _allow_external_symlink_target: bool,
 ) -> Result<(), String> {
+    validate_filename(filename, file_context)?;
+
     let canonical_root = if create_root {
         resolve_or_create_root(root, root_context)?
     } else {
@@ -122,9 +142,7 @@ pub(crate) fn write_text_file_within(
         let canonical_path = candidate
             .canonicalize()
             .map_err(|err| format!("Failed to resolve {file_context}: {err}"))?;
-        if !canonical_path.starts_with(&canonical_root)
-            && !(allow_external_symlink_target && candidate_is_symlink)
-        {
+        if candidate_is_symlink || !canonical_path.starts_with(&canonical_root) {
             return Err(format!("Invalid {file_context} path"));
         }
         canonical_path
@@ -235,7 +253,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn read_allows_external_symlink_when_enabled() {
+    fn read_rejects_external_symlink_even_when_flag_enabled() {
         use std::os::unix::fs::symlink;
 
         let root = temp_dir();
@@ -249,16 +267,15 @@ mod tests {
         let link_path = root.join("AGENTS.md");
         symlink(&outside_file, &link_path).expect("create symlink");
 
-        let response =
+        let error =
             read_text_file_within(&root, "AGENTS.md", false, "CODEX_HOME", "AGENTS.md", true)
-                .expect("read should succeed");
-        assert!(response.exists);
-        assert_eq!(response.content, "outside");
+                .expect_err("read should fail");
+        assert!(error.contains("Invalid AGENTS.md path"));
     }
 
     #[cfg(unix)]
     #[test]
-    fn write_allows_external_symlink_when_enabled() {
+    fn write_rejects_external_symlink_even_when_flag_enabled() {
         use std::os::unix::fs::symlink;
 
         let root = temp_dir();
@@ -272,7 +289,7 @@ mod tests {
         let link_path = root.join("AGENTS.md");
         symlink(&outside_file, &link_path).expect("create symlink");
 
-        write_text_file_within(
+        let error = write_text_file_within(
             &root,
             "AGENTS.md",
             "updated",
@@ -281,10 +298,8 @@ mod tests {
             "AGENTS.md",
             true,
         )
-        .expect("write should succeed");
-
-        let updated = std::fs::read_to_string(&outside_file).expect("read outside file");
-        assert_eq!(updated, "updated");
+        .expect_err("write should fail");
+        assert!(error.contains("Invalid AGENTS.md path"));
     }
 
     #[cfg(unix)]
@@ -313,5 +328,39 @@ mod tests {
         )
         .expect_err("should reject symlink escape");
         assert!(error.contains("Invalid config.toml path"));
+    }
+
+    #[test]
+    fn read_rejects_parent_traversal_filename() {
+        let root = temp_dir();
+        std::fs::create_dir_all(&root).expect("create root");
+        let error = read_text_file_within(
+            &root,
+            "../AGENTS.md",
+            false,
+            "workspace root",
+            "AGENTS.md",
+            false,
+        )
+        .expect_err("must reject traversal");
+        assert!(error.contains("Invalid AGENTS.md path"));
+    }
+
+    #[test]
+    fn write_rejects_absolute_filename() {
+        let root = temp_dir();
+        std::fs::create_dir_all(&root).expect("create root");
+        let absolute = std::env::temp_dir().join("AGENTS.md");
+        let error = write_text_file_within(
+            &root,
+            absolute.to_string_lossy().as_ref(),
+            "unsafe",
+            false,
+            "workspace root",
+            "AGENTS.md",
+            false,
+        )
+        .expect_err("must reject absolute path");
+        assert!(error.contains("Invalid AGENTS.md path"));
     }
 }

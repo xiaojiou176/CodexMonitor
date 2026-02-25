@@ -59,8 +59,11 @@ pub(crate) struct WorkspaceSession {
     pub(crate) pending: Mutex<HashMap<u64, oneshot::Sender<Value>>>,
     pub(crate) next_id: AtomicU64,
     /// Callbacks for background threads - events for these threadIds are sent through the channel
-    pub(crate) background_thread_callbacks: Mutex<HashMap<String, mpsc::UnboundedSender<Value>>>,
+    pub(crate) background_thread_callbacks: Mutex<HashMap<String, mpsc::Sender<Value>>>,
 }
+
+const APP_SERVER_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const BACKGROUND_THREAD_EVENT_BUFFER: usize = 128;
 
 impl WorkspaceSession {
     async fn write_message(&self, value: Value) -> Result<(), String> {
@@ -84,7 +87,20 @@ impl WorkspaceSession {
             self.pending.lock().await.remove(&id);
             return Err(error);
         }
-        rx.await.map_err(|_| "request canceled".to_string())
+        match timeout(APP_SERVER_REQUEST_TIMEOUT, rx).await {
+            Ok(Ok(value)) => Ok(value),
+            Ok(Err(_)) => {
+                self.pending.lock().await.remove(&id);
+                Err("request canceled".to_string())
+            }
+            Err(_) => {
+                self.pending.lock().await.remove(&id);
+                Err(format!(
+                    "request timed out after {}s",
+                    APP_SERVER_REQUEST_TIMEOUT.as_secs()
+                ))
+            }
+        }
     }
 
     pub(crate) async fn send_notification(
@@ -108,6 +124,48 @@ impl WorkspaceSession {
 
 fn clear_pending_requests(pending: &mut HashMap<u64, oneshot::Sender<Value>>) {
     pending.clear();
+}
+
+async fn try_send_background_callback(
+    session: &Arc<WorkspaceSession>,
+    workspace_id: &str,
+    thread_id: &str,
+    value: Value,
+) -> BackgroundCallbackDispatch {
+    let sender = {
+        let callbacks = session.background_thread_callbacks.lock().await;
+        callbacks.get(thread_id).cloned()
+    };
+
+    let Some(sender) = sender else {
+        return BackgroundCallbackDispatch::Missing;
+    };
+
+    match sender.try_send(value) {
+        Ok(()) => BackgroundCallbackDispatch::Sent,
+        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+            eprintln!(
+                "background thread callback queue full, falling back to app-server-event path: workspace_id={workspace_id}, thread_id={thread_id}"
+            );
+            BackgroundCallbackDispatch::QueueFull
+        }
+        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+            eprintln!(
+                "background thread callback channel closed: workspace_id={workspace_id}, thread_id={thread_id}"
+            );
+            let mut callbacks = session.background_thread_callbacks.lock().await;
+            callbacks.remove(thread_id);
+            BackgroundCallbackDispatch::Closed
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum BackgroundCallbackDispatch {
+    Missing,
+    Sent,
+    QueueFull,
+    Closed,
 }
 
 pub(crate) fn build_codex_path_env(codex_bin: Option<&str>) -> Option<String> {
@@ -406,14 +464,34 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
                     // Check for background thread callback
                     let mut sent_to_background = false;
                     if let Some(ref tid) = thread_id {
-                        let callbacks = session_clone.background_thread_callbacks.lock().await;
-                        if let Some(tx) = callbacks.get(tid) {
-                            if tx.send(value.clone()).is_err() {
-                                eprintln!(
-                                    "failed to deliver background thread callback: workspace_id={workspace_id}, thread_id={tid}, id={id}"
-                                );
+                        match try_send_background_callback(
+                            &session_clone,
+                            &workspace_id,
+                            tid,
+                            value.clone(),
+                        )
+                        .await
+                        {
+                            BackgroundCallbackDispatch::Sent => {
+                                sent_to_background = true;
                             }
-                            sent_to_background = true;
+                            BackgroundCallbackDispatch::QueueFull => {
+                                let payload = AppServerEvent {
+                                    workspace_id: workspace_id.clone(),
+                                    message: json!({
+                                        "method": "codex/backgroundThreadQueueFallback",
+                                        "params": {
+                                            "workspaceId": workspace_id.clone(),
+                                            "threadId": tid,
+                                            "reason": "queue_full",
+                                            "bufferSize": BACKGROUND_THREAD_EVENT_BUFFER
+                                        },
+                                    }),
+                                };
+                                event_sink_clone.emit_app_server_event(payload);
+                            }
+                            BackgroundCallbackDispatch::Missing
+                            | BackgroundCallbackDispatch::Closed => {}
                         }
                     }
                     // Don't emit to frontend if this is a background thread event
@@ -435,14 +513,34 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
                 // Check for background thread callback
                 let mut sent_to_background = false;
                 if let Some(ref tid) = thread_id {
-                    let callbacks = session_clone.background_thread_callbacks.lock().await;
-                    if let Some(tx) = callbacks.get(tid) {
-                        if tx.send(value.clone()).is_err() {
-                            eprintln!(
-                                "failed to deliver background thread callback notification: workspace_id={workspace_id}, thread_id={tid}"
-                            );
+                    match try_send_background_callback(
+                        &session_clone,
+                        &workspace_id,
+                        tid,
+                        value.clone(),
+                    )
+                    .await
+                    {
+                        BackgroundCallbackDispatch::Sent => {
+                            sent_to_background = true;
                         }
-                        sent_to_background = true;
+                        BackgroundCallbackDispatch::QueueFull => {
+                            let payload = AppServerEvent {
+                                workspace_id: workspace_id.clone(),
+                                message: json!({
+                                    "method": "codex/backgroundThreadQueueFallback",
+                                    "params": {
+                                        "workspaceId": workspace_id.clone(),
+                                        "threadId": tid,
+                                        "reason": "queue_full",
+                                        "bufferSize": BACKGROUND_THREAD_EVENT_BUFFER
+                                    },
+                                }),
+                            };
+                            event_sink_clone.emit_app_server_event(payload);
+                        }
+                        BackgroundCallbackDispatch::Missing
+                        | BackgroundCallbackDispatch::Closed => {}
                     }
                 }
                 // Don't emit to frontend if this is a background thread event
@@ -524,9 +622,17 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_initialize_params, clear_pending_requests, extract_thread_id};
+    use super::{
+        build_initialize_params, clear_pending_requests, extract_thread_id,
+        BackgroundCallbackDispatch,
+    };
     use serde_json::json;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tokio::process::Command;
+    use tokio::sync::{mpsc, Mutex};
     use tokio::sync::oneshot;
+    use std::sync::atomic::AtomicU64;
 
     #[test]
     fn extract_thread_id_reads_camel_case() {
@@ -571,5 +677,60 @@ mod tests {
             rx.try_recv(),
             Err(tokio::sync::oneshot::error::TryRecvError::Closed)
         ));
+    }
+
+    #[test]
+    fn try_send_background_callback_returns_queue_full_instead_of_silent_drop() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should initialize");
+        runtime.block_on(async {
+            let mut child = Command::new("sh")
+                .arg("-c")
+                .arg("sleep 5")
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .expect("must spawn child process");
+            let stdin = child.stdin.take().expect("missing stdin");
+            let (tx, mut rx) = mpsc::channel::<serde_json::Value>(1);
+            tx.send(json!({"first": true}))
+                .await
+                .expect("must fill callback channel");
+            let mut callbacks = HashMap::new();
+            callbacks.insert("thread-1".to_string(), tx);
+
+            let session = Arc::new(crate::backend::app_server::WorkspaceSession {
+                entry: crate::types::WorkspaceEntry {
+                    id: "ws-1".to_string(),
+                    name: "Workspace".to_string(),
+                    path: ".".to_string(),
+                    codex_bin: None,
+                    kind: crate::types::WorkspaceKind::Main,
+                    parent_id: None,
+                    worktree: None,
+                    settings: crate::types::WorkspaceSettings::default(),
+                },
+                child: Mutex::new(child),
+                stdin: Mutex::new(stdin),
+                pending: Mutex::new(HashMap::new()),
+                next_id: AtomicU64::new(1),
+                background_thread_callbacks: Mutex::new(callbacks),
+            });
+
+            let dispatch = super::try_send_background_callback(
+                &session,
+                "ws-1",
+                "thread-1",
+                json!({"second": true}),
+            )
+            .await;
+
+            assert_eq!(dispatch, BackgroundCallbackDispatch::QueueFull);
+            let first = rx.recv().await.expect("first event must remain queued");
+            assert_eq!(first.get("first").and_then(|v| v.as_bool()), Some(true));
+
+            let mut child = session.child.lock().await;
+            crate::shared::process_core::kill_child_process_tree(&mut child).await;
+        });
     }
 }

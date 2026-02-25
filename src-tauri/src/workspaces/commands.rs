@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use std::sync::Arc;
 
@@ -24,6 +24,199 @@ use crate::remote_backend;
 use crate::shared::workspaces_core;
 use crate::state::AppState;
 use crate::types::{WorkspaceEntry, WorkspaceInfo, WorkspaceSettings, WorktreeSetupStatus};
+
+fn canonicalize_existing_file(path: &Path) -> Result<PathBuf, String> {
+    if !path.exists() {
+        return Err(format!("Binary path does not exist: {}", path.display()));
+    }
+    if !path.is_file() {
+        return Err(format!(
+            "Binary path must point to a file: {}",
+            path.display()
+        ));
+    }
+    std::fs::canonicalize(path).map_err(|err| {
+        format!(
+            "Failed to canonicalize binary path {}: {err}",
+            path.display()
+        )
+    })
+}
+
+fn is_allowed_codex_file_name(file_name: &str) -> bool {
+    let lower = file_name.to_ascii_lowercase();
+    matches!(
+        lower.as_str(),
+        "codex" | "codex.exe" | "codex.cmd" | "codex.bat"
+    )
+}
+
+fn trusted_codex_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        roots.push(PathBuf::from("/usr/local/bin"));
+        roots.push(PathBuf::from("/opt/homebrew/bin"));
+        roots.push(PathBuf::from("/usr/bin"));
+        roots.push(PathBuf::from("/bin"));
+        if let Ok(home) = std::env::var("HOME") {
+            let home = PathBuf::from(home);
+            roots.push(home.join(".local").join("bin"));
+            roots.push(home.join("bin"));
+            roots.push(home.join(".nvm"));
+            roots.push(home.join(".volta").join("bin"));
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(program_files) = std::env::var("ProgramFiles") {
+            roots.push(PathBuf::from(program_files));
+        }
+        if let Ok(program_files_x86) = std::env::var("ProgramFiles(x86)") {
+            roots.push(PathBuf::from(program_files_x86));
+        }
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            roots.push(PathBuf::from(local_app_data));
+        }
+        if let Ok(app_data) = std::env::var("APPDATA") {
+            roots.push(PathBuf::from(app_data));
+        }
+        if let Ok(user_profile) = std::env::var("USERPROFILE") {
+            roots.push(PathBuf::from(user_profile).join("scoop").join("apps"));
+        }
+    }
+
+    roots
+}
+
+fn validate_codex_bin_input(codex_bin: Option<String>) -> Result<Option<String>, String> {
+    let Some(raw_value) = codex_bin else {
+        return Ok(None);
+    };
+
+    let trimmed = raw_value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let has_separator = trimmed.contains('/') || trimmed.contains('\\');
+    if !has_separator {
+        let lower = trimmed.to_ascii_lowercase();
+        if lower == "codex" || lower == "codex.exe" {
+            return Ok(Some(trimmed.to_string()));
+        }
+        return Err(format!("Untrusted codex command name: {trimmed}"));
+    }
+
+    let canonical = canonicalize_existing_file(Path::new(trimmed))?;
+    let file_name = canonical
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("Invalid codex binary file name: {}", canonical.display()))?;
+    if !is_allowed_codex_file_name(file_name) {
+        return Err(format!(
+            "Codex binary file name not allowed: {}",
+            canonical.display()
+        ));
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let metadata = std::fs::metadata(&canonical).map_err(|err| {
+            format!(
+                "Failed to read codex binary metadata {}: {err}",
+                canonical.display()
+            )
+        })?;
+        if metadata.permissions().mode() & 0o111 == 0 {
+            return Err(format!(
+                "Codex binary is not executable: {}",
+                canonical.display()
+            ));
+        }
+    }
+
+    let trusted_roots = trusted_codex_roots();
+    if !trusted_roots
+        .iter()
+        .any(|root| canonical.starts_with(root))
+    {
+        return Err(format!(
+            "Codex binary path is outside trusted directories: {}",
+            canonical.display()
+        ));
+    }
+
+    Ok(Some(canonical.to_string_lossy().to_string()))
+}
+
+fn is_allowed_open_workspace_command(command: &str) -> bool {
+    matches!(
+        command,
+        "code"
+            | "code-insiders"
+            | "cursor"
+            | "windsurf"
+            | "zed"
+            | "subl"
+            | "idea"
+            | "webstorm"
+            | "pycharm"
+    )
+}
+
+fn is_allowed_open_workspace_arg(arg: &str) -> bool {
+    matches!(
+        arg,
+        "-n" | "-r" | "--new-window" | "--reuse-window" | "--wait" | "--add" | "--goto"
+    )
+}
+
+fn validate_open_workspace_command_and_args(
+    command: Option<String>,
+    args: Vec<String>,
+) -> Result<(Option<String>, Vec<String>), String> {
+    if args.len() > 8 {
+        return Err("Too many open_workspace_in arguments.".to_string());
+    }
+
+    let mut normalized_args = Vec::with_capacity(args.len());
+    for arg in args {
+        let trimmed = arg.trim().to_string();
+        if trimmed.is_empty() {
+            return Err("open_workspace_in argument cannot be empty.".to_string());
+        }
+        if !is_allowed_open_workspace_arg(&trimmed) {
+            return Err(format!("open_workspace_in argument not allowed: {trimmed}"));
+        }
+        normalized_args.push(trimmed);
+    }
+
+    let normalized_command = match command {
+        Some(value) => {
+            let trimmed = value.trim().to_string();
+            if trimmed.is_empty() {
+                return Err("open_workspace_in command cannot be empty.".to_string());
+            }
+            if !trimmed
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-')
+            {
+                return Err("open_workspace_in command contains unsupported characters.".to_string());
+            }
+            if !is_allowed_open_workspace_command(&trimmed) {
+                return Err(format!("open_workspace_in command not allowed: {trimmed}"));
+            }
+            Some(trimmed)
+        }
+        None => None,
+    };
+
+    Ok((normalized_command, normalized_args))
+}
 
 fn spawn_with_app(
     app: &AppHandle,
@@ -102,6 +295,8 @@ pub(crate) async fn add_workspace(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<WorkspaceInfo, String> {
+    let codex_bin = validate_codex_bin_input(codex_bin)?;
+
     if remote_backend::is_remote_mode(&*state).await {
         let path = remote_backend::normalize_path_for_remote(path);
         let codex_bin = codex_bin.map(remote_backend::normalize_path_for_remote);
@@ -138,6 +333,8 @@ pub(crate) async fn add_workspace_from_git_url(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<WorkspaceInfo, String> {
+    let codex_bin = validate_codex_bin_input(codex_bin)?;
+
     if remote_backend::is_remote_mode(&*state).await {
         let destination_path = remote_backend::normalize_path_for_remote(destination_path);
         let codex_bin = codex_bin.map(remote_backend::normalize_path_for_remote);
@@ -526,6 +723,8 @@ pub(crate) async fn update_workspace_codex_bin(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<WorkspaceInfo, String> {
+    let codex_bin = validate_codex_bin_input(codex_bin)?;
+
     if remote_backend::is_remote_mode(&*state).await {
         let codex_bin = codex_bin.map(remote_backend::normalize_path_for_remote);
         let response = remote_backend::call_remote(
@@ -601,6 +800,7 @@ pub(crate) async fn open_workspace_in(
     args: Vec<String>,
     command: Option<String>,
 ) -> Result<(), String> {
+    let (command, args) = validate_open_workspace_command_and_args(command, args)?;
     workspaces_core::open_workspace_in_core(path, app, args, command).await
 }
 

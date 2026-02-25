@@ -26,7 +26,7 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self' asset: data: blob: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: asset: https: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; img-src 'self' asset: data: blob: https: http:; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self';",
       "assetProtocol": {
         "enable": true,
         "scope": [

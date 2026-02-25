@@ -297,6 +297,34 @@ fn emit_event(app: &AppHandle, event: DictationEvent) {
     }
 }
 
+fn take_audio_samples(audio: &Arc<Mutex<Vec<f32>>>) -> Vec<f32> {
+    match audio.lock() {
+        Ok(mut guard) => {
+            let captured = guard.clone();
+            guard.clear();
+            captured
+        }
+        Err(poisoned) => {
+            eprintln!("[dictation] audio buffer mutex was poisoned; recovering buffered samples");
+            let mut guard = poisoned.into_inner();
+            let captured = guard.clone();
+            guard.clear();
+            captured
+        }
+    }
+}
+
+fn clear_audio_samples(audio: &Arc<Mutex<Vec<f32>>>) {
+    match audio.lock() {
+        Ok(mut guard) => guard.clear(),
+        Err(poisoned) => {
+            eprintln!("[dictation] audio buffer mutex was poisoned; clearing buffered samples");
+            let mut guard = poisoned.into_inner();
+            guard.clear();
+        }
+    }
+}
+
 async fn clear_processing_cancel(app: &AppHandle, cancel_flag: &Arc<AtomicBool>) -> bool {
     let state_handle = app.state::<AppState>();
     let mut dictation = state_handle.dictation.lock().await;
@@ -925,12 +953,7 @@ pub(crate) async fn dictation_stop(
         eprintln!("[dictation] stop completion sender dropped while stopping session");
     }
     tokio::spawn(async move {
-        let samples = {
-            let mut guard = audio.lock().unwrap();
-            let captured = guard.clone();
-            guard.clear();
-            captured
-        };
+        let samples = take_audio_samples(&audio);
         if cancel_flag.load(Ordering::Relaxed) {
             clear_processing_cancel(&app_handle, &cancel_flag).await;
             return;
@@ -1111,10 +1134,7 @@ pub(crate) async fn dictation_cancel(
     if stopped.await.is_err() {
         eprintln!("[dictation] stop completion sender dropped while canceling session");
     }
-    {
-        let mut guard = audio.lock().unwrap();
-        guard.clear();
-    }
+    clear_audio_samples(&audio);
 
     emit_event(
         &app,

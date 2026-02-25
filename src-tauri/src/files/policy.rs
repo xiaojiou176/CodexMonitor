@@ -40,7 +40,7 @@ pub(crate) fn policy_for(scope: FileScope, kind: FileKind) -> Result<FilePolicy,
             root_context: "CODEX_HOME",
             root_may_be_missing: true,
             create_root: true,
-            allow_external_symlink_target: true,
+            allow_external_symlink_target: false,
         }),
         (FileScope::Global, FileKind::Config) => Ok(FilePolicy {
             filename: CONFIG_FILENAME,
@@ -76,7 +76,7 @@ mod tests {
         assert_eq!(policy.root_context, "CODEX_HOME");
         assert!(policy.root_may_be_missing);
         assert!(policy.create_root);
-        assert!(policy.allow_external_symlink_target);
+        assert!(!policy.allow_external_symlink_target);
     }
 
     #[test]

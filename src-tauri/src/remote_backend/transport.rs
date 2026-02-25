@@ -3,11 +3,13 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::time::timeout;
 
 use super::protocol::{parse_incoming_line, IncomingMessage, DISCONNECTED_MESSAGE};
 
@@ -53,6 +55,9 @@ pub(crate) struct TransportConnection {
     pub(crate) connected: Arc<AtomicBool>,
 }
 
+const TRANSPORT_OUTBOUND_BUFFER: usize = 128;
+const TRANSPORT_BACKPRESSURE_TIMEOUT: Duration = Duration::from_secs(3);
+
 pub(crate) type TransportFuture =
     Pin<Box<dyn Future<Output = Result<TransportConnection, String>> + Send>>;
 
@@ -70,16 +75,36 @@ where
     W: AsyncWrite + Unpin + Send + 'static,
 {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<String>();
+    let (write_tx, mut write_rx) = mpsc::channel::<String>(TRANSPORT_OUTBOUND_BUFFER);
     let pending = Arc::new(Mutex::new(PendingMap::new()));
+    let pending_for_bridge = Arc::clone(&pending);
     let pending_for_writer = Arc::clone(&pending);
     let pending_for_reader = Arc::clone(&pending);
 
     let connected = Arc::new(AtomicBool::new(true));
+    let connected_for_bridge = Arc::clone(&connected);
     let connected_for_writer = Arc::clone(&connected);
     let connected_for_reader = Arc::clone(&connected);
 
     tokio::spawn(async move {
         while let Some(message) = out_rx.recv().await {
+            match timeout(TRANSPORT_BACKPRESSURE_TIMEOUT, write_tx.send(message)).await {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => break,
+                Err(_) => {
+                    eprintln!(
+                        "remote transport outbound queue saturated for >{}s, disconnecting",
+                        TRANSPORT_BACKPRESSURE_TIMEOUT.as_secs()
+                    );
+                    mark_disconnected(&pending_for_bridge, &connected_for_bridge).await;
+                    break;
+                }
+            }
+        }
+    });
+
+    tokio::spawn(async move {
+        while let Some(message) = write_rx.recv().await {
             if writer.write_all(message.as_bytes()).await.is_err()
                 || writer.write_all(b"\n").await.is_err()
             {

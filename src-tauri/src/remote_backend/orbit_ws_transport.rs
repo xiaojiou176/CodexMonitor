@@ -1,9 +1,11 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use tauri::AppHandle;
 use tokio::sync::{mpsc, Mutex};
+use tokio::time::timeout;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
@@ -15,6 +17,8 @@ use super::transport::{
 };
 
 pub(crate) struct OrbitWsTransport;
+const ORBIT_WS_OUTBOUND_BUFFER: usize = 128;
+const ORBIT_WS_BACKPRESSURE_TIMEOUT: Duration = Duration::from_secs(3);
 
 impl RemoteTransport for OrbitWsTransport {
     fn connect(&self, app: AppHandle, config: RemoteTransportConfig) -> TransportFuture {
@@ -31,16 +35,36 @@ impl RemoteTransport for OrbitWsTransport {
             let (mut writer, mut reader) = stream.split();
 
             let (out_tx, mut out_rx) = mpsc::unbounded_channel::<String>();
+            let (write_tx, mut write_rx) = mpsc::channel::<String>(ORBIT_WS_OUTBOUND_BUFFER);
             let pending = Arc::new(Mutex::new(PendingMap::new()));
+            let pending_for_bridge = Arc::clone(&pending);
             let pending_for_writer = Arc::clone(&pending);
             let pending_for_reader = Arc::clone(&pending);
 
             let connected = Arc::new(AtomicBool::new(true));
+            let connected_for_bridge = Arc::clone(&connected);
             let connected_for_writer = Arc::clone(&connected);
             let connected_for_reader = Arc::clone(&connected);
 
             tokio::spawn(async move {
                 while let Some(message) = out_rx.recv().await {
+                    match timeout(ORBIT_WS_BACKPRESSURE_TIMEOUT, write_tx.send(message)).await {
+                        Ok(Ok(())) => {}
+                        Ok(Err(_)) => break,
+                        Err(_) => {
+                            eprintln!(
+                                "orbit ws outbound queue saturated for >{}s, disconnecting",
+                                ORBIT_WS_BACKPRESSURE_TIMEOUT.as_secs()
+                            );
+                            mark_disconnected(&pending_for_bridge, &connected_for_bridge).await;
+                            break;
+                        }
+                    }
+                }
+            });
+
+            tokio::spawn(async move {
+                while let Some(message) = write_rx.recv().await {
                     if writer.send(Message::Text(message.into())).await.is_err() {
                         mark_disconnected(&pending_for_writer, &connected_for_writer).await;
                         break;

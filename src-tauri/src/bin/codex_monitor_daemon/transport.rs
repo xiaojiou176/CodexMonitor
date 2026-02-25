@@ -4,6 +4,9 @@ use super::rpc::{
 };
 use super::*;
 
+const DAEMON_OUTBOUND_BUFFER: usize = 256;
+const DAEMON_BACKPRESSURE_TIMEOUT: Duration = Duration::from_secs(3);
+
 pub(super) async fn handle_client(
     socket: TcpStream,
     config: Arc<DaemonConfig>,
@@ -14,8 +17,25 @@ pub(super) async fn handle_client(
     let mut lines = BufReader::new(reader).lines();
 
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<String>();
-    let write_task = tokio::spawn(async move {
+    let (wire_tx, mut wire_rx) = mpsc::channel::<String>(DAEMON_OUTBOUND_BUFFER);
+    let bridge_task = tokio::spawn(async move {
         while let Some(message) = out_rx.recv().await {
+            match tokio::time::timeout(DAEMON_BACKPRESSURE_TIMEOUT, wire_tx.send(message)).await {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => break,
+                Err(_) => {
+                    eprintln!(
+                        "[daemon] outbound queue saturated for >{}s, closing client writer",
+                        DAEMON_BACKPRESSURE_TIMEOUT.as_secs()
+                    );
+                    break;
+                }
+            }
+        }
+    });
+
+    let write_task = tokio::spawn(async move {
+        while let Some(message) = wire_rx.recv().await {
             if writer.write_all(message.as_bytes()).await.is_err() {
                 break;
             }
@@ -108,6 +128,7 @@ pub(super) async fn handle_client(
     if let Some(task) = events_task {
         task.abort();
     }
+    bridge_task.abort();
     write_task.abort();
 }
 
@@ -208,9 +229,27 @@ pub(super) async fn run_orbit_mode(
 
         let (mut writer, mut reader) = stream.split();
         let (out_tx, mut out_rx) = mpsc::unbounded_channel::<String>();
+        let (wire_tx, mut wire_rx) = mpsc::channel::<String>(DAEMON_OUTBOUND_BUFFER);
+
+        let bridge_task = tokio::spawn(async move {
+            while let Some(message) = out_rx.recv().await {
+                match tokio::time::timeout(DAEMON_BACKPRESSURE_TIMEOUT, wire_tx.send(message)).await
+                {
+                    Ok(Ok(())) => {}
+                    Ok(Err(_)) => break,
+                    Err(_) => {
+                        eprintln!(
+                            "[daemon] orbit outbound queue saturated for >{}s, reconnecting",
+                            DAEMON_BACKPRESSURE_TIMEOUT.as_secs()
+                        );
+                        break;
+                    }
+                }
+            }
+        });
 
         let write_task = tokio::spawn(async move {
-            while let Some(message) = out_rx.recv().await {
+            while let Some(message) = wire_rx.recv().await {
                 if writer.send(Message::Text(message.into())).await.is_err() {
                     break;
                 }
@@ -278,6 +317,7 @@ pub(super) async fn run_orbit_mode(
 
         drop(out_tx);
         events_task.abort();
+        bridge_task.abort();
         write_task.abort();
 
         eprintln!(

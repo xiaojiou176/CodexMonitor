@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
+use std::sync::OnceLock;
 
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -16,6 +18,36 @@ use crate::types::{AppSettings, WorkspaceEntry, WorkspaceInfo, WorkspaceKind, Wo
 
 use super::connect::{kill_session_by_id, take_live_shared_session, workspace_session_spawn_lock};
 use super::helpers::normalize_setup_script;
+
+static WORKSPACE_SETTINGS_REVISION: OnceLock<StdMutex<HashMap<String, u64>>> = OnceLock::new();
+
+fn workspace_settings_revision_get(workspace_id: &str) -> Result<u64, String> {
+    let revisions = WORKSPACE_SETTINGS_REVISION
+        .get_or_init(|| StdMutex::new(HashMap::new()))
+        .lock()
+        .map_err(|_| "workspace settings revision lock poisoned".to_string())?;
+    Ok(*revisions.get(workspace_id).unwrap_or(&0))
+}
+
+fn workspace_settings_revision_compare(workspace_id: &str, expected: u64) -> Result<(), String> {
+    let current = workspace_settings_revision_get(workspace_id)?;
+    if current != expected {
+        return Err(format!(
+            "stale workspace settings write rejected (expected revision {expected}, got {current})"
+        ));
+    }
+    Ok(())
+}
+
+fn workspace_settings_revision_bump(workspace_id: &str) -> Result<u64, String> {
+    let mut revisions = WORKSPACE_SETTINGS_REVISION
+        .get_or_init(|| StdMutex::new(HashMap::new()))
+        .lock()
+        .map_err(|_| "workspace settings revision lock poisoned".to_string())?;
+    let next = revisions.get(workspace_id).copied().unwrap_or(0) + 1;
+    revisions.insert(workspace_id.to_string(), next);
+    Ok(next)
+}
 
 pub(crate) async fn add_workspace_core<F, Fut>(
     path: String,
@@ -550,10 +582,18 @@ where
     FSpawn: Fn(WorkspaceEntry, Option<String>, Option<String>, Option<PathBuf>) -> FutSpawn,
     FutSpawn: Future<Output = Result<Arc<WorkspaceSession>, String>>,
 {
+    let expected_revision = workspace_settings_revision_get(&id)?;
     settings.worktree_setup_script = normalize_setup_script(settings.worktree_setup_script);
+    workspace_settings_revision_compare(&id, expected_revision)?;
 
-    let (entry_snapshot, previous_worktree_setup_script, child_entries) = {
+    let (
+        entry_snapshot,
+        previous_worktree_setup_script,
+        child_entries,
+        workspaces_before_update,
+    ) = {
         let mut workspaces = workspaces.lock().await;
+        let workspaces_before_update = workspaces.clone();
         let previous_entry = workspaces
             .get(&id)
             .cloned()
@@ -569,12 +609,19 @@ where
             entry_snapshot,
             previous_worktree_setup_script,
             child_entries,
+            workspaces_before_update,
         )
     };
 
     let worktree_setup_script_changed =
         previous_worktree_setup_script != entry_snapshot.settings.worktree_setup_script;
     let connected = sessions.lock().await.contains_key(&id);
+
+    if let Err(error) = workspace_settings_revision_compare(&id, expected_revision) {
+        let mut workspaces = workspaces.lock().await;
+        *workspaces = workspaces_before_update;
+        return Err(error);
+    }
 
     if worktree_setup_script_changed && !entry_snapshot.kind.is_worktree() {
         let child_ids = child_entries
@@ -596,6 +643,7 @@ where
         workspaces.values().cloned().collect()
     };
     write_workspaces(storage_path, &list)?;
+    workspace_settings_revision_bump(&id)?;
     Ok(WorkspaceInfo {
         id: entry_snapshot.id,
         name: entry_snapshot.name,
@@ -610,7 +658,17 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{default_repo_name_from_url, validate_target_folder_name};
+    use super::{
+        default_repo_name_from_url, update_workspace_settings_core, validate_target_folder_name,
+        workspace_settings_revision_bump, workspace_settings_revision_get,
+    };
+    use crate::types::{
+        AppSettings, WorkspaceEntry, WorkspaceInfo, WorkspaceKind, WorkspaceSettings,
+    };
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+    use uuid::Uuid;
 
     #[test]
     fn derives_repo_name_from_https_url() {
@@ -647,5 +705,114 @@ mod tests {
     fn rejects_target_folder_name_with_traversal() {
         let err = validate_target_folder_name("../project").expect_err("name should be rejected");
         assert!(err.contains("without separators or traversal"));
+    }
+
+    #[tokio::test]
+    async fn update_workspace_settings_rejects_stale_revision() {
+        let workspace_id = "workspace-1".to_string();
+        let entry = WorkspaceEntry {
+            id: workspace_id.clone(),
+            name: "Workspace".to_string(),
+            path: "/tmp/workspace-1".to_string(),
+            kind: WorkspaceKind::Main,
+            parent_id: None,
+            worktree: None,
+            settings: WorkspaceSettings::default(),
+        };
+        let mut entries = HashMap::new();
+        entries.insert(workspace_id.clone(), entry);
+        let workspaces = Mutex::new(entries);
+        let sessions = Mutex::new(HashMap::<String, Arc<crate::backend::app_server::WorkspaceSession>>::new());
+        let app_settings = Mutex::new(AppSettings::default());
+        let storage_path =
+            std::env::temp_dir().join(format!("codex-monitor-stale-settings-{}.json", Uuid::new_v4()));
+
+        let mut next_settings = WorkspaceSettings::default();
+        next_settings.display_name = Some("Updated".to_string());
+        let result = update_workspace_settings_core(
+            workspace_id.clone(),
+            next_settings,
+            &workspaces,
+            &sessions,
+            &app_settings,
+            &storage_path,
+            |workspaces, workspace_id, settings| {
+                let entry = workspaces
+                    .get_mut(workspace_id)
+                    .ok_or_else(|| "workspace not found".to_string())?;
+                entry.settings = settings.clone();
+                // Simulate a concurrent successful write in the CAS window.
+                let _ = workspace_settings_revision_bump(workspace_id)?;
+                Ok(entry.clone())
+            },
+            |_, _, _, _| async { Err("spawn should not be called".to_string()) },
+        )
+        .await;
+
+        assert!(result.is_err());
+        let err = result.expect_err("must reject stale write");
+        assert!(err.contains("stale workspace settings write rejected"));
+        let workspaces = workspaces.lock().await;
+        let entry = workspaces
+            .get(&workspace_id)
+            .expect("workspace must exist after stale write");
+        assert_eq!(
+            entry.settings.display_name,
+            None,
+            "stale write must not pollute in-memory settings"
+        );
+    }
+
+    #[tokio::test]
+    async fn update_workspace_settings_successfully_bumps_revision() {
+        let workspace_id = "workspace-2".to_string();
+        let entry = WorkspaceEntry {
+            id: workspace_id.clone(),
+            name: "Workspace".to_string(),
+            path: "/tmp/workspace-2".to_string(),
+            kind: WorkspaceKind::Main,
+            parent_id: None,
+            worktree: None,
+            settings: WorkspaceSettings::default(),
+        };
+        let mut entries = HashMap::new();
+        entries.insert(workspace_id.clone(), entry);
+        let workspaces = Mutex::new(entries);
+        let sessions = Mutex::new(HashMap::<String, Arc<crate::backend::app_server::WorkspaceSession>>::new());
+        let app_settings = Mutex::new(AppSettings::default());
+        let storage_path =
+            std::env::temp_dir().join(format!("codex-monitor-settings-{}.json", Uuid::new_v4()));
+        let revision_before = workspace_settings_revision_get(&workspace_id)
+            .expect("revision before should be readable");
+
+        let mut next_settings = WorkspaceSettings::default();
+        next_settings.display_name = Some("Updated".to_string());
+        let updated: WorkspaceInfo = update_workspace_settings_core(
+            workspace_id.clone(),
+            next_settings,
+            &workspaces,
+            &sessions,
+            &app_settings,
+            &storage_path,
+            |workspaces, workspace_id, settings| {
+                let entry = workspaces
+                    .get_mut(workspace_id)
+                    .ok_or_else(|| "workspace not found".to_string())?;
+                entry.settings = settings.clone();
+                Ok(entry.clone())
+            },
+            |_, _, _, _| async { Err("spawn should not be called".to_string()) },
+        )
+        .await
+        .expect("write should succeed");
+
+        let revision_after = workspace_settings_revision_get(&workspace_id)
+            .expect("revision after should be readable");
+        assert_eq!(
+            revision_after,
+            revision_before + 1,
+            "successful write must bump revision"
+        );
+        assert_eq!(updated.settings.display_name.as_deref(), Some("Updated"));
     }
 }

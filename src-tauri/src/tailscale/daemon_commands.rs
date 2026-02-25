@@ -109,8 +109,10 @@ pub(super) async fn tailscale_daemon_start(
         .map(|path| path.to_path_buf())
         .ok_or_else(|| "Unable to resolve app data directory".to_string())?;
 
-    let mut runtime = state.tcp_daemon.lock().await;
-    refresh_tcp_daemon_runtime(&mut runtime).await;
+    {
+        let mut runtime = state.tcp_daemon.lock().await;
+        refresh_tcp_daemon_runtime(&mut runtime).await;
+    }
 
     match probe_daemon(&listen_addr, Some(token)).await {
         DaemonProbe::Running {
@@ -126,13 +128,17 @@ pub(super) async fn tailscale_daemon_start(
                 None
             };
 
-            runtime.child = None;
-            runtime.status = TcpDaemonStatus {
-                state: TcpDaemonState::Running,
-                pid,
-                started_at_ms: runtime.status.started_at_ms,
-                last_error: auth_error.clone(),
-                listen_addr: Some(listen_addr.clone()),
+            let current_status = {
+                let mut runtime = state.tcp_daemon.lock().await;
+                runtime.child = None;
+                runtime.status = TcpDaemonStatus {
+                    state: TcpDaemonState::Running,
+                    pid,
+                    started_at_ms: runtime.status.started_at_ms,
+                    last_error: auth_error.clone(),
+                    listen_addr: Some(listen_addr.clone()),
+                };
+                runtime.status.clone()
             };
             if !auth_ok {
                 return Err(auth_error.unwrap_or_else(|| {
@@ -140,7 +146,7 @@ pub(super) async fn tailscale_daemon_start(
                 }));
             }
             if !restart_required {
-                return Ok(runtime.status.clone());
+                return Ok(current_status);
             }
 
             let force_kill_allowed = can_force_stop_daemon(auth_ok, info.as_ref());
@@ -194,13 +200,16 @@ pub(super) async fn tailscale_daemon_start(
                 }
             }
 
-            runtime.status = TcpDaemonStatus {
-                state: TcpDaemonState::Stopped,
-                pid: None,
-                started_at_ms: None,
-                last_error: None,
-                listen_addr: Some(listen_addr.clone()),
-            };
+            {
+                let mut runtime = state.tcp_daemon.lock().await;
+                runtime.status = TcpDaemonStatus {
+                    state: TcpDaemonState::Stopped,
+                    pid: None,
+                    started_at_ms: None,
+                    last_error: None,
+                    listen_addr: Some(listen_addr.clone()),
+                };
+            }
         }
         DaemonProbe::NotDaemon => {
             return Err(format!(
@@ -224,16 +233,20 @@ pub(super) async fn tailscale_daemon_start(
         .spawn()
         .map_err(|err| format!("Failed to start mobile access daemon: {err}"))?;
 
-    runtime.status = TcpDaemonStatus {
-        state: TcpDaemonState::Running,
-        pid: child.id(),
-        started_at_ms: Some(now_unix_ms()),
-        last_error: None,
-        listen_addr: Some(listen_addr),
+    let status = {
+        let mut runtime = state.tcp_daemon.lock().await;
+        runtime.status = TcpDaemonStatus {
+            state: TcpDaemonState::Running,
+            pid: child.id(),
+            started_at_ms: Some(now_unix_ms()),
+            last_error: None,
+            listen_addr: Some(listen_addr),
+        };
+        runtime.child = Some(child);
+        runtime.status.clone()
     };
-    runtime.child = Some(child);
 
-    Ok(runtime.status.clone())
+    Ok(status)
 }
 
 pub(super) async fn tailscale_daemon_stop(
@@ -243,9 +256,13 @@ pub(super) async fn tailscale_daemon_stop(
     let configured_listen_addr = configured_daemon_listen_addr(&settings);
     let listen_port = parse_port_from_remote_host(&configured_listen_addr);
 
-    let mut runtime = state.tcp_daemon.lock().await;
+    let mut child_from_runtime = {
+        let mut runtime = state.tcp_daemon.lock().await;
+        refresh_tcp_daemon_runtime(&mut runtime).await;
+        runtime.child.take()
+    };
     let mut stop_error: Option<String> = None;
-    if let Some(mut child) = runtime.child.take() {
+    if let Some(mut child) = child_from_runtime.take() {
         kill_child_process_tree(&mut child).await;
         let _ = child.wait().await;
     } else if let Some(port) = listen_port {
@@ -327,38 +344,40 @@ pub(super) async fn tailscale_daemon_stop(
         Some(port) => find_listener_pid(port).await,
         None => None,
     };
-    runtime.status = match probe_after_stop {
-        DaemonProbe::Running { auth_error, .. } => TcpDaemonStatus {
-            state: TcpDaemonState::Error,
-            pid: pid_after_stop,
-            started_at_ms: runtime.status.started_at_ms,
-            last_error: Some(
-                stop_error
-                    .or(auth_error)
-                    .unwrap_or_else(|| "Daemon is still running after stop attempt.".to_string()),
-            ),
-            listen_addr: runtime.status.listen_addr.clone(),
-        },
-        DaemonProbe::NotDaemon => TcpDaemonStatus {
-            state: TcpDaemonState::Error,
-            pid: pid_after_stop,
-            started_at_ms: runtime.status.started_at_ms,
-            last_error: Some(stop_error.unwrap_or_else(|| {
-                "Configured port is now occupied by a non-daemon process.".to_string()
-            })),
-            listen_addr: runtime.status.listen_addr.clone(),
-        },
-        DaemonProbe::NotReachable => TcpDaemonStatus {
-            state: TcpDaemonState::Stopped,
-            pid: None,
-            started_at_ms: None,
-            last_error: stop_error,
-            listen_addr: runtime.status.listen_addr.clone(),
-        },
+    let status = {
+        let mut runtime = state.tcp_daemon.lock().await;
+        runtime.status = match probe_after_stop {
+            DaemonProbe::Running { auth_error, .. } => TcpDaemonStatus {
+                state: TcpDaemonState::Error,
+                pid: pid_after_stop,
+                started_at_ms: runtime.status.started_at_ms,
+                last_error: Some(stop_error.or(auth_error).unwrap_or_else(|| {
+                    "Daemon is still running after stop attempt.".to_string()
+                })),
+                listen_addr: runtime.status.listen_addr.clone(),
+            },
+            DaemonProbe::NotDaemon => TcpDaemonStatus {
+                state: TcpDaemonState::Error,
+                pid: pid_after_stop,
+                started_at_ms: runtime.status.started_at_ms,
+                last_error: Some(stop_error.unwrap_or_else(|| {
+                    "Configured port is now occupied by a non-daemon process.".to_string()
+                })),
+                listen_addr: runtime.status.listen_addr.clone(),
+            },
+            DaemonProbe::NotReachable => TcpDaemonStatus {
+                state: TcpDaemonState::Stopped,
+                pid: None,
+                started_at_ms: None,
+                last_error: stop_error,
+                listen_addr: runtime.status.listen_addr.clone(),
+            },
+        };
+        sync_tcp_daemon_listen_addr(&mut runtime.status, &configured_listen_addr);
+        runtime.status.clone()
     };
-    sync_tcp_daemon_listen_addr(&mut runtime.status, &configured_listen_addr);
 
-    Ok(runtime.status.clone())
+    Ok(status)
 }
 
 pub(super) async fn tailscale_daemon_status(
@@ -368,20 +387,25 @@ pub(super) async fn tailscale_daemon_status(
     let configured_listen_addr = configured_daemon_listen_addr(&settings);
     let listen_port = parse_port_from_remote_host(&configured_listen_addr);
 
-    let mut runtime = state.tcp_daemon.lock().await;
-    refresh_tcp_daemon_runtime(&mut runtime).await;
+    let base_status = {
+        let mut runtime = state.tcp_daemon.lock().await;
+        refresh_tcp_daemon_runtime(&mut runtime).await;
+        if matches!(runtime.status.state, TcpDaemonState::Running) {
+            sync_tcp_daemon_listen_addr(&mut runtime.status, &configured_listen_addr);
+            return Ok(runtime.status.clone());
+        }
+        runtime.status.clone()
+    };
 
-    if !matches!(runtime.status.state, TcpDaemonState::Running) {
-        let pid = match listen_port {
-            Some(port) => find_listener_pid(port).await,
-            None => None,
-        };
-        runtime.status = match probe_daemon(
-            &configured_listen_addr,
-            settings.remote_backend_token.as_deref(),
-        )
-        .await
-        {
+    let pid = match listen_port {
+        Some(port) => find_listener_pid(port).await,
+        None => None,
+    };
+    let probe = probe_daemon(&configured_listen_addr, settings.remote_backend_token.as_deref()).await;
+
+    let status = {
+        let mut runtime = state.tcp_daemon.lock().await;
+        runtime.status = match probe {
             DaemonProbe::Running {
                 auth_ok: _,
                 auth_error,
@@ -389,32 +413,57 @@ pub(super) async fn tailscale_daemon_status(
             } => TcpDaemonStatus {
                 state: TcpDaemonState::Running,
                 pid,
-                started_at_ms: runtime.status.started_at_ms,
+                started_at_ms: runtime
+                    .status
+                    .started_at_ms
+                    .or(base_status.started_at_ms),
                 last_error: auth_error,
-                listen_addr: runtime.status.listen_addr.clone(),
+                listen_addr: runtime
+                    .status
+                    .listen_addr
+                    .clone()
+                    .or(base_status.listen_addr.clone()),
             },
             DaemonProbe::NotDaemon => TcpDaemonStatus {
                 state: TcpDaemonState::Error,
                 pid,
-                started_at_ms: runtime.status.started_at_ms,
+                started_at_ms: runtime
+                    .status
+                    .started_at_ms
+                    .or(base_status.started_at_ms),
                 last_error: Some(format!(
                     "Configured daemon port {configured_listen_addr} is occupied by a non-daemon process."
                 )),
-                listen_addr: runtime.status.listen_addr.clone(),
+                listen_addr: runtime
+                    .status
+                    .listen_addr
+                    .clone()
+                    .or(base_status.listen_addr.clone()),
             },
             DaemonProbe::NotReachable => TcpDaemonStatus {
                 state: runtime.status.state.clone(),
-                pid: runtime.status.pid,
-                started_at_ms: runtime.status.started_at_ms,
-                last_error: runtime.status.last_error.clone(),
-                listen_addr: runtime.status.listen_addr.clone(),
+                pid: runtime.status.pid.or(base_status.pid),
+                started_at_ms: runtime
+                    .status
+                    .started_at_ms
+                    .or(base_status.started_at_ms),
+                last_error: runtime
+                    .status
+                    .last_error
+                    .clone()
+                    .or(base_status.last_error.clone()),
+                listen_addr: runtime
+                    .status
+                    .listen_addr
+                    .clone()
+                    .or(base_status.listen_addr.clone()),
             },
         };
-    }
+        sync_tcp_daemon_listen_addr(&mut runtime.status, &configured_listen_addr);
+        runtime.status.clone()
+    };
 
-    sync_tcp_daemon_listen_addr(&mut runtime.status, &configured_listen_addr);
-
-    Ok(runtime.status.clone())
+    Ok(status)
 }
 
 #[cfg(test)]
