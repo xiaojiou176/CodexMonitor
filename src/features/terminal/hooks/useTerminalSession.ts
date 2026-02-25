@@ -329,13 +329,16 @@ export function useTerminalSession({
   }, [isVisible, onDebug]);
 
   useEffect(() => {
+    const pendingOutput = pendingOutputRef.current;
+    const overflowedKeys = overflowedKeysRef.current;
+
     return () => {
       if (flushTimerRef.current !== null) {
         window.clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
       }
-      pendingOutputRef.current.clear();
-      overflowedKeysRef.current.clear();
+      pendingOutput.clear();
+      overflowedKeys.clear();
       inputDisposableRef.current?.dispose();
       inputDisposableRef.current = null;
       if (terminalRef.current) {

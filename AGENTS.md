@@ -417,10 +417,12 @@ npm run test:watch
 
 At the end of a task:
 
-1. Run `npm run lint`.
-2. Run `npm run test` when you touched threads, settings, updater, shared utils, or backend cores.
-3. Run `npm run typecheck`.
-4. If you changed Rust backend code, run `cargo check` in `src-tauri`.
+1. Run `npm run lint:strict`.
+2. Run `npm run test:assertions:guard`.
+3. Run `npm run test` when you touched threads, settings, updater, shared utils, or backend cores.
+4. Run `npm run typecheck`.
+5. If you changed Rust backend code, run `npm run check:rust`.
+6. Keep Husky hooks enabled (`pre-commit` and `pre-push`) so these checks run before pushing.
 
 ## Notes
 

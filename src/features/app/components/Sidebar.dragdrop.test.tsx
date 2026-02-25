@@ -93,10 +93,10 @@ describe("Sidebar drag and drop", () => {
       />,
     );
 
-    const alphaRow = screen.getByText("Alpha").closest(".thread-row");
-    const betaRow = screen.getByText("Beta").closest(".thread-row");
-    expect(alphaRow?.getAttribute("draggable")).toBe("true");
-    expect(betaRow?.getAttribute("draggable")).toBe("true");
+    const alphaRow = screen.getByText("Alpha").closest<HTMLElement>(".thread-row");
+    const betaRow = screen.getByText("Beta").closest<HTMLElement>(".thread-row");
+    expect(alphaRow?.draggable).toBeTruthy();
+    expect(betaRow?.draggable).toBeTruthy();
 
     if (!alphaRow || !betaRow) {
       throw new Error("Missing thread rows for drag test");
@@ -255,10 +255,10 @@ describe("Sidebar drag and drop", () => {
       />,
     );
 
-    const alphaRow = screen.getByText("Alpha Repo").closest(".workspace-row");
-    const betaRow = screen.getByText("Beta Repo").closest(".workspace-row");
-    expect(alphaRow?.getAttribute("draggable")).toBe("true");
-    expect(betaRow?.getAttribute("draggable")).toBe("true");
+    const alphaRow = screen.getByText("Alpha Repo").closest<HTMLElement>(".workspace-row");
+    const betaRow = screen.getByText("Beta Repo").closest<HTMLElement>(".workspace-row");
+    expect(alphaRow?.draggable).toBeTruthy();
+    expect(betaRow?.draggable).toBeTruthy();
 
     if (!alphaRow || !betaRow) {
       throw new Error("Missing workspace rows for drag test");

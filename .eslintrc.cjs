@@ -7,14 +7,29 @@ const hasJestPlugin = (() => {
   }
 })();
 
+const hasVitestPlugin = (() => {
+  try {
+    require.resolve("eslint-plugin-vitest");
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
 const antiFalseGreenTestRules = {
   "no-restricted-syntax": [
     "error",
     {
       selector:
-        "CallExpression[callee.object.callee.name='expect'][callee.property.name=/^(toBe|toEqual|toStrictEqual)$/][arguments.0.value=true]",
+        "CallExpression[callee.type='MemberExpression'][callee.object.type='CallExpression'][callee.object.callee.name='expect'][callee.property.name=/^(toBe|toEqual|toStrictEqual)$/][callee.object.arguments.length=1][callee.object.arguments.0.value=true][arguments.length=1][arguments.0.value=true]",
       message:
         "Avoid placebo assertions like expect(true).toBe(true); assert real behavior instead.",
+    },
+    {
+      selector:
+        "CallExpression[callee.type='MemberExpression'][callee.object.type='CallExpression'][callee.object.callee.name='expect'][callee.property.name=/^(toBe|toEqual|toStrictEqual)$/][callee.object.arguments.length=1][callee.object.arguments.0.value=false][arguments.length=1][arguments.0.value=false]",
+      message:
+        "Avoid placebo assertions like expect(false).toBe(false); assert real behavior instead.",
     },
     {
       selector:
@@ -28,6 +43,12 @@ const antiFalseGreenTestRules = {
       message:
         "Avoid hard sleeps in tests; use deterministic waits like expect(...).toBeVisible() or waitForResponse().",
     },
+    {
+      selector:
+        "CallExpression[callee.type='MemberExpression'][callee.property.name='toBeDefined']",
+      message:
+        "Avoid low-value matcher toBeDefined(); prefer explicit assertions. If absolutely necessary, use `codex-allow-toBeDefined` with guard script justification.",
+    },
   ],
   "no-restricted-properties": [
     "error",
@@ -37,13 +58,21 @@ const antiFalseGreenTestRules = {
     { object: "it", property: "skip", message: "Do not commit skipped tests (`it.skip`)." },
     { object: "test", property: "skip", message: "Do not commit skipped tests (`test.skip`)." },
   ],
-  ...(hasJestPlugin
+      ...(hasJestPlugin
     ? {
         "jest/expect-expect": "error",
         "jest/no-commented-out-tests": "error",
         "jest/no-conditional-expect": "error",
         "jest/valid-expect-in-promise": "error",
         "jest/valid-expect": "error",
+      }
+    : {}),
+  ...(hasVitestPlugin
+    ? {
+        "vitest/expect-expect": "error",
+        "vitest/no-commented-out-tests": "error",
+        "vitest/no-focused-tests": "error",
+        "vitest/no-disabled-tests": "error",
       }
     : {}),
 };
@@ -65,7 +94,13 @@ module.exports = {
       version: 'detect',
     },
   },
-  plugins: ['@typescript-eslint', 'react', 'react-hooks', ...(hasJestPlugin ? ['jest'] : [])],
+  plugins: [
+    '@typescript-eslint',
+    'react',
+    'react-hooks',
+    ...(hasJestPlugin ? ['jest'] : []),
+    ...(hasVitestPlugin ? ['vitest'] : []),
+  ],
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',

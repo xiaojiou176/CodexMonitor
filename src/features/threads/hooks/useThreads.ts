@@ -27,6 +27,7 @@ import { setThreadName as setThreadNameService } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import { makeCustomNameKey, saveCustomName, saveCustomNames } from "../utils/threadStorage";
 import { getSubagentDescendantThreadIds } from "../utils/subagentTree";
+import { extractSubAgentParentThreadId } from "../utils/subAgentSource";
 
 const SUB_AGENT_AUTO_ARCHIVE_DEFAULT_MAX_AGE_MINUTES = 30;
 const SUB_AGENT_AUTO_ARCHIVE_MIN_AGE_MINUTES = 5;
@@ -96,6 +97,8 @@ export function useThreads({
   const threadsByWorkspaceRef = useRef(state.threadsByWorkspace);
   const threadStatusByIdRef = useRef(state.threadStatusById);
   const activeTurnIdByThreadRef = useRef(state.activeTurnIdByThread);
+  const activeThreadIdByWorkspaceRef = useRef(state.activeThreadIdByWorkspace);
+  const threadParentByIdRef = useRef(state.threadParentById);
   const detachedReviewNoticeRef = useRef<Set<string>>(new Set());
   const subAgentThreadIdsRef = useRef<Record<string, true>>({});
   const threadCreatedAtByIdRef = useRef<Record<string, number>>({});
@@ -105,6 +108,8 @@ export function useThreads({
   threadsByWorkspaceRef.current = state.threadsByWorkspace;
   threadStatusByIdRef.current = state.threadStatusById;
   activeTurnIdByThreadRef.current = state.activeTurnIdByThread;
+  activeThreadIdByWorkspaceRef.current = state.activeThreadIdByWorkspace;
+  threadParentByIdRef.current = state.threadParentById;
   const {
     customNamesRef,
     threadActivityRef,
@@ -116,6 +121,8 @@ export function useThreads({
     isThreadPinned,
     getPinTimestamp,
   } = useThreadStorage();
+  const threadActivityByWorkspaceRef = useRef(threadActivityRef.current);
+  threadActivityByWorkspaceRef.current = threadActivityRef.current;
   void pinnedThreadsVersion;
 
   useEffect(() => {
@@ -622,12 +629,13 @@ export function useThreads({
       clampSubAgentAutoArchiveMinutes(autoArchiveSubAgentThreadsMaxAgeMinutes)
       * 60
       * 1000;
+    let disposed = false;
     const getLastActivityAt = (
       workspaceId: string,
       threadId: string,
       createdAt: number | null,
     ): number | null => {
-      const rawActivityAt = threadActivityRef.current[workspaceId]?.[threadId];
+      const rawActivityAt = threadActivityByWorkspaceRef.current[workspaceId]?.[threadId];
       if (
         typeof rawActivityAt === "number"
         && Number.isFinite(rawActivityAt)
@@ -649,7 +657,12 @@ export function useThreads({
       workspaceId: string;
       threadId: string;
       createdAt: number | null;
-      status: (typeof state.threadStatusById)[string] | undefined;
+      status: {
+        isProcessing?: boolean;
+        isReviewing?: boolean;
+        phase?: string;
+        hasUnread?: boolean;
+      } | undefined;
       activeThreadId: string | null;
       activeTurnId: string | null;
       now: number;
@@ -685,16 +698,16 @@ export function useThreads({
         idleMs: number;
         hasUnread: boolean;
       }> = [];
-      Object.entries(state.threadsByWorkspace).forEach(([workspaceId, threads]) => {
+      Object.entries(threadsByWorkspaceRef.current).forEach(([workspaceId, threads]) => {
         const activeThreadForWorkspace =
-          state.activeThreadIdByWorkspace[workspaceId] ?? null;
+          activeThreadIdByWorkspaceRef.current[workspaceId] ?? null;
         threads.forEach((thread) => {
           const threadId = thread.id;
           if (!threadId || !subAgentThreadIdsRef.current[threadId]) {
             return;
           }
           const createdAt = threadCreatedAtByIdRef.current[threadId] ?? null;
-          const status = state.threadStatusById[threadId];
+          const status = threadStatusByIdRef.current[threadId];
           if (
             !canAutoArchiveSubAgentThread({
               workspaceId,
@@ -726,17 +739,60 @@ export function useThreads({
           return;
         }
         autoArchiveInFlightRef.current.add(requestKey);
-        onDebug?.({
-          id: `${Date.now()}-client-thread-auto-archive`,
-          timestamp: Date.now(),
-          source: "client",
-          label: "thread/auto-archive",
-          payload: { workspaceId, threadId, ageMs, idleMs, hasUnread },
-        });
-        void removeThreads(workspaceId, [threadId])
-          .finally(() => {
+        queueMicrotask(() => {
+          if (disposed) {
             autoArchiveInFlightRef.current.delete(requestKey);
+            return;
+          }
+          const latestStatus = threadStatusByIdRef.current[threadId];
+          const latestActiveThreadId =
+            activeThreadIdByWorkspaceRef.current[workspaceId] ?? null;
+          const latestThread = (threadsByWorkspaceRef.current[workspaceId] ?? [])
+            .find((thread) => thread.id === threadId);
+          const latestParentId =
+            threadParentByIdRef.current[threadId]
+            ?? extractSubAgentParentThreadId(
+              (latestThread as { source?: unknown } | undefined)?.source,
+            );
+          const isActive = latestActiveThreadId === threadId;
+          const isPinned = isThreadPinned(workspaceId, threadId);
+          const isInFlight =
+            Boolean(latestStatus?.isProcessing)
+            || Boolean(latestStatus?.isReviewing);
+          const hasSubAgentParent =
+            Boolean(latestParentId) && latestParentId !== threadId;
+          if (isActive || isPinned || isInFlight || !hasSubAgentParent) {
+            onDebug?.({
+              id: `${Date.now()}-client-thread-auto-archive-blocked`,
+              timestamp: Date.now(),
+              source: "client",
+              label: "thread/auto-archive blocked",
+              payload: {
+                workspaceId,
+                threadId,
+                reason: {
+                  isActive,
+                  isPinned,
+                  isInFlight,
+                  hasSubAgentParent,
+                },
+              },
+            });
+            autoArchiveInFlightRef.current.delete(requestKey);
+            return;
+          }
+          onDebug?.({
+            id: `${Date.now()}-client-thread-auto-archive`,
+            timestamp: Date.now(),
+            source: "client",
+            label: "thread/auto-archive",
+            payload: { workspaceId, threadId, ageMs, idleMs, hasUnread },
           });
+          void removeThreads(workspaceId, [threadId])
+            .finally(() => {
+              autoArchiveInFlightRef.current.delete(requestKey);
+            });
+        });
       });
     };
 
@@ -745,7 +801,10 @@ export function useThreads({
       scanAndArchive,
       SUB_AGENT_AUTO_ARCHIVE_CHECK_INTERVAL_MS,
     );
-    return () => window.clearInterval(timer);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
   }, [
     removeThreads,
     autoArchiveSubAgentThreadsEnabled,
@@ -753,6 +812,7 @@ export function useThreads({
     isThreadPinned,
     onDebug,
     state.activeThreadIdByWorkspace,
+    state.threadParentById,
     state.threadStatusById,
     state.threadsByWorkspace,
   ]);

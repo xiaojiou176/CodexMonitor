@@ -260,14 +260,26 @@ Note: `npm run build` also runs `tsc` before bundling the frontend.
 Recommended validation commands:
 
 ```bash
-npm run lint
+npm run lint:strict
+npm run test:assertions:guard
 npm run test
 npm run typecheck
 npm run test:coverage:gate
-cd src-tauri && cargo check
+npm run check:rust
 ```
 
-One-shot JavaScript quality gate:
+Git hooks are enforced with Husky:
+
+- `pre-commit`: runs `npm run precommit:repo`
+- `pre-push`: runs `npm run prepush:repo`
+
+Assertion guard policy:
+
+- `expect(...).toBeDefined()` is forbidden by default.
+- Literal self-assertions like `expect("x").toBe("x")` are forbidden.
+- If `toBeDefined()` is genuinely required, annotate the assertion line (or the line above) with `codex-allow-toBeDefined`.
+
+One-shot full-repo quality gate (TS/React + tests + Rust):
 
 ```bash
 npm run test:repo
