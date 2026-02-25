@@ -1,4 +1,4 @@
-import type { ConversationItem } from "../types";
+import type { ConversationItem, ThreadToolOutputMode, ThreadTranscriptOptions } from "../types";
 
 // ── Markdown transcript builder ──
 // Produces a well-structured Markdown document when copying a conversation,
@@ -28,7 +28,7 @@ function formatReasoning(item: Extract<ConversationItem, { kind: "reasoning" }>)
 
 function formatTool(
   item: Extract<ConversationItem, { kind: "tool" }>,
-  includeOutput: boolean,
+  mode: Exclude<ThreadToolOutputMode, "none">,
 ) {
   const sections: string[] = [];
 
@@ -46,8 +46,8 @@ function formatTool(
     sections.push(`\`\`\`\n${item.detail}\n\`\`\``);
   }
 
-  // Output — only included when requested
-  if (includeOutput && item.output && item.output.trim().length > 0) {
+  // Output — only included in detailed mode
+  if (mode === "detailed" && item.output && item.output.trim().length > 0) {
     const trimmedOutput = item.output.trim();
     if (trimmedOutput.split("\n").length > 10) {
       sections.push(
@@ -56,8 +56,14 @@ function formatTool(
     } else {
       sections.push(`\`\`\`\n${trimmedOutput}\n\`\`\``);
     }
-  } else if (!includeOutput && item.output && item.output.trim().length > 0) {
-    sections.push(`*（输出已省略）*`);
+  }
+
+  if (
+    mode === "compact" &&
+    typeof item.durationMs === "number" &&
+    Number.isFinite(item.durationMs)
+  ) {
+    sections.push(`**耗时：** ${item.durationMs}ms`);
   }
 
   // File changes
@@ -102,30 +108,57 @@ function formatExplore(item: Extract<ConversationItem, { kind: "explore" }>) {
   return [`#### ${title}`, ...lines].join("\n");
 }
 
-export type TranscriptOptions = {
-  /** Whether to include tool/command output in the transcript. Default: true */
-  includeToolOutput?: boolean;
-};
+function resolveToolOutputMode(options?: ThreadTranscriptOptions): ThreadToolOutputMode {
+  if (options?.toolOutputMode) {
+    return options.toolOutputMode;
+  }
+  // Backward compat: old includeToolOutput=false means compact mode.
+  if (options?.includeToolOutput === false) {
+    return "compact";
+  }
+  return "detailed";
+}
 
 export function buildThreadTranscript(
   items: ConversationItem[],
-  options?: TranscriptOptions,
+  options?: ThreadTranscriptOptions,
 ) {
-  const includeOutput = options?.includeToolOutput !== false;
+  const includeUserInput = options?.includeUserInput !== false;
+  const includeAssistantMessages = options?.includeAssistantMessages !== false;
+  const toolOutputMode = resolveToolOutputMode(options);
+
   return items
     .map((item) => {
       switch (item.kind) {
         case "message":
+          if (item.role === "user" && !includeUserInput) {
+            return "";
+          }
+          if (item.role === "assistant" && !includeAssistantMessages) {
+            return "";
+          }
           return formatMessage(item);
         case "reasoning":
           return formatReasoning(item);
         case "explore":
+          if (toolOutputMode === "none") {
+            return "";
+          }
           return formatExplore(item);
         case "tool":
-          return formatTool(item, includeOutput);
+          if (toolOutputMode === "none") {
+            return "";
+          }
+          return formatTool(item, toolOutputMode);
         case "diff":
+          if (toolOutputMode === "none") {
+            return "";
+          }
           return formatDiff(item);
         case "review":
+          if (toolOutputMode === "none") {
+            return "";
+          }
           return formatReview(item);
       }
       return "";

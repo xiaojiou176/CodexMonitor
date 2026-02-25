@@ -84,6 +84,7 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     () => new Set(),
   );
   const workspaceSettingsRef = useRef<Map<string, WorkspaceSettings>>(new Map());
+  const settingsMutationSeqRef = useRef<Map<string, number>>(new Map());
   const lastRefreshErrorRef = useRef<string | null>(null);
   const { onDebug, defaultCodexBin, appSettings, onUpdateAppSettings } = options;
 
@@ -500,6 +501,9 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
       }
       const previousSettings = currentSettings;
       const nextSettings = { ...currentSettings, ...patch };
+      const mutationSeq =
+        (settingsMutationSeqRef.current.get(workspaceId) ?? 0) + 1;
+      settingsMutationSeqRef.current.set(workspaceId, mutationSeq);
       workspaceSettingsRef.current.set(workspaceId, nextSettings);
       setWorkspaces((prev) =>
         prev.map((entry) => {
@@ -511,20 +515,33 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
       );
       try {
         const updated = await updateWorkspaceSettingsService(workspaceId, nextSettings);
+        const latestMutationSeq =
+          settingsMutationSeqRef.current.get(workspaceId) ?? 0;
+        if (latestMutationSeq !== mutationSeq) {
+          return updated;
+        }
         workspaceSettingsRef.current.set(workspaceId, updated.settings);
         setWorkspaces((prev) =>
           prev.map((entry) => (entry.id === workspaceId ? updated : entry)),
         );
         return updated;
       } catch (error) {
-        workspaceSettingsRef.current.set(workspaceId, previousSettings);
-        setWorkspaces((prev) =>
-          prev.map((entry) =>
-            entry.id === workspaceId
-              ? { ...entry, settings: previousSettings }
-              : entry,
-          ),
-        );
+        const latestMutationSeq =
+          settingsMutationSeqRef.current.get(workspaceId) ?? 0;
+        const currentOptimisticSettings = workspaceSettingsRef.current.get(workspaceId);
+        if (
+          latestMutationSeq === mutationSeq &&
+          currentOptimisticSettings === nextSettings
+        ) {
+          workspaceSettingsRef.current.set(workspaceId, previousSettings);
+          setWorkspaces((prev) =>
+            prev.map((entry) =>
+              entry.id === workspaceId
+                ? { ...entry, settings: previousSettings }
+                : entry,
+            ),
+          );
+        }
         onDebug?.({
           id: `${Date.now()}-client-update-workspace-settings-error`,
           timestamp: Date.now(),

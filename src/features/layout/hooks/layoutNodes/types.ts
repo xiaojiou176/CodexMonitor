@@ -30,6 +30,7 @@ import type {
   ThreadScrollRestoreMode,
   ThreadListSortKey,
   ThreadSummary,
+  ThreadToolOutputMode,
   ThreadTokenUsage,
   ThreadPhase,
   TurnPlan,
@@ -218,6 +219,19 @@ export type LayoutNodesOptions = {
   onCopyThread: () => void | Promise<void>;
   onCopyThreadFull: () => void | Promise<void>;
   onCopyThreadCompact: () => void | Promise<void>;
+  copyThreadConfig: {
+    includeUserInput: boolean;
+    includeCodexReplies: boolean;
+    toolOutputMode: ThreadToolOutputMode;
+  };
+  onCopyThreadConfigChange: (next: {
+    includeUserInput: boolean;
+    includeCodexReplies: boolean;
+    toolOutputMode: ThreadToolOutputMode;
+  }) => void;
+  onApplyDetailedCopyPreset: () => void | Promise<void>;
+  onApplyCompactCopyPreset: () => void | Promise<void>;
+  onCopyThreadCurrentConfig: () => void | Promise<void>;
   onToggleTerminal: () => void;
   showTerminalButton: boolean;
   showWorkspaceTools: boolean;

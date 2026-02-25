@@ -183,20 +183,35 @@ export function useWorkspaceCrud({
           return true;
         });
 
-      for (const selection of selections) {
+      const checks = await Promise.all(
+        selections.map(async (selection) => {
+          try {
+            return {
+              selection,
+              isDir: await isWorkspacePathDirService(selection),
+              error: null as string | null,
+            };
+          } catch (error) {
+            return {
+              selection,
+              isDir: false,
+              error: error instanceof Error ? error.message : String(error),
+            };
+          }
+        }),
+      );
+
+      for (const { selection, isDir, error } of checks) {
         const key = normalizeWorkspacePathKey(selection);
         if (existingPaths.has(key)) {
           skippedExisting.push(selection);
           continue;
         }
 
-        let isDir = false;
-        try {
-          isDir = await isWorkspacePathDirService(selection);
-        } catch (error) {
+        if (error) {
           failures.push({
             path: selection,
-            message: error instanceof Error ? error.message : String(error),
+            message: error,
           });
           continue;
         }

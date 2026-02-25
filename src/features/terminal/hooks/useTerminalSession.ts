@@ -18,6 +18,10 @@ import {
 } from "../../../services/tauri";
 
 const MAX_BUFFER_CHARS = 200_000;
+const TERMINAL_FLUSH_INTERVAL_MS = 24;
+const MAX_PENDING_OUTPUT_CHARS = 120_000;
+const OUTPUT_THROTTLED_NOTICE =
+  "\r\n[CodexMonitor] terminal output throttled to keep UI responsive.\r\n";
 
 type UseTerminalSessionOptions = {
   activeWorkspace: WorkspaceInfo | null;
@@ -123,6 +127,9 @@ export function useTerminalSession({
   const inputDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const openedSessionsRef = useRef<Set<string>>(new Set());
   const outputBuffersRef = useRef<Map<string, string>>(new Map());
+  const pendingOutputRef = useRef<Map<string, string>>(new Map());
+  const overflowedKeysRef = useRef<Set<string>>(new Set());
+  const flushTimerRef = useRef<number | null>(null);
   const activeKeyRef = useRef<string | null>(null);
   const renderedKeyRef = useRef<string | null>(null);
   const activeWorkspaceRef = useRef<WorkspaceInfo | null>(null);
@@ -165,6 +172,31 @@ export function useTerminalSession({
     terminalRef.current?.write(data);
   }, []);
 
+  const flushPendingOutput = useCallback(() => {
+    flushTimerRef.current = null;
+    const key = activeKeyRef.current;
+    if (!key) {
+      return;
+    }
+    const chunk = pendingOutputRef.current.get(key);
+    if (!chunk) {
+      return;
+    }
+    pendingOutputRef.current.delete(key);
+    const hasOverflow = overflowedKeysRef.current.delete(key);
+    writeToTerminal(hasOverflow ? `${OUTPUT_THROTTLED_NOTICE}${chunk}` : chunk);
+    if (pendingOutputRef.current.has(key) && terminalRef.current) {
+      flushTimerRef.current = window.setTimeout(flushPendingOutput, TERMINAL_FLUSH_INTERVAL_MS);
+    }
+  }, [writeToTerminal]);
+
+  const schedulePendingOutputFlush = useCallback(() => {
+    if (flushTimerRef.current !== null || !terminalRef.current) {
+      return;
+    }
+    flushTimerRef.current = window.setTimeout(flushPendingOutput, TERMINAL_FLUSH_INTERVAL_MS);
+  }, [flushPendingOutput]);
+
   const refreshTerminal = useCallback(() => {
     const terminal = terminalRef.current;
     if (!terminal) {
@@ -181,6 +213,8 @@ export function useTerminalSession({
       if (!term) {
         return;
       }
+      pendingOutputRef.current.delete(key);
+      overflowedKeysRef.current.delete(key);
       term.reset();
       const buffered = outputBuffersRef.current.get(key);
       if (buffered) {
@@ -198,8 +232,15 @@ export function useTerminalSession({
         const key = `${workspaceId}:${terminalId}`;
         const next = appendBuffer(outputBuffersRef.current.get(key), data);
         outputBuffersRef.current.set(key, next);
-        if (activeKeyRef.current === key) {
-          writeToTerminal(data);
+        if (activeKeyRef.current === key && terminalRef.current) {
+          const currentPending = pendingOutputRef.current.get(key) ?? "";
+          let pending = currentPending + data;
+          if (pending.length > MAX_PENDING_OUTPUT_CHARS) {
+            pending = pending.slice(pending.length - MAX_PENDING_OUTPUT_CHARS);
+            overflowedKeysRef.current.add(key);
+          }
+          pendingOutputRef.current.set(key, pending);
+          schedulePendingOutputFlush();
         }
       },
       {
@@ -211,7 +252,7 @@ export function useTerminalSession({
     return () => {
       unlisten();
     };
-  }, [onDebug, writeToTerminal]);
+  }, [onDebug, schedulePendingOutputFlush]);
 
   useEffect(() => {
     const unlisten = subscribeTerminalExit(
@@ -232,6 +273,12 @@ export function useTerminalSession({
 
   useEffect(() => {
     if (!isVisible) {
+      if (flushTimerRef.current !== null) {
+        window.clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      pendingOutputRef.current.clear();
+      overflowedKeysRef.current.clear();
       inputDisposableRef.current?.dispose();
       inputDisposableRef.current = null;
       if (terminalRef.current) {
@@ -283,6 +330,12 @@ export function useTerminalSession({
 
   useEffect(() => {
     return () => {
+      if (flushTimerRef.current !== null) {
+        window.clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      pendingOutputRef.current.clear();
+      overflowedKeysRef.current.clear();
       inputDisposableRef.current?.dispose();
       inputDisposableRef.current = null;
       if (terminalRef.current) {
@@ -357,9 +410,10 @@ export function useTerminalSession({
     if (!isVisible || !activeKey || !terminalRef.current || !fitAddonRef.current) {
       return;
     }
+    schedulePendingOutputFlush();
     fitAddonRef.current.fit();
     refreshTerminal();
-  }, [activeKey, isVisible, refreshTerminal]);
+  }, [activeKey, isVisible, refreshTerminal, schedulePendingOutputFlush]);
 
   useEffect(() => {
     if (

@@ -266,6 +266,28 @@ function firstNonEmptyString(...values: unknown[]): string | null {
   return null;
 }
 
+function toBooleanLike(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+    if (normalized === "false" || normalized === "0" || normalized === "no" || normalized === "off") {
+      return false;
+    }
+    if (normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on") {
+      return true;
+    }
+  }
+  return Boolean(value);
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -460,7 +482,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
               id: String(question.id ?? "").trim(),
               header: String(question.header ?? ""),
               question: String(question.question ?? ""),
-              isOther: Boolean(question.isOther ?? question.is_other),
+              isOther: toBooleanLike(question.isOther ?? question.is_other),
               options: options.length ? options : undefined,
             };
           })
@@ -737,7 +759,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
           typeof loginIdRaw === "string" && loginIdRaw.trim().length > 0
             ? loginIdRaw
             : null;
-        const success = Boolean(params.success);
+        const success = toBooleanLike(params.success);
         const errorRaw = params.error ?? null;
         const error =
           typeof errorRaw === "string" && errorRaw.trim().length > 0 ? errorRaw : null;

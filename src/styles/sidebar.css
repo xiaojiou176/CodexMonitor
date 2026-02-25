@@ -1074,6 +1074,12 @@
   position: relative;
 }
 
+.thread-row.thread-row-subagent {
+  padding-left: calc(8px + var(--thread-indent, 0px) + 10px);
+  background: color-mix(in srgb, var(--surface-context) 18%, transparent);
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--border-muted) 52%, transparent);
+}
+
 .thread-list-nested .thread-row {
   border-radius: 8px;
 }

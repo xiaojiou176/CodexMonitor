@@ -4,12 +4,27 @@ import { listen } from "@tauri-apps/api/event";
 import type { AppServerEvent } from "../types";
 import {
   subscribeAppServerEvents,
+  subscribeMenuAddWorkspace,
   subscribeMenuAddWorkspaceFromUrl,
   subscribeMenuCycleCollaborationMode,
   subscribeMenuCycleModel,
+  subscribeMenuCycleReasoning,
   subscribeMenuNewAgent,
+  subscribeMenuNewCloneAgent,
+  subscribeMenuNewWorktreeAgent,
+  subscribeMenuNextAgent,
+  subscribeMenuNextWorkspace,
   subscribeMenuOpenBranchSwitcher,
+  subscribeMenuOpenSettings,
+  subscribeMenuPrevAgent,
+  subscribeMenuPrevWorkspace,
+  subscribeMenuToggleDebugPanel,
+  subscribeMenuToggleGitSidebar,
+  subscribeMenuToggleProjectsSidebar,
+  subscribeMenuToggleTerminal,
+  subscribeTerminalExit,
   subscribeTerminalOutput,
+  subscribeUpdaterCheck,
 } from "./events";
 
 const flushMicrotaskQueue = () =>
@@ -176,6 +191,71 @@ describe("events subscriptions", () => {
     await flushMicrotaskQueue();
     await flushMicrotaskQueue();
     expect(onError).toHaveBeenCalledWith(error);
+
+    cleanup();
+  });
+
+  it("wires additional menu/terminal/updater hubs and forwards payloads", async () => {
+    const subscriptions: Array<{
+      eventName: string;
+      subscribe: (listener: () => void) => () => void;
+    }> = [
+      { eventName: "menu-new-worktree-agent", subscribe: subscribeMenuNewWorktreeAgent },
+      { eventName: "menu-new-clone-agent", subscribe: subscribeMenuNewCloneAgent },
+      { eventName: "menu-add-workspace", subscribe: subscribeMenuAddWorkspace },
+      { eventName: "menu-open-settings", subscribe: subscribeMenuOpenSettings },
+      { eventName: "menu-toggle-projects-sidebar", subscribe: subscribeMenuToggleProjectsSidebar },
+      { eventName: "menu-toggle-git-sidebar", subscribe: subscribeMenuToggleGitSidebar },
+      { eventName: "menu-toggle-debug-panel", subscribe: subscribeMenuToggleDebugPanel },
+      { eventName: "menu-toggle-terminal", subscribe: subscribeMenuToggleTerminal },
+      { eventName: "menu-next-agent", subscribe: subscribeMenuNextAgent },
+      { eventName: "menu-prev-agent", subscribe: subscribeMenuPrevAgent },
+      { eventName: "menu-next-workspace", subscribe: subscribeMenuNextWorkspace },
+      { eventName: "menu-prev-workspace", subscribe: subscribeMenuPrevWorkspace },
+      { eventName: "menu-composer-cycle-reasoning", subscribe: subscribeMenuCycleReasoning },
+      { eventName: "updater-check", subscribe: subscribeUpdaterCheck },
+    ];
+
+    for (const entry of subscriptions) {
+      let listener: EventCallback<void> = () => {};
+      const unlisten = vi.fn();
+      vi.mocked(listen).mockImplementationOnce((event, handler) => {
+        expect(event).toBe(entry.eventName);
+        listener = handler as EventCallback<void>;
+        return Promise.resolve(unlisten);
+      });
+
+      const onEvent = vi.fn();
+      const cleanup = entry.subscribe(onEvent);
+      listener({ event: entry.eventName, id: 1, payload: undefined });
+      expect(onEvent).toHaveBeenCalledTimes(1);
+      cleanup();
+      await flushMicrotaskQueue();
+      expect(unlisten).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("delivers terminal exit payloads", async () => {
+    let listener: EventCallback<{ workspaceId: string; terminalId: string }> = () => {};
+    const unlisten = vi.fn();
+
+    vi.mocked(listen).mockImplementation((_event, handler) => {
+      listener = handler as EventCallback<{ workspaceId: string; terminalId: string }>;
+      return Promise.resolve(unlisten);
+    });
+
+    const onEvent = vi.fn();
+    const cleanup = subscribeTerminalExit(onEvent);
+
+    listener({
+      event: "terminal-exit",
+      id: 1,
+      payload: { workspaceId: "ws-1", terminalId: "term-1" },
+    });
+    expect(onEvent).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      terminalId: "term-1",
+    });
 
     cleanup();
   });

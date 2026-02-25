@@ -1,6 +1,10 @@
 import { useCallback } from "react";
 import { buildThreadTranscript } from "../../../utils/threadText";
-import type { ConversationItem, DebugEntry } from "../../../types";
+import type {
+  ConversationItem,
+  DebugEntry,
+  ThreadTranscriptOptions,
+} from "../../../types";
 
 type CopyThreadOptions = {
   activeItems: ConversationItem[];
@@ -9,13 +13,11 @@ type CopyThreadOptions = {
 
 export function useCopyThread({ activeItems, onDebug }: CopyThreadOptions) {
   const doCopy = useCallback(
-    async (includeToolOutput: boolean) => {
+    async (options?: ThreadTranscriptOptions) => {
       if (!activeItems.length) {
         return;
       }
-      const transcript = buildThreadTranscript(activeItems, {
-        includeToolOutput,
-      });
+      const transcript = buildThreadTranscript(activeItems, options);
       if (!transcript) {
         return;
       }
@@ -34,20 +36,30 @@ export function useCopyThread({ activeItems, onDebug }: CopyThreadOptions) {
     [activeItems, onDebug],
   );
 
+  const handleCopyThreadWithOptions = useCallback(
+    (options?: ThreadTranscriptOptions) => doCopy(options),
+    [doCopy],
+  );
+
   /** Copy with full tool/command output */
   const handleCopyThreadFull = useCallback(
-    () => doCopy(true),
+    () => doCopy({ toolOutputMode: "detailed" }),
     [doCopy],
   );
 
   /** Copy without tool/command output (compact) */
   const handleCopyThreadCompact = useCallback(
-    () => doCopy(false),
+    () => doCopy({ toolOutputMode: "compact" }),
     [doCopy],
   );
 
   /** Legacy: same as full for backward compat */
   const handleCopyThread = handleCopyThreadFull;
 
-  return { handleCopyThread, handleCopyThreadFull, handleCopyThreadCompact };
+  return {
+    handleCopyThread,
+    handleCopyThreadWithOptions,
+    handleCopyThreadFull,
+    handleCopyThreadCompact,
+  };
 }

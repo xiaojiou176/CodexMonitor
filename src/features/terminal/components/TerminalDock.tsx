@@ -1,4 +1,5 @@
-import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import { useMemo, useRef } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { TerminalTab } from "../hooks/useTerminalTabs";
 
 type TerminalDockProps = {
@@ -22,9 +23,74 @@ export function TerminalDock({
   onResizeStart,
   terminalNode,
 }: TerminalDockProps) {
+  const tabButtonRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const tabPanelId = "terminal-tabpanel";
+  const tabIds = useMemo(
+    () =>
+      terminals.map((tab) => ({
+        id: tab.id,
+        elementId: `terminal-tab-${tab.id}`,
+      })),
+    [terminals],
+  );
+
   if (!isOpen) {
     return null;
   }
+
+  const handleTabKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    currentIndex: number,
+    terminalId: string,
+  ) => {
+    const terminalCount = terminals.length;
+    if (terminalCount === 0) {
+      return;
+    }
+    const focusByIndex = (nextIndex: number) => {
+      const normalizedIndex = (nextIndex + terminalCount) % terminalCount;
+      const target = tabButtonRefs.current[normalizedIndex];
+      if (!target) {
+        return;
+      }
+      target.focus();
+      onSelectTerminal(terminals[normalizedIndex].id);
+    };
+
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      focusByIndex(currentIndex + 1);
+      return;
+    }
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      focusByIndex(currentIndex - 1);
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      focusByIndex(0);
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      focusByIndex(terminalCount - 1);
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSelectTerminal(terminalId);
+      return;
+    }
+    if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault();
+      onCloseTerminal(terminalId);
+    }
+  };
+
+  const activeTabElementId =
+    tabIds.find((item) => item.id === activeTerminalId)?.elementId ??
+    tabIds[0]?.elementId;
 
   return (
     <section className="terminal-panel">
@@ -38,39 +104,51 @@ export function TerminalDock({
         />
       )}
       <div className="terminal-header">
-        <div className="terminal-tabs" role="tablist" aria-label="终端标签">
-          {terminals.map((tab) => (
-            <div
-              key={tab.id}
-              className={`terminal-tab${
-                tab.id === activeTerminalId ? " active" : ""
-              }`}
-              role="tab"
-              aria-selected={tab.id === activeTerminalId}
-              tabIndex={tab.id === activeTerminalId ? 0 : -1}
-              onClick={() => onSelectTerminal(tab.id)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onSelectTerminal(tab.id);
-                }
-              }}
-            >
-              <span className="terminal-tab-label">{tab.title}</span>
-              <button
-                type="button"
-                className="terminal-tab-close"
-                aria-label={`关闭 ${tab.title}`}
-                title={`关闭 ${tab.title}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onCloseTerminal(tab.id);
-                }}
+        <div
+          className="terminal-tabs"
+          role="tablist"
+          aria-label="终端标签"
+          aria-orientation="horizontal"
+        >
+          {terminals.map((tab, index) => {
+            const tabElementId = tabIds[index]?.elementId ?? `terminal-tab-${tab.id}`;
+            const isActive = tab.id === activeTerminalId;
+            return (
+              <div
+                key={tab.id}
+                className="terminal-tab-group"
+                style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
               >
-                <span aria-hidden>×</span>
-              </button>
-            </div>
-          ))}
+                <button
+                  type="button"
+                  className={`terminal-tab${
+                    isActive ? " active" : ""
+                  }`}
+                  id={tabElementId}
+                  ref={(node) => {
+                    tabButtonRefs.current[index] = node;
+                  }}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={tabPanelId}
+                  tabIndex={isActive ? 0 : -1}
+                  onClick={() => onSelectTerminal(tab.id)}
+                  onKeyDown={(event) => handleTabKeyDown(event, index, tab.id)}
+                >
+                  <span className="terminal-tab-label">{tab.title}</span>
+                </button>
+                <button
+                  type="button"
+                  className="terminal-tab-close"
+                  aria-label={`关闭 ${tab.title}`}
+                  title={`关闭 ${tab.title}`}
+                  onClick={() => onCloseTerminal(tab.id)}
+                >
+                  <span aria-hidden>×</span>
+                </button>
+              </div>
+            );
+          })}
           <button
             className="terminal-tab-add"
             type="button"
@@ -82,7 +160,14 @@ export function TerminalDock({
           </button>
         </div>
       </div>
-      <div className="terminal-body">{terminalNode}</div>
+      <div
+        id={tabPanelId}
+        className="terminal-body"
+        role="tabpanel"
+        aria-labelledby={activeTabElementId}
+      >
+        {terminalNode}
+      </div>
     </section>
   );
 }

@@ -292,6 +292,11 @@ export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNod
       onCopyThread={options.onCopyThread}
       onCopyThreadFull={options.onCopyThreadFull}
       onCopyThreadCompact={options.onCopyThreadCompact}
+      copyThreadConfig={options.copyThreadConfig}
+      onCopyThreadConfigChange={options.onCopyThreadConfigChange}
+      onApplyDetailedCopyPreset={options.onApplyDetailedCopyPreset}
+      onApplyCompactCopyPreset={options.onApplyCompactCopyPreset}
+      onCopyThreadCurrentConfig={options.onCopyThreadCurrentConfig}
       onToggleTerminal={options.onToggleTerminal}
       isTerminalOpen={options.terminalOpen}
       showTerminalButton={options.showTerminalButton}

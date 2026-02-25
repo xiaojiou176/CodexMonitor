@@ -145,7 +145,7 @@ export function PinnedThreadList({
             data-thread-id={thread.id}
             className={`thread-row${isActive ? " active" : ""}${
               isSelected ? " thread-row-selected" : ""
-            }`}
+            }${threadRow.isSubAgent ? " thread-row-subagent" : ""}`}
             style={indentStyle}
             onClick={(event) => {
               onThreadSelectionChange?.({

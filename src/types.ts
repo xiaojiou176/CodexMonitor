@@ -108,6 +108,16 @@ export type ConversationItem =
       changes?: { path: string; kind?: string; diff?: string }[];
     };
 
+export type ThreadToolOutputMode = "none" | "compact" | "detailed";
+
+export type ThreadTranscriptOptions = {
+  includeUserInput?: boolean;
+  includeAssistantMessages?: boolean;
+  toolOutputMode?: ThreadToolOutputMode;
+  /** @deprecated use toolOutputMode instead */
+  includeToolOutput?: boolean;
+};
+
 export type ThreadSummary = {
   id: string;
   name: string;
@@ -204,6 +214,9 @@ export type AppSettings = {
   theme: ThemePreference;
   usageShowRemaining: boolean;
   showMessageFilePath: boolean;
+  threadCopyIncludeUserInput: boolean;
+  threadCopyIncludeAssistantMessages: boolean;
+  threadCopyToolOutputMode: ThreadToolOutputMode;
   threadScrollRestoreMode: ThreadScrollRestoreMode;
   threadTitleAutogenerationEnabled: boolean;
   uiFontFamily: string;

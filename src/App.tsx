@@ -120,6 +120,8 @@ import { normalizeCodexArgsInput } from "./utils/codexArgsInput";
 import type {
   ComposerEditorSettings,
   GitFileStatus,
+  ThreadToolOutputMode,
+  ThreadTranscriptOptions,
   WorkspaceInfo,
 } from "./types";
 import { OPEN_APP_STORAGE_KEY } from "./features/app/constants";
@@ -172,6 +174,24 @@ const CONTINUE_PROMPT_DEFAULT = "请继续完成我和你讨论的Plan！";
 type ContinueThreadConfig = {
   enabled: boolean;
   prompt: string;
+};
+
+type MainHeaderCopyConfig = {
+  includeUserInput: boolean;
+  includeCodexReplies: boolean;
+  toolOutputMode: ThreadToolOutputMode;
+};
+
+const THREAD_COPY_PRESET_DETAILED: ThreadTranscriptOptions = {
+  includeUserInput: true,
+  includeAssistantMessages: true,
+  toolOutputMode: "detailed",
+};
+
+const THREAD_COPY_PRESET_COMPACT: ThreadTranscriptOptions = {
+  includeUserInput: true,
+  includeAssistantMessages: true,
+  toolOutputMode: "compact",
 };
 
 function clampMessageFontSize(value: number): number {
@@ -316,6 +336,7 @@ function MainApp() {
     activeWorkspaceId,
     setActiveWorkspaceId,
     addWorkspace,
+    addWorkspacesFromPaths,
     addWorkspaceFromPath,
     mobileRemoteWorkspacePathPrompt,
     updateMobileRemoteWorkspacePathInput,
@@ -1180,10 +1201,92 @@ function MainApp() {
     setActiveTab,
   });
 
-  const { handleCopyThread, handleCopyThreadFull, handleCopyThreadCompact } = useCopyThread({
+  const {
+    handleCopyThread,
+    handleCopyThreadWithOptions,
+    handleCopyThreadFull,
+    handleCopyThreadCompact,
+  } = useCopyThread({
     activeItems,
     onDebug: addDebugEntry,
   });
+
+  const copyThreadConfig = useMemo<Required<ThreadTranscriptOptions>>(
+    () => ({
+      includeUserInput: appSettings.threadCopyIncludeUserInput,
+      includeAssistantMessages: appSettings.threadCopyIncludeAssistantMessages,
+      toolOutputMode: appSettings.threadCopyToolOutputMode,
+      includeToolOutput: appSettings.threadCopyToolOutputMode !== "none",
+    }),
+    [
+      appSettings.threadCopyIncludeUserInput,
+      appSettings.threadCopyIncludeAssistantMessages,
+      appSettings.threadCopyToolOutputMode,
+    ],
+  );
+
+  const mainHeaderCopyConfig = useMemo<MainHeaderCopyConfig>(
+    () => ({
+      includeUserInput: copyThreadConfig.includeUserInput,
+      includeCodexReplies: copyThreadConfig.includeAssistantMessages,
+      toolOutputMode: copyThreadConfig.toolOutputMode,
+    }),
+    [copyThreadConfig],
+  );
+
+  const persistCopyThreadConfig = useCallback(
+    (next: ThreadTranscriptOptions) => {
+      setAppSettings((current) => {
+        const nextIncludeUserInput =
+          next.includeUserInput ?? current.threadCopyIncludeUserInput;
+        const nextIncludeAssistantMessages =
+          next.includeAssistantMessages ?? current.threadCopyIncludeAssistantMessages;
+        const nextToolOutputMode =
+          next.toolOutputMode ?? current.threadCopyToolOutputMode;
+        if (
+          current.threadCopyIncludeUserInput === nextIncludeUserInput &&
+          current.threadCopyIncludeAssistantMessages === nextIncludeAssistantMessages &&
+          current.threadCopyToolOutputMode === nextToolOutputMode
+        ) {
+          return current;
+        }
+        const nextSettings = {
+          ...current,
+          threadCopyIncludeUserInput: nextIncludeUserInput,
+          threadCopyIncludeAssistantMessages: nextIncludeAssistantMessages,
+          threadCopyToolOutputMode: nextToolOutputMode,
+        };
+        void queueSaveSettings(nextSettings);
+        return nextSettings;
+      });
+    },
+    [queueSaveSettings, setAppSettings],
+  );
+
+  const handleCopyThreadCurrentConfig = useCallback(() => {
+    return handleCopyThreadWithOptions(copyThreadConfig);
+  }, [copyThreadConfig, handleCopyThreadWithOptions]);
+
+  const handleApplyDetailedCopyPreset = useCallback(() => {
+    persistCopyThreadConfig(THREAD_COPY_PRESET_DETAILED);
+    return handleCopyThreadWithOptions(THREAD_COPY_PRESET_DETAILED);
+  }, [handleCopyThreadWithOptions, persistCopyThreadConfig]);
+
+  const handleApplyCompactCopyPreset = useCallback(() => {
+    persistCopyThreadConfig(THREAD_COPY_PRESET_COMPACT);
+    return handleCopyThreadWithOptions(THREAD_COPY_PRESET_COMPACT);
+  }, [handleCopyThreadWithOptions, persistCopyThreadConfig]);
+
+  const handleCopyThreadConfigChange = useCallback(
+    (next: MainHeaderCopyConfig) => {
+      persistCopyThreadConfig({
+        includeUserInput: next.includeUserInput,
+        includeAssistantMessages: next.includeCodexReplies,
+        toolOutputMode: next.toolOutputMode,
+      });
+    },
+    [persistCopyThreadConfig],
+  );
 
   const {
     renamePrompt,
@@ -1975,11 +2078,35 @@ function MainApp() {
   });
 
   useWindowDrag("titlebar");
+
+  const resolvePreferredThreadIdOnRestore = useCallback(
+    ({
+      workspaceId,
+      activeWorkspaceId: restoreActiveWorkspaceId,
+      activeThreadId: restoreActiveThreadId,
+    }: {
+      workspaceId: string;
+      activeWorkspaceId: string | null;
+      activeThreadId: string | null;
+    }) => {
+      if (restoreActiveWorkspaceId === workspaceId && restoreActiveThreadId) {
+        return restoreActiveThreadId;
+      }
+      return threadsByWorkspace[workspaceId]?.[0]?.id ?? null;
+    },
+    [threadsByWorkspace],
+  );
+
   useWorkspaceRestore({
     workspaces,
     hasLoaded,
+    backendMode: appSettings.backendMode,
+    activeWorkspaceId,
+    activeThreadId,
     connectWorkspace,
-    listThreadsForWorkspace
+    listThreadsForWorkspace,
+    resolvePreferredThreadId: resolvePreferredThreadIdOnRestore,
+    refreshThreadRuntime: refreshThread,
   });
   useWorkspaceRefreshOnFocus({
     workspaces,
@@ -2002,7 +2129,6 @@ function MainApp() {
   const {
     handleAddWorkspace,
     handleAddWorkspaceFromUrl,
-    handleAddWorkspaceFromPath,
     handleAddAgent,
     handleAddWorktreeAgent,
     handleAddCloneAgent,
@@ -2030,11 +2156,9 @@ function MainApp() {
       if (uniquePaths.length === 0) {
         return;
       }
-      uniquePaths.forEach((path) => {
-        void handleAddWorkspaceFromPath(path);
-      });
+      await addWorkspacesFromPaths(uniquePaths);
     },
-    [handleAddWorkspaceFromPath],
+    [addWorkspacesFromPaths],
   );
 
   const {
@@ -2659,6 +2783,11 @@ function MainApp() {
     onCopyThread: handleCopyThread,
     onCopyThreadFull: handleCopyThreadFull,
     onCopyThreadCompact: handleCopyThreadCompact,
+    copyThreadConfig: mainHeaderCopyConfig,
+    onCopyThreadConfigChange: handleCopyThreadConfigChange,
+    onApplyDetailedCopyPreset: handleApplyDetailedCopyPreset,
+    onApplyCompactCopyPreset: handleApplyCompactCopyPreset,
+    onCopyThreadCurrentConfig: handleCopyThreadCurrentConfig,
     onToggleTerminal: handleToggleTerminal,
     showTerminalButton: !isCompact,
     showWorkspaceTools: !isCompact,

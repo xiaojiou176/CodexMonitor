@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+} from "react";
 import type { DebugEntry } from "../../../types";
 import { UI_LOCALE } from "../../../i18n/locale";
 
@@ -166,6 +169,9 @@ export function DebugPanel({
   const [onlyErrors, setOnlyErrors] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const filterTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const tabListId = "debug-filter-tablist";
+  const tabPanelId = "debug-log-panel";
 
   type FormattedDebugEntry = DebugEntry & {
     timeLabel: string;
@@ -227,6 +233,11 @@ export function DebugPanel({
   }, [entries, isVisible]);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
+  const activeFilterIndex = LEVEL_FILTERS.findIndex((filter) => filter.value === levelFilter);
+  const activeFilterTabId =
+    LEVEL_FILTERS[activeFilterIndex]?.value !== undefined
+      ? `debug-filter-tab-${LEVEL_FILTERS[activeFilterIndex].value}`
+      : undefined;
   const visibleEntries = useMemo(
     () =>
       formattedEntries.filter((entry) => {
@@ -259,6 +270,54 @@ export function DebugPanel({
     return null;
   }
 
+  const handleFilterTabKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    currentIndex: number,
+  ) => {
+    const tabCount = LEVEL_FILTERS.length;
+    if (tabCount === 0) {
+      return;
+    }
+    const focusAndSelect = (targetIndex: number) => {
+      const normalizedIndex = (targetIndex + tabCount) % tabCount;
+      const targetFilter = LEVEL_FILTERS[normalizedIndex];
+      const targetElement = filterTabRefs.current[normalizedIndex];
+      if (!targetFilter || !targetElement) {
+        return;
+      }
+      targetElement.focus();
+      setLevelFilter(targetFilter.value);
+    };
+
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      focusAndSelect(currentIndex + 1);
+      return;
+    }
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      focusAndSelect(currentIndex - 1);
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      focusAndSelect(0);
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      focusAndSelect(tabCount - 1);
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      const currentFilter = LEVEL_FILTERS[currentIndex];
+      if (currentFilter) {
+        setLevelFilter(currentFilter.value);
+      }
+    }
+  };
+
   return (
     <section
       className={`debug-panel ${variant === "full" ? "full" : isOpen ? "open" : ""}`}
@@ -284,16 +343,34 @@ export function DebugPanel({
         </div>
       </div>
       <div className="debug-controls">
-        <div className="debug-filter-group" role="tablist" aria-label="日志级别筛选">
-          {LEVEL_FILTERS.map((filter) => (
+        <div
+          className="debug-filter-group"
+          id={tabListId}
+          role="tablist"
+          aria-label="日志级别筛选"
+          aria-orientation="horizontal"
+        >
+          {LEVEL_FILTERS.map((filter, index) => {
+            const isSelected = levelFilter === filter.value;
+            return (
             <button
               key={filter.value}
+              id={`debug-filter-tab-${filter.value}`}
+              ref={(node) => {
+                filterTabRefs.current[index] = node;
+              }}
               className={`debug-filter-chip ${levelFilter === filter.value ? "active" : ""}`}
+              role="tab"
+              aria-selected={isSelected}
+              aria-controls={tabPanelId}
+              tabIndex={isSelected ? 0 : -1}
               onClick={() => setLevelFilter(filter.value)}
+              onKeyDown={(event) => handleFilterTabKeyDown(event, index)}
             >
               {filter.label}
             </button>
-          ))}
+            );
+          })}
         </div>
         <label className="debug-toggle">
           <input
@@ -321,7 +398,14 @@ export function DebugPanel({
         />
       </div>
       {isOpen ? (
-        <div className="debug-list" ref={listRef}>
+        <div
+          id={tabPanelId}
+          className="debug-list"
+          ref={listRef}
+          role="tabpanel"
+          aria-labelledby={activeFilterTabId}
+          aria-describedby={tabListId}
+        >
           {formattedEntries.length === 0 ? (
             <div className="debug-empty">暂无调试事件。</div>
           ) : visibleEntries.length === 0 ? (

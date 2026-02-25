@@ -184,6 +184,7 @@ export function useRemoteThreadRefreshOnFocus({
     } catch {
       // In non-Tauri environments, getCurrentWindow can throw.
     }
+    runRefresh();
     updatePolling();
     return () => {
       didCleanup = true;

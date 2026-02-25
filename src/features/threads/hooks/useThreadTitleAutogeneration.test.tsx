@@ -148,4 +148,52 @@ describe("useThreadTitleAutogeneration", () => {
 
     expect(renameThread).not.toHaveBeenCalled();
   });
+
+  it("skips rename when generated title is blank after normalization", async () => {
+    vi.mocked(generateRunMetadata).mockResolvedValue({
+      title: "   ",
+      worktreeName: "feat/blank",
+    });
+    const { result, renameThread } = setup();
+
+    await act(async () => {
+      await result.current.onUserMessageCreated("ws-1", "thread-1", "Need a title");
+    });
+
+    expect(generateRunMetadata).toHaveBeenCalledWith("ws-1", "Need a title");
+    expect(renameThread).not.toHaveBeenCalled();
+  });
+
+  it("records debug details when metadata generation throws", async () => {
+    vi.mocked(generateRunMetadata).mockRejectedValue(new Error("metadata failed"));
+    const onDebug = vi.fn();
+
+    const { result } = renderHook(() =>
+      useThreadTitleAutogeneration({
+        enabled: true,
+        itemsByThreadRef: { current: { "thread-1": [] } },
+        threadsByWorkspaceRef: {
+          current: {
+            "ws-1": [{ id: "thread-1", name: "New Agent", updatedAt: 0 }],
+          },
+        },
+        getCustomName: vi.fn(() => undefined),
+        renameThread: vi.fn(),
+        onDebug,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.onUserMessageCreated("ws-1", "thread-1", "trigger failure");
+    });
+
+    expect(onDebug).toHaveBeenCalledTimes(1);
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "error",
+        label: "thread/title autogen error",
+        payload: "metadata failed",
+      }),
+    );
+  });
 });

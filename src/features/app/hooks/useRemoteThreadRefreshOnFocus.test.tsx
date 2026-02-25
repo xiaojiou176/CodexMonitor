@@ -27,6 +27,33 @@ describe("useRemoteThreadRefreshOnFocus", () => {
     vi.useRealTimers();
   });
 
+  it("refreshes once shortly after mount without waiting poll interval", async () => {
+    const refreshThread = vi.fn().mockResolvedValue(undefined);
+
+    renderHook(() =>
+      useRemoteThreadRefreshOnFocus({
+        backendMode: "remote",
+        activeWorkspace: {
+          id: "ws-immediate",
+          name: "Workspace Immediate",
+          path: "/tmp/ws-immediate",
+          connected: true,
+          settings: { sidebarCollapsed: false },
+        },
+        activeThreadId: "thread-immediate",
+        refreshThread,
+      }),
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(501);
+      await new Promise<void>((resolve) => { queueMicrotask(resolve); });
+    });
+
+    expect(refreshThread).toHaveBeenCalledTimes(1);
+    expect(refreshThread).toHaveBeenCalledWith("ws-immediate", "thread-immediate");
+  });
+
   it("polls on interval for remote active thread", async () => {
     const refreshThread = vi.fn().mockResolvedValue(undefined);
 

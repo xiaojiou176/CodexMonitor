@@ -17,8 +17,6 @@ type UseThreadUserInputOptions = {
 
 export function useThreadUserInput({
   dispatch,
-  setThreadPhase,
-  setThreadWaitReason,
 }: UseThreadUserInputOptions) {
   const handleUserInputSubmit = useCallback(
     async (request: RequestUserInputRequest, response: RequestUserInputResponse) => {
@@ -32,13 +30,8 @@ export function useThreadUserInput({
         requestId: request.request_id,
         workspaceId: request.workspace_id,
       });
-      const threadId = request.params.thread_id.trim();
-      if (threadId) {
-        setThreadPhase(threadId, "starting");
-        setThreadWaitReason(threadId, "none");
-      }
     },
-    [dispatch, setThreadPhase, setThreadWaitReason],
+    [dispatch],
   );
 
   return { handleUserInputSubmit };

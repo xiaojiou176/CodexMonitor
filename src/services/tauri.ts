@@ -34,6 +34,61 @@ import type {
   ReviewTarget,
 } from "../types";
 
+const OPEN_WORKSPACE_COMMAND_ALLOWLIST = new Set([
+  "code",
+  "code-insiders",
+  "cursor",
+  "windsurf",
+  "zed",
+  "subl",
+  "idea",
+  "webstorm",
+  "pycharm",
+]);
+
+const OPEN_WORKSPACE_ARG_ALLOWLIST = new Set([
+  "-n",
+  "-r",
+  "--new-window",
+  "--reuse-window",
+  "--wait",
+  "--add",
+  "--goto",
+]);
+
+function validateOpenWorkspaceCommand(command: string): string {
+  const trimmed = command.trim();
+  if (!trimmed) {
+    throw new Error("Invalid command: empty value");
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(trimmed)) {
+    throw new Error("Invalid command: unsupported characters");
+  }
+  if (!OPEN_WORKSPACE_COMMAND_ALLOWLIST.has(trimmed)) {
+    throw new Error(`Command not allowed: ${trimmed}`);
+  }
+  return trimmed;
+}
+
+function validateOpenWorkspaceArgs(args: string[]): string[] {
+  if (!Array.isArray(args)) {
+    throw new Error("Invalid args: expected array");
+  }
+  if (args.length > 8) {
+    throw new Error("Invalid args: too many arguments");
+  }
+  return args.map((value) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new Error("Invalid args: empty value");
+    }
+    if (!OPEN_WORKSPACE_ARG_ALLOWLIST.has(trimmed)) {
+      throw new Error(`Argument not allowed: ${trimmed}`);
+    }
+    return trimmed;
+  });
+}
+
 function isMissingTauriInvokeError(error: unknown) {
   return (
     error instanceof TypeError &&
@@ -347,11 +402,15 @@ export async function openWorkspaceIn(
     args?: string[];
   },
 ): Promise<void> {
+  const safeCommand = options.command
+    ? validateOpenWorkspaceCommand(options.command)
+    : null;
+  const safeArgs = validateOpenWorkspaceArgs(options.args ?? []);
   return invoke("open_workspace_in", {
     path,
     app: options.appName ?? null,
-    command: options.command ?? null,
-    args: options.args ?? [],
+    command: safeCommand,
+    args: safeArgs,
   });
 }
 

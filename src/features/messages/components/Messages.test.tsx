@@ -84,9 +84,7 @@ describe("Messages", () => {
     expect(bubble).not.toBeNull();
     expect(grid).not.toBeNull();
     expect(markdown).not.toBeNull();
-    if (grid && markdown) {
-      expect(bubble?.firstChild).toBe(grid);
-    }
+    expect((bubble as HTMLElement).firstChild).toBe(grid);
     const openButton = screen.getByRole("button", { name: "打开图片 1" });
     fireEvent.click(openButton);
     expect(screen.getByRole("dialog")).not.toBeNull();

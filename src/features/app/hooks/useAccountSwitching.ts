@@ -20,6 +20,25 @@ type UseAccountSwitchingResult = {
   handleCancelSwitchAccount: () => Promise<void>;
 };
 
+function parseBooleanParam(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on") {
+      return true;
+    }
+    if (normalized === "false" || normalized === "0" || normalized === "no" || normalized === "off") {
+      return false;
+    }
+  }
+  return false;
+}
+
 export function useAccountSwitching({
   activeWorkspaceId,
   accountByWorkspace,
@@ -111,7 +130,7 @@ export function useAccountSwitching({
 
         loginIdRef.current = null;
         loginWorkspaceIdRef.current = null;
-        const success = Boolean(params.success);
+        const success = parseBooleanParam(params.success);
         const errorMessage = String(params.error ?? "").trim();
 
         if (success && !accountSwitchCanceledRef.current) {

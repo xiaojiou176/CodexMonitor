@@ -90,4 +90,24 @@ describe("AppSettings contract", () => {
       `Missing in src-tauri/src/types.rs: ${missingInRust.join(", ")}`,
     ).toEqual([]);
   });
+
+  it("keeps thread copy defaults and normalize wiring in useAppSettings", () => {
+    const settingsHookSource = readFileSync(
+      resolve(process.cwd(), "src/features/settings/hooks/useAppSettings.ts"),
+      "utf8",
+    );
+
+    const requiredKeys = [
+      "threadCopyIncludeUserInput",
+      "threadCopyIncludeAssistantMessages",
+      "threadCopyToolOutputMode",
+    ];
+
+    requiredKeys.forEach((key) => {
+      expect(
+        settingsHookSource.includes(key),
+        `Expected useAppSettings to include ${key} default/normalize wiring`,
+      ).toBe(true);
+    });
+  });
 });

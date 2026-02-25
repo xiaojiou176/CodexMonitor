@@ -67,6 +67,9 @@ const baseSettings: AppSettings = {
   theme: "system",
   usageShowRemaining: false,
   showMessageFilePath: true,
+  threadCopyIncludeUserInput: true,
+  threadCopyIncludeAssistantMessages: true,
+  threadCopyToolOutputMode: "compact",
   threadScrollRestoreMode: "latest",
   threadTitleAutogenerationEnabled: false,
   uiFontFamily:

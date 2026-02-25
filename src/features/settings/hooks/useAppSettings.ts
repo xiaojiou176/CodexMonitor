@@ -22,9 +22,13 @@ import { DEFAULT_COMMIT_MESSAGE_PROMPT } from "../../../utils/commitMessagePromp
 const allowedThemes = new Set(["system", "light", "dark", "dim"]);
 const allowedPersonality = new Set(["friendly", "pragmatic"]);
 const allowedThreadScrollRestoreMode = new Set(["latest", "remember"]);
+const allowedThreadCopyToolOutputModes = new Set(["none", "compact", "detailed"]);
 const AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_DEFAULT = 30;
 const AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MIN = 5;
 const AUTO_ARCHIVE_SUB_AGENT_THREADS_MINUTES_MAX = 240;
+const THREAD_COPY_INCLUDE_USER_INPUT_DEFAULT = true;
+const THREAD_COPY_INCLUDE_ASSISTANT_MESSAGES_DEFAULT = true;
+const THREAD_COPY_TOOL_OUTPUT_MODE_DEFAULT = "detailed" as const;
 
 function clampAutoArchiveSubAgentThreadsMinutes(value: number): number {
   if (!Number.isFinite(value)) {
@@ -118,6 +122,10 @@ function buildDefaultSettings(): AppSettings {
     showMessageFilePath: true,
     threadScrollRestoreMode: "latest",
     threadTitleAutogenerationEnabled: false,
+    threadCopyIncludeUserInput: THREAD_COPY_INCLUDE_USER_INPUT_DEFAULT,
+    threadCopyIncludeAssistantMessages:
+      THREAD_COPY_INCLUDE_ASSISTANT_MESSAGES_DEFAULT,
+    threadCopyToolOutputMode: THREAD_COPY_TOOL_OUTPUT_MODE_DEFAULT,
     uiFontFamily: DEFAULT_UI_FONT_FAMILY,
     codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
     codeFontSize: CODE_FONT_SIZE_DEFAULT,
@@ -204,6 +212,19 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
     )
       ? settings.threadScrollRestoreMode
       : "latest",
+    threadCopyIncludeUserInput:
+      typeof settings.threadCopyIncludeUserInput === "boolean"
+        ? settings.threadCopyIncludeUserInput
+        : THREAD_COPY_INCLUDE_USER_INPUT_DEFAULT,
+    threadCopyIncludeAssistantMessages:
+      typeof settings.threadCopyIncludeAssistantMessages === "boolean"
+        ? settings.threadCopyIncludeAssistantMessages
+        : THREAD_COPY_INCLUDE_ASSISTANT_MESSAGES_DEFAULT,
+    threadCopyToolOutputMode: allowedThreadCopyToolOutputModes.has(
+      settings.threadCopyToolOutputMode,
+    )
+      ? settings.threadCopyToolOutputMode
+      : THREAD_COPY_TOOL_OUTPUT_MODE_DEFAULT,
     reviewDeliveryMode:
       settings.reviewDeliveryMode === "detached" ? "detached" : "inline",
     showSubAgentThreadsInSidebar:

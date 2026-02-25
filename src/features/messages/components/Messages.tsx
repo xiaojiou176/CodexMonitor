@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { CSSProperties } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type {
   ConversationItem,
@@ -724,22 +725,6 @@ export const Messages = memo(function Messages({
   }, [shouldVirtualize, totalVirtualHeight]);
 
   useLayoutEffect(() => {
-    const virtualContent = virtualContentRef.current;
-    if (!virtualContent || !shouldVirtualize) {
-      return;
-    }
-    for (const virtualRow of virtualRows) {
-      const rowElement = virtualContent.querySelector<HTMLElement>(
-        `[data-index="${virtualRow.index}"]`,
-      );
-      if (!rowElement) {
-        continue;
-      }
-      rowElement.style.setProperty("--messages-virtual-row-offset", `${virtualRow.start}px`);
-    }
-  }, [shouldVirtualize, virtualRows]);
-
-  useLayoutEffect(() => {
     if (!threadId || pendingThreadPinRef.current !== threadId) {
       return;
     }
@@ -1028,9 +1013,13 @@ export const Messages = memo(function Messages({
             return (
               <div
                 key={entry.key}
-                data-index={virtualRow.index}
                 ref={rowVirtualizer.measureElement}
                 className={`messages-virtual-row is-virtualized ${entry.rowClassName}`}
+                style={
+                  {
+                    "--messages-virtual-row-offset": `${virtualRow.start}px`,
+                  } as CSSProperties
+                }
               >
                 {renderItem(entry.item)}
               </div>

@@ -26,6 +26,7 @@ import { useThreadStaleGuard } from "./useThreadStaleGuard";
 import { setThreadName as setThreadNameService } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import { makeCustomNameKey, saveCustomName, saveCustomNames } from "../utils/threadStorage";
+import { getSubagentDescendantThreadIds } from "../utils/subagentTree";
 
 const SUB_AGENT_AUTO_ARCHIVE_DEFAULT_MAX_AGE_MINUTES = 30;
 const SUB_AGENT_AUTO_ARCHIVE_MIN_AGE_MINUTES = 5;
@@ -94,6 +95,7 @@ export function useThreads({
   const itemsByThreadRef = useRef(state.itemsByThread);
   const threadsByWorkspaceRef = useRef(state.threadsByWorkspace);
   const threadStatusByIdRef = useRef(state.threadStatusById);
+  const activeTurnIdByThreadRef = useRef(state.activeTurnIdByThread);
   const detachedReviewNoticeRef = useRef<Set<string>>(new Set());
   const subAgentThreadIdsRef = useRef<Record<string, true>>({});
   const threadCreatedAtByIdRef = useRef<Record<string, number>>({});
@@ -102,6 +104,7 @@ export function useThreads({
   itemsByThreadRef.current = state.itemsByThread;
   threadsByWorkspaceRef.current = state.threadsByWorkspace;
   threadStatusByIdRef.current = state.threadStatusById;
+  activeTurnIdByThreadRef.current = state.activeTurnIdByThread;
   const {
     customNamesRef,
     threadActivityRef,
@@ -544,7 +547,32 @@ export function useThreads({
         };
       }
 
-      const result = await archiveThreads(workspaceId, normalizedThreadIds);
+      const expandedThreadIds: string[] = [];
+      const expandedThreadIdSet = new Set<string>();
+      const addExpandedThreadId = (threadId: string) => {
+        if (!threadId || expandedThreadIdSet.has(threadId)) {
+          return;
+        }
+        expandedThreadIdSet.add(threadId);
+        expandedThreadIds.push(threadId);
+      };
+
+      normalizedThreadIds.forEach((threadId) => {
+        addExpandedThreadId(threadId);
+        const parentId = state.threadParentById[threadId];
+        const isMainAgent = !parentId || parentId === threadId;
+        if (!isMainAgent) {
+          return;
+        }
+        const descendants = getSubagentDescendantThreadIds({
+          rootThreadId: threadId,
+          threadParentById: state.threadParentById,
+          isSubagentThread: (id) => Boolean(subAgentThreadIdsRef.current[id]),
+        });
+        descendants.forEach((descendantId) => addExpandedThreadId(descendantId));
+      });
+
+      const result = await archiveThreads(workspaceId, expandedThreadIds);
       result.okIds.forEach((threadId) => {
         unpinThread(workspaceId, threadId);
         cleanupThreadRefs(threadId);
@@ -559,6 +587,8 @@ export function useThreads({
           workspaceId,
           allSucceeded: result.allSucceeded,
           total: result.total,
+          requestedIds: normalizedThreadIds,
+          expandedIds: expandedThreadIds,
           okIds: result.okIds,
           failed: result.failed,
         },
@@ -578,7 +608,7 @@ export function useThreads({
       }
       return result;
     },
-    [archiveThreads, cleanupThreadRefs, dispatch, onDebug, unpinThread],
+    [archiveThreads, cleanupThreadRefs, dispatch, onDebug, state.threadParentById, unpinThread],
   );
 
   useEffect(() => {
@@ -592,9 +622,69 @@ export function useThreads({
       clampSubAgentAutoArchiveMinutes(autoArchiveSubAgentThreadsMaxAgeMinutes)
       * 60
       * 1000;
+    const getLastActivityAt = (
+      workspaceId: string,
+      threadId: string,
+      createdAt: number | null,
+    ): number | null => {
+      const rawActivityAt = threadActivityRef.current[workspaceId]?.[threadId];
+      if (
+        typeof rawActivityAt === "number"
+        && Number.isFinite(rawActivityAt)
+        && rawActivityAt > 0
+      ) {
+        return rawActivityAt;
+      }
+      return createdAt;
+    };
+    const canAutoArchiveSubAgentThread = ({
+      workspaceId,
+      threadId,
+      createdAt,
+      status,
+      activeThreadId,
+      activeTurnId,
+      now,
+    }: {
+      workspaceId: string;
+      threadId: string;
+      createdAt: number | null;
+      status: (typeof state.threadStatusById)[string] | undefined;
+      activeThreadId: string | null;
+      activeTurnId: string | null;
+      now: number;
+    }): boolean => {
+      if (status?.isProcessing || status?.isReviewing) {
+        return false;
+      }
+      const isInFlightPhase =
+        status?.phase === "starting"
+        || status?.phase === "streaming"
+        || status?.phase === "tool_running";
+      if (activeTurnId && isInFlightPhase) {
+        return false;
+      }
+      if (activeThreadId === threadId) {
+        return false;
+      }
+      if (isThreadPinned(workspaceId, threadId)) {
+        return false;
+      }
+      const lastActivityAt = getLastActivityAt(workspaceId, threadId, createdAt);
+      if (!lastActivityAt) {
+        return false;
+      }
+      return now - lastActivityAt > autoArchiveMaxAgeMs;
+    };
     const scanAndArchive = () => {
       const now = Date.now();
-      const candidates: Array<{ workspaceId: string; threadId: string; ageMs: number }> = [];
+      const candidates: Array<{
+        workspaceId: string;
+        threadId: string;
+        ageMs: number;
+        idleMs: number;
+        hasUnread: boolean;
+      }> = [];
       Object.entries(state.threadsByWorkspace).forEach(([workspaceId, threads]) => {
         const activeThreadForWorkspace =
           state.activeThreadIdByWorkspace[workspaceId] ?? null;
@@ -603,25 +693,34 @@ export function useThreads({
           if (!threadId || !subAgentThreadIdsRef.current[threadId]) {
             return;
           }
-          const createdAt = threadCreatedAtByIdRef.current[threadId];
-          if (!createdAt || now - createdAt < autoArchiveMaxAgeMs) {
-            return;
-          }
+          const createdAt = threadCreatedAtByIdRef.current[threadId] ?? null;
           const status = state.threadStatusById[threadId];
-          if (status?.isProcessing || status?.isReviewing || status?.hasUnread) {
+          if (
+            !canAutoArchiveSubAgentThread({
+              workspaceId,
+              threadId,
+              createdAt,
+              status,
+              activeThreadId: activeThreadForWorkspace,
+              activeTurnId: activeTurnIdByThreadRef.current[threadId] ?? null,
+              now,
+            })
+          ) {
             return;
           }
-          if (activeThreadForWorkspace === threadId) {
-            return;
-          }
-          if (isThreadPinned(workspaceId, threadId)) {
-            return;
-          }
-          candidates.push({ workspaceId, threadId, ageMs: now - createdAt });
+          const lastActivityAt = getLastActivityAt(workspaceId, threadId, createdAt);
+          const ageBaselineAt = createdAt ?? lastActivityAt ?? now;
+          candidates.push({
+            workspaceId,
+            threadId,
+            ageMs: now - ageBaselineAt,
+            idleMs: lastActivityAt ? now - lastActivityAt : 0,
+            hasUnread: Boolean(status?.hasUnread),
+          });
         });
       });
 
-      candidates.forEach(({ workspaceId, threadId, ageMs }) => {
+      candidates.forEach(({ workspaceId, threadId, ageMs, idleMs, hasUnread }) => {
         const requestKey = `${workspaceId}:${threadId}`;
         if (autoArchiveInFlightRef.current.has(requestKey)) {
           return;
@@ -632,7 +731,7 @@ export function useThreads({
           timestamp: Date.now(),
           source: "client",
           label: "thread/auto-archive",
-          payload: { workspaceId, threadId, ageMs },
+          payload: { workspaceId, threadId, ageMs, idleMs, hasUnread },
         });
         void removeThreads(workspaceId, [threadId])
           .finally(() => {

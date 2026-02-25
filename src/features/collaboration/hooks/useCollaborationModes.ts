@@ -21,11 +21,20 @@ export function useCollaborationModes({
   const [selectedModeId, setSelectedModeId] = useState<string | null>(null);
   const lastFetchedWorkspaceId = useRef<string | null>(null);
   const previousWorkspaceId = useRef<string | null>(null);
-  const inFlight = useRef(false);
   const selectedModeIdRef = useRef<string | null>(null);
+  const latestRequestSeqRef = useRef(0);
+  const activeContextRef = useRef({
+    workspaceId: null as string | null,
+    isConnected: false,
+    enabled: false,
+  });
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
+
+  useEffect(() => {
+    activeContextRef.current = { workspaceId, isConnected, enabled };
+  }, [enabled, isConnected, workspaceId]);
 
   const extractModeList = useCallback((response: any): any[] => {
     const candidates = [
@@ -65,19 +74,18 @@ export function useCollaborationModes({
     if (!workspaceId || !isConnected || !enabled) {
       return;
     }
-    if (inFlight.current) {
-      return;
-    }
-    inFlight.current = true;
+    const requestWorkspaceId = workspaceId;
+    const requestSeq = latestRequestSeqRef.current + 1;
+    latestRequestSeqRef.current = requestSeq;
     onDebug?.({
       id: `${Date.now()}-client-collaboration-mode-list`,
       timestamp: Date.now(),
       source: "client",
       label: "collaborationMode/list",
-      payload: { workspaceId },
+      payload: { workspaceId: requestWorkspaceId, requestSeq },
     });
     try {
-      const response = await getCollaborationModes(workspaceId);
+      const response = await getCollaborationModes(requestWorkspaceId);
       onDebug?.({
         id: `${Date.now()}-server-collaboration-mode-list`,
         timestamp: Date.now(),
@@ -85,6 +93,27 @@ export function useCollaborationModes({
         label: "collaborationMode/list response",
         payload: response,
       });
+      const context = activeContextRef.current;
+      const isLatestRequest = latestRequestSeqRef.current === requestSeq;
+      const isSameWorkspace = context.workspaceId === requestWorkspaceId;
+      const isContextActive = context.enabled && context.isConnected;
+      if (!isLatestRequest || !isSameWorkspace || !isContextActive) {
+        onDebug?.({
+          id: `${Date.now()}-client-collaboration-mode-list-stale`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "collaborationMode/list stale response ignored",
+          payload: {
+            requestWorkspaceId,
+            currentWorkspaceId: context.workspaceId,
+            requestSeq,
+            latestRequestSeq: latestRequestSeqRef.current,
+            enabled: context.enabled,
+            isConnected: context.isConnected,
+          },
+        });
+        return;
+      }
       const rawData = extractModeList(response);
       const data: CollaborationModeOption[] = rawData
         .map((item: any) => {
@@ -135,7 +164,7 @@ export function useCollaborationModes({
         })
         .filter((mode): mode is CollaborationModeOption => mode !== null);
       setModes(data);
-      lastFetchedWorkspaceId.current = workspaceId;
+      lastFetchedWorkspaceId.current = requestWorkspaceId;
       const preferredModeId =
         data.find(
           (mode) =>
@@ -167,8 +196,6 @@ export function useCollaborationModes({
         label: "collaborationMode/list error",
         payload: error instanceof Error ? error.message : String(error),
       });
-    } finally {
-      inFlight.current = false;
     }
   }, [enabled, extractModeList, isConnected, onDebug, workspaceId]);
 

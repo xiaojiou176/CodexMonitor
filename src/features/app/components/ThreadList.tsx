@@ -275,7 +275,9 @@ export function ThreadList({
           isSelected ? " thread-row-selected" : ""
         }${
           isReorderableRoot ? " thread-row-draggable" : ""
-        }${isDragging ? " thread-row-dragging" : ""}${
+        }${row.isSubAgent ? " thread-row-subagent" : ""}${
+          isDragging ? " thread-row-dragging" : ""
+        }${
           isDropTarget ? " thread-row-drop-target" : ""
         }${
           isDropTargetBefore ? " thread-row-drop-target-before" : ""

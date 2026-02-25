@@ -20,19 +20,8 @@ type UseThreadApprovalsOptions = {
   onDebug?: (entry: DebugEntry) => void;
 };
 
-function resolveApprovalThreadId(params: Record<string, unknown>): string | null {
-  const threadId = params.threadId ?? params.thread_id ?? null;
-  if (typeof threadId !== "string") {
-    return null;
-  }
-  const trimmed = threadId.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
 export function useThreadApprovals({
   dispatch,
-  setThreadPhase,
-  setThreadWaitReason,
   onDebug,
 }: UseThreadApprovalsOptions) {
   const approvalAllowlistRef = useRef<Record<string, string[][]>>({});
@@ -68,13 +57,8 @@ export function useThreadApprovals({
         requestId: request.request_id,
         workspaceId: request.workspace_id,
       });
-      const threadId = resolveApprovalThreadId(request.params ?? {});
-      if (threadId) {
-        setThreadPhase(threadId, "starting");
-        setThreadWaitReason(threadId, "none");
-      }
     },
-    [dispatch, setThreadPhase, setThreadWaitReason],
+    [dispatch],
   );
 
   const handleApprovalRemember = useCallback(
@@ -103,13 +87,8 @@ export function useThreadApprovals({
         requestId: request.request_id,
         workspaceId: request.workspace_id,
       });
-      const threadId = resolveApprovalThreadId(request.params ?? {});
-      if (threadId) {
-        setThreadPhase(threadId, "starting");
-        setThreadWaitReason(threadId, "none");
-      }
     },
-    [dispatch, onDebug, rememberApprovalPrefix, setThreadPhase, setThreadWaitReason],
+    [dispatch, onDebug, rememberApprovalPrefix],
   );
 
   return {

@@ -4,7 +4,13 @@ import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import type { BackendMode, BranchInfo, OpenAppTarget, WorkspaceInfo } from "../../../types";
+import type {
+  BackendMode,
+  BranchInfo,
+  OpenAppTarget,
+  ThreadToolOutputMode,
+  WorkspaceInfo,
+} from "../../../types";
 import type { ReactNode } from "react";
 import { revealInFileManagerLabel } from "../../../utils/platformPaths";
 import { BranchList } from "../../git/components/BranchList";
@@ -16,6 +22,12 @@ import { LaunchScriptButton } from "./LaunchScriptButton";
 import { LaunchScriptEntryButton } from "./LaunchScriptEntryButton";
 import type { WorkspaceLaunchScriptsState } from "../hooks/useWorkspaceLaunchScripts";
 import { useDismissibleMenu } from "../hooks/useDismissibleMenu";
+
+type CopyThreadMenuConfig = {
+  includeUserInput: boolean;
+  includeCodexReplies: boolean;
+  toolOutputMode: ThreadToolOutputMode;
+};
 
 type MainHeaderProps = {
   workspace: WorkspaceInfo;
@@ -36,6 +48,11 @@ type MainHeaderProps = {
   onCopyThread?: () => void | Promise<void>;
   onCopyThreadFull?: () => void | Promise<void>;
   onCopyThreadCompact?: () => void | Promise<void>;
+  copyThreadConfig?: CopyThreadMenuConfig;
+  onCopyThreadConfigChange?: (next: CopyThreadMenuConfig) => void;
+  onApplyDetailedCopyPreset?: () => void | Promise<void>;
+  onApplyCompactCopyPreset?: () => void | Promise<void>;
+  onCopyThreadCurrentConfig?: () => void | Promise<void>;
   onToggleTerminal: () => void;
   isTerminalOpen: boolean;
   showTerminalButton?: boolean;
@@ -92,6 +109,11 @@ export function MainHeader({
   onCopyThread,
   onCopyThreadFull,
   onCopyThreadCompact,
+  copyThreadConfig,
+  onCopyThreadConfigChange,
+  onApplyDetailedCopyPreset,
+  onApplyCompactCopyPreset,
+  onCopyThreadCurrentConfig,
   onToggleTerminal,
   isTerminalOpen,
   showTerminalButton = true,
@@ -183,18 +205,23 @@ export function MainHeader({
 
   const [copyMenuOpen, setCopyMenuOpen] = useState(false);
   const copyMenuRef = useRef<HTMLDivElement>(null);
+  const effectiveCopyConfig = useMemo(
+    () =>
+      copyThreadConfig ?? {
+        includeUserInput: true,
+        includeCodexReplies: true,
+        toolOutputMode: "detailed" as ThreadToolOutputMode,
+      },
+    [copyThreadConfig],
+  );
+  const copyCurrentHandler = onCopyThreadCurrentConfig ?? onCopyThread;
+  const canCopyCurrent = canCopyThread && Boolean(copyCurrentHandler);
 
-  // Close menu on outside click
-  useEffect(() => {
-    if (!copyMenuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (copyMenuRef.current && !copyMenuRef.current.contains(e.target as Node)) {
-        setCopyMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [copyMenuOpen]);
+  useDismissibleMenu({
+    isOpen: copyMenuOpen,
+    containerRef: copyMenuRef,
+    onClose: () => setCopyMenuOpen(false),
+  });
 
   const showCopyFeedback = useCallback(() => {
     setCopyFeedback(true);
@@ -209,28 +236,54 @@ export function MainHeader({
 
   const handleCopyFull = useCallback(async () => {
     try {
-      await (onCopyThreadFull ?? onCopyThread)?.();
+      await (onApplyDetailedCopyPreset ?? onCopyThreadFull ?? onCopyThread)?.();
       showCopyFeedback();
     } catch {
       // Errors are handled upstream in the copy handler.
     }
-  }, [onCopyThreadFull, onCopyThread, showCopyFeedback]);
+  }, [onApplyDetailedCopyPreset, onCopyThreadFull, onCopyThread, showCopyFeedback]);
 
   const handleCopyCompact = useCallback(async () => {
     try {
-      await onCopyThreadCompact?.();
+      await (onApplyCompactCopyPreset ?? onCopyThreadCompact)?.();
       showCopyFeedback();
     } catch {
       // Errors are handled upstream in the copy handler.
     }
-  }, [onCopyThreadCompact, showCopyFeedback]);
+  }, [onApplyCompactCopyPreset, onCopyThreadCompact, showCopyFeedback]);
+
+  const handleCopyConfigToggle = useCallback(
+    (key: "includeUserInput" | "includeCodexReplies", checked: boolean) => {
+      if (!onCopyThreadConfigChange) {
+        return;
+      }
+      onCopyThreadConfigChange({
+        ...effectiveCopyConfig,
+        [key]: checked,
+      });
+    },
+    [effectiveCopyConfig, onCopyThreadConfigChange],
+  );
+
+  const handleToolOutputModeChange = useCallback(
+    (mode: ThreadToolOutputMode) => {
+      if (!onCopyThreadConfigChange) {
+        return;
+      }
+      onCopyThreadConfigChange({
+        ...effectiveCopyConfig,
+        toolOutputMode: mode,
+      });
+    },
+    [effectiveCopyConfig, onCopyThreadConfigChange],
+  );
 
   const handleCopyClick = async () => {
-    if (!onCopyThread) {
+    if (!copyCurrentHandler) {
       return;
     }
     try {
-      await onCopyThread();
+      await copyCurrentHandler();
       showCopyFeedback();
     } catch {
       // Errors are handled upstream in the copy handler.
@@ -657,9 +710,9 @@ export function MainHeader({
             type="button"
             className={`ghost main-header-action copy-thread-main${copyFeedback ? " is-copied" : ""}`}
             onClick={handleCopyClick}
-            disabled={!canCopyThread || !onCopyThread}
+            disabled={!canCopyCurrent}
             aria-label="复制对话"
-            title="复制对话（含全部输出）"
+            title="按当前配置复制"
           >
             <span className="main-header-icon" aria-hidden>
               <Copy className="main-header-icon-copy" size={14} />
@@ -670,31 +723,103 @@ export function MainHeader({
             type="button"
             className="ghost main-header-action copy-thread-dropdown"
             onClick={() => setCopyMenuOpen((prev) => !prev)}
-            disabled={!canCopyThread || !onCopyThread}
+            disabled={!canCopyCurrent}
             aria-label="复制选项"
             title="复制选项"
+            aria-expanded={copyMenuOpen}
+            aria-haspopup="menu"
           >
             <ChevronDown size={10} aria-hidden />
           </button>
           {copyMenuOpen && (
-            <div className="copy-thread-menu">
-              <button
-                type="button"
-                className="copy-thread-menu-item"
-                onClick={() => void handleCopyFull()}
-              >
-                <span className="copy-thread-menu-label">完整复制</span>
-                <span className="copy-thread-menu-hint">含工具 / 命令输出</span>
-              </button>
-              <button
-                type="button"
-                className="copy-thread-menu-item"
-                onClick={() => void handleCopyCompact()}
-              >
-                <span className="copy-thread-menu-label">精简复制</span>
-                <span className="copy-thread-menu-hint">省略工具 / 命令输出</span>
-              </button>
-            </div>
+            <PopoverSurface className="copy-thread-menu" role="menu" aria-label="复制菜单">
+              <section className="copy-thread-menu-section" aria-label="复制预设">
+                <p className="copy-thread-menu-section-title">预设</p>
+                <button
+                  type="button"
+                  className="copy-thread-menu-item"
+                  onClick={() => void handleCopyFull()}
+                  disabled={!canCopyCurrent}
+                >
+                  <span className="copy-thread-menu-label">详细复制</span>
+                  <span className="copy-thread-menu-hint">保留用户输入、回复与完整工具输出</span>
+                </button>
+                <button
+                  type="button"
+                  className="copy-thread-menu-item"
+                  onClick={() => void handleCopyCompact()}
+                  disabled={!canCopyCurrent}
+                >
+                  <span className="copy-thread-menu-label">精简复制</span>
+                  <span className="copy-thread-menu-hint">保留关键对话，省略工具细节</span>
+                </button>
+              </section>
+              <div className="copy-thread-menu-divider" aria-hidden />
+              <section className="copy-thread-menu-section" aria-label="复制配置">
+                <p className="copy-thread-menu-section-title">配置</p>
+                <label className="copy-thread-option-row">
+                  <input
+                    type="checkbox"
+                    checked={effectiveCopyConfig.includeUserInput}
+                    onChange={(event) =>
+                      handleCopyConfigToggle("includeUserInput", event.currentTarget.checked)
+                    }
+                  />
+                  <span>包含用户输入</span>
+                </label>
+                <label className="copy-thread-option-row">
+                  <input
+                    type="checkbox"
+                    checked={effectiveCopyConfig.includeCodexReplies}
+                    onChange={(event) =>
+                      handleCopyConfigToggle("includeCodexReplies", event.currentTarget.checked)
+                    }
+                  />
+                  <span>包含 Codex 回复（所有）</span>
+                </label>
+                <fieldset className="copy-thread-radio-group">
+                  <legend>工具/命令输出</legend>
+                  <label className="copy-thread-option-row">
+                    <input
+                      type="radio"
+                      name="copy-tool-output-mode"
+                      checked={effectiveCopyConfig.toolOutputMode === "none"}
+                      onChange={() => handleToolOutputModeChange("none")}
+                    />
+                    <span>不包含</span>
+                  </label>
+                  <label className="copy-thread-option-row">
+                    <input
+                      type="radio"
+                      name="copy-tool-output-mode"
+                      checked={effectiveCopyConfig.toolOutputMode === "compact"}
+                      onChange={() => handleToolOutputModeChange("compact")}
+                    />
+                    <span>简略</span>
+                  </label>
+                  <label className="copy-thread-option-row">
+                    <input
+                      type="radio"
+                      name="copy-tool-output-mode"
+                      checked={effectiveCopyConfig.toolOutputMode === "detailed"}
+                      onChange={() => handleToolOutputModeChange("detailed")}
+                    />
+                    <span>详细</span>
+                  </label>
+                </fieldset>
+              </section>
+              <div className="copy-thread-menu-divider" aria-hidden />
+              <section className="copy-thread-menu-section copy-thread-menu-actions" aria-label="复制操作">
+                <button
+                  type="button"
+                  className="copy-thread-menu-item copy-thread-menu-item-primary"
+                  onClick={() => void handleCopyClick()}
+                  disabled={!canCopyCurrent}
+                >
+                  <span className="copy-thread-menu-label">按当前配置复制</span>
+                </button>
+              </section>
+            </PopoverSurface>
           )}
         </div>
         </div>
