@@ -950,4 +950,608 @@ describe("useThreadActions", () => {
       }),
     );
   });
+
+  it("returns null for empty thread id params and skips service calls", async () => {
+    const { result } = renderActions();
+
+    await act(async () => {
+      await expect(
+        result.current.resumeThreadForWorkspace("ws-1", ""),
+      ).resolves.toBeNull();
+      await expect(
+        result.current.forkThreadForWorkspace("ws-1", ""),
+      ).resolves.toBeNull();
+      await expect(
+        result.current.refreshThread("ws-1", ""),
+      ).resolves.toBeNull();
+      await expect(
+        result.current.loadOlderMessagesForThread("ws-1", ""),
+      ).resolves.toBeNull();
+    });
+
+    expect(resumeThread).not.toHaveBeenCalled();
+    expect(forkThread).not.toHaveBeenCalled();
+  });
+
+  it("handles missing workspace state when resetting/loading older threads", async () => {
+    const { result, dispatch, loadedThreadsRef } = renderActions({
+      loadedThreadsRef: { current: { "thread-stays": true } },
+      threadsByWorkspace: {},
+      activeThreadIdByWorkspace: {},
+      threadListCursorByWorkspace: {},
+    });
+
+    act(() => {
+      result.current.resetWorkspaceThreads("ws-missing");
+    });
+    await act(async () => {
+      await result.current.loadOlderThreadsForWorkspace({
+        ...workspace,
+        id: "ws-missing",
+      });
+    });
+
+    expect(loadedThreadsRef.current["thread-stays"]).toBeTruthy();
+    expect(listThreads).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setThreadListPaging",
+        workspaceId: "ws-missing",
+      }),
+    );
+  });
+
+  it("returns empty success when archive batch params are empty after trim", async () => {
+    const { result } = renderActions();
+
+    let summary: ThreadArchiveBatchResult | undefined;
+    await act(async () => {
+      summary = await result.current.archiveThreads("ws-1", ["", " ", "\n"]);
+    });
+
+    expect(summary).toEqual({
+      allSucceeded: true,
+      okIds: [],
+      failed: [],
+      total: 0,
+    });
+    expect(archiveThreads).not.toHaveBeenCalled();
+  });
+
+  it("cleans up resume loading state after async reject", async () => {
+    vi.mocked(resumeThread).mockRejectedValue(new Error("offline"));
+    const onDebug = vi.fn();
+    const { result, dispatch } = renderActions({ onDebug });
+
+    let resumed: string | null = "seed";
+    await act(async () => {
+      resumed = await result.current.resumeThreadForWorkspace("ws-1", "thread-reject", true);
+    });
+
+    expect(resumed).toBeNull();
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadResumeLoading",
+      threadId: "thread-reject",
+      isLoading: true,
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadResumeLoading",
+      threadId: "thread-reject",
+      isLoading: false,
+    });
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "error",
+        label: "thread/resume error",
+        payload: "offline",
+      }),
+    );
+  });
+
+  it("forces refresh resume even when thread is already marked as loaded", async () => {
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: { thread: { id: "thread-loaded", updated_at: 5 } },
+    });
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    vi.mocked(isReviewingFromThread).mockReturnValue(false);
+    vi.mocked(getThreadTimestamp).mockReturnValue(5);
+
+    const { result, loadedThreadsRef, replaceOnResumeRef } = renderActions({
+      loadedThreadsRef: { current: { "thread-loaded": true } },
+    });
+
+    await act(async () => {
+      await result.current.refreshThread("ws-1", "thread-loaded");
+    });
+
+    expect(resumeThread).toHaveBeenCalledWith("ws-1", "thread-loaded");
+    expect(loadedThreadsRef.current["thread-loaded"]).toBeTruthy();
+    expect(replaceOnResumeRef.current["thread-loaded"]).toBeFalsy();
+  });
+
+  it("rethrows startThread failures so upstream workflows can handle async failures", async () => {
+    vi.mocked(startThread).mockRejectedValue(new Error("start failed"));
+    const { result } = renderActions();
+
+    await act(async () => {
+      await expect(
+        result.current.startThreadForWorkspace("ws-1"),
+      ).rejects.toThrow("start failed");
+    });
+  });
+
+  it("normalizes fallback archive failures for non-Error reject values", async () => {
+    vi.mocked(archiveThreads).mockRejectedValue(
+      new Error("method not found"),
+    );
+    vi.mocked(archiveThread)
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce("plain-failure");
+    const { result } = renderActions();
+
+    let summary: ThreadArchiveBatchResult | undefined;
+    await act(async () => {
+      summary = await result.current.archiveThreads("ws-1", [
+        "thread-ok",
+        "thread-bad",
+      ]);
+    });
+
+    expect(summary).toEqual({
+      allSucceeded: false,
+      okIds: ["thread-ok"],
+      failed: [{ threadId: "thread-bad", error: "plain-failure" }],
+      total: 2,
+    });
+  });
+
+  it("normalizes invalid archive batch payloads and fans out archive_failed defaults", async () => {
+    vi.mocked(archiveThreads).mockResolvedValue({
+      result: {
+        okIds: ["thread-a", "thread-z", 42],
+        failed: [
+          null,
+          { threadId: "thread-a", error: "ignored-because-ok" },
+          { thread_id: "thread-b", error: "" },
+          { threadId: "thread-z", error: "ignored-unknown-thread" },
+        ],
+      },
+    } as unknown as ThreadArchiveBatchResult);
+
+    const { result } = renderActions();
+
+    let summary: ThreadArchiveBatchResult | undefined;
+    await act(async () => {
+      summary = await result.current.archiveThreads("ws-1", [
+        "thread-a",
+        "thread-b",
+        "thread-c",
+      ]);
+    });
+
+    expect(summary).toEqual({
+      allSucceeded: false,
+      okIds: ["thread-a"],
+      failed: [
+        { threadId: "thread-b", error: "archive_failed" },
+        { threadId: "thread-c", error: "archive_failed" },
+      ],
+      total: 3,
+    });
+  });
+
+  it("dedupes and trims archive ids before calling batch service", async () => {
+    vi.mocked(archiveThreads).mockResolvedValue({
+      result: { okIds: ["thread-a", "thread-b"], failed: [] },
+    } as unknown as ThreadArchiveBatchResult);
+
+    const { result } = renderActions();
+
+    await act(async () => {
+      await result.current.archiveThreads("ws-1", [
+        "thread-a",
+        " thread-a ",
+        "thread-b",
+        " ",
+      ]);
+    });
+
+    expect(archiveThreads).toHaveBeenCalledWith("ws-1", ["thread-a", "thread-b"]);
+  });
+
+  it("falls back to single-thread archive on threadIds mismatch payload errors", async () => {
+    vi.mocked(archiveThreads).mockRejectedValue(
+      new Error("Invalid payload: threadIds missing"),
+    );
+    vi.mocked(archiveThread).mockResolvedValue({});
+    const { result } = renderActions();
+
+    let summary: ThreadArchiveBatchResult | undefined;
+    await act(async () => {
+      summary = await result.current.archiveThreads("ws-1", ["thread-a", "thread-b"]);
+    });
+
+    expect(archiveThread).toHaveBeenCalledTimes(2);
+    expect(summary).toEqual({
+      allSucceeded: true,
+      okIds: ["thread-a", "thread-b"],
+      failed: [],
+      total: 2,
+    });
+  });
+
+  it("keeps no-op behavior when loading older threads only returns existing ids", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [{ id: "thread-1", cwd: "/tmp/codex", preview: "Existing", updated_at: 12 }],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockReturnValue(12);
+
+    const { result, dispatch } = renderActions({
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "Agent 1", updatedAt: 12 }],
+      },
+      threadListCursorByWorkspace: { "ws-1": "cursor-older" },
+    });
+
+    await act(async () => {
+      await result.current.loadOlderThreadsForWorkspace(workspace);
+    });
+
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setThreads",
+        workspaceId: "ws-1",
+      }),
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadListCursor",
+      workspaceId: "ws-1",
+      cursor: null,
+    });
+  });
+
+  it("fans out non-fallback archive errors to all normalized thread ids", async () => {
+    vi.mocked(archiveThreads).mockRejectedValue("gateway-down");
+
+    const { result } = renderActions();
+
+    let summary: ThreadArchiveBatchResult | undefined;
+    await act(async () => {
+      summary = await result.current.archiveThreads("ws-1", [
+        "thread-a",
+        " thread-a ",
+        "thread-b",
+      ]);
+    });
+
+    expect(summary).toEqual({
+      allSucceeded: false,
+      okIds: [],
+      failed: [
+        { threadId: "thread-a", error: "gateway-down" },
+        { threadId: "thread-b", error: "gateway-down" },
+      ],
+      total: 2,
+    });
+  });
+
+  it("refreshThread forces remote replacement and clears replace marker", async () => {
+    const localItem: ConversationItem = {
+      id: "local-1",
+      kind: "message",
+      role: "assistant",
+      text: "Local",
+    };
+    const remoteItem: ConversationItem = {
+      id: "remote-1",
+      kind: "message",
+      role: "assistant",
+      text: "Remote replacement",
+    };
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: { thread: { id: "thread-r", preview: "Remote", updated_at: 21 } },
+    });
+    vi.mocked(buildItemsFromThread).mockReturnValue([remoteItem]);
+    vi.mocked(isReviewingFromThread).mockReturnValue(false);
+    vi.mocked(getThreadTimestamp).mockReturnValue(21);
+
+    const { result, dispatch, replaceOnResumeRef } = renderActions({
+      itemsByThread: { "thread-r": [localItem] },
+      loadedThreadsRef: { current: { "thread-r": true } },
+    });
+
+    await act(async () => {
+      await result.current.refreshThread("ws-1", "thread-r");
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadItems",
+      threadId: "thread-r",
+      items: [remoteItem],
+    });
+    expect(replaceOnResumeRef.current["thread-r"]).toBeFalsy();
+  });
+
+  it("resetWorkspaceThreads clears loaded flags for listed and active threads", () => {
+    const loadedThreadsRef = {
+      current: { "thread-1": true, "thread-2": true, "thread-other": true },
+    };
+    const { result } = renderActions({
+      loadedThreadsRef,
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "Agent 1", updatedAt: 1 }],
+      },
+      activeThreadIdByWorkspace: { "ws-1": "thread-2" },
+    });
+
+    act(() => {
+      result.current.resetWorkspaceThreads("ws-1");
+    });
+
+    expect(loadedThreadsRef.current["thread-1"]).toBeFalsy();
+    expect(loadedThreadsRef.current["thread-2"]).toBeFalsy();
+    expect(loadedThreadsRef.current["thread-other"]).toBeTruthy();
+  });
+
+  it("handles older-thread list errors with debug logging and paging cleanup", async () => {
+    vi.mocked(listThreads).mockRejectedValue(new Error("older-list-failed"));
+    const onDebug = vi.fn();
+    const { result, dispatch } = renderActions({
+      onDebug,
+      threadListCursorByWorkspace: { "ws-1": "cursor-older" },
+    });
+
+    await act(async () => {
+      await result.current.loadOlderThreadsForWorkspace(workspace);
+    });
+
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "error",
+        label: "thread/list older error",
+        payload: "older-list-failed",
+      }),
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadListPaging",
+      workspaceId: "ws-1",
+      isLoading: false,
+    });
+  });
+
+  it("supports startThread responses that return thread at top-level payload", async () => {
+    vi.mocked(startThread).mockResolvedValue({
+      thread: { id: "thread-direct" },
+    });
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.startThreadForWorkspace("ws-1");
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "thread-direct",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setActiveThreadId",
+      workspaceId: "ws-1",
+      threadId: "thread-direct",
+    });
+  });
+
+  it("returns null when startThread response has no thread id", async () => {
+    vi.mocked(startThread).mockResolvedValue({
+      result: { thread: {} },
+    });
+    const { result, dispatch } = renderActions();
+
+    let threadId: string | null = "seed";
+    await act(async () => {
+      threadId = await result.current.startThreadForWorkspace("ws-1");
+    });
+
+    expect(threadId).toBeNull();
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ensureThread",
+        workspaceId: "ws-1",
+      }),
+    );
+  });
+
+  it("returns null when fork response has no thread id and skips resume", async () => {
+    vi.mocked(forkThread).mockResolvedValue({
+      result: { thread: {} },
+    });
+    const { result } = renderActions();
+
+    let threadId: string | null = "seed";
+    await act(async () => {
+      threadId = await result.current.forkThreadForWorkspace("ws-1", "thread-base");
+    });
+
+    expect(threadId).toBeNull();
+    expect(resumeThread).not.toHaveBeenCalled();
+  });
+
+  it("returns null and logs fork failures", async () => {
+    vi.mocked(forkThread).mockRejectedValue(new Error("fork failed"));
+    const onDebug = vi.fn();
+    const { result } = renderActions({ onDebug });
+
+    let threadId: string | null = "seed";
+    await act(async () => {
+      threadId = await result.current.forkThreadForWorkspace("ws-1", "thread-base");
+    });
+
+    expect(threadId).toBeNull();
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "error",
+        label: "thread/fork error",
+        payload: "fork failed",
+      }),
+    );
+  });
+
+  it("uses persisted name, server name, preview truncation, and agent fallback in list summaries", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "persisted",
+            cwd: "/tmp/codex",
+            updated_at: 400,
+            preview: "ignored because persisted name wins",
+          },
+          {
+            id: "server-name",
+            cwd: "/tmp/codex",
+            updated_at: 300,
+            thread_name: "Server Thread Name",
+          },
+          {
+            id: "preview-long",
+            cwd: "/tmp/codex",
+            updated_at: 200,
+            preview: "1234567890123456789012345678901234567890X",
+          },
+          {
+            id: "fallback-agent",
+            cwd: "/tmp/codex",
+            updated_at: 100,
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockImplementation((thread) => {
+      const value = (thread as Record<string, unknown>).updated_at as number;
+      return value ?? 0;
+    });
+    vi.mocked(getThreadCreatedTimestamp).mockImplementation((thread) => {
+      const value = (thread as Record<string, unknown>).updated_at as number;
+      return value ?? 0;
+    });
+
+    const { result, dispatch } = renderActions({
+      threadSortKey: "created_at",
+      getPersistedThreadDisplayName: (_workspaceId, threadId) =>
+        threadId === "persisted" ? "Persisted Name" : undefined,
+    });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "created_at",
+      threads: [
+        { id: "persisted", name: "Persisted Name", updatedAt: 400 },
+        { id: "server-name", name: "Server Thread Name", updatedAt: 300 },
+        { id: "preview-long", name: "12345678901234567890123456789012345678…", updatedAt: 200 },
+        { id: "fallback-agent", name: "Agent 4", updatedAt: 100 },
+      ],
+    });
+  });
+
+  it("stops list pagination after max pages without activity when no matches are found", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [{ id: "remote", cwd: "/different", updated_at: 1 }],
+        nextCursor: "next",
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockReturnValue(1);
+    const { result, dispatch } = renderActions({
+      threadActivityRef: { current: { "ws-1": {} } },
+    });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    expect(listThreads).toHaveBeenCalledTimes(3);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "updated_at",
+      threads: [],
+    });
+  });
+
+  it("stops older-thread pagination after max pages without matches", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [{ id: "remote", cwd: "/different", updated_at: 1 }],
+        nextCursor: "next",
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockReturnValue(1);
+    const { result, dispatch } = renderActions({
+      threadListCursorByWorkspace: { "ws-1": "cursor-1" },
+    });
+
+    await act(async () => {
+      await result.current.loadOlderThreadsForWorkspace(workspace);
+    });
+
+    expect(listThreads).toHaveBeenCalledTimes(6);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadListCursor",
+      workspaceId: "ws-1",
+      cursor: "next",
+    });
+  });
+
+  it("logs list errors for non-Error values", async () => {
+    vi.mocked(listThreads).mockRejectedValue("list exploded");
+    const onDebug = vi.fn();
+    const { result } = renderActions({ onDebug });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "error",
+        label: "thread/list error",
+        payload: "list exploded",
+      }),
+    );
+  });
+
+  it("returns thread id and marks loaded when resume payload has no thread body", async () => {
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {},
+    });
+
+    const loadedThreadsRef = { current: {} as Record<string, boolean> };
+    const { result, dispatch } = renderActions({
+      loadedThreadsRef,
+    });
+
+    let resumed: string | null = null;
+    await act(async () => {
+      resumed = await result.current.resumeThreadForWorkspace("ws-1", "thread-missing", true);
+    });
+
+    expect(resumed).toBe("thread-missing");
+    expect(loadedThreadsRef.current["thread-missing"]).toBeTruthy();
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ensureThread",
+        threadId: "thread-missing",
+      }),
+    );
+  });
 });
