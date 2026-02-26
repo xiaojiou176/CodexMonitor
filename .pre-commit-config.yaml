@@ -1,0 +1,277 @@
+minimum_pre_commit_version: '3.7.0'
+default_language_version:
+  python: python3
+
+default_stages: [pre-commit]
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+fail_fast: true
+exclude: '(^|/)(\.git|\.venv|venv|node_modules|dist|build|__pycache__)(/|$)|\.min\.[^.]+$|\.svg$'
+
+# Keep Husky as the primary git hook in this repo.
+# This config acts as a parallel governance entry for manual/pre-commit runs.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-ast
+        files: '\\.pyi?$'
+      - id: check-builtin-literals
+        files: '\\.pyi?$'
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-illegal-windows-names
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: check-executables-have-shebangs
+        exclude: '^repo-overview/'
+      - id: check-shebang-scripts-are-executable
+        files: '\\.(sh|bash)$'
+      - id: debug-statements
+      - id: detect-aws-credentials
+        args: ["--allow-missing-credentials"]
+      - id: fix-byte-order-marker
+      - id: end-of-file-fixer
+        exclude: '^package-lock\.json$'
+      - id: requirements-txt-fixer
+        files: '(^|/)requirements[^/]*\\.txt$'
+      - id: name-tests-test
+        files: '(^|/)(tests?/.*\\.py|.*_test\\.py|test_.*\\.py)$'
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+      - id: check-json
+        exclude: '(^tsconfig(\..+)?\.json$|^repo-overview/.*\.json$)'
+      - id: pretty-format-json
+        args: ["--autofix", "--indent=2", "--no-sort-keys"]
+        exclude: '(^tsconfig(\..+)?\.json$|^repo-overview/.*\.json$)'
+      - id: check-toml
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+      - id: check-xml
+      - id: check-vcs-permalinks
+        files: '\\.(md|markdown|rst)$'
+      - id: detect-private-key
+      - id: forbid-submodules
+      - id: no-commit-to-branch
+        args: ["--branch", "main", "--branch", "master"]
+        stages: [pre-push]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks
+        args: ["--config=.gitleaks.toml", "--redact"]
+        pass_filenames: false
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: '(^\.secrets\.baseline$|^package-lock\.json$|^package\.json$|^repo-overview/|^flake\.nix$|^src-tauri/tauri\.conf\.json$|^src/.+\.test\.tsx?$|^src/services/cliproxyapi\.test\.ts$)'
+
+  - repo: https://github.com/wemake-services/dotenv-linter
+    rev: 0.7.0
+    hooks:
+      - id: dotenv-linter
+        args: [".env.example"]
+        pass_filenames: false
+
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.13.9
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.43.5
+    hooks:
+      - id: typos
+        args: ["--write-changes"]
+        files: '(^README\.md$|^AGENTS\.md$|^CHANGELOG\.md$|^docs/.*\.md$|^\.cursorrules$)'
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.21.0
+    hooks:
+      - id: markdownlint-cli2
+        files: '\\.(md|markdown)$'
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.2
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+        files: '\\.pyi?$'
+      - id: ruff-format
+        files: '\\.pyi?$'
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+      - id: mypy
+        files: '\\.pyi?$'
+        args: ["--config-file", "pyproject.toml"]
+
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v2.4.4
+    hooks:
+      - id: biome-check
+        args: ["--apply", "--error-on-warnings"]
+        files: '\\.(js|jsx|ts|tsx|json|jsonc|css|scss)$'
+
+  - repo: local
+    hooks:
+      - id: gofumpt
+        name: gofumpt (go-only)
+        entry: bash -lc 'if command -v gofumpt >/dev/null 2>&1; then gofumpt -w "$@"; else echo "gofumpt not installed, skip"; fi'
+        language: system
+        pass_filenames: true
+        files: '\\.go$'
+
+      - id: golangci-lint
+        name: golangci-lint (go-only)
+        entry: bash -lc 'if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run ./...; else echo "golangci-lint not installed, skip"; fi'
+        language: system
+        pass_filenames: false
+        files: '\\.go$'
+
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+      - id: fmt
+        files: '^src-tauri/.*\\.rs$'
+      - id: cargo-check
+        files: '^src-tauri/.*\\.rs$'
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        files: '\\.(sh|bash)$'
+
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.14.0
+    hooks:
+      - id: hadolint-docker
+        args: ["--failure-threshold", "warning"]
+        files: '(^|/)Dockerfile(\\..+)?$'
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.11
+    hooks:
+      - id: actionlint
+        files: '^\\.github/workflows/.*\\.ya?ml$'
+
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 4.0.4
+    hooks:
+      - id: sqlfluff-lint
+        files: '\\.(sql|ddl)$'
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.105.0
+    hooks:
+      - id: terraform_fmt
+        files: '\\.(tf|tfvars)$'
+      - id: terraform_validate
+        files: '\\.(tf|tfvars)$'
+      - id: terraform_tflint
+        files: '\\.(tf|tfvars)$'
+      - id: terraform_tfsec
+        files: '\\.(tf|tfvars)$'
+
+  - repo: local
+    hooks:
+      - id: kube-linter
+        name: kube-linter
+        entry: bash -lc 'if command -v kube-linter >/dev/null 2>&1; then kube-linter lint --config .kubelinter/config.yaml "$@"; else echo "kube-linter not installed, skip"; fi'
+        language: system
+        pass_filenames: true
+        files: '(^k8s/.*\\.ya?ml$|^kubernetes/.*\\.ya?ml$|^helm/.*/templates/.*\\.ya?ml$)'
+
+      - id: block-todo-fixme
+        name: block TODO/FIXME in staged files
+        entry: bash -lc 'rg -n "(TODO|FIXME)" "$@" && { echo "Found TODO/FIXME. Resolve before commit."; exit 1; } || exit 0'
+        language: system
+        pass_filenames: true
+        files: '\\.(ts|tsx|js|jsx|py|rs|go|sh|md)$'
+
+      - id: block-console-log
+        name: block console.log in source
+        entry: bash -lc 'rg -n "console\\.log\\(" src scripts "$@" && { echo "Found console.log usage."; exit 1; } || exit 0'
+        language: system
+        pass_filenames: true
+        files: '\\.(ts|tsx|js|jsx)$'
+
+      - id: cargo-clippy
+        name: cargo clippy (src-tauri)
+        entry: bash -lc 'if command -v cargo >/dev/null 2>&1; then cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings; else echo "cargo not installed, skip"; fi'
+        language: system
+        pass_filenames: false
+        files: '^src-tauri/.*\\.rs$'
+
+      - id: jscpd-dup-check
+        name: jscpd duplicate check
+        entry: bash -lc 'if command -v npx >/dev/null 2>&1; then npx --yes jscpd --silent --threshold 2 --format "ts,tsx,js,jsx,py,rs" src scripts; else echo "npx not installed, skip"; fi'
+        language: system
+        pass_filenames: false
+        files: '^(src|scripts)/.*\\.(ts|tsx|js|jsx|py|rs)$'
+
+      - id: ai-context-nav-check
+        name: AI context navigation docs check
+        entry: bash -lc 'test -f AGENTS.md && test -f CLAUDE.md && test -f src/AGENTS.md && test -f src/CLAUDE.md && test -f src-tauri/AGENTS.md && test -f src-tauri/CLAUDE.md'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: iac-existence-check
+        name: IaC presence check (docker/k8s/tf)
+        entry: bash -lc 'test -f docker-compose.dev.yml || ls docker-compose*.yml >/dev/null 2>&1 || ls k8s/*.y*ml >/dev/null 2>&1 || ls kubernetes/*.y*ml >/dev/null 2>&1 || ls *.tf >/dev/null 2>&1'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: env-count-check
+        name: env matrix count check
+        entry: >-
+          node -e "const fs=require('fs');const p='.env.example';const s='config/env.schema.json';if(!fs.existsSync(p)||!fs.existsSync(s)){process.exit(0)}const env=fs.readFileSync(p,'utf8').split(/\\r?\\n/).filter(l=>l&&!l.startsWith('#')&&l.includes('='));const schema=JSON.parse(fs.readFileSync(s,'utf8'));const props=Object.keys((schema&&schema.properties)||{});if(env.length<props.length){console.error('env count mismatch: .env.example='+env.length+', schema='+props.length);process.exit(1)}"
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: deny-real-env-files
+        name: deny real .env commit
+        entry: bash -lc 'files=$(git diff --cached --name-only); echo "$files" | rg "^\.env($|\.local$|\.production$|\.development$|\.test$)" && { echo "Do not commit real .env files."; exit 1; } || exit 0'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: no-direct-env-access
+        name: block direct process.env access in frontend
+        entry: bash -lc 'rg -n "process\\.env" src --glob "*.ts" --glob "*.tsx" && { echo "Use import.meta.env / typed env accessors."; exit 1; } || exit 0'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: precommit-autoupdate-policy
+        name: pre-commit autoupdate policy check
+        entry: bash -lc 'rg -n "^\s*rev:\s*(main|master|HEAD)$" .pre-commit-config.yaml && { echo "All hook rev must be pinned tags."; exit 1; } || exit 0'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: stylelint-uiux
+        name: stylelint UI/UX static audit
+        entry: npm run lint:stylelint:uiux --
+        language: system
+        pass_filenames: true
+        files: '\.(css|scss)$'
+        stages: [pre-commit]
+
+      - id: gemini-uiux-audit
+        name: Gemini UI/UX intelligent audit
+        entry: node scripts/gemini-uiux-audit.mjs
+        language: system
+        pass_filenames: true
+        files: '\.(tsx|jsx|css|scss|html)$'
+        stages: [pre-push]

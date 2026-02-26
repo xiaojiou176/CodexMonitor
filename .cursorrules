@@ -1,0 +1,8 @@
+# CodexMonitor Cursor Rules (minimal)
+
+- Read root AGENTS.md first, then lazy-load module docs.
+- Prefer reuse over creating duplicate utilities/components.
+- Keep frontend logic in hooks/services, keep components presentational.
+- Route Tauri IPC through src/services/tauri.ts only.
+- Keep shared backend logic in src-tauri/src/shared/* and adapters thin.
+- Never commit real secrets or runtime .env files.

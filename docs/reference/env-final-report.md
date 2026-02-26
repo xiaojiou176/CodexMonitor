@@ -4,9 +4,9 @@ Date: 2026-02-26
 
 ## Final Counts (Single Source of Truth)
 
-- canonical_count: **11**
-- runtime_usage_count: **12**
-- broad_env_like_count: **183**
+- canonical_count: **12**
+- runtime_usage_count: **14**
+- broad_env_like_count: **196**
 - .env variant files: **4**
 - .env union keys: **21**
 
@@ -25,6 +25,7 @@ Complete inventory is listed in this file under `## Full Key Inventory` (183 key
 
 ### Keep (canonical schema)
 - `GEMINI_API_KEY`
+- `GEMINI_UIUX_MODEL`
 - `PLAYWRIGHT_BASE_URL`
 - `PLAYWRIGHT_WEB_PORT`
 - `REAL_EXTERNAL_URL`
@@ -39,6 +40,7 @@ Complete inventory is listed in this file under `## Full Key Inventory` (183 key
 ### Migrate (moved out of .env.example)
 - `REAL_EXTERNAL_URL`
 - `GEMINI_API_KEY`
+- `GEMINI_UIUX_MODEL`
 - `REAL_LLM_BASE_URL`
 - `REAL_LLM_MODEL`
 - `REAL_LLM_TIMEOUT_MS`
@@ -65,6 +67,7 @@ Note: Inventory also includes `code/script internal` (152 keys) and `mixed(.env,
 | Key | Current Source | Remediation Status | Final Governance |
 | --- | --- | --- | --- |
 | `GEMINI_API_KEY` | mixed(.env,CI secrets) | ✅ 已整改：从 `.env.example` 迁出 | Local `.env/.env.local` for dev-live, CI secret for pipeline live |
+| `GEMINI_UIUX_MODEL` | local(.env/.env.local) | ✅ 新增治理：已纳入 schema | Optional runtime selector for UI/UX Gemini audit model (default `gemini-3.0-flash`) |
 | `REAL_EXTERNAL_URL` | mixed(.env,CI secrets) | ✅ 已整改：从 `.env.example` 迁出 | Local `.env/.env.local` for local external testing, CI secret/var for CI live |
 | `REAL_LLM_BASE_URL` | mixed(.env,CI secrets) | ✅ 已整改：从 `.env.example` 迁出 | Local `.env/.env.local` or CI secret/var |
 | `REAL_LLM_MODEL` | mixed(.env,CI secrets) | ✅ 已整改：从 `.env.example` 迁出 | Local `.env/.env.local` or CI secret/var |
@@ -109,16 +112,16 @@ Latest execution summary is documented in this section after running:
 | Metric | Before | After |
 | --- | ---: | ---: |
 | .env.example keys | 10 | 5 |
-| canonical_count | 12 | 11 |
-| runtime_usage_count | n/a | 12 |
-| broad_env_like_count | 182 (historical) | 183 |
+| canonical_count | 12 | 12 |
+| runtime_usage_count | n/a | 14 |
+| broad_env_like_count | 182 (historical) | 196 |
 | mixed-source keys | 5 | 5 (all moved out of `.env.example`) |
 | deprecated aliases in active runtime paths | unknown | 0 (enforced by gate) |
 
 ASCII Trend:
 
 - .env.example: `##########` -> `#####`
-- canonical_count: `############` -> `###########`
+- canonical_count: `############` -> `############`
 
 ## Full Key Inventory
 
@@ -315,3 +318,19 @@ ASCII Trend:
 - `.runtime-cache/env_audit_total_keys.txt`
 - `.runtime-cache/test_output/real-llm/latest.json`
 - `.runtime-cache/test_output/live-preflight/latest.json`
+
+## 2026-02-26 Gate Update
+
+- Scope: local/CI gate hardening and UI/UX audit expansion.
+- Changed workflow files:
+  - `.github/workflows/ci.yml`
+  - `.github/workflows/release.yml`
+  - `.github/workflows/mutation-weekly.yml`
+- Changed pre-commit governance files:
+  - `.pre-commit-config.yaml`
+  - `scripts/gemini-uiux-audit.mjs`
+  - `.stylelintrc.json`
+  - `docs/reference/uiux-audit.md`
+- Env governance impact:
+  - No new runtime-prefixed environment keys introduced.
+  - Existing env schema coverage and runtime checks remain unchanged.

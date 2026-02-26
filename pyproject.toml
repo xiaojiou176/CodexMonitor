@@ -1,0 +1,48 @@
+[project]
+name = "codex-monitor-quality-gates"
+version = "0.0.1"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+  "node_modules",
+  "dist",
+  "src",
+  "src-tauri",
+]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["ANN", "D", "COM812", "ISC001"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S105"]
+"pytests/**/*.py" = ["S101", "S105"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-q --maxfail=1 --strict-config --strict-markers"
+testpaths = ["tests", "pytests"]
+python_files = ["test_*.py", "*_test.py"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+check_untyped_defs = true
+exclude = "(node_modules|dist|src|src-tauri)"
+
+[tool.mutmut]
+paths_to_mutate = ["src"]
+tests_dir = ["tests", "pytests"]
+runner = "python -m pytest -q"
+max_stack_depth = 8

@@ -1,0 +1,60 @@
+{
+  "ignoreFiles": [
+    "node_modules/**",
+    "dist/**",
+    "build/**",
+    ".runtime-cache/**",
+    "docs/**",
+    "repo-overview/**",
+    "src/styles/ds-modal.css"
+  ],
+  "rules": {
+    "block-no-empty": true,
+    "color-no-invalid-hex": true,
+    "function-no-unknown": [
+      true,
+      {
+        "ignoreFunctions": [
+          "var",
+          "rgb",
+          "rgba",
+          "hsl",
+          "hsla",
+          "calc",
+          "clamp",
+          "min",
+          "max",
+          "env",
+          "color-mix",
+          "oklab",
+          "oklch",
+          "light-dark"
+        ]
+      }
+    ],
+    "no-empty-source": true,
+    "property-no-unknown": [
+      true,
+      {
+        "ignoreProperties": [
+          "/^--/"
+        ]
+      }
+    ],
+    "selector-pseudo-class-no-unknown": [
+      true,
+      {
+        "ignorePseudoClasses": [
+          "global",
+          "local"
+        ]
+      }
+    ],
+    "selector-pseudo-element-no-unknown": true,
+    "declaration-property-value-disallowed-list": {
+      "/^(color|border(?:-[^\\s:]+)?-color|fill|stroke)$/": [
+        "/^(?!var\\().*(#|rgb\\(|rgba\\(|hsl\\(|hsla\\()/i"
+      ]
+    }
+  }
+}

@@ -1,0 +1,15 @@
+checks:
+  addAllBuiltIn: true
+
+ignorePaths:
+  - "node_modules/**"
+  - "dist/**"
+  - "src/**"
+  - "src-tauri/**"
+  - "docs/**"
+
+exclude:
+  - "run-as-non-root"
+  - "latest-tag"
+
+# Enable by adding manifests under k8s/, kubernetes/, or helm/*/templates.

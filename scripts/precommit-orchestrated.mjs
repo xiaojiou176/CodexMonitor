@@ -76,9 +76,9 @@ async function main() {
     `--enforce=${complianceMode}`,
     ...(DRY_RUN ? ["--dry-run"] : []),
   ]);
-  await runTask("check:compat:optin-log", [
+  await runTask("check:compat:option-log", [
     "run",
-    "check:compat:optin-log",
+    "check:compat:option-log",
     "--",
     `--enforce=${complianceMode}`,
     ...(DRY_RUN ? ["--dry-run"] : []),

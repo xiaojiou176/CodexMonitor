@@ -130,10 +130,10 @@ function readTextSafe(file) {
 
 function maybeFail(message) {
   if (ENFORCE === "warn" || DRY_RUN) {
-    console.warn(`[compat-optin] WARN: ${message}`);
+    console.warn(`[compat-option] WARN: ${message}`);
     return;
   }
-  console.error(`[compat-optin] FAIL: ${message}`);
+  console.error(`[compat-option] FAIL: ${message}`);
   process.exit(1);
 }
 
@@ -144,7 +144,7 @@ function main() {
 
   const { files, patch } = getChangedFilesAndPatch();
   if (files.length === 0) {
-    console.log(`[compat-optin] No ${MODE} changes. Skipping.`);
+    console.log(`[compat-option] No ${MODE} changes. Skipping.`);
     return;
   }
 
@@ -152,7 +152,7 @@ function main() {
   const nonGeminiDetected = added.some((line) => NON_GEMINI_HINTS.some((pattern) => pattern.test(line)));
 
   if (!nonGeminiDetected) {
-    console.log(`[compat-optin] (${MODE}) Gemini-only default preserved. Gate passed.`);
+    console.log(`[compat-option] (${MODE}) Gemini-only default preserved. Gate passed.`);
     return;
   }
 
@@ -170,12 +170,12 @@ function main() {
     return;
   }
 
-  console.log(`[compat-optin] (${MODE}) opt-in record complete (${ENFORCE} mode).`);
+  console.log(`[compat-option] (${MODE}) opt-in record complete (${ENFORCE} mode).`);
 }
 
 try {
   main();
 } catch (error) {
-  console.error("[compat-optin] Failed:", error instanceof Error ? error.message : String(error));
+  console.error("[compat-option] Failed:", error instanceof Error ? error.message : String(error));
   process.exit(2);
 }

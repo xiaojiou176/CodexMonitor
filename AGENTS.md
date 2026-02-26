@@ -12,7 +12,7 @@ CodexMonitor is a Tauri app that orchestrates Codex agents across local workspac
 
 ## Environment Variables
 
-Use `CodexMonitor/.env.example` as the canonical template.
+Use repository-root `.env.example` as the canonical env template.
 Canonical schema for env governance lives in `config/env.schema.json`.
 Canonical matrix/audit docs live in `docs/reference/env-matrix.md` and `docs/reference/env-audit-report.md`.
 
@@ -28,9 +28,9 @@ Canonical matrix/audit docs live in `docs/reference/env-matrix.md` and `docs/ref
 
 ### Package Manager and Lockfile Policy
 
-- `AionUi` uses npm as the source of truth (`packageManager: npm`).
-- Keep `AionUi/package-lock.json` in sync with `AionUi/package.json` via `npm install --package-lock-only`.
-- Do not maintain mixed lock strategies for the same package (`bun.lock` vs `package-lock.json`) in `AionUi`.
+- CodexMonitor uses npm as the source of truth (`packageManager: npm`).
+- Keep root `package-lock.json` in sync with root `package.json` via `npm install --package-lock-only`.
+- Do not maintain mixed lock strategies for the same package in this repo (for example `bun.lock` vs `package-lock.json`).
 
 ### App-Server Boolean Parsing Policy
 

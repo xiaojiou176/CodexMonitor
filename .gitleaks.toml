@@ -1,0 +1,22 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Project-safe allowlist"
+paths = [
+  '''^\.secrets\.baseline$''',
+  '''^docs/reference/env-audit-report\.md$''',
+  '''^README\.md$''',
+  '''^\.env\.example$''',
+  '''^\.testflight\.local\.env\.example$'''
+]
+regexes = [
+  '''(?i)example(_|-)?(key|token|secret|password)''',
+  '''(?i)dummy(_|-)?(key|token|secret|password)''',
+  '''(?i)test(_|-)?(key|token|secret|password)'''
+]
+stopwords = [
+  "EXAMPLE",
+  "DUMMY",
+  "TEST"
+]

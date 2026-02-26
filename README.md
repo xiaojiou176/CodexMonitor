@@ -260,7 +260,7 @@ Artifacts will be in:
 
 - `src-tauri/target/release/bundle/nsis/` (installer exe)
 - `src-tauri/target/release/bundle/msi/` (msi)
- 
+
 Note: building from source on Windows requires LLVM/Clang (for `bindgen` / `libclang`) in addition to CMake.
 
 ## Type Checking
@@ -312,6 +312,33 @@ Git hooks are enforced with Husky:
   - Phase 1 (short first): `preflight:doc-drift (branch)` + `env:rationalize:check` + `env:doctor:dev` + `preflight:quick` (`test:assertions:guard` then `typecheck`).
   - Phase 2 (parallel long jobs): `test`, `test:coverage:gate` (strict 80/95), `check:rust`, `test:smoke:ui`, and `test:live:preflight`, each with heartbeat logs every ~20s.
   - Parallel failure output preserves task names, so gate failures are directly attributable to the failing job.
+
+### Pre-commit Governance Usage
+
+Install pre-commit (Python toolchain) and register local hooks:
+
+```bash
+python3 -m pip install pre-commit
+pre-commit install
+```
+
+Run all configured hooks against the full repository:
+
+```bash
+pre-commit run --all-files
+```
+
+Update pinned hook versions in `.pre-commit-config.yaml`:
+
+```bash
+pre-commit autoupdate
+```
+
+How pre-commit and Husky work together in this repo:
+
+- Husky is the default Git hook gateway for Node/Rust quality gates (`.husky/*` + `npm run precommit:orchestrated` / `npm run preflight:orchestrated`).
+- pre-commit is complementary and useful for full-repo/manual governance scans and optional CI alignment.
+- Keep both green: use Husky for commit-time orchestration, and use `pre-commit run --all-files` for periodic full baseline checks.
 
 UI smoke gate command:
 
