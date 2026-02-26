@@ -61,6 +61,7 @@ async function main() {
   console.log("[precommit] Phase 2/3: security + compliance gates");
   await runTask("check:secrets:staged", ["run", "check:secrets:staged"]);
   await runTask("check:keys:source-policy", ["run", "check:keys:source-policy"]);
+  await runTask("check:real-llm-alias-usage", ["run", "check:real-llm-alias-usage"]);
   await runTask("check:critical-path-logging", [
     "run",
     "check:critical-path-logging",

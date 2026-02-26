@@ -99,6 +99,8 @@ jobs:
         run: npm ci
       - name: Runtime env drift check
         run: npm run env:rationalize:check
+      - name: Real LLM alias usage guard
+        run: npm run check:real-llm-alias-usage
       - name: Env doctor (strict alias policy)
         run: npm run env:doctor:dev
   test-js:

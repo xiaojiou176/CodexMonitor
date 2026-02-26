@@ -302,7 +302,7 @@ Git hooks are enforced with Husky:
 
 - `pre-commit`: runs `npm run precommit:orchestrated`
   - Phase 1: `preflight:doc-drift` checks staged files and requires staged docs updates for doc-sensitive changes (`README.md`, `AGENTS.md`, `CLAUDE.md`, `src/{AGENTS,CLAUDE}.md`, `src-tauri/{AGENTS,CLAUDE}.md`, `CHANGELOG.md`, or `docs/*`).
-  - Phase 2: security + env governance gates: `check:secrets:staged`, `check:keys:source-policy`, and `env:doctor:staged`.
+  - Phase 2: security + env governance gates: `check:secrets:staged`, `check:keys:source-policy`, `check:real-llm-alias-usage`, and `env:doctor:staged`.
   - Runtime env drift is blocked by `env:rationalize:check` (runtime-prefixed keys must be declared in schema or allowlist).
   - Phase 3: runs `test:assertions:guard`, `guard:reuse-search`, and `lint:strict` in parallel.
 - `commit-msg`: runs secret scan and conventional-commit lint:
@@ -330,6 +330,7 @@ Security gate commands:
 ```bash
 npm run check:secrets:staged
 npm run check:keys:source-policy
+npm run check:real-llm-alias-usage
 npm run check:commit-message:secrets -- .git/COMMIT_EDITMSG
 ```
 

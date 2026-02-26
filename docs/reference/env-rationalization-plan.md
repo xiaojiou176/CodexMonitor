@@ -54,6 +54,7 @@ Last updated: 2026-02-26
 1. New runtime-prefixed env keys must be added to `config/env.schema.json` or `config/env.runtime-allowlist.json`.
 2. `npm run env:rationalize:check` blocks drift during pre-commit.
 3. Alias candidates should be removed only after all callsites migrate to canonical keys.
+4. `npm run check:real-llm-alias-usage` blocks new alias references outside approved compatibility files.
 
 ## Evidence (Latest Round)
 
@@ -64,6 +65,10 @@ Last updated: 2026-02-26
   - `scripts/real-llm-smoke.mjs`
   - `src/utils/realLlmSmoke.test.ts`
   - `scripts/env-doctor.mjs`
+  - `scripts/check-real-llm-alias-usage.mjs`
+  - `scripts/precommit-orchestrated.mjs`
+  - `.github/workflows/ci.yml`
+  - `package.json`
 
 ## Compatibility Opt-In Record
 

@@ -59,6 +59,7 @@
     "guard:reuse-search": "node scripts/guard-reuse-search.mjs",
     "check:secrets:staged": "node scripts/scan-staged-secrets.mjs",
     "check:keys:source-policy": "node scripts/check-key-source-policy.mjs",
+    "check:real-llm-alias-usage": "node scripts/check-real-llm-alias-usage.mjs",
     "check:critical-path-logging": "node scripts/check-critical-path-logging.mjs",
     "check:critical-path-logging:dry": "node scripts/check-critical-path-logging.mjs --dry-run",
     "check:lazy-load:evidence-gate": "node scripts/check-lazy-load-evidence-gate.mjs",
