@@ -21,8 +21,9 @@ Date: 2026-02-26
 
 - `mutation-js`: pinned and localized Stryker runtime (`@stryker-mutator/core@9.5.1`, `@stryker-mutator/vitest-runner@9.5.1`) and switched mutation gate execution to repo-local `node_modules/.bin/stryker` to avoid transient package env/cwd drift.
 - `security-scans`: kept high-severity blocking while changing audit scope to runtime dependencies with `npm audit --omit=dev --audit-level=high`.
+- `workflow-hygiene`: fixed `shellcheck` SC2086 in `.github/workflows/release.yml` by quoting the DMG output path containing `${VERSION}`.
 - Evidence artifacts: `.runtime-cache/test_output/ci-fixes/npm-install.log`, `.runtime-cache/test_output/ci-fixes/test-mutation-gate-dry-run.log`, `.runtime-cache/test_output/ci-fixes/mutation-target-precheck.log`, `.runtime-cache/test_output/ci-fixes/mutation-target-files.txt`, `.runtime-cache/test_output/ci-fixes/test-assertions-guard.log`, `.runtime-cache/test_output/ci-fixes/env-rationalize-check.log`, `.runtime-cache/test_output/ci-fixes/typecheck.log`, `.runtime-cache/test_output/ci-fixes/actionlint-ci.log`.
-- Evidence code paths: `package.json`, `package-lock.json`, `scripts/mutation-gate.mjs`, `.github/workflows/ci.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
+- Evidence code paths: `package.json`, `package-lock.json`, `scripts/mutation-gate.mjs`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
 
 ## Env Variant Files
 

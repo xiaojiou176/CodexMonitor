@@ -237,7 +237,7 @@ jobs:
           hdiutil create -volname "Codex Monitor" \
             -srcfolder release-artifacts/dmg-root \
             -ov -format UDZO \
-            release-artifacts/CodexMonitor_${VERSION}_aarch64.dmg
+            "release-artifacts/CodexMonitor_${VERSION}_aarch64.dmg"
 
           COPYFILE_DISABLE=1 tar -czf \
             "src-tauri/target/release/bundle/macos/Codex Monitor.app.tar.gz" \
