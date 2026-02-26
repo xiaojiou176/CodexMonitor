@@ -20,8 +20,12 @@ Date: 2026-02-26
 ## CI Residual Fixes Update (2026-02-26)
 
 - `mutation-js`: pinned and localized Stryker runtime (`@stryker-mutator/core@9.5.1`, `@stryker-mutator/vitest-runner@9.5.1`) and switched mutation gate execution to repo-local `node_modules/.bin/stryker` to avoid transient package env/cwd drift.
+- `mutation-js` follow-up: added `git ls-files` backup path in `scripts/mutation-gate.mjs` when `rg` is unavailable on runner images.
 - `security-scans`: kept high-severity blocking while changing audit scope to runtime dependencies with `npm audit --omit=dev --audit-level=high`.
+- `security-scans` follow-up: configured Cargo audit action working directory to `src-tauri` so it resolves the repository lockfile correctly.
 - `workflow-hygiene`: fixed `shellcheck` SC2086 in `.github/workflows/release.yml` by quoting the DMG output path containing `${VERSION}`.
+- `pre-commit` follow-up: added Node setup + `npm ci` before `pre-commit run --all-files` so `stylelint-uiux` hooks can resolve `stylelint`.
+- `test-tauri` follow-up: replaced Windows-incompatible bash heartbeat loop with a PowerShell heartbeat implementation for the matrix Windows leg.
 - Evidence artifacts: `.runtime-cache/test_output/ci-fixes/npm-install.log`, `.runtime-cache/test_output/ci-fixes/test-mutation-gate-dry-run.log`, `.runtime-cache/test_output/ci-fixes/mutation-target-precheck.log`, `.runtime-cache/test_output/ci-fixes/mutation-target-files.txt`, `.runtime-cache/test_output/ci-fixes/test-assertions-guard.log`, `.runtime-cache/test_output/ci-fixes/env-rationalize-check.log`, `.runtime-cache/test_output/ci-fixes/typecheck.log`, `.runtime-cache/test_output/ci-fixes/actionlint-ci.log`.
 - Evidence code paths: `package.json`, `package-lock.json`, `scripts/mutation-gate.mjs`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
 

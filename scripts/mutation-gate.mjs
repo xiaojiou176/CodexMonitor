@@ -39,21 +39,30 @@ function isMutationTarget(filePath) {
 }
 
 function resolveDefaultMutateFiles() {
-  const precheck = spawnSync(
+  const rgPrecheck = spawnSync(
     "rg",
     ["--files", "src/features/threads", "src/services", "-g", "*.ts", "-g", "*.tsx"],
-    {
-      cwd: rootDir,
-      encoding: "utf8",
-    },
+    { cwd: rootDir, encoding: "utf8" },
   );
-  if (precheck.status !== 0 || precheck.stdout.trim() === "") {
-    throw new Error("mutation target precheck failed: no files found in default critical scopes");
-  }
-  const files = precheck.stdout
+  const rawFileList = rgPrecheck.status === 0 && rgPrecheck.stdout.trim() !== ""
+    ? rgPrecheck.stdout
+    : (() => {
+        const gitPrecheck = spawnSync(
+          "git",
+          ["ls-files", "src/features/threads", "src/services"],
+          { cwd: rootDir, encoding: "utf8" },
+        );
+        if (gitPrecheck.status !== 0 || gitPrecheck.stdout.trim() === "") {
+          throw new Error("mutation target precheck failed: no files found in default critical scopes");
+        }
+        return gitPrecheck.stdout;
+      })();
+
+  const files = rawFileList
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
+    .filter((line) => line.endsWith(".ts") || line.endsWith(".tsx"))
     .filter(isMutationTarget);
   if (files.length === 0) {
     throw new Error("mutation target precheck failed: default scopes only matched test files");
