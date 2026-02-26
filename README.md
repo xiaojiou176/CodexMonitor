@@ -379,11 +379,11 @@ npm run test:real:llm
 
 - Required env:
   - `REAL_LLM_BASE_URL` (Gemini OpenAI-compatible base URL, example: `https://generativelanguage.googleapis.com/v1beta/openai`)
-  - `GEMINI_API_KEY` (primary; `REAL_LLM_API_KEY` kept as compatibility alias)
+  - `GEMINI_API_KEY` (required)
 - Env source resolution:
   - First uses current process environment (including exported zsh variables).
   - If missing, falls back to repo `.env.local`, then repo `.env`, then `~/.zshrc`.
-  - Supports compatibility alias: `REAL_LLM_API_KEY`.
+  - `REAL_LLM_API_KEY` remains temporary compatibility-only alias (deprecated; migrate before 2026-06-01).
   - If only key is present, base URL defaults to `https://generativelanguage.googleapis.com/v1beta/openai`.
 - Optional env:
   - `REAL_LLM_MODEL` (if omitted, script auto-selects the first model from `/v1/models`)

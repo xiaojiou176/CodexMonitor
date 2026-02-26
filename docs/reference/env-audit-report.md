@@ -27,7 +27,7 @@ Required in dev:
 - `PLAYWRIGHT_WEB_PORT`
 
 Required in live:
-- `GEMINI_API_KEY` (or compatibility alias `REAL_LLM_API_KEY`)
+- `GEMINI_API_KEY`
 - `REAL_LLM_BASE_URL`
 - `REAL_LLM_MODEL`
 - `REAL_LLM_TIMEOUT_MS`
@@ -41,6 +41,9 @@ Optional:
 Deprecated/blocked:
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
+
+Deprecated alias (compatibility-only):
+- `REAL_LLM_API_KEY` (retirement target: 2026-06-01)
 
 ## Evidence Paths
 

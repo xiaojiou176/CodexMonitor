@@ -45,7 +45,6 @@ Last updated: 2026-02-26
 ## Direct-Usage Gap Candidates
 
 - `GEMINI_API_KEY`
-- `REAL_LLM_API_KEY`
 - `REAL_LLM_BASE_URL`
 - `REAL_LLM_MODEL`
 - `REAL_LLM_TIMEOUT_MS`

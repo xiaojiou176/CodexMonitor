@@ -14,7 +14,7 @@ This matrix defines the canonical env governance model for this repo:
 
 - Total discovered env-like keys in repo scan: `80` (includes OS/CI/build/test/release/runtime keys).
 - App/product-prefixed keys (`VITE_`, `TAURI_`, `PLAYWRIGHT_`, `REAL_`, `GEMINI_`, `CODEX_`, `CODEX_MONITOR_`): `18`.
-- Keys currently templated in `.env.example`: `11`.
+- Keys currently templated in `.env.example`: `10`.
 - Keys currently present in local `.env` / `.env.local`: local-machine dependent and intentionally untracked.
 
 ## Canonical Local Runtime Keys
@@ -29,7 +29,7 @@ This matrix defines the canonical env governance model for this repo:
 | `PLAYWRIGHT_BASE_URL` | No | No | dev/live | Optional base URL override. |
 | `REAL_EXTERNAL_URL` | No | No | live | Optional real external browser target. |
 | `GEMINI_API_KEY` | Yes (live) | Yes | live | Primary Gemini key. |
-| `REAL_LLM_API_KEY` | No (alias) | Yes | live | Compatibility alias for scripts; should match Gemini key if both set. |
+| `REAL_LLM_API_KEY` | No (deprecated alias) | Yes | live | Compatibility-only alias, planned retirement on 2026-06-01. |
 | `REAL_LLM_BASE_URL` | Yes (live) | No | live | Gemini OpenAI-compatible base. |
 | `REAL_LLM_MODEL` | Yes (live) | No | live | Recommended: `gemini-3.1-pro-preview`. |
 | `REAL_LLM_TIMEOUT_MS` | Yes (live) | No | live | Positive integer timeout in ms. |
@@ -45,7 +45,7 @@ If these are set, `env-doctor` fails.
 
 1. `.env.example` is template-safe only (no real secrets).
 2. Real keys only come from `.env`, `.env.local`, or terminal process environment.
-3. Live mode requires Gemini credentials and valid URLs.
+3. Live mode requires `GEMINI_API_KEY` plus valid URLs.
 4. If both `GEMINI_API_KEY` and `REAL_LLM_API_KEY` are set but inconsistent, `env-doctor` warns.
 5. Pre-commit and pre-push run `env-doctor` to block drift and invalid env config.
 
