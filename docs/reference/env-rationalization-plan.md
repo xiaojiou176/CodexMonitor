@@ -6,6 +6,7 @@ Last updated: 2026-02-26
 
 - Runtime-prefixed keys discovered in repo: `12`
 - Canonical schema keys: `11`
+- Broad env-like keys discovered in repo: `180`
 - Non-template allowlist keys: `7`
 - Unknown runtime-prefixed keys: `0`
 
@@ -43,13 +44,18 @@ Last updated: 2026-02-26
 
 ## Direct-Usage Gap Candidates
 
-- `GEMINI_API_KEY`
-- `REAL_LLM_BASE_URL`
-- `REAL_LLM_MODEL`
-- `REAL_LLM_TIMEOUT_MS`
+- (none)
 
 ## Governance Rules
 
 1. New runtime-prefixed env keys must be added to `config/env.schema.json` or `config/env.runtime-allowlist.json`.
 2. `npm run env:rationalize:check` blocks drift during pre-commit.
 3. Deprecated runtime keys are blocked from runtime codepaths.
+
+## Evidence (Latest Run)
+
+- Runtime artifacts:
+  - `.runtime-cache/test_output/real-llm/latest.json`
+  - `.runtime-cache/test_output/live-preflight/latest.json`
+- Changed code references:
+  - `scripts/env-rationalize.mjs`

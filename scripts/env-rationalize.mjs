@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const CWD = process.cwd();
@@ -18,6 +18,7 @@ const ENV_ACCESS_PATTERNS = [
   "env::var_os\\(\"[A-Z0-9_]+\"\\)",
   "env!\\(\"[A-Z0-9_]+\"\\)",
 ];
+const ENV_VARIANT_FILES = [".env", ".env.example", ".env.local", ".testflight.local.env.example"];
 
 function parseEnvFile(filePath) {
   const content = readFileSync(filePath, "utf8");
@@ -33,6 +34,13 @@ function parseEnvFile(filePath) {
     }
   }
   return keys;
+}
+
+function parseEnvFileSafe(filePath) {
+  if (!existsSync(filePath)) {
+    return [];
+  }
+  return parseEnvFile(filePath);
 }
 
 function runRg(patterns) {
@@ -71,6 +79,40 @@ function runRg(patterns) {
         "playwright.config.ts",
         "playwright.external.config.ts",
         "vite.config.ts",
+      ],
+      { encoding: "utf8", cwd: CWD },
+    );
+    return output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch (error) {
+    const stdout = error?.stdout;
+    if (typeof stdout === "string" && stdout.trim() !== "") {
+      return stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    }
+    return [];
+  }
+}
+
+function runRgSingle(pattern, searchPaths) {
+  try {
+    const output = execFileSync(
+      "rg",
+      [
+        "-n",
+        "--no-heading",
+        "--glob",
+        "!node_modules/**",
+        "--glob",
+        "!.git/**",
+        "--glob",
+        "!dist/**",
+        "--glob",
+        "!.runtime-cache/**",
+        "-e",
+        pattern,
+        ...searchPaths,
       ],
       { encoding: "utf8", cwd: CWD },
     );
@@ -134,22 +176,65 @@ function main() {
   const runtimeKeysDiscovered = uniqueSorted(
     extractEnvKeys(runRg(ENV_ACCESS_PATTERNS)).filter((key) => isGovernedRuntimeKey(key)),
   );
+  const envVariantKeys = uniqueSorted(
+    ENV_VARIANT_FILES.flatMap((fileName) => parseEnvFileSafe(path.join(CWD, fileName))),
+  );
+  const shellAssignmentKeys = uniqueSorted(
+    runRgSingle(
+      "\\b([A-Z][A-Z0-9_]*)\\s*=",
+      ["scripts", ".github/workflows"],
+    )
+      .map((line) => line.match(/\b([A-Z][A-Z0-9_]*)\s*=/)?.[1] ?? "")
+      .filter(Boolean),
+  );
+  const workflowSecretVarKeys = uniqueSorted(
+    runRgSingle(
+      "\\$\\{\\{\\s*(?:vars|secrets)\\.([A-Z0-9_]+)",
+      [".github/workflows"],
+    )
+      .map((line) => line.match(/\$\{\{\s*(?:vars|secrets)\.([A-Z0-9_]+)/)?.[1] ?? "")
+      .filter(Boolean),
+  );
+  const broadEnvLikeKeys = uniqueSorted([
+    ...extractEnvKeys(runRg(ENV_ACCESS_PATTERNS)),
+    ...envVariantKeys,
+    ...shellAssignmentKeys,
+    ...workflowSecretVarKeys,
+  ]);
+
+  const canonicalCount = schemaKeys.length;
+  const runtimeUsageCount = runtimeKeysDiscovered.length;
+  const broadEnvLikeCount = broadEnvLikeKeys.length;
+
   const known = new Set([...schemaKeys, ...allowlistKeys]);
   const unknownRuntimeKeys = runtimeKeysDiscovered.filter((key) => !known.has(key));
 
   const directUsageGapCandidates = templateKeys.filter((key) => !runtimeKeysDiscovered.includes(key));
   const deprecatedRuntimeKeys = uniqueSorted((schema.deprecatedKeys || []).filter((key) => /^REAL_/.test(key)));
 
-  console.log(`[env-rationalize] runtime discovered=${runtimeKeysDiscovered.length}`);
-  console.log(`[env-rationalize] schema keys=${schemaKeys.length}`);
+  console.log(`[env-rationalize] canonical_count=${canonicalCount}`);
+  console.log(`[env-rationalize] runtime_usage_count=${runtimeUsageCount}`);
+  console.log(`[env-rationalize] broad_env_like_count=${broadEnvLikeCount}`);
+  console.log(`[env-rationalize] runtime discovered=${runtimeUsageCount}`);
+  console.log(`[env-rationalize] schema keys=${canonicalCount}`);
   console.log(`[env-rationalize] allowlist keys=${allowlistKeys.length}`);
   console.log(`[env-rationalize] unknown runtime keys=${unknownRuntimeKeys.length}`);
+  console.log(`[env-rationalize] template_unread_keys=${directUsageGapCandidates.length}`);
 
   if (unknownRuntimeKeys.length > 0) {
     console.error("[env-rationalize] unknown runtime-prefixed keys detected:");
     for (const key of unknownRuntimeKeys) {
       console.error(`  - ${key}`);
     }
+  }
+  if (directUsageGapCandidates.length > 0) {
+    console.error("[env-rationalize] .env.example contains keys not directly read by code:");
+    for (const key of directUsageGapCandidates) {
+      console.error(`  - ${key}`);
+    }
+    console.error(
+      "[env-rationalize] move non-local keys out of .env.example (release template or CI secrets).",
+    );
   }
 
   if (WRITE_REPORT) {
@@ -161,6 +246,7 @@ Last updated: 2026-02-26
 
 - Runtime-prefixed keys discovered in repo: \`${runtimeKeysDiscovered.length}\`
 - Canonical schema keys: \`${schemaKeys.length}\`
+- Broad env-like keys discovered in repo: \`${broadEnvLikeCount}\`
 - Non-template allowlist keys: \`${allowlistKeys.length}\`
 - Unknown runtime-prefixed keys: \`${unknownRuntimeKeys.length}\`
 
@@ -189,6 +275,14 @@ ${toBullets(directUsageGapCandidates)}
 1. New runtime-prefixed env keys must be added to \`config/env.schema.json\` or \`config/env.runtime-allowlist.json\`.
 2. \`npm run env:rationalize:check\` blocks drift during pre-commit.
 3. Deprecated runtime keys are blocked from runtime codepaths.
+
+## Evidence (Latest Run)
+
+- Runtime artifacts:
+  - \`.runtime-cache/test_output/real-llm/latest.json\`
+  - \`.runtime-cache/test_output/live-preflight/latest.json\`
+- Changed code references:
+  - \`scripts/env-rationalize.mjs\`
 `;
     mkdirSync(path.dirname(REPORT_PATH), { recursive: true });
     writeFileSync(REPORT_PATH, report, "utf8");
@@ -196,6 +290,9 @@ ${toBullets(directUsageGapCandidates)}
   }
 
   if (unknownRuntimeKeys.length > 0) {
+    process.exit(1);
+  }
+  if (directUsageGapCandidates.length > 0) {
     process.exit(1);
   }
 

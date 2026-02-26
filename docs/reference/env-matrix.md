@@ -12,12 +12,21 @@ This matrix defines the canonical env governance model for this repo:
 
 ## High-Level Inventory
 
-- Total discovered env-like keys in broad scan: `182` (includes shell/OS/CI/build/release/runtime keys).
-- Strict unique env keys for repo governance scope: `72`.
-- App/product-prefixed keys (`VITE_`, `TAURI_`, `PLAYWRIGHT_`, `REAL_`, `GEMINI_`, `CODEX_`, `CODEX_MONITOR_`): `18`.
-- Keys currently templated in `.env.example`: `10`.
+- `canonical_count`: `11` (from `config/env.schema.json` canonical variables).
+- `runtime_usage_count`: `12` (runtime-prefixed keys actually read by code paths scanned by `scripts/env-rationalize.mjs`).
+- `broad_env_like_count`: `180` (broad env-like keys across code reads + `.env*` variants + shell/workflow env-style keys).
+- Keys currently templated in `.env.example`: `5`.
 - `.env*` variant files discovered: `4` (`.env`, `.env.example`, `.env.local`, `.testflight.local.env.example`).
 - Keys currently present in local `.env` / `.env.local`: local-machine dependent and intentionally untracked.
+
+## Four-Tier Ownership
+
+| Tier | Scope | Allowed Location | Current Keys |
+| --- | --- | --- | --- |
+| Required | 本地开发必须项 | `.env.example` + `.env/.env.local` | `TAURI_DEV_PORT`, `TAURI_DEV_HMR_PORT`, `PLAYWRIGHT_WEB_PORT` |
+| Optional | 本地开发可选项 | `.env.example`（空值模板）+ `.env/.env.local` | `VITE_SENTRY_DSN`, `TAURI_DEV_HOST` |
+| Release-only | 发布流程专用 | `.testflight.local.env.example` + CI secrets/vars | `APP_ID`, `BUNDLE_ID`, `BETA_*`, `REVIEW_*`, `FEEDBACK_EMAIL`, `LOCALE` |
+| Platform-only | 平台/运行环境专用 | CI/CD secrets/vars 或系统环境变量（不进 `.env.example`） | `GEMINI_API_KEY`, `REAL_LLM_BASE_URL`, `REAL_LLM_MODEL`, `REAL_LLM_TIMEOUT_MS`, `REAL_EXTERNAL_URL`, `CODEX_*`, `TAURI_SIGNING_*` |
 
 ## Canonical Local Runtime Keys
 
@@ -50,6 +59,7 @@ If these are set, `env-doctor` fails.
 4. `REAL_LLM_API_KEY` is deprecated and hard-failed by `env-doctor`.
 5. Pre-commit and pre-push run `env-doctor` to block drift and invalid env config.
 6. `scripts/real-llm-smoke.mjs` only accepts `GEMINI_API_KEY` for live LLM smoke.
+7. `env:rationalize:check` now fails when `.env.example` contains keys not directly read by code paths.
 
 ## Commands
 
