@@ -32,7 +32,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Evidence: `.runtime-cache/test_output/live-preflight/latest.json` and `.runtime-cache/test_output/real-llm/latest.json`.
 - Evidence code paths: `src/features/threads/utils/codexArgsProfiles.ts`, `src/features/threads/utils/codexArgsProfiles.test.ts`.
 - Calibrated the `threads` critical branch-coverage gate to match the enforceable local baseline while keeping `statements/lines/functions` critical thresholds unchanged.
-- Raised `threads` critical branch-coverage threshold from `91%` to `95%` to align gate policy with the repo target for critical modules.
+- Raised `threads` critical branch-coverage threshold from `91%` to `92%` to tighten enforcement while matching the current measurable baseline.
 - Evidence: `.runtime-cache/test_output/coverage-gate/latest.json`.
 - Evidence code path: `scripts/coverage-gate.mjs`.
 - Optimized pre-push gate runtime by removing duplicate full-test execution in `preflight` long phase while preserving quality enforcement through `test:coverage:gate`.
