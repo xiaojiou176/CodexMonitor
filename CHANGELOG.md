@@ -48,7 +48,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - None
 
 ### Fixed
-- TBD
+- Corrected protocol status/item/message phase literals in `useThreadsReducer` tests to match shared type unions, unblocking typecheck and pre-push gates.
+- Evidence: `.runtime-cache/test_output/coverage-gate/latest.json`.
+- Evidence code path: `src/features/threads/hooks/useThreadsReducer.test.ts`.
 
 ### Security
 - None

@@ -3619,9 +3619,9 @@ describe("threadReducer", () => {
           lastActivityAt: 1200,
           lastErrorAt: null,
           lastErrorMessage: null,
-          turnStatus: "streaming",
-          activeItemStatuses: { "item-1": "in_progress" },
-          messagePhase: "assistant",
+          turnStatus: "inProgress",
+          activeItemStatuses: { "item-1": "inProgress" },
+          messagePhase: "commentary",
           waitReason: "approval",
           retryState: "retrying",
           lastMcpProgressMessage: "working",
@@ -3631,10 +3631,10 @@ describe("threadReducer", () => {
     const next = threadReducer(base, {
       type: "setThreadTurnStatus",
       threadId: "thread-1",
-      turnStatus: "running",
+      turnStatus: "inProgress",
     });
     expect(next.threadStatusById["thread-1"]?.activeItemStatuses).toEqual({
-      "item-1": "in_progress",
+      "item-1": "inProgress",
     });
     expect(next.threadStatusById["thread-1"]?.waitReason).toBe("approval");
     expect(next.threadStatusById["thread-1"]?.lastMcpProgressMessage).toBe("working");
