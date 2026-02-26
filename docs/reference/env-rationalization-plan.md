@@ -63,6 +63,7 @@ Last updated: 2026-02-26
 - Changed code references:
   - `scripts/real-llm-smoke.mjs`
   - `src/utils/realLlmSmoke.test.ts`
+  - `scripts/env-doctor.mjs`
 
 ## Compatibility Opt-In Record
 

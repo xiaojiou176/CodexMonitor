@@ -179,12 +179,14 @@ function main() {
 
   const sourcesReport = [
     "GEMINI_API_KEY",
-    "REAL_LLM_API_KEY",
     "REAL_LLM_BASE_URL",
     "REAL_LLM_MODEL",
     "REAL_LLM_TIMEOUT_MS",
     "REAL_EXTERNAL_URL",
   ].map((key) => `${key}=${safeSourceFor(key, rootEnv, localEnv)}`);
+  if (hasValue(realLlmKey)) {
+    sourcesReport.push(`LEGACY_REAL_LLM_API_KEY=${safeSourceFor("REAL_LLM_API_KEY", rootEnv, localEnv)}`);
+  }
 
   if (MODE === "live" && !hasValue(geminiKey)) {
     errors.push("mode=live requires GEMINI_API_KEY");
