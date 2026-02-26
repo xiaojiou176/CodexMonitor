@@ -21,6 +21,7 @@ Date: 2026-02-26
 
 - `mutation-js`: pinned and localized Stryker runtime (`@stryker-mutator/core@9.5.1`, `@stryker-mutator/vitest-runner@9.5.1`) and switched mutation gate execution to repo-local `node_modules/.bin/stryker` to avoid transient package env/cwd drift.
 - `mutation-js` follow-up: added `git ls-files` backup path in `scripts/mutation-gate.mjs` when `rg` is unavailable on runner images.
+- `mutation-js` stability update: set `vitest.related=false` in `scripts/mutation-stryker.config.mjs` to avoid sandbox path resolution crashes during Stryker dry-run.
 - `security-scans`: kept high-severity blocking while changing audit scope to runtime dependencies with `npm audit --omit=dev --audit-level=high`.
 - `security-scans` follow-up: configured Cargo audit action working directory to `src-tauri` so it resolves the repository lockfile correctly.
 - `workflow-hygiene`: fixed `shellcheck` SC2086 in `.github/workflows/release.yml` by quoting the DMG output path containing `${VERSION}`.

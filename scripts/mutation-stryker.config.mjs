@@ -21,6 +21,7 @@ export function buildMutationConfig({ mutate, thresholdBreak }) {
     ],
     vitest: {
       configFile: "vite.config.ts",
+      related: false,
     },
     coverageAnalysis: "off",
     timeoutMS: 30_000,
