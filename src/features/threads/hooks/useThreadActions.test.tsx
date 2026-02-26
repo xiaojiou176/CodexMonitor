@@ -725,6 +725,74 @@ describe("useThreadActions", () => {
     expect(listThreads).toHaveBeenCalledWith("ws-1", null, 100, "created_at");
   });
 
+  it("uses known activity pagination window before stopping when no threads match workspace", async () => {
+    let page = 0;
+    vi.mocked(listThreads).mockImplementation(async () => {
+      page += 1;
+      return {
+        result: {
+          data: [{ id: `remote-${page}`, cwd: "/other", updated_at: page }],
+          nextCursor: page < 20 ? `cursor-${page}` : null,
+        },
+      };
+    });
+    vi.mocked(getThreadTimestamp).mockReturnValue(0);
+
+    const { result, dispatch } = renderActions({
+      threadActivityRef: { current: { "ws-1": { "seed-thread": 1000 } } },
+    });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    expect(listThreads).toHaveBeenCalledTimes(8);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "updated_at",
+      threads: [],
+    });
+  });
+
+  it("sorts created_at results by created timestamp and thread id tie-breaker", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          { id: "thread-b", cwd: "/tmp/codex", preview: "B", created_at: 20, updated_at: 2 },
+          { id: "thread-a", cwd: "/tmp/codex", preview: "A", created_at: 20, updated_at: 1 },
+          { id: "thread-c", cwd: "/tmp/codex", preview: "C", created_at: 30, updated_at: 3 },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockImplementation((thread) => {
+      const value = (thread as Record<string, unknown>).updated_at as number;
+      return value ?? 0;
+    });
+    vi.mocked(getThreadCreatedTimestamp).mockImplementation((thread) => {
+      const value = (thread as Record<string, unknown>).created_at as number;
+      return value ?? 0;
+    });
+
+    const { result, dispatch } = renderActions({ threadSortKey: "created_at" });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "created_at",
+      threads: [
+        { id: "thread-c", name: "C", updatedAt: 3 },
+        { id: "thread-a", name: "A", updatedAt: 1 },
+        { id: "thread-b", name: "B", updatedAt: 2 },
+      ],
+    });
+  });
+
   it("ignores stale list responses when a newer sort request is in-flight", async () => {
     const first = createDeferred<Record<string, unknown>>();
     const second = createDeferred<Record<string, unknown>>();
@@ -949,6 +1017,30 @@ describe("useThreadActions", () => {
         label: "thread/archive batch fallback",
       }),
     );
+  });
+
+  it("falls back to single-thread archive when threadIds payload is reported invalid", async () => {
+    vi.mocked(archiveThreads).mockRejectedValue(
+      new Error("threadIds is missing in payload"),
+    );
+    vi.mocked(archiveThread).mockResolvedValue({});
+    const { result } = renderActions();
+
+    let summary: ThreadArchiveBatchResult | undefined;
+    await act(async () => {
+      summary = await result.current.archiveThreads("ws-1", [
+        "thread-31",
+        "thread-32",
+      ]);
+    });
+
+    expect(archiveThread).toHaveBeenCalledTimes(2);
+    expect(summary).toEqual({
+      allSucceeded: true,
+      okIds: ["thread-31", "thread-32"],
+      failed: [],
+      total: 2,
+    });
   });
 
   it("returns null for empty thread id params and skips service calls", async () => {
@@ -2292,5 +2384,94 @@ describe("useThreadActions", () => {
       sortKey: "updated_at",
       threads: [{ id: "thread-no-name", name: "Agent 1", updatedAt: 50 }],
     });
+  });
+
+  it("normalizes archive batch payloads without a result wrapper", async () => {
+    vi.mocked(archiveThreads).mockResolvedValue({
+      okIds: ["thread-a"],
+      failed: [{ threadId: "thread-b", error: "denied" }],
+    } as unknown as ThreadArchiveBatchResult);
+
+    const { result } = renderActions();
+
+    let summary: ThreadArchiveBatchResult | undefined;
+    await act(async () => {
+      summary = await result.current.archiveThreads("ws-1", ["thread-a", "thread-b"]);
+    });
+
+    expect(summary).toEqual({
+      allSucceeded: false,
+      okIds: ["thread-a"],
+      failed: [{ threadId: "thread-b", error: "denied" }],
+      total: 2,
+    });
+  });
+
+  it("uses activity-aware thread list max page guard when workspace has known activity", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [{ id: "remote", cwd: "/different", updated_at: 1 }],
+        nextCursor: "next",
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockReturnValue(1);
+    const { result, dispatch } = renderActions({
+      threadActivityRef: { current: { "ws-1": { "thread-known": 999 } } },
+    });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    expect(listThreads).toHaveBeenCalledTimes(8);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "updated_at",
+      threads: [],
+    });
+  });
+
+  it("skips malformed list entries without thread ids when recording activity and metadata", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          { id: "", cwd: "/tmp/codex", preview: "No id", updated_at: 80 },
+          { id: "thread-ok", cwd: "/tmp/codex", preview: "Okay", updated_at: 70 },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockImplementation((thread) => {
+      const value = (thread as Record<string, unknown>).updated_at as number;
+      return value ?? 0;
+    });
+    const recordThreadCreatedAt = vi.fn();
+    const markSubAgentThread = vi.fn();
+    const updateThreadParent = vi.fn();
+    const { result, dispatch } = renderActions({
+      recordThreadCreatedAt,
+      markSubAgentThread,
+      updateThreadParent,
+    });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "updated_at",
+      threads: [{ id: "thread-ok", name: "Okay", updatedAt: 70 }],
+    });
+    expect(recordThreadCreatedAt).toHaveBeenCalledTimes(1);
+    expect(recordThreadCreatedAt).toHaveBeenCalledWith(
+      "thread-ok",
+      expect.any(Number),
+      expect.any(Number),
+    );
+    expect(markSubAgentThread).not.toHaveBeenCalled();
+    expect(updateThreadParent).not.toHaveBeenCalled();
   });
 });

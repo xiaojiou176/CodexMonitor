@@ -342,4 +342,67 @@ describe("codexArgsProfiles", () => {
     expect(options[1]?.label).toBe(options[2]?.label);
     expect((options[1]?.value ?? "") < (options[2]?.value ?? "")).toBe(true);
   });
+
+  it("normalizes legacy smart quotes and dash-like flags before parsing", () => {
+    const parsed = parseCodexArgsProfile(
+      "\u201C\u2014config\u00A0./legacy.toml\u00A0\u2014search\u201D",
+    );
+
+    expect(parsed.recognizedSegments).toEqual([
+      {
+        flag: "--config",
+        canonicalFlag: "--config",
+        value: "./legacy.toml",
+        label: "config:./legacy.toml",
+      },
+      {
+        flag: "--search",
+        canonicalFlag: "--search",
+        value: null,
+        label: "search",
+      },
+    ]);
+    expect(parsed.ignoredFlags).toEqual([]);
+    expect(parsed.effectiveArgs).toBe("--config ./legacy.toml --search");
+  });
+
+  it("normalizes wrapped quote values for labels and keeps short urls", () => {
+    const parsed = parseCodexArgsProfile("--enable='beta' --config=http://a.co");
+
+    expect(parsed.recognizedSegments).toEqual([
+      {
+        flag: "--enable",
+        canonicalFlag: "--enable",
+        value: "beta",
+        label: "enable:beta",
+      },
+      {
+        flag: "--config",
+        canonicalFlag: "--config",
+        value: "http://a.co",
+        label: "config:http://a.co",
+      },
+    ]);
+    expect(buildCodexArgsBadgeLabel("--enable='beta'")).toBe("enable:beta");
+  });
+
+  it("keeps non-escaped backslashes inside quoted values stable", () => {
+    const parsed = parseCodexArgsProfile('--enable "value\\nwith\\qbackslash" --search');
+
+    expect(parsed.recognizedSegments).toEqual([
+      {
+        flag: "--enable",
+        canonicalFlag: "--enable",
+        value: "value\\nwith\\qbackslash",
+        label: "enable:nwith/qbackslash",
+      },
+      {
+        flag: "--search",
+        canonicalFlag: "--search",
+        value: null,
+        label: "search",
+      },
+    ]);
+    expect(parsed.effectiveArgs).toBe('--enable "value\\\\nwith\\\\qbackslash" --search');
+  });
 });

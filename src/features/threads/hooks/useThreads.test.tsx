@@ -1017,6 +1017,178 @@ describe("useThreads branch guards", () => {
     setIntervalSpy.mockRestore();
   });
 
+  it("uses fallback timestamp for invalid createdAt when evaluating auto-archive", async () => {
+    vi.useFakeTimers();
+    try {
+      const now = new Date("2026-02-26T07:00:00.000Z");
+      vi.setSystemTime(now);
+      useThreadActionsMocks.archiveThreads.mockResolvedValueOnce({
+        allSucceeded: true,
+        okIds: ["thread-sub"],
+        failed: [],
+        total: 1,
+      });
+
+      renderHook(() =>
+        useThreads({
+          activeWorkspace: { ...activeWorkspace },
+          onWorkspaceConnected: vi.fn(),
+          autoArchiveSubAgentThreadsMaxAgeMinutes: 5,
+        }),
+      );
+
+      const eventArgs = useThreadEventHandlersCapture.latestArgs as Record<string, unknown>;
+      const dispatch = eventArgs.dispatch as (action: Record<string, unknown>) => void;
+      const markSubAgentThread = eventArgs.markSubAgentThread as ((threadId: string) => void);
+      const recordThreadCreatedAt = eventArgs.recordThreadCreatedAt as (
+        threadId: string,
+        createdAt: number,
+        fallbackTimestamp?: number,
+      ) => void;
+      const recordThreadActivity = eventArgs.recordThreadActivity as (
+        workspaceId: string,
+        threadId: string,
+        timestamp?: number,
+      ) => void;
+      const staleAt = now.getTime() - 20 * 60 * 1000;
+
+      act(() => {
+        dispatch({
+          type: "setThreads",
+          workspaceId: "ws-active",
+          threads: [{ id: "thread-sub", name: "Sub agent", updatedAt: staleAt }],
+          sortKey: "updated_at",
+        });
+        dispatch({
+          type: "setThreadParent",
+          threadId: "thread-sub",
+          parentId: "thread-parent",
+        });
+        dispatch({
+          type: "setActiveThreadId",
+          workspaceId: "ws-active",
+          threadId: "thread-main",
+        });
+        markSubAgentThread("thread-sub");
+        recordThreadCreatedAt("thread-sub", Number.NaN, staleAt);
+        recordThreadActivity("ws-active", "thread-sub", staleAt);
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+        await Promise.resolve();
+      });
+
+      expect(useThreadActionsMocks.archiveThreads).toHaveBeenCalledWith("ws-active", [
+        "thread-sub",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("skips auto-archive when active turn is in-flight phase", async () => {
+    vi.useFakeTimers();
+    try {
+      const now = new Date("2026-02-26T07:30:00.000Z");
+      vi.setSystemTime(now);
+
+      renderHook(() =>
+        useThreads({
+          activeWorkspace: { ...activeWorkspace },
+          onWorkspaceConnected: vi.fn(),
+          autoArchiveSubAgentThreadsMaxAgeMinutes: 5,
+        }),
+      );
+
+      const eventArgs = useThreadEventHandlersCapture.latestArgs as Record<string, unknown>;
+      const dispatch = eventArgs.dispatch as (action: Record<string, unknown>) => void;
+      const markSubAgentThread = eventArgs.markSubAgentThread as ((threadId: string) => void);
+      const recordThreadCreatedAt = eventArgs.recordThreadCreatedAt as (
+        threadId: string,
+        createdAt: number,
+        fallbackTimestamp?: number,
+      ) => void;
+      const staleAt = now.getTime() - 20 * 60 * 1000;
+      const phases = ["starting", "streaming", "tool_running"] as const;
+
+      for (const phase of phases) {
+        act(() => {
+          dispatch({
+            type: "setThreads",
+            workspaceId: "ws-active",
+            threads: [{ id: "thread-sub", name: "Sub agent", updatedAt: staleAt }],
+            sortKey: "updated_at",
+          });
+          dispatch({
+            type: "setThreadParent",
+            threadId: "thread-sub",
+            parentId: "thread-parent",
+          });
+          dispatch({
+            type: "setActiveTurnId",
+            threadId: "thread-sub",
+            turnId: "turn-active",
+          });
+          dispatch({
+            type: "setThreadPhase",
+            threadId: "thread-sub",
+            phase,
+          });
+          markSubAgentThread("thread-sub");
+          recordThreadCreatedAt("thread-sub", staleAt, staleAt);
+        });
+
+        await act(async () => {
+          vi.advanceTimersByTime(60_000);
+          await Promise.resolve();
+        });
+      }
+
+      expect(useThreadActionsMocks.archiveThreads).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ignores empty thread ids during auto-archive candidate scan", async () => {
+    vi.useFakeTimers();
+    try {
+      const now = new Date("2026-02-26T07:45:00.000Z");
+      vi.setSystemTime(now);
+
+      renderHook(() =>
+        useThreads({
+          activeWorkspace: { ...activeWorkspace },
+          onWorkspaceConnected: vi.fn(),
+          autoArchiveSubAgentThreadsMaxAgeMinutes: 5,
+        }),
+      );
+
+      const eventArgs = useThreadEventHandlersCapture.latestArgs as Record<string, unknown>;
+      const dispatch = eventArgs.dispatch as (action: Record<string, unknown>) => void;
+      const staleAt = now.getTime() - 20 * 60 * 1000;
+
+      act(() => {
+        dispatch({
+          type: "setThreads",
+          workspaceId: "ws-active",
+          threads: [{ id: "", name: "Invalid sub agent", updatedAt: staleAt }],
+          sortKey: "updated_at",
+        });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+        await Promise.resolve();
+      });
+
+      expect(useThreadActionsMocks.archiveThreads).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("auto-archives stale subagent threads when eligible", async () => {
     vi.useFakeTimers();
     try {

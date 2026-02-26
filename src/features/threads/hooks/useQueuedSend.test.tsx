@@ -2179,4 +2179,348 @@ describe("useQueuedSend", () => {
     );
   });
 
+  it("runs /new with prompt body and no active model options", async () => {
+    const options = makeOptions({
+      activeModel: null,
+      activeEffort: null,
+      activeCollaborationMode: null,
+      startThreadForWorkspace: vi.fn().mockResolvedValue("thread-new"),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/new draft notes");
+    });
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspace,
+      "thread-new",
+      "draft notes",
+      [],
+    );
+  });
+
+  it("runs /new with prompt body when only effort is configured", async () => {
+    const options = makeOptions({
+      activeModel: null,
+      activeEffort: "medium",
+      activeCollaborationMode: null,
+      startThreadForWorkspace: vi.fn().mockResolvedValue("thread-new"),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/new summarize");
+    });
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspace,
+      "thread-new",
+      "summarize",
+      [],
+      {
+        model: null,
+        effort: "medium",
+        collaborationMode: null,
+      },
+    );
+  });
+
+  it("returns false when steering target thread has no queued messages", async () => {
+    const options = makeOptions({ steerEnabled: true });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      expect(await result.current.steerQueuedMessage("thread-1", "missing-item")).toBe(false);
+    });
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("steers queued message with merged queued and active model options", async () => {
+    window.localStorage.setItem(
+      "codexmonitor.queuedMessagesByThread",
+      JSON.stringify({
+        "thread-1": [
+          {
+            id: "steer-opts",
+            text: "steer with options",
+            createdAt: 1,
+            model: "gemini-3.1-pro",
+            collaborationMode: { mode: "solo" },
+          },
+        ],
+      }),
+    );
+    const options = makeOptions({
+      steerEnabled: true,
+      isProcessing: true,
+      activeEffort: "high",
+      activeModel: null,
+      activeCollaborationMode: null,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      expect(await result.current.steerQueuedMessage("thread-1", "steer-opts")).toBe(true);
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledWith(
+      "steer with options",
+      [],
+      {
+        forceSteer: true,
+        model: "gemini-3.1-pro",
+        effort: "high",
+        collaborationMode: { mode: "solo" },
+      },
+    );
+  });
+
+  it("swallows persistence errors when localStorage.setItem throws", async () => {
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("disk full");
+      });
+    const options = makeOptions({ isProcessing: true });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("persist failure should not crash");
+    });
+
+    expect(result.current.activeQueue.map((item) => item.text)).toEqual([
+      "persist failure should not crash",
+    ]);
+    setItemSpy.mockRestore();
+  });
+
+  it("migrates legacy workspace id from queued fallback entry", async () => {
+    window.localStorage.setItem(
+      "codexmonitor.queuedMessagesByThread",
+      JSON.stringify({
+        "thread-2": [
+          {
+            id: "legacy-has-workspace",
+            text: "seed",
+            createdAt: 1,
+            workspaceId: "workspace-2",
+          },
+          {
+            id: "legacy-missing-workspace",
+            text: "needs migration",
+            createdAt: 2,
+          },
+        ],
+      }),
+    );
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      isProcessing: true,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      const migrated = result.current.migrateLegacyQueueWorkspaceIds();
+      expect(migrated).toEqual({ migratedMessages: 0, migratedThreads: 0 });
+    });
+
+    expect(
+      result.current.queuedByThread["thread-2"]?.find((item) => item.id === "legacy-missing-workspace")
+        ?.workspaceId,
+    ).toBe("workspace-2");
+  });
+
+  it("keeps removeQueuedMessage as a no-op for unknown thread id", () => {
+    const options = makeOptions();
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    act(() => {
+      result.current.removeQueuedMessage("thread-missing", "msg-missing");
+    });
+
+    expect(result.current.queuedByThread["thread-missing"]).toEqual([]);
+  });
+
+  it("dispatches /apps text for background thread when apps feature is disabled", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      appsEnabled: false,
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      activeModel: null,
+      activeEffort: null,
+      activeCollaborationMode: null,
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: false },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.queueMessageForThread("thread-2", "/apps dashboard");
+    });
+    await flushAsyncTicks(2);
+
+    expect(options.startApps).not.toHaveBeenCalled();
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspaceTwo,
+      "thread-2",
+      "/apps dashboard",
+      [],
+    );
+    expect(result.current.queuedByThread["thread-2"] ?? []).toEqual([]);
+  });
+
+  it("keeps migration as a no-op for explicit empty thread queues", async () => {
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      isProcessing: true,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.queueMessage("temporary");
+    });
+
+    const queuedId = result.current.activeQueue[0]?.id ?? "";
+    await act(async () => {
+      result.current.removeQueuedMessage("thread-1", queuedId);
+    });
+
+    await act(async () => {
+      expect(result.current.migrateLegacyQueueWorkspaceIds()).toEqual({
+        migratedMessages: 0,
+        migratedThreads: 0,
+      });
+    });
+  });
+
+  it("swallows persistence errors when localStorage.removeItem throws", () => {
+    const removeItemSpy = vi
+      .spyOn(Storage.prototype, "removeItem")
+      .mockImplementation(() => {
+        throw new Error("remove denied");
+      });
+    const options = makeOptions({
+      activeThreadId: "thread-empty",
+      activeWorkspace: null,
+    });
+
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    expect(result.current.activeQueue).toEqual([]);
+    removeItemSpy.mockRestore();
+  });
+
+  it("steers with force flag only when queued and active options are null", async () => {
+    const options = makeOptions({
+      steerEnabled: true,
+      isProcessing: true,
+      activeModel: null,
+      activeEffort: null,
+      activeCollaborationMode: null,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.queueMessage("force-only");
+    });
+    const queued = result.current.activeQueue[0];
+
+    await act(async () => {
+      expect(await result.current.steerQueuedMessage("thread-1", queued?.id ?? "")).toBe(true);
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledWith("force-only", [], {
+      forceSteer: true,
+    });
+  });
+
+  it("dispatches persisted background item without options and without images payload", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    window.localStorage.setItem(
+      "codexmonitor.queuedMessagesByThread",
+      JSON.stringify({
+        "thread-2": [
+          {
+            id: "persisted-bg",
+            text: "persisted background item",
+            createdAt: 1,
+            workspaceId: "workspace-2",
+            model: null,
+            effort: null,
+            collaborationMode: null,
+          },
+        ],
+      }),
+    );
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      activeModel: null,
+      activeEffort: null,
+      activeCollaborationMode: null,
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: false },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+    renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await flushAsyncTicks(3);
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspaceTwo,
+      "thread-2",
+      "persisted background item",
+      [],
+    );
+  });
+
 });

@@ -945,6 +945,61 @@ describe("useThreadMessaging branch coverage", () => {
     );
   });
 
+  it("normalizes object collaboration mode without settings to null in send payload", async () => {
+    const options = createOptions({
+      collaborationMode: { mode: "default" } as NonNullable<HookOptions["collaborationMode"]>,
+    });
+    const { result } = renderHook(() => useThreadMessaging(options));
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(workspace, "thread-1", "hello", []);
+    });
+
+    expect(sendUserMessageService).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "hello",
+      expect.objectContaining({
+        collaborationMode: null,
+      }),
+    );
+  });
+
+  it("ignores marker-only segments and still matches skills with internal multi-space names", async () => {
+    const options = createOptions({
+      skills: [
+        {
+          name: "pair   review",
+          path: "/Users/me/.codex/skills/pair-review/SKILL.md",
+        },
+      ],
+    });
+    const { result } = renderHook(() => useThreadMessaging(options));
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "run $   then $pair review now",
+        [],
+      );
+    });
+
+    expect(sendUserMessageService).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "run $   then $pair review now",
+      expect.objectContaining({
+        skillMentions: [
+          {
+            name: "pair   review",
+            path: "/Users/me/.codex/skills/pair-review/SKILL.md",
+          },
+        ],
+      }),
+    );
+  });
+
   it("supports windows absolute skill paths and ignores unmatched markers", async () => {
     const options = createOptions({
       skills: [
@@ -1950,6 +2005,28 @@ describe("useThreadMessaging branch coverage", () => {
     );
   });
 
+  it("startStatus shows collaboration off when collaboration settings are not an object", async () => {
+    const dispatch = vi.fn();
+    const options = createOptions({
+      dispatch,
+      collaborationMode: {
+        settings: ["invalid-collab-settings"],
+      } as unknown as NonNullable<HookOptions["collaborationMode"]>,
+    });
+    const { result } = renderHook(() => useThreadMessaging(options));
+
+    await act(async () => {
+      await result.current.startStatus("/status");
+    });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "addAssistantMessage",
+        text: expect.stringContaining("Collaboration: off"),
+      }),
+    );
+  });
+
   it("startMcp covers null guards and string auth/tool-none formatting", async () => {
     const noWorkspaceOptions = createOptions({ activeWorkspace: null });
     const { result: noWorkspaceResult } = renderHook(() => useThreadMessaging(noWorkspaceOptions));
@@ -2119,6 +2196,150 @@ describe("useThreadMessaging branch coverage", () => {
     expect(pushThreadErrorMessage).toHaveBeenCalledWith("thread-1", "expand failed");
     expect(safeMessageActivity).toHaveBeenCalledTimes(1);
     expect(sendUserMessageService).not.toHaveBeenCalled();
+  });
+
+  it("retries steer when thrown mismatch reports a quoted retry turn id", async () => {
+    vi.mocked(steerTurnService)
+      .mockRejectedValueOnce(
+        new Error("expected active turn id turn-1 but found `turn-9`"),
+      )
+      .mockResolvedValueOnce({
+        result: { turnId: "turn-9" },
+      } as Awaited<ReturnType<typeof steerTurnService>>);
+    const setActiveTurnId = vi.fn();
+    const options = createOptions({
+      steerEnabled: true,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          isReviewing: false,
+          hasUnread: false,
+          phase: "starting",
+          processingStartedAt: 0,
+          lastDurationMs: null,
+        },
+      },
+      activeTurnIdByThread: {
+        "thread-1": "turn-1",
+      },
+      setActiveTurnId,
+    });
+    const { result } = renderHook(() => useThreadMessaging(options));
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(workspace, "thread-1", "steer drift", []);
+    });
+
+    expect(steerTurnService).toHaveBeenCalledTimes(2);
+    expect(steerTurnService).toHaveBeenNthCalledWith(
+      2,
+      "ws-1",
+      "thread-1",
+      "turn-9",
+      "steer drift",
+      [],
+      undefined,
+      [],
+    );
+    expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", "turn-9");
+  });
+
+  it("falls back to start when steer rpc mismatch does not provide a retry id", async () => {
+    vi.mocked(steerTurnService).mockResolvedValueOnce({
+      error: { message: "expected active turn id turn-1 but found ''" },
+    } as Awaited<ReturnType<typeof steerTurnService>>);
+    const options = createOptions({
+      steerEnabled: true,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          isReviewing: false,
+          hasUnread: false,
+          phase: "starting",
+          processingStartedAt: 0,
+          lastDurationMs: null,
+        },
+      },
+      activeTurnIdByThread: {
+        "thread-1": "turn-1",
+      },
+    });
+    const { result } = renderHook(() => useThreadMessaging(options));
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(workspace, "thread-1", "fallback", []);
+    });
+
+    expect(steerTurnService).toHaveBeenCalledTimes(1);
+    expect(sendUserMessageService).toHaveBeenCalledTimes(1);
+  });
+
+  it("startReview reports thrown non-Error failures and resets review state", async () => {
+    vi.mocked(startReviewService).mockRejectedValueOnce("review crashed");
+    const markProcessing = vi.fn();
+    const markReviewing = vi.fn();
+    const pushThreadErrorMessage = vi.fn();
+    const safeMessageActivity = vi.fn();
+    const options = createOptions({
+      markProcessing,
+      markReviewing,
+      pushThreadErrorMessage,
+      safeMessageActivity,
+    });
+    const { result } = renderHook(() => useThreadMessaging(options));
+
+    await act(async () => {
+      await result.current.startReview("/review branch:main");
+    });
+
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", false);
+    expect(markReviewing).toHaveBeenCalledWith("thread-1", false);
+    expect(pushThreadErrorMessage).toHaveBeenCalledWith("thread-1", "review crashed");
+    expect(safeMessageActivity).toHaveBeenCalled();
+  });
+
+  it("startMcp normalizes non-array data payloads to empty state", async () => {
+    vi.mocked(listMcpServerStatusService).mockResolvedValueOnce({
+      result: {
+        data: { invalid: true },
+      },
+    } as Awaited<ReturnType<typeof listMcpServerStatusService>>);
+    const dispatch = vi.fn();
+    const { result } = renderHook(() => useThreadMessaging(createOptions({ dispatch })));
+
+    await act(async () => {
+      await result.current.startMcp("/mcp");
+    });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "addAssistantMessage",
+        text: expect.stringContaining("No MCP servers configured."),
+      }),
+    );
+  });
+
+  it("startApps parses fallback name/id and camelCase accessibility fields", async () => {
+    vi.mocked(getAppsListService).mockResolvedValueOnce({
+      result: {
+        data: [
+          {
+            isAccessible: true,
+            description: 42,
+          },
+        ],
+      },
+    } as Awaited<ReturnType<typeof getAppsListService>>);
+    const dispatch = vi.fn();
+    const { result } = renderHook(() => useThreadMessaging(createOptions({ dispatch })));
+
+    await act(async () => {
+      await result.current.startApps("/apps");
+    });
+
+    const payload = dispatch.mock.calls[0]?.[0] as { text?: string } | undefined;
+    const text = payload?.text ?? "";
+    expect(text).toContain("- unknown — connected");
   });
 
   it("handles turn/start Error throws and surfaces the error message", async () => {

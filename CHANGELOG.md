@@ -12,6 +12,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 - Improved responsive layout behavior across desktop/tablet views, including sidebar interactions and panel resizing flows.
+- Expanded `threads` branch-coverage tests across reducer, messaging, actions, queue handling, and args profile parsing to harden guard/no-op/error paths.
+- Evidence: `.runtime-cache/test_output/coverage-gate/latest.json`.
+- Evidence code paths: `src/features/threads/hooks/useThreadsReducer.test.ts`, `src/features/threads/hooks/useThreadMessaging.test.tsx`, `src/features/threads/hooks/useThreadActions.test.tsx`, `src/features/threads/hooks/useQueuedSend.test.tsx`, `src/features/threads/hooks/useThreads.test.tsx`, `src/features/threads/utils/codexArgsProfiles.test.ts`.
 - Updated related frontend tests and style rules to keep layout, settings, and thread/profile surfaces aligned with new UI behavior.
 - Evidence: `.runtime-cache/test_output/live-preflight/latest.json` and `.runtime-cache/test_output/real-llm/latest.json` were used during local gate verification for this update.
 - Evidence code paths: `src/App.tsx`, `src/features/layout/hooks/useResizablePanels.ts`, `src/features/settings/components/SettingsView.tsx`.
