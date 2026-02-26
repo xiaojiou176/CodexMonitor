@@ -24,11 +24,12 @@ Date: 2026-02-26
 - `mutation-js` stability update: set `vitest.related=false` in `scripts/mutation-stryker.config.mjs` to avoid sandbox path resolution crashes during Stryker dry-run.
 - `security-scans`: kept high-severity blocking while changing audit scope to runtime dependencies with `npm audit --omit=dev --audit-level=high`.
 - `security-scans` follow-up: configured Cargo audit action working directory to `src-tauri` so it resolves the repository lockfile correctly.
+- `security-scans` dependency remediation: upgraded Rust lockfile entries to patched versions (`bytes 1.11.1`, `time 0.3.47`, `time-macros 0.2.27`) to clear current RustSec critical findings.
 - `workflow-hygiene`: fixed `shellcheck` SC2086 in `.github/workflows/release.yml` by quoting the DMG output path containing `${VERSION}`.
 - `pre-commit` follow-up: added Node setup + `npm ci` before `pre-commit run --all-files` so `stylelint-uiux` hooks can resolve `stylelint`.
 - `test-tauri` follow-up: replaced Windows-incompatible bash heartbeat loop with a PowerShell heartbeat implementation for the matrix Windows leg.
 - Evidence artifacts: `.runtime-cache/test_output/ci-fixes/npm-install.log`, `.runtime-cache/test_output/ci-fixes/test-mutation-gate-dry-run.log`, `.runtime-cache/test_output/ci-fixes/mutation-target-precheck.log`, `.runtime-cache/test_output/ci-fixes/mutation-target-files.txt`, `.runtime-cache/test_output/ci-fixes/test-assertions-guard.log`, `.runtime-cache/test_output/ci-fixes/env-rationalize-check.log`, `.runtime-cache/test_output/ci-fixes/typecheck.log`, `.runtime-cache/test_output/ci-fixes/actionlint-ci.log`.
-- Evidence code paths: `package.json`, `package-lock.json`, `scripts/mutation-gate.mjs`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
+- Evidence code paths: `package.json`, `package-lock.json`, `src-tauri/Cargo.lock`, `scripts/mutation-gate.mjs`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
 
 ## Env Variant Files
 
