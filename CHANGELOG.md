@@ -25,6 +25,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Refreshed project documentation and audit artifacts to align roadmap notes, site metadata, and UI/UX audit snapshots with current repository state.
 - Synced guidance docs (`CLAUDE.md`, upstream plan notes, and docs pages) to reduce drift between process rules and implementation reality.
 - Updated `repo-overview` scaffolding metadata/assets and local workspace extension recommendations for consistent contributor bootstrap behavior.
+- Aligned codex args fallback-label test expectations with the current truncation policy used by badge/option labels.
+- Evidence: `.runtime-cache/test_output/live-preflight/latest.json` and `.runtime-cache/test_output/real-llm/latest.json`.
+- Evidence code paths: `src/features/threads/utils/codexArgsProfiles.ts`, `src/features/threads/utils/codexArgsProfiles.test.ts`.
 
 ### Deprecated
 - None
