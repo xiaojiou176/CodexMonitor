@@ -4,55 +4,41 @@ Generated: 2026-02-26
 
 ## Executive Summary
 
-1. Repo-wide broad env scan identifies `182` env-like keys (runtime + shell + OS + CI + release + test).
-2. Strict governance-scope unique key count is `72`; product/runtime-focused keys remain a smaller subset (`18` by prefix scan).
-3. `.env.example` is now governed by `config/env.schema.json` and validated by `scripts/env-doctor.mjs`.
-4. Pre-commit and pre-push orchestrators now run env governance checks to prevent config drift.
-5. Gemini is the default live LLM path; OpenAI/Anthropic env keys are treated as deprecated and blocked by `env-doctor`.
+1. Current env governance status must be read from:
+   - `npm run env:rationalize:check`
+   - `docs/reference/env-final-report.md`
+2. This report records governance conclusions and policy framing, not standalone current numeric totals.
+3. Gemini remains the default live LLM route; deprecated key handling is enforced by checker + final report outputs.
 
-## Inventory Snapshot
+## Four-Tier Classification (Current Policy)
 
-- Full scan artifact: `.runtime-cache/env_audit_latest.json`
-- Broad discovered keys: `182`
-- Strict governance keys: `72`
-- In `.env.example`: `10`
-- `.env*` variants discovered: `4` (`.env`, `.env.example`, `.env.local`, `.testflight.local.env.example`)
-- In local `.env` (machine-local): `5` at scan time
-- In local `.env.local` (machine-local): `5` at scan time
-- In `.testflight.local.env.example`: `11`
+| Tier | Definition | Typical Examples (Descriptive) | Allowed Location |
+| --- | --- | --- | --- |
+| Required | 必需项。缺失会导致对应模式不可运行。 | Dev 端口类、Live 主模型连接类 | `.env.example`（模板）+ 本地/CI/运行环境 |
+| Optional | 可选项。缺失不阻断核心流程。 | 遥测、覆盖范围扩展、可选覆盖配置 | `.env.example`（可空模板）+ 本地/CI/运行环境 |
+| Release-only | 发布链路专用。 | 签名/提审/分发相关配置 | 发布模板 + CI secrets/vars |
+| Platform-only | 平台或基础设施专用。 | 平台 token、运行时注入变量、系统级配置 | CI/CD secrets/vars 或系统环境变量 |
 
-## Required vs Optional (Local Runtime)
+## Current-State Canonical References
 
-Required in dev:
-- `TAURI_DEV_PORT`
-- `TAURI_DEV_HMR_PORT`
-- `PLAYWRIGHT_WEB_PORT`
+- Checker gate: `npm run env:rationalize:check`
+- Final current report: `docs/reference/env-final-report.md`
+- Supporting schema and validators:
+  - `config/env.schema.json`
+  - `scripts/env-rationalize.mjs`
+  - `scripts/env-doctor.mjs`
 
-Required in live:
-- `GEMINI_API_KEY`
-- `REAL_LLM_BASE_URL`
-- `REAL_LLM_MODEL`
-- `REAL_LLM_TIMEOUT_MS`
+## Historical Record
 
-Optional:
-- `VITE_SENTRY_DSN`
-- `TAURI_DEV_HOST`
-- `PLAYWRIGHT_BASE_URL`
-- `REAL_EXTERNAL_URL`
-
-Deprecated/blocked:
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-
-Deprecated keys (blocked):
-- `REAL_LLM_API_KEY`
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
+- historical: this report previously included point-in-time numeric inventory snapshots.
+- historical: those snapshots are preserved only as historical context and are no longer authoritative for current counts.
 
 ## Evidence Paths
 
+- Final report: `docs/reference/env-final-report.md`
 - Env schema: `config/env.schema.json`
 - Env doctor: `scripts/env-doctor.mjs`
+- Env rationalize checker: `scripts/env-rationalize.mjs`
 - Pre-commit orchestration: `scripts/precommit-orchestrated.mjs`
 - Preflight orchestration: `scripts/preflight-orchestrated.mjs`
-- Env matrix: `docs/reference/env-matrix.md`
+- Policy matrix: `docs/reference/env-matrix.md`

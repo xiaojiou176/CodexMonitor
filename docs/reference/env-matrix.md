@@ -4,68 +4,40 @@ Last updated: 2026-02-26
 
 ## Scope
 
-This matrix defines the canonical env governance model for this repo:
+This matrix defines the canonical env governance model for this repo.
 
-- Schema source of truth: `config/env.schema.json`
-- Validation gate: `scripts/env-doctor.mjs`
-- Runtime preflight: `scripts/real-llm-smoke.mjs`
+Current single source of truth for counts and current-state inventory:
+- `npm run env:rationalize:check`
+- `docs/reference/env-final-report.md`
 
-## High-Level Inventory
+This document is policy-focused and intentionally does not publish standalone current numeric totals.
 
-- `canonical_count`: `11` (from `config/env.schema.json` canonical variables).
-- `runtime_usage_count`: `12` (runtime-prefixed keys actually read by code paths scanned by `scripts/env-rationalize.mjs`).
-- `broad_env_like_count`: `183` (broad env-like keys across code reads + `.env*` variants + shell/workflow env-style keys).
-- Keys currently templated in `.env.example`: `5`.
-- `.env*` variant files discovered: `4` (`.env`, `.env.example`, `.env.local`, `.testflight.local.env.example`).
-- Keys currently present in local `.env` / `.env.local`: local-machine dependent and intentionally untracked.
+## Four-Tier Ownership (Current Policy)
 
-## Four-Tier Ownership
-
-| Tier | Scope | Allowed Location | Current Keys |
-| --- | --- | --- | --- |
-| Required | 本地开发必须项 | `.env.example` + `.env/.env.local` | `TAURI_DEV_PORT`, `TAURI_DEV_HMR_PORT`, `PLAYWRIGHT_WEB_PORT` |
-| Optional | 本地开发可选项 | `.env.example`（空值模板）+ `.env/.env.local` | `VITE_SENTRY_DSN`, `TAURI_DEV_HOST` |
-| Release-only | 发布流程专用 | `.testflight.local.env.example` + CI secrets/vars | `APP_ID`, `BUNDLE_ID`, `BETA_*`, `REVIEW_*`, `FEEDBACK_EMAIL`, `LOCALE` |
-| Platform-only | 平台/运行环境专用 | CI/CD secrets/vars 或系统环境变量（不进 `.env.example`） | `GEMINI_API_KEY`, `REAL_LLM_BASE_URL`, `REAL_LLM_MODEL`, `REAL_LLM_TIMEOUT_MS`, `REAL_EXTERNAL_URL`, `CODEX_*`, `TAURI_SIGNING_*` |
-
-## Canonical Local Runtime Keys
-
-| Key | Required | Sensitive | Mode | Notes |
-| --- | --- | --- | --- | --- |
-| `VITE_SENTRY_DSN` | No | No | dev/prod | Frontend telemetry DSN. |
-| `TAURI_DEV_HOST` | No | No | dev | Optional host override for remote device/browser testing. |
-| `TAURI_DEV_PORT` | Yes (dev) | No | dev | App dev server port. |
-| `TAURI_DEV_HMR_PORT` | Yes (dev) | No | dev | HMR port. |
-| `PLAYWRIGHT_WEB_PORT` | Yes (dev/live) | No | dev/live | Local E2E web port. |
-| `PLAYWRIGHT_BASE_URL` | No | No | dev/live | Optional base URL override. |
-| `REAL_EXTERNAL_URL` | No | No | live | Optional real external browser target. |
-| `GEMINI_API_KEY` | Yes (live) | Yes | live | Primary Gemini key. |
-| `REAL_LLM_BASE_URL` | Yes (live) | No | live | Gemini OpenAI-compatible base. |
-| `REAL_LLM_MODEL` | Yes (live) | No | live | Recommended: `gemini-3.1-pro-preview`. |
-| `REAL_LLM_TIMEOUT_MS` | Yes (live) | No | live | Positive integer timeout in ms. |
-
-## Deprecated Keys (Blocked)
-
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-
-If these are set, `env-doctor` fails.
+| Tier | Definition | Allowed Location |
+| --- | --- | --- |
+| Required | 必需项。缺失会导致对应流程无法运行（按运行模式判定 dev/live/release）。 | `.env.example`（模板占位）+ 本地环境（`.env`/`.env.local`）或 CI/运行环境 |
+| Optional | 可选项。缺失不阻断主流程，但会影响增强能力或覆盖范围。 | `.env.example`（可空模板）+ 本地环境或 CI/运行环境 |
+| Release-only | 发布专用项。仅在签名、分发、提审、发布流水线中生效。 | 发布模板文件（如 `.testflight.local.env.example`）+ CI secrets/vars |
+| Platform-only | 平台专用项。仅在平台/基础设施/运行时注入，不作为通用本地模板要求。 | CI/CD secrets/vars 或系统环境变量 |
 
 ## Governance Rules
 
 1. `.env.example` is template-safe only (no real secrets).
-2. Real keys only come from `.env`, `.env.local`, or terminal process environment.
-3. Live mode requires `GEMINI_API_KEY` plus valid URLs.
-4. `REAL_LLM_API_KEY` is deprecated and hard-failed by `env-doctor`.
-5. Pre-commit and pre-push run `env-doctor` to block drift and invalid env config.
-6. `scripts/real-llm-smoke.mjs` only accepts `GEMINI_API_KEY` for live LLM smoke.
-7. `env:rationalize:check` now fails when `.env.example` contains keys not directly read by code paths.
-8. `check:real-llm-alias-usage` blocks deprecated alias references outside `docs/*` and `config/env.schema.json`.
-9. `preflight:doc-drift` enforces strong binding: env-sensitive file changes must include env governance docs updates.
+2. Real keys only come from local runtime env (`.env`/`.env.local`) or process environment/CI secrets.
+3. Current-state counts and inventory decisions must be read from `npm run env:rationalize:check` and `docs/reference/env-final-report.md`.
+4. Deprecated or blocked keys are governed by checker output and final report, not by duplicated local-number snapshots in this file.
+5. Any historical number, if retained for context, must be marked explicitly as `historical`.
+
+## Historical Notes
+
+- historical: this file previously contained point-in-time standalone counts and local snapshots.
+- historical: those numeric snapshots are retired to avoid drift and conflicting "current" interpretations.
 
 ## Commands
 
 ```bash
+npm run env:rationalize:check
 npm run env:doctor
 npm run env:doctor:dev
 npm run env:doctor:live
@@ -74,9 +46,7 @@ npm run env:doctor:staged
 
 ## Evidence
 
+- Current-state canonical report: `docs/reference/env-final-report.md`
 - Runtime artifacts:
   - `.runtime-cache/test_output/real-llm/latest.json`
   - `.runtime-cache/test_output/live-preflight/latest.json`
-- Changed code references:
-  - `scripts/preflight-doc-drift.mjs`
-  - `scripts/check-real-llm-alias-usage.mjs`

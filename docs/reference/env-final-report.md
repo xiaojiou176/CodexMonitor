@@ -17,7 +17,11 @@ Date: 2026-02-26
 - `.env.local` (5 keys)
 - `.testflight.local.env.example` (11 keys)
 
-## Keep / Migrate / Remove
+## Full Key Inventory (Requirement #1)
+
+Complete inventory is listed in this file under `## Full Key Inventory` (183 keys, same-day generated state, no historical merge).
+
+## Keep / Migrate / Remove (Requirement #2)
 
 ### Keep (canonical schema)
 - `GEMINI_API_KEY`
@@ -44,20 +48,63 @@ Date: 2026-02-26
 - `OPENAI_API_KEY`
 - `REAL_LLM_API_KEY`
 
-## Alias Retirement Evidence
+## Unique Source List (Requirement #3)
+
+Requested unique-source categories:
+
+| Source | Count | Keys |
+| --- | ---: | --- |
+| `.env` | 5 | `PLAYWRIGHT_WEB_PORT`, `TAURI_DEV_HMR_PORT`, `TAURI_DEV_HOST`, `TAURI_DEV_PORT`, `VITE_SENTRY_DSN` |
+| `CI secrets` | 11 | `APPLE_API_ISSUER_ID`, `APPLE_API_KEY_ID`, `APPLE_API_PRIVATE_KEY_B64`, `APPLE_CERTIFICATE_P12`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID`, `CODESIGN_IDENTITY`, `GITHUB_TOKEN`, `NOTARY_PROFILE_NAME`, `TAURI_SIGNING_PRIVATE_KEY_B64`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` |
+| `release template` | 11 | `APP_ID`, `BETA_DESCRIPTION`, `BETA_GROUP_NAME`, `BUNDLE_ID`, `FEEDBACK_EMAIL`, `LOCALE`, `REVIEW_CONTACT_EMAIL`, `REVIEW_CONTACT_PHONE`, `REVIEW_FIRST_NAME`, `REVIEW_LAST_NAME`, `REVIEW_NOTES` |
+
+Note: Inventory also includes `code/script internal` (152 keys) and `mixed(.env,CI secrets)` (5 keys), retained in the full table for audit completeness.
+
+## Mixed-Source Keys Hard List (Requirement #4)
+
+| Key | Current Source | Remediation Status | Final Governance |
+| --- | --- | --- | --- |
+| `GEMINI_API_KEY` | mixed(.env,CI secrets) | ✅ 已整改：从 `.env.example` 迁出 | Local `.env/.env.local` for dev-live, CI secret for pipeline live |
+| `REAL_EXTERNAL_URL` | mixed(.env,CI secrets) | ✅ 已整改：从 `.env.example` 迁出 | Local `.env/.env.local` for local external testing, CI secret/var for CI live |
+| `REAL_LLM_BASE_URL` | mixed(.env,CI secrets) | ✅ 已整改：从 `.env.example` 迁出 | Local `.env/.env.local` or CI secret/var |
+| `REAL_LLM_MODEL` | mixed(.env,CI secrets) | ✅ 已整改：从 `.env.example` 迁出 | Local `.env/.env.local` or CI secret/var |
+| `REAL_LLM_TIMEOUT_MS` | mixed(.env,CI secrets) | ✅ 已整改：从 `.env.example` 迁出 | Local `.env/.env.local` or CI secret/var |
+
+## Alias Retirement Evidence (Requirement #5)
 
 - Deprecated list contains alias: `config/env.schema.json`
+- Deprecated aliases in schema: `REAL_LLM_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 - Alias gate command: `npm run check:real-llm-alias-usage`
+- Alias gate policy source: `scripts/check-real-llm-alias-usage.mjs`
 - Phase-3 gate hardening commit: `189cd176`
 
-## Gate Pass Evidence (latest)
+## Gate Pass Log Summary (Requirement #6)
+
+Latest execution summary is documented in this section after running:
 
 - `npm run check:real-llm-alias-usage`
 - `npm run env:rationalize:check`
 - `npm run preflight:doc-drift`
 - `npm run precommit:orchestrated`
 
-## Before vs After
+### Result Snapshot
+
+| Command | Status | Key Log |
+| --- | --- | --- |
+| `npm run check:real-llm-alias-usage` | ✅ passed | `[env-alias-usage] passed.` |
+| `npm run env:rationalize:check` | ✅ passed | `unknown runtime keys=0`, `template_unread_keys=0`, `[env-rationalize] passed.` |
+| `npm run preflight:doc-drift` | ✅ passed | `[doc-drift] No staged changes. Skipping.` |
+| `npm run precommit:orchestrated` | ✅ passed | `[precommit] All gates passed.` |
+
+## Phase 3 Gate Hardening (Current)
+
+- `check-real-llm-alias-usage` now blocks all keys listed in `config/env.schema.json -> deprecatedKeys` outside controlled allowlist paths.
+- `preflight-doc-drift` now requires this file (`docs/reference/env-final-report.md`) to be changed whenever env/workflow-sensitive files change.
+- `env:rationalize:check` remains dual-blocking:
+  - block unknown runtime-prefixed keys (not in schema/allowlist)
+  - block `.env.example` keys that are not directly read in code
+
+## Before vs After Variable Count Comparison (Requirement #7)
 
 | Metric | Before | After |
 | --- | ---: | ---: |
@@ -65,6 +112,8 @@ Date: 2026-02-26
 | canonical_count | 12 | 11 |
 | runtime_usage_count | n/a | 12 |
 | broad_env_like_count | 182 (historical) | 183 |
+| mixed-source keys | 5 | 5 (all moved out of `.env.example`) |
+| deprecated aliases in active runtime paths | unknown | 0 (enforced by gate) |
 
 ASCII Trend:
 

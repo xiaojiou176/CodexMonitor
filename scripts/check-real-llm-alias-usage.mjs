@@ -16,7 +16,7 @@ const ALLOWED_PATH_PATTERNS = [
 function loadAliasKeys() {
   const schema = JSON.parse(readFileSync(SCHEMA_PATH, "utf8"));
   const deprecatedKeys = Array.isArray(schema.deprecatedKeys) ? schema.deprecatedKeys : [];
-  return deprecatedKeys.filter((key) => key === "REAL_LLM_API_KEY");
+  return [...new Set(deprecatedKeys.filter((key) => typeof key === "string" && key.trim() !== ""))];
 }
 
 function runRg(aliasKey) {
