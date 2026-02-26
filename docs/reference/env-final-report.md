@@ -26,6 +26,7 @@ Date: 2026-02-26
 - `security-scans` follow-up: configured Cargo audit action working directory to `src-tauri` so it resolves the repository lockfile correctly.
 - `security-scans` dependency remediation: upgraded Rust lockfile entries to patched versions (`bytes 1.11.1`, `time 0.3.47`, `time-macros 0.2.27`) to clear current RustSec critical findings.
 - `lint-backend` stabilization: changed CI clippy gate from global `-D warnings` to targeted hard blockers (`dbg_macro`, `todo`) so legacy style debt no longer blocks CI while debug/todo leftovers still fail fast.
+- `lint-backend` tauri context fix: added a `dist` placeholder creation step in CI so `tauri::generate_context!()` no longer panics when frontend artifacts are absent in lint-only jobs.
 - `workflow-hygiene`: fixed `shellcheck` SC2086 in `.github/workflows/release.yml` by quoting the DMG output path containing `${VERSION}`.
 - `pre-commit` follow-up: added Node setup + `npm ci` before `pre-commit run --all-files` so `stylelint-uiux` hooks can resolve `stylelint`.
 - `test-tauri` follow-up: replaced Windows-incompatible bash heartbeat loop with a PowerShell heartbeat implementation for the matrix Windows leg.

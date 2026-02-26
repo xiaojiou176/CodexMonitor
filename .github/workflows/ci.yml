@@ -106,6 +106,8 @@ jobs:
             librsvg2-dev \
             libasound2-dev \
             pkg-config
+      - name: Prepare frontend dist placeholder
+        run: mkdir -p dist
       - name: Cargo lint (clippy)
         run: cargo clippy --all-targets --all-features -- -D clippy::dbg_macro -D clippy::todo
         working-directory: src-tauri
