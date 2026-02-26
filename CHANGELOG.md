@@ -22,6 +22,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Regenerated Tauri Apple/Android project artifacts and capability payloads to keep platform metadata synchronized with current app state.
 - Updated iOS device build helper and generated bindings/project descriptors under `src-tauri/gen/apple` for consistent local/device build behavior.
 - Evidence code paths: `src-tauri/capabilities/default.json`, `src-tauri/gen/apple/codex-monitor.xcodeproj/project.pbxproj`, `scripts/build_run_ios_device.sh`.
+- Refreshed project documentation and audit artifacts to align roadmap notes, site metadata, and UI/UX audit snapshots with current repository state.
+- Synced guidance docs (`CLAUDE.md`, upstream plan notes, and docs pages) to reduce drift between process rules and implementation reality.
 
 ### Deprecated
 - None

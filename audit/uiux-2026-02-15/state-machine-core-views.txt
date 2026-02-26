@@ -129,4 +129,3 @@
 85:            {loading ? "正在加载 MCP 服务状态…" : "当前工作区暂无 MCP 服务"}
 100:              {server.error ? (
 101:                <div className="mcp-panel-item-error">{server.error}</div>
-

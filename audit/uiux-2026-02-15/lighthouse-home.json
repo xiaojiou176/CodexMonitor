@@ -55,7 +55,7 @@
       "scoreDisplayMode": "numeric",
       "numericValue": 906.5708999999999,
       "numericUnit": "millisecond",
-      "displayValue": "0.9 s",
+      "displayValue": "0.9\u00a0s",
       "scoringOptions": {
         "p10": 1800,
         "median": 3000
@@ -69,7 +69,7 @@
       "scoreDisplayMode": "numeric",
       "numericValue": 3306.5708999999997,
       "numericUnit": "millisecond",
-      "displayValue": "3.3 s",
+      "displayValue": "3.3\u00a0s",
       "scoringOptions": {
         "p10": 2500,
         "median": 4000
@@ -83,7 +83,7 @@
       "scoreDisplayMode": "numeric",
       "numericValue": 906.5708999999999,
       "numericUnit": "millisecond",
-      "displayValue": "0.9 s",
+      "displayValue": "0.9\u00a0s",
       "scoringOptions": {
         "p10": 3387,
         "median": 5800
@@ -163,7 +163,7 @@
       "scoreDisplayMode": "numeric",
       "numericValue": 20,
       "numericUnit": "millisecond",
-      "displayValue": "20 ms",
+      "displayValue": "20\u00a0ms",
       "scoringOptions": {
         "p10": 200,
         "median": 600
@@ -177,7 +177,7 @@
       "scoreDisplayMode": "numeric",
       "numericValue": 70,
       "numericUnit": "millisecond",
-      "displayValue": "70 ms"
+      "displayValue": "70\u00a0ms"
     },
     "cumulative-layout-shift": {
       "id": "cumulative-layout-shift",
@@ -237,7 +237,7 @@
       "scoreDisplayMode": "metricSavings",
       "numericValue": 2,
       "numericUnit": "millisecond",
-      "displayValue": "Root document took 0 ms",
+      "displayValue": "Root document took 0\u00a0ms",
       "metricSavings": {
         "FCP": 0,
         "LCP": 0
@@ -274,7 +274,7 @@
       "scoreDisplayMode": "numeric",
       "numericValue": 3376.5708999999997,
       "numericUnit": "millisecond",
-      "displayValue": "3.4 s"
+      "displayValue": "3.4\u00a0s"
     },
     "user-timings": {
       "id": "user-timings",
@@ -458,7 +458,7 @@
       "scoreDisplayMode": "metricSavings",
       "numericValue": 10924.984000001321,
       "numericUnit": "millisecond",
-      "displayValue": "10.9 s",
+      "displayValue": "10.9\u00a0s",
       "metricSavings": {
         "TBT": 0
       },
@@ -528,7 +528,7 @@
       "scoreDisplayMode": "metricSavings",
       "numericValue": 9910.288000000914,
       "numericUnit": "millisecond",
-      "displayValue": "9.9 s",
+      "displayValue": "9.9\u00a0s",
       "metricSavings": {
         "TBT": 0
       },
@@ -795,7 +795,7 @@
       "scoreDisplayMode": "informative",
       "numericValue": 63.708,
       "numericUnit": "millisecond",
-      "displayValue": "60 ms",
+      "displayValue": "60\u00a0ms",
       "details": {
         "type": "table",
         "headings": [
@@ -834,7 +834,7 @@
       "scoreDisplayMode": "informative",
       "numericValue": 26.058999999999997,
       "numericUnit": "millisecond",
-      "displayValue": "30 ms",
+      "displayValue": "30\u00a0ms",
       "details": {
         "type": "table",
         "headings": [
@@ -2014,7 +2014,7 @@
     "input-button-name": {
       "id": "input-button-name",
       "title": "Input buttons have discernible text.",
-      "description": "Adding discernable and accessible text to input buttons may help screen reader users understand the purpose of the input button. [Learn more about input buttons](https://dequeuniversity.com/rules/axe/4.11/input-button-name).",
+      "description": "Adding discernible and accessible text to input buttons may help screen reader users understand the purpose of the input button. [Learn more about input buttons](https://dequeuniversity.com/rules/axe/4.11/input-button-name).",
       "score": null,
       "scoreDisplayMode": "notApplicable"
     },
@@ -2340,7 +2340,7 @@
       "scoreDisplayMode": "metricSavings",
       "numericValue": 461605,
       "numericUnit": "byte",
-      "displayValue": "Total size was 451 KiB",
+      "displayValue": "Total size was 451\u00a0KiB",
       "details": {
         "type": "table",
         "headings": [
@@ -2456,7 +2456,7 @@
       "scoreDisplayMode": "metricSavings",
       "numericValue": 150,
       "numericUnit": "millisecond",
-      "displayValue": "Est savings of 31 KiB",
+      "displayValue": "Est savings of 31\u00a0KiB",
       "metricSavings": {
         "FCP": 150,
         "LCP": 150
@@ -2511,7 +2511,7 @@
       "scoreDisplayMode": "metricSavings",
       "numericValue": 1350,
       "numericUnit": "millisecond",
-      "displayValue": "Est savings of 267 KiB",
+      "displayValue": "Est savings of 267\u00a0KiB",
       "metricSavings": {
         "FCP": 0,
         "LCP": 1350
@@ -2722,7 +2722,7 @@
     },
     "is-crawlable": {
       "id": "is-crawlable",
-      "title": "Page isn’t blocked from indexing",
+      "title": "Page isn\u2019t blocked from indexing",
       "description": "Search engines are unable to include your pages in search results if they don't have permission to crawl them. [Learn more about crawler directives](https://developer.chrome.com/docs/lighthouse/seo/is-crawlable/).",
       "score": 1,
       "scoreDisplayMode": "binary",
@@ -3128,7 +3128,7 @@
                 "height": 455
               },
               "snippet": "<div class=\"mobile-setup-wizard-body\">",
-              "nodeLabel": "Connection type\nTCP\nOrbit\nTailscale host\nRemote backend token\n连接并测试\nEnter your …"
+              "nodeLabel": "Connection type\nTCP\nOrbit\nTailscale host\nRemote backend token\n\u8fde\u63a5\u5e76\u6d4b\u8bd5\nEnter your \u2026"
             },
             "value": {
               "type": "numeric",
@@ -3357,7 +3357,7 @@
               "height": 63
             },
             "snippet": "<p class=\"mobile-setup-wizard-subtitle\">",
-            "nodeLabel": "Complete this setup before using the app. Use the same connection details confi…"
+            "nodeLabel": "Complete this setup before using the app. Use the same connection details confi\u2026"
           }
         ]
       },
@@ -3523,7 +3523,7 @@
       "description": "Requests are blocking the page's initial render, which may delay LCP. [Deferring or inlining](https://developer.chrome.com/docs/performance/insights/render-blocking) can move these network requests out of the critical path.",
       "score": 0,
       "scoreDisplayMode": "metricSavings",
-      "displayValue": "Est savings of 290 ms",
+      "displayValue": "Est savings of 290\u00a0ms",
       "metricSavings": {
         "FCP": 300,
         "LCP": 300
@@ -3618,7 +3618,7 @@
     "viewport-insight": {
       "id": "viewport-insight",
       "title": "Optimize viewport for mobile",
-      "description": "Tap interactions may be [delayed by up to 300 ms](https://developer.chrome.com/docs/performance/insights/viewport) if the viewport is not optimized for mobile.",
+      "description": "Tap interactions may be [delayed by up to 300\u00a0ms](https://developer.chrome.com/docs/performance/insights/viewport) if the viewport is not optimized for mobile.",
       "score": 1,
       "scoreDisplayMode": "numeric",
       "metricSavings": {
@@ -4568,11 +4568,11 @@
     },
     "seo-mobile": {
       "title": "Mobile Friendly",
-      "description": "Make sure your pages are mobile friendly so users don’t have to pinch or zoom in order to read the content pages. [Learn how to make pages mobile-friendly](https://developers.google.com/search/mobile-sites/)."
+      "description": "Make sure your pages are mobile friendly so users don\u2019t have to pinch or zoom in order to read the content pages. [Learn how to make pages mobile-friendly](https://developers.google.com/search/mobile-sites/)."
     },
     "seo-content": {
       "title": "Content Best Practices",
-      "description": "Format your HTML in a way that enables crawlers to better understand your app’s content."
+      "description": "Format your HTML in a way that enables crawlers to better understand your app\u2019s content."
     },
     "seo-crawl": {
       "title": "Crawling and Indexing",

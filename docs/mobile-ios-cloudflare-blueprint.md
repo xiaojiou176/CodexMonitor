@@ -421,7 +421,7 @@ Notes:
 4. Run:
 
 ```bash
-npm run tauri ios dev -- <device-name-or-udid>
+npm run tauri ios dev -- <device-name-or-uuid>
 ```
 
 If network issues appear, ensure dev server listens on host interface and uses `TAURI_DEV_HOST` when set.

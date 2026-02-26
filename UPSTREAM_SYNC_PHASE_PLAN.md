@@ -373,4 +373,3 @@ git reset --hard <phase-start-sha>
 ## 9. 立即执行建议（下一步）
 
 从 `custom/main` 新开：`integration/phase1-workspace-thread-v3-20260223`，严格按 Phase1 白名单推进，并在首轮冲突处理后立即跑 `typecheck + cargo check`，先验证契约层闭环。
-
