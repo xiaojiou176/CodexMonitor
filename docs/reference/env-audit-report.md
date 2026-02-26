@@ -44,6 +44,7 @@ Deprecated/blocked:
 
 Deprecated alias (compatibility-only):
 - `REAL_LLM_API_KEY` (retirement target: 2026-06-01)
+- CI strict mode can enforce retirement immediately with `ENV_DOCTOR_STRICT_REAL_LLM_ALIAS=1`.
 
 ## Evidence Paths
 

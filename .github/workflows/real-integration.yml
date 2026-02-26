@@ -12,9 +12,10 @@ jobs:
   real-integrations:
     runs-on: ubuntu-latest
     env:
+      ENV_DOCTOR_STRICT_REAL_LLM_ALIAS: "1"
       REAL_EXTERNAL_URL: ${{ vars.REAL_EXTERNAL_URL != '' && vars.REAL_EXTERNAL_URL || secrets.REAL_EXTERNAL_URL }}
       REAL_LLM_BASE_URL: ${{ vars.REAL_LLM_BASE_URL != '' && vars.REAL_LLM_BASE_URL || secrets.REAL_LLM_BASE_URL }}
-      REAL_LLM_API_KEY: ${{ secrets.REAL_LLM_API_KEY }}
+      GEMINI_API_KEY: ${{ vars.GEMINI_API_KEY != '' && vars.GEMINI_API_KEY || secrets.GEMINI_API_KEY }}
       REAL_LLM_MODEL: ${{ vars.REAL_LLM_MODEL }}
       REAL_LLM_TIMEOUT_MS: ${{ vars.REAL_LLM_TIMEOUT_MS }}
     steps:
@@ -109,4 +110,4 @@ jobs:
       - name: Real LLM skip notice
         if: steps.preflight.outputs.run_llm != 'true'
         run: |
-          echo "::notice::REAL_LLM_BASE_URL/REAL_LLM_API_KEY missing, LLM smoke not executed."
+          echo "::notice::REAL_LLM_BASE_URL/GEMINI_API_KEY missing, LLM smoke not executed."
