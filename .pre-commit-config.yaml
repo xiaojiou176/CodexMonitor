@@ -149,6 +149,13 @@ repos:
       - id: shellcheck
         files: '\\.(sh|bash)$'
 
+  - repo: https://github.com/shssoichiro/oxipng
+    rev: v9.1.5
+    hooks:
+      - id: oxipng
+        files: '\\.png$'
+        stages: [pre-commit]
+
   - repo: https://github.com/hadolint/hadolint
     rev: v2.14.0
     hooks:
@@ -262,7 +269,7 @@ repos:
 
       - id: stylelint-uiux
         name: stylelint UI/UX static audit
-        entry: npm run lint:stylelint:uiux --
+        entry: npm run lint:stylelint:uiux -- --fix
         language: system
         pass_filenames: true
         files: '\.(css|scss)$'

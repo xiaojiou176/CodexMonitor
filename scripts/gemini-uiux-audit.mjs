@@ -219,12 +219,17 @@ async function main() {
   const apiKey = resolveApiKey(repoRoot);
   if (!apiKey) {
     jsonOut({
-      status: "error",
+      status: "skipped",
       stage: "pre-push",
+      severity: "warning",
       reason: "missing_gemini_api_key",
-      message: "GEMINI_API_KEY is required. Set it in environment variables or repository .env before push."
+      message:
+        "GEMINI_API_KEY is missing. Skipping Gemini UI/UX audit for this pre-push run. Set it in environment variables or repository .env to enable auditing.",
+      auditedFiles: 0,
+      findings: [],
+      errorCount: 0
     });
-    process.exit(1);
+    process.exit(0);
   }
 
   const incomingFiles = process.argv.slice(2);

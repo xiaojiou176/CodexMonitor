@@ -338,6 +338,10 @@ How pre-commit and Husky work together in this repo:
 
 - Husky is the default Git hook gateway for Node/Rust quality gates (`.husky/*` + `npm run precommit:orchestrated` / `npm run preflight:orchestrated`).
 - pre-commit is complementary and useful for full-repo/manual governance scans and optional CI alignment.
+- pre-commit now includes `oxipng` (lossless PNG optimization) and runs the local `stylelint-uiux` hook in autofix mode (`--fix`) during `pre-commit`.
+- Gemini UI/UX `pre-push` audit degrades to a warning-level `skipped` result when `GEMINI_API_KEY` is missing; with a key present, it still runs the full audit.
+- Hook/audit implementation references: `.pre-commit-config.yaml`, `scripts/gemini-uiux-audit.mjs`.
+- Example runtime evidence artifacts: `.runtime-cache/test_output/coverage-gate/latest.json`, `.runtime-cache/test_output/live-preflight/latest.json`.
 - Keep both green: use Husky for commit-time orchestration, and use `pre-commit run --all-files` for periodic full baseline checks.
 
 UI smoke gate command:
@@ -455,6 +459,7 @@ npm run test:real
 - App-server compatibility reference: `docs/app-server-events.md`
 - Configuration reference: `docs/reference/configuration.md`
 - Environment matrix reference: `docs/reference/env-matrix.md`
+- Environment final report: `docs/reference/env-final-report.md`
 - Logging/cache governance: `docs/reference/logging-cache-governance.md`
 - Dependency maintenance policy: `docs/reference/dependency-maintenance.md`
 - Upstream sync runbook: `docs/upstream-sync-runbook.md`
