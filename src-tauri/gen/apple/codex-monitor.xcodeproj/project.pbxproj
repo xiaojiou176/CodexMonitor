@@ -57,7 +57,7 @@
 		89ECCBBE0AEAE71653597A37 /* io.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = io.rs; sourceTree = "<group>"; };
 		8B631803A68708BDF5FC92AF /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		90D7D2BB5D2B32D2D5E7FC74 /* protocol.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = protocol.rs; sourceTree = "<group>"; };
-		914206053B7A8031967B3CAF /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
+		914206053B7A8031967B3CALF /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
 		920E0860F7C1C1530051CF92 /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
 		923D29D54D18EF1DF9330208 /* worktree.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = worktree.rs; sourceTree = "<group>"; };
 		94AD322F1E988800DBA78639 /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
@@ -81,7 +81,7 @@
 		C827A86FC4748C8C09E76FD7 /* utils.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = utils.rs; sourceTree = "<group>"; };
 		C87A6117F01777AC322C19B0 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		D05DC45BD60F3A9C1A3B0663 /* policy.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = policy.rs; sourceTree = "<group>"; };
-		D3469462193DAA7437CF3971 /* state.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = state.rs; sourceTree = "<group>"; };
+		D3469462193DATA7437CF3971 /* state.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = state.rs; sourceTree = "<group>"; };
 		D5066E0D8C3EBB3BF6522255 /* codex_core.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = codex_core.rs; sourceTree = "<group>"; };
 		D94AE32B1D64069E94AFEDC9 /* orbit_ws_transport.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = orbit_ws_transport.rs; sourceTree = "<group>"; };
 		DA6F8CA66C86156DDE024DBD /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -195,7 +195,7 @@
 			isa = PBXGroup;
 			children = (
 				C1762FE44CFF1462C18C502A /* core.rs */,
-				914206053B7A8031967B3CAF /* mod.rs */,
+				914206053B7A8031967B3CALF /* mod.rs */,
 			);
 			path = tailscale;
 			sourceTree = "<group>";
@@ -267,7 +267,7 @@
 				E2273D6B9B5220DA9D1A4274 /* notifications.rs */,
 				2966B8A4BD316FB016FEA54E /* prompts.rs */,
 				2EE9CACCF7CD2CF0BA7A20A5 /* rules.rs */,
-				D3469462193DAA7437CF3971 /* state.rs */,
+				D3469462193DATA7437CF3971 /* state.rs */,
 				0C5D9C058CAABA28654FB273 /* storage.rs */,
 				DDD4EC5921EB16AAA903CE5D /* terminal.rs */,
 				EBB0A4BF03AABE51602B846D /* types.rs */,

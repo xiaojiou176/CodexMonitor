@@ -4,8 +4,14 @@
     {
       "identifier": "desktop-default",
       "description": "Capability for desktop windows",
-      "windows": ["main"],
-      "platforms": ["macOS", "windows", "linux"],
+      "windows": [
+        "main"
+      ],
+      "platforms": [
+        "macOS",
+        "windows",
+        "linux"
+      ],
       "permissions": [
         "core:default",
         "core:webview:allow-set-webview-zoom",
@@ -23,8 +29,14 @@
     {
       "identifier": "desktop-about",
       "description": "Minimal capability for about window",
-      "windows": ["about"],
-      "platforms": ["macOS", "windows", "linux"],
+      "windows": [
+        "about"
+      ],
+      "platforms": [
+        "macOS",
+        "windows",
+        "linux"
+      ],
       "permissions": [
         "core:default",
         "core:webview:allow-set-webview-zoom",
@@ -34,8 +46,13 @@
     {
       "identifier": "mobile-default",
       "description": "Capability for mobile main window",
-      "windows": ["main"],
-      "platforms": ["iOS", "android"],
+      "windows": [
+        "main"
+      ],
+      "platforms": [
+        "iOS",
+        "android"
+      ],
       "permissions": [
         "core:default",
         "core:webview:allow-set-webview-zoom",

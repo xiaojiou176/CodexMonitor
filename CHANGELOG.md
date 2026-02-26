@@ -19,6 +19,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   - Trigger reason: fallback compatibility wording appears in staged code/comments and is intentionally retained for migration-safe behavior.
   - Rollback condition: if Gemini-only path is fully verified without compatibility fallback, remove compatibility wording/branching and re-run full gates.
   - Result diff: no model provider switch introduced in runtime behavior; this commit only updates UI/layout logic while preserving existing compatibility text.
+- Regenerated Tauri Apple/Android project artifacts and capability payloads to keep platform metadata synchronized with current app state.
+- Updated iOS device build helper and generated bindings/project descriptors under `src-tauri/gen/apple` for consistent local/device build behavior.
+- Evidence code paths: `src-tauri/capabilities/default.json`, `src-tauri/gen/apple/codex-monitor.xcodeproj/project.pbxproj`, `scripts/build_run_ios_device.sh`.
 
 ### Deprecated
 - None

@@ -22,7 +22,7 @@ and launches it using devicectl.
 
 Options:
   --device <id|name>   Required unless --list-devices is used.
-                       Accepts UDID, serial, UUID, or device name.
+                       Accepts UUID, serial, UUID, or device name.
   --target <target>    Tauri iOS target (default: aarch64)
   --bundle-id <id>     Bundle id to launch (default: com.dimillian.codexmonitor.ios)
   --team <id>          Apple development team ID (sets APPLE_DEVELOPMENT_TEAM)
