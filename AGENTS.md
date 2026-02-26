@@ -13,6 +13,8 @@ CodexMonitor is a Tauri app that orchestrates Codex agents across local workspac
 ## Environment Variables
 
 Use `CodexMonitor/.env.example` as the canonical template.
+Canonical schema for env governance lives in `config/env.schema.json`.
+Canonical matrix/audit docs live in `docs/reference/env-matrix.md` and `docs/reference/env-audit-report.md`.
 
 - `VITE_SENTRY_DSN`: optional frontend telemetry DSN.
 - `TAURI_DEV_HOST` / `TAURI_DEV_PORT` / `TAURI_DEV_HMR_PORT`: local dev host and ports.
@@ -420,10 +422,11 @@ At the end of a task:
 1. Run `npm run lint:strict`.
 2. Run `npm run test:assertions:guard`.
 3. Run `npm run guard:reuse-search`.
-4. Run `npm run test` when you touched threads, settings, updater, shared utils, or backend cores.
-5. Run `npm run typecheck`.
-6. If you changed Rust backend code, run `npm run check:rust`.
-7. Keep Husky hooks enabled (`pre-commit` and `pre-push`) so these checks run before pushing.
+4. Run `npm run env:doctor:dev` (or `npm run env:doctor:live` for live-integration work).
+5. Run `npm run test` when you touched threads, settings, updater, shared utils, or backend cores.
+6. Run `npm run typecheck`.
+7. If you changed Rust backend code, run `npm run check:rust`.
+8. Keep Husky hooks enabled (`pre-commit` and `pre-push`) so these checks run before pushing.
 
 ## 测试与质量铁律（2026-02）
 

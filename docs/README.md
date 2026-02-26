@@ -12,6 +12,8 @@ This directory is the governance and architecture entrypoint for CodexMonitor.
 ## Reference Guides
 
 - Configuration and environment variables: `docs/reference/configuration.md`
+- Environment matrix: `docs/reference/env-matrix.md`
+- Environment audit report: `docs/reference/env-audit-report.md`
 - Logging and cache governance: `docs/reference/logging-cache-governance.md`
 - Dependency maintenance policy: `docs/reference/dependency-maintenance.md`
 

@@ -30,6 +30,9 @@ CodexMonitor reads configuration from these layers:
 - Keep `.env` usage limited to script workflows; document required keys per script.
 - Key source policy: keys/tokens/secrets are only allowed from terminal environment variables or local `.env`/`.env.local` loading flows.
 - Forbidden key sources: hardcoded literals, query string parameters, browser storage, cookies, or committed non-template env files.
+- Canonical env schema is defined in `config/env.schema.json`.
+- Env drift/validity gate is `npm run env:doctor` (also executed in pre-commit/pre-push orchestrated flows).
+- Canonical env matrix is documented in `docs/reference/env-matrix.md`.
 
 ## Security Gates (Local)
 

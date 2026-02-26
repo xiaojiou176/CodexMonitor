@@ -37,6 +37,7 @@ npm run tauri:build
 npm run lint:strict
 npm run test:assertions:guard
 npm run guard:reuse-search
+npm run env:doctor:dev
 npm run test
 npm run typecheck
 npm run check:rust

@@ -66,6 +66,7 @@ async function main() {
     "check:critical-path-logging",
     ...(DRY_RUN ? ["--", "--dry-run"] : []),
   ]);
+  await runTask("env:doctor:staged", ["run", "env:doctor:staged"]);
   await runTask("check:lazy-load:evidence-gate", [
     "run",
     "check:lazy-load:evidence-gate",
