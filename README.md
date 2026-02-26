@@ -82,6 +82,24 @@ Dev ports:
 - Default Playwright web port (`PLAYWRIGHT_WEB_PORT`): `17473`
 - Auto-fallback search range: `17420-17520`
 
+## Containerized Consistency (Dev Container)
+
+This project now includes a minimal containerized dev skeleton for environment consistency:
+
+- `.devcontainer/devcontainer.json`
+- `docker-compose.dev.yml`
+
+Quick start:
+
+1. Open this repo in VS Code with the Dev Containers extension.
+2. Run `Dev Containers: Reopen in Container`.
+3. Inside the container, run `npm run start:dev` (same command as local).
+
+Notes:
+
+- Local development flow remains unchanged; container usage is optional.
+- The container is set up for Node + Rust + Playwright friendly development/test workflows.
+
 ### Optional: Create a desktop shortcut
 
 Create a one-click desktop launcher:
@@ -284,10 +302,14 @@ Git hooks are enforced with Husky:
 
 - `pre-commit`: runs `npm run precommit:orchestrated`
   - Phase 1: `preflight:doc-drift` checks staged files and requires staged docs updates for doc-sensitive changes (`README.md`, `AGENTS.md`, `CLAUDE.md`, `src/{AGENTS,CLAUDE}.md`, `src-tauri/{AGENTS,CLAUDE}.md`, `CHANGELOG.md`, or `docs/*`).
-  - Phase 2: runs `test:assertions:guard` and `lint:strict` in parallel.
+  - Phase 2: security gates: `check:secrets:staged` and `check:keys:source-policy`.
+  - Phase 3: runs `test:assertions:guard`, `guard:reuse-search`, and `lint:strict` in parallel.
+- `commit-msg`: runs secret scan and conventional-commit lint:
+  - `npm run check:commit-message:secrets -- "$1"`
+  - `npx --no-install commitlint --edit "$1"`
 - `pre-push`: runs `npm run preflight:orchestrated`
   - Phase 1 (short first): `preflight:quick` (`test:assertions:guard` then `typecheck`).
-  - Phase 2 (parallel long jobs): `test`, `test:coverage:gate` (strict 80/95), `check:rust`, and `test:e2e:smoke`, each with heartbeat logs every ~20s.
+  - Phase 2 (parallel long jobs): `test`, `test:coverage:gate` (strict 80/95), `check:rust`, `test:e2e:smoke`, and `test:live:preflight`, each with heartbeat logs every ~20s.
   - Parallel failure output preserves task names, so gate failures are directly attributable to the failing job.
 
 Dry-run commands:
@@ -296,6 +318,14 @@ Dry-run commands:
 npm run preflight:doc-drift:dry
 npm run precommit:orchestrated:dry
 npm run preflight:orchestrated:dry
+```
+
+Security gate commands:
+
+```bash
+npm run check:secrets:staged
+npm run check:keys:source-policy
+npm run check:commit-message:secrets -- .git/COMMIT_EDITMSG
 ```
 
 Assertion guard policy:
@@ -334,6 +364,7 @@ npm run test:e2e:external
 - Uses `REAL_EXTERNAL_URL` from your environment.
 - If `REAL_EXTERNAL_URL` is not set, the test exits early with a visible reason.
 - Uses `playwright.external.config.ts`, so it does not boot the local Vite dev server.
+- Retries are enabled (up to 2) for transient network/infra failures.
 - Intended for real-world integration probing and scheduled/manual CI runs, not required local or PR gates.
 
 Optional real LLM/API key smoke test (non-default, non-gating):
@@ -343,13 +374,13 @@ npm run test:real:llm
 ```
 
 - Required env:
-  - `REAL_LLM_BASE_URL` (OpenAI-compatible base URL, example: `https://api.openai.com`)
+  - `REAL_LLM_BASE_URL` (Gemini OpenAI-compatible base URL, example: `https://generativelanguage.googleapis.com/v1beta/openai`)
   - `REAL_LLM_API_KEY`
 - Env source resolution:
   - First uses current process environment (including exported zsh variables).
   - If missing, falls back to repo `.env.local`, then repo `.env`, then `~/.zshrc`.
-  - Supports aliases: `OPENAI_API_KEY`/`OPENAI_BASE_URL`/`OPENAI_MODEL`/`OPENAI_TIMEOUT_MS`.
-  - If only key is present, base URL defaults to `https://api.openai.com`.
+  - Supports aliases: `GEMINI_API_KEY`/`GEMINI_BASE_URL`/`GEMINI_MODEL`/`GEMINI_TIMEOUT_MS`.
+  - If only key is present, base URL defaults to `https://generativelanguage.googleapis.com/v1beta/openai`.
 - Optional env:
   - `REAL_LLM_MODEL` (if omitted, script auto-selects the first model from `/v1/models`)
   - `REAL_LLM_TIMEOUT_MS` (default `20000`)
@@ -428,6 +459,12 @@ src-tauri/
 - Worktree agents live under the app data directory (`worktrees/<workspace-id>`); legacy `.codex-worktrees/` paths remain supported, and the app no longer edits repo `.gitignore` files.
 - UI state (panel sizes, reduced transparency toggle, recent thread activity) is stored in `localStorage`.
 - Custom prompts load from `$CODEX_HOME/prompts` (or `~/.codex/prompts`) with optional frontmatter description/argument hints.
+
+## Compatibility Opt-In Record
+
+- 触发原因: 本次引入兼容识别与门禁审计脚本，确保在 Gemini-only 主路径下仍可审计兼容场景。
+- 回退条件: 若兼容门禁导致误报或阻塞开发，先回退到 Gemini-only 严格路径并关闭兼容提示检查。
+- 结果差异: 默认运行逻辑不变，新增的是门禁校验、证据日志和提交前合规拦截行为。
 
 ## Tauri IPC Surface
 

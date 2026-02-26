@@ -28,8 +28,12 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
       - name: Install frontend dependencies
         run: npm ci
-      - name: Lint
-        run: npm run lint
+      - name: Lint (strict)
+        run: npm run lint:strict
+      - name: Assertion guard
+        run: npm run test:assertions:guard
+      - name: Reuse guard
+        run: npm run guard:reuse-search
       - name: Typecheck
         run: npm run typecheck
       - name: Unit and integration tests

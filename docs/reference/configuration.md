@@ -21,12 +21,21 @@ CodexMonitor reads configuration from these layers:
 - Sensitive remote backend values must not be copied into docs/examples.
 - Keep local env files outside version control.
 - CI secret scanning is enabled (`gitleaks` in `.github/workflows/ci.yml`).
+- Local git gates also block staged secret patterns and commit-message secret patterns.
 
 ## Environment Variable Guidance
 
 - Use environment variables for local machine-specific values only.
 - Prefer explicit settings UI fields for stable application behavior.
 - Keep `.env` usage limited to script workflows; document required keys per script.
+- Key source policy: keys/tokens/secrets are only allowed from terminal environment variables or local `.env`/`.env.local` loading flows.
+- Forbidden key sources: hardcoded literals, query string parameters, browser storage, cookies, or committed non-template env files.
+
+## Security Gates (Local)
+
+- `npm run check:secrets:staged`: scans staged added lines for secret-like literals and blocks tracked `.env*` files except example templates.
+- `npm run check:keys:source-policy`: blocks staged code that reads secrets from forbidden sources.
+- `npm run check:commit-message:secrets -- <commit-msg-file>`: blocks secret-like material in commit messages.
 
 ## Validation and Guardrails
 

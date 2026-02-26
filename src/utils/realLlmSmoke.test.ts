@@ -5,6 +5,7 @@ import {
   parseKeyValueLines,
   resolveConfig,
   resolveEffectiveEnv,
+  resolveEffectiveEnvWithSources,
   selectModel,
 } from "../../scripts/real-llm-smoke.mjs";
 
@@ -22,12 +23,12 @@ describe("real-llm-smoke helpers", () => {
       # comment
       REAL_LLM_BASE_URL="https://proxy.local"
       export REAL_LLM_API_KEY='sk-demo'
-      OPENAI_MODEL=gpt-5-mini
+      GEMINI_MODEL=gemini-2.5-pro
     `);
     expect(parsed).toMatchObject({
       REAL_LLM_BASE_URL: "https://proxy.local",
       REAL_LLM_API_KEY: "sk-demo",
-      OPENAI_MODEL: "gpt-5-mini",
+      GEMINI_MODEL: "gemini-2.5-pro",
     });
   });
 
@@ -49,22 +50,41 @@ describe("real-llm-smoke helpers", () => {
     expect(effective.REAL_LLM_API_KEY).toBe("sk-from-dotenv");
   });
 
-  it("maps OPENAI_API_KEY from zshrc and defaults base url", () => {
+  it("maps GEMINI_API_KEY from process env and defaults Gemini base url", () => {
     const effective = resolveEffectiveEnv(
-      {},
+      {
+        GEMINI_API_KEY: "gemini-process-key",
+      },
       {
         cwd: "/repo",
-        home: "/home/user",
-        readText: (filePath: string) => {
-          if (filePath === "/home/user/.zshrc") {
-            return "export OPENAI_API_KEY=sk-zsh";
-          }
+        readText: () => {
           throw new Error("missing");
         },
       },
     );
-    expect(effective.REAL_LLM_API_KEY).toBe("sk-zsh");
-    expect(effective.REAL_LLM_BASE_URL).toBe("https://api.openai.com");
+    expect(effective.REAL_LLM_API_KEY).toBe("gemini-process-key");
+    expect(effective.REAL_LLM_BASE_URL).toBe(
+      "https://generativelanguage.googleapis.com/v1beta/openai",
+    );
+  });
+
+  it("tracks alias source without leaking raw key in source metadata", () => {
+    const { sources } = resolveEffectiveEnvWithSources(
+      {
+        GEMINI_API_KEY: "gemini-process-key",
+      },
+      {
+        cwd: "/repo",
+        readText: () => {
+          throw new Error("missing");
+        },
+      },
+    ) as unknown as {
+      sources: Record<string, string>;
+    };
+    const apiKeySource = sources.REAL_LLM_API_KEY;
+    expect(apiKeySource).toBe("GEMINI_API_KEY (process env)");
+    expect(apiKeySource).not.toContain("gemini-process-key");
   });
 
   it("normalizes required env and timeout", () => {

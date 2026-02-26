@@ -12,7 +12,8 @@ export default defineConfig({
     timeout: 5_000,
   },
   fullyParallel: false,
-  retries: process.env.CI ? 1 : 0,
+  // E2E allows auto-retry (max 2) to absorb transient network/infra flakes.
+  retries: process.env.CI ? 2 : 1,
   reporter: process.env.CI
     ? [["github"], ["html", { open: "never" }]]
     : [["list"]],

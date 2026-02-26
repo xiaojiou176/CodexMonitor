@@ -2,7 +2,6 @@
 
 import { appendFileSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import process from "node:process";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -33,6 +32,21 @@ function cleanEnvValue(value) {
 
 function normalizeBaseUrl(baseUrl) {
   return baseUrl.replace(/\/+$/, "");
+}
+
+function isGeminiOpenAiCompatibleBase(baseUrl) {
+  return /\/v1beta\/openai$/i.test(baseUrl);
+}
+
+function buildApiUrl(baseUrl, endpointPath) {
+  const normalizedPath = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
+  const baseEndsWithV1 = /\/v1$/i.test(baseUrl);
+  const geminiOpenAiBase = isGeminiOpenAiCompatibleBase(baseUrl);
+  const shouldStripV1Prefix = geminiOpenAiBase || baseEndsWithV1;
+  const resolvedPath = shouldStripV1Prefix
+    ? normalizedPath.replace(/^\/v1(?=\/|$)/i, "")
+    : normalizedPath;
+  return `${baseUrl}${resolvedPath}`;
 }
 
 function parseTimeoutMs(rawTimeout) {
@@ -107,15 +121,9 @@ function redactSecret(value) {
   return `${normalized.slice(0, 4)}...${normalized.slice(-2)}`;
 }
 
-function resolveEnvSourceLabel(filePath, cwd, home) {
-  if (filePath === path.join(cwd, ".env.local")) {
-    return ".env.local";
-  }
+function resolveEnvSourceLabel(filePath, cwd) {
   if (filePath === path.join(cwd, ".env")) {
     return ".env";
-  }
-  if (filePath === path.join(home, ".zshrc")) {
-    return "~/.zshrc";
   }
   return filePath;
 }
@@ -152,7 +160,6 @@ function appendGithubSummary(lines) {
 
 export function resolveEffectiveEnvWithSources(seedEnv = process.env, options = {}) {
   const cwd = options.cwd ?? process.cwd();
-  const home = options.home ?? homedir();
   const readText = options.readText ?? ((filePath) => readFileSync(filePath, "utf-8"));
   const effective = { ...seedEnv };
   const sources = {};
@@ -162,15 +169,11 @@ export function resolveEffectiveEnvWithSources(seedEnv = process.env, options = 
     }
   }
 
-  const fallbackFiles = [
-    path.join(cwd, ".env.local"),
-    path.join(cwd, ".env"),
-    path.join(home, ".zshrc"),
-  ];
+  const fallbackFiles = [path.join(cwd, ".env")];
 
   for (const filePath of fallbackFiles) {
     const parsed = readParsedFile(filePath, readText);
-    const sourceLabel = resolveEnvSourceLabel(filePath, cwd, home);
+    const sourceLabel = resolveEnvSourceLabel(filePath, cwd);
     for (const [key, value] of Object.entries(parsed)) {
       if (!hasEnvValue(effective[key]) && hasEnvValue(value)) {
         effective[key] = value;
@@ -179,24 +182,27 @@ export function resolveEffectiveEnvWithSources(seedEnv = process.env, options = 
     }
   }
 
-  if (!hasEnvValue(effective.REAL_LLM_API_KEY) && hasEnvValue(effective.OPENAI_API_KEY)) {
-    effective.REAL_LLM_API_KEY = cleanEnvValue(effective.OPENAI_API_KEY);
-    sources.REAL_LLM_API_KEY = resolveAliasSource("OPENAI_API_KEY", sources);
+  if (!hasEnvValue(effective.REAL_LLM_API_KEY) && hasEnvValue(effective.GEMINI_API_KEY)) {
+    effective.REAL_LLM_API_KEY = cleanEnvValue(effective.GEMINI_API_KEY);
+    sources.REAL_LLM_API_KEY = resolveAliasSource("GEMINI_API_KEY", sources);
   }
-  if (!hasEnvValue(effective.REAL_LLM_BASE_URL) && hasEnvValue(effective.OPENAI_BASE_URL)) {
-    effective.REAL_LLM_BASE_URL = cleanEnvValue(effective.OPENAI_BASE_URL);
-    sources.REAL_LLM_BASE_URL = resolveAliasSource("OPENAI_BASE_URL", sources);
+  if (!hasEnvValue(effective.REAL_LLM_BASE_URL) && hasEnvValue(effective.GEMINI_BASE_URL)) {
+    effective.REAL_LLM_BASE_URL = cleanEnvValue(effective.GEMINI_BASE_URL);
+    sources.REAL_LLM_BASE_URL = resolveAliasSource("GEMINI_BASE_URL", sources);
   }
-  if (!hasEnvValue(effective.REAL_LLM_MODEL) && hasEnvValue(effective.OPENAI_MODEL)) {
-    effective.REAL_LLM_MODEL = cleanEnvValue(effective.OPENAI_MODEL);
-    sources.REAL_LLM_MODEL = resolveAliasSource("OPENAI_MODEL", sources);
+  if (!hasEnvValue(effective.REAL_LLM_MODEL) && hasEnvValue(effective.GEMINI_MODEL)) {
+    effective.REAL_LLM_MODEL = cleanEnvValue(effective.GEMINI_MODEL);
+    sources.REAL_LLM_MODEL = resolveAliasSource("GEMINI_MODEL", sources);
   }
-  if (!hasEnvValue(effective.REAL_LLM_TIMEOUT_MS) && hasEnvValue(effective.OPENAI_TIMEOUT_MS)) {
-    effective.REAL_LLM_TIMEOUT_MS = cleanEnvValue(effective.OPENAI_TIMEOUT_MS);
-    sources.REAL_LLM_TIMEOUT_MS = resolveAliasSource("OPENAI_TIMEOUT_MS", sources);
+  if (
+    !hasEnvValue(effective.REAL_LLM_TIMEOUT_MS) &&
+    hasEnvValue(effective.GEMINI_TIMEOUT_MS)
+  ) {
+    effective.REAL_LLM_TIMEOUT_MS = cleanEnvValue(effective.GEMINI_TIMEOUT_MS);
+    sources.REAL_LLM_TIMEOUT_MS = resolveAliasSource("GEMINI_TIMEOUT_MS", sources);
   }
   if (!hasEnvValue(effective.REAL_LLM_BASE_URL) && hasEnvValue(effective.REAL_LLM_API_KEY)) {
-    effective.REAL_LLM_BASE_URL = "https://api.openai.com";
+    effective.REAL_LLM_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
     sources.REAL_LLM_BASE_URL = "default (REAL_LLM_API_KEY present)";
   }
 
@@ -248,6 +254,20 @@ function createTimeoutSignal(timeoutMs) {
   return AbortSignal.timeout(timeoutMs);
 }
 
+function buildStatusError(endpointPath, status) {
+  const error = new Error(`${endpointPath} failed with status ${status}`);
+  error.name = "HttpStatusError";
+  error.status = status;
+  return error;
+}
+
+function getErrorStatus(error) {
+  if (typeof error?.status === "number") {
+    return error.status;
+  }
+  return null;
+}
+
 async function requestJson(url, { method, headers, body, timeoutMs }) {
   const response = await fetch(url, {
     method,
@@ -289,7 +309,20 @@ export function selectModel(modelIds, requestedModel) {
   if (requestedModel) {
     return requestedModel;
   }
-  return modelIds[0] ?? "";
+  const normalizedIds = modelIds
+    .map((id) => (typeof id === "string" ? id.trim() : ""))
+    .filter(Boolean);
+  const pureGemini = normalizedIds.find(
+    (id) => /gemini/i.test(id) && !/(claude|gpt|openai|anthropic)/i.test(id),
+  );
+  if (pureGemini) {
+    return pureGemini;
+  }
+  const geminiBranded = normalizedIds.find((id) => /gemini/i.test(id));
+  if (geminiBranded) {
+    return geminiBranded;
+  }
+  return normalizedIds[0] ?? "";
 }
 
 function extractTextFromPart(part) {
@@ -330,6 +363,48 @@ export function extractGeneratedText(payload) {
         return text;
       }
     }
+  }
+
+  return "";
+}
+
+function extractChatCompletionsText(payload) {
+  const firstChoice = payload?.choices?.[0];
+  const message = firstChoice?.message;
+  if (typeof message?.content === "string" && message.content.trim()) {
+    return message.content.trim();
+  }
+  if (Array.isArray(message?.content)) {
+    for (const part of message.content) {
+      const text = extractTextFromPart(part);
+      if (text) {
+        return text;
+      }
+    }
+  }
+  if (Array.isArray(message?.parts)) {
+    for (const part of message.parts) {
+      const text = extractTextFromPart(part);
+      if (text) {
+        return text;
+      }
+    }
+  }
+
+  if (Array.isArray(payload?.candidates)) {
+    for (const candidate of payload.candidates) {
+      const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+      for (const part of parts) {
+        const text = extractTextFromPart(part);
+        if (text) {
+          return text;
+        }
+      }
+    }
+  }
+
+  if (typeof firstChoice?.text === "string" && firstChoice.text.trim()) {
+    return firstChoice.text.trim();
   }
 
   return "";
@@ -378,14 +453,15 @@ function assertNonEmptyOutput(text) {
 }
 
 async function fetchAvailableModels(config) {
-  const response = await requestJson(`${config.baseUrl}/v1/models`, {
+  const endpointPath = "/v1/models";
+  const response = await requestJson(buildApiUrl(config.baseUrl, endpointPath), {
     method: "GET",
     headers: buildAuthHeaders(config.apiKey),
     timeoutMs: config.timeoutMs,
   });
 
   if (!response.ok) {
-    throw new Error(`/v1/models failed with status ${response.status}`);
+    throw buildStatusError(endpointPath, response.status);
   }
 
   const ids = extractModelIds(response.body);
@@ -402,7 +478,8 @@ async function fetchAvailableModels(config) {
 }
 
 async function generateViaResponses(config, model) {
-  const response = await requestJson(`${config.baseUrl}/v1/responses`, {
+  const endpointPath = "/v1/responses";
+  const response = await requestJson(buildApiUrl(config.baseUrl, endpointPath), {
     method: "POST",
     headers: buildAuthHeaders(config.apiKey),
     body: {
@@ -414,14 +491,16 @@ async function generateViaResponses(config, model) {
   });
 
   if (!response.ok) {
-    throw new Error(`/v1/responses failed with status ${response.status}`);
+    throw buildStatusError(endpointPath, response.status);
   }
 
   return extractGeneratedText(response.body);
 }
 
 async function generateViaChatCompletions(config, model) {
-  const response = await requestJson(`${config.baseUrl}/v1/chat/completions`, {
+  const endpointPath = "/v1/chat/completions";
+  const maxTokens = isGeminiOpenAiCompatibleBase(config.baseUrl) ? 512 : 32;
+  const response = await requestJson(buildApiUrl(config.baseUrl, endpointPath), {
     method: "POST",
     headers: buildAuthHeaders(config.apiKey),
     body: {
@@ -432,16 +511,16 @@ async function generateViaChatCompletions(config, model) {
           content: GENERATION_PROMPT,
         },
       ],
-      max_tokens: 32,
+      max_tokens: maxTokens,
     },
     timeoutMs: config.timeoutMs,
   });
 
   if (!response.ok) {
-    throw new Error(`/v1/chat/completions failed with status ${response.status}`);
+    throw buildStatusError(endpointPath, response.status);
   }
 
-  return extractGeneratedText(response.body);
+  return extractChatCompletionsText(response.body);
 }
 
 function extractLlmEnvSourceReport(effectiveEnv, sources) {
@@ -617,7 +696,7 @@ export async function runLivePreflight(seedEnv = process.env) {
   }
 
   if (runLlm) {
-    const modelsUrl = `${llmConfig.baseUrl}/v1/models`;
+    const modelsUrl = buildApiUrl(llmConfig.baseUrl, "/v1/models");
     try {
       const response = await probeUrl(modelsUrl, {
         headers: buildAuthHeaders(llmConfig.apiKey),
@@ -730,9 +809,16 @@ export async function runRealLlmSmoke(env = process.env) {
     outputText = await generateViaResponses(config, model);
     assertNonEmptyOutput(outputText);
   } catch (responsesError) {
+    const responsesStatus = getErrorStatus(responsesError);
+    const shouldFallback =
+      isGeminiOpenAiCompatibleBase(config.baseUrl) &&
+      (responsesStatus === 400 || responsesStatus === 404);
+    if (!shouldFallback) {
+      throw responsesError;
+    }
     transport = "chat.completions";
     console.log(
-      `[real-llm-smoke] /v1/responses unavailable or invalid output; fallback to /v1/chat/completions`,
+      `[real-llm-smoke] /v1/responses unavailable on Gemini-compatible endpoint; fallback to /v1/chat/completions`,
     );
     outputText = await generateViaChatCompletions(config, model);
     assertNonEmptyOutput(outputText);

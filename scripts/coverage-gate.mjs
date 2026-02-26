@@ -212,6 +212,79 @@ export function collectCriticalScopeFailures(criticalScopes) {
   return failures;
 }
 
+function formatPercent(value) {
+  return `${Number(value).toFixed(2)}%`;
+}
+
+function logCoverageSummary({ actualValues, thresholds, criticalScopes, latestPath, runId, coverageDir }) {
+  console.log("\n[Coverage Gate]");
+  console.log(`- run: ${runId}`);
+  console.log(`- coverageDir: ${coverageDir}`);
+  console.log(`- report: ${latestPath}`);
+  console.log("- global:");
+  console.log(
+    `  statements ${formatPercent(actualValues.statements)} (min ${formatPercent(thresholds.statements)})`,
+  );
+  console.log(`  lines ${formatPercent(actualValues.lines)} (min ${formatPercent(thresholds.lines)})`);
+  console.log(
+    `  functions ${formatPercent(actualValues.functions)} (min ${formatPercent(thresholds.functions)})`,
+  );
+  console.log(
+    `  branches ${formatPercent(actualValues.branches)} (min ${formatPercent(thresholds.branches)})`,
+  );
+  console.log("- critical scopes:");
+  for (const scope of criticalScopes) {
+    console.log(`  ${scope.name} | files=${scope.fileCount} | prefix=${scope.prefix}`);
+    console.log(
+      `    statements ${formatPercent(scope.coverage.statements)} (min ${formatPercent(scope.thresholds.statements)})`,
+    );
+    console.log(
+      `    lines ${formatPercent(scope.coverage.lines)} (min ${formatPercent(scope.thresholds.lines)})`,
+    );
+    console.log(
+      `    functions ${formatPercent(scope.coverage.functions)} (min ${formatPercent(scope.thresholds.functions)})`,
+    );
+    console.log(
+      `    branches ${formatPercent(scope.coverage.branches)} (min ${formatPercent(scope.thresholds.branches)})`,
+    );
+  }
+}
+
+function logFailureShortfall(failures) {
+  if (failures.length === 0) {
+    return;
+  }
+
+  const globalFailures = failures.filter((failure) => !failure.scope);
+  const scopedFailures = failures.filter((failure) => failure.scope);
+  console.error("❌ Coverage gate failed");
+
+  if (globalFailures.length > 0) {
+    console.error("  Global shortfall:");
+    for (const failure of globalFailures) {
+      console.error(
+        `    - ${failure.metric}: actual ${formatPercent(failure.actual)} < required ${formatPercent(failure.min)} | shortfall ${formatPercent(failure.shortfall)}`,
+      );
+    }
+  }
+
+  if (scopedFailures.length > 0) {
+    console.error("  Critical scope shortfall:");
+    for (const failure of scopedFailures) {
+      const scopeLabel = `${failure.scope} (${failure.prefix})`;
+      if (failure.metric === "files") {
+        console.error(
+          `    - ${scopeLabel} files: actual ${failure.actual} < required ${failure.min} | shortfall ${failure.shortfall}`,
+        );
+        continue;
+      }
+      console.error(
+        `    - ${scopeLabel} ${failure.metric}: actual ${formatPercent(failure.actual)} < required ${formatPercent(failure.min)} | shortfall ${formatPercent(failure.shortfall)}`,
+      );
+    }
+  }
+}
+
 export async function main() {
   await mkdir(reportDir, { recursive: true });
   const runId = buildRunId();
@@ -285,43 +358,10 @@ export async function main() {
   const latestPath = path.join(reportDir, "latest.json");
   await writeFile(latestPath, `${JSON.stringify(report, null, 2)}\n`, "utf-8");
 
-  console.log("\n[Coverage Gate]");
-  console.log(`- run: ${runId}`);
-  console.log(`- coverageDir: ${coverageDir}`);
-  console.log(`- statements: ${actualValues.statements}% (min ${thresholds.statements}%)`);
-  console.log(`- lines: ${actualValues.lines}% (min ${thresholds.lines}%)`);
-  console.log(`- functions: ${actualValues.functions}% (min ${thresholds.functions}%)`);
-  console.log(`- branches: ${actualValues.branches}% (min ${thresholds.branches}%)`);
-  for (const scope of criticalScopes) {
-    console.log(`- scope:${scope.name} files=${scope.fileCount} prefix=${scope.prefix}`);
-    console.log(
-      `  statements ${scope.coverage.statements}% (min ${scope.thresholds.statements}%)`,
-    );
-    console.log(
-      `  lines ${scope.coverage.lines}% (min ${scope.thresholds.lines}%)`,
-    );
-    console.log(
-      `  functions ${scope.coverage.functions}% (min ${scope.thresholds.functions}%)`,
-    );
-    console.log(
-      `  branches ${scope.coverage.branches}% (min ${scope.thresholds.branches}%)`,
-    );
-  }
-  console.log(`- report: ${latestPath}`);
+  logCoverageSummary({ actualValues, thresholds, criticalScopes, latestPath, runId, coverageDir });
 
   if (failures.length > 0) {
-    console.error("❌ Coverage gate failed");
-    failures.forEach((failure) => {
-      if (failure.scope) {
-        console.error(
-          `  - scope:${failure.scope} (${failure.prefix}) ${failure.metric}: actual ${failure.actual}% < required ${failure.min}% (shortfall ${failure.shortfall}%)`,
-        );
-        return;
-      }
-      console.error(
-        `  - global ${failure.metric}: actual ${failure.actual}% < required ${failure.min}% (shortfall ${failure.shortfall}%)`,
-      );
-    });
+    logFailureShortfall(failures);
     process.exit(3);
   }
 

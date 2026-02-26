@@ -80,8 +80,8 @@ describe("coverage-gate helpers", () => {
       { statements: 60, lines: 49, functions: 69, branches: 80 },
     );
     assert.deepEqual(globalFailures, [
-      { metric: "lines", min: 50, actual: 49 },
-      { metric: "functions", min: 70, actual: 69 },
+      { metric: "lines", min: 50, actual: 49, shortfall: 1 },
+      { metric: "functions", min: 70, actual: 69, shortfall: 1 },
     ]);
 
     const criticalFailures = collectCriticalScopeFailures([
@@ -107,6 +107,7 @@ describe("coverage-gate helpers", () => {
         metric: "files",
         min: 1,
         actual: 0,
+        shortfall: 1,
       },
       {
         scope: "services",
@@ -114,6 +115,7 @@ describe("coverage-gate helpers", () => {
         metric: "branches",
         min: 70,
         actual: 69.5,
+        shortfall: 0.5,
       },
     ]);
   });

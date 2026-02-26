@@ -1,0 +1,19 @@
+services:
+  workspace:
+    image: mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm
+    init: true
+    tty: true
+    working_dir: /workspace
+    command: sleep infinity
+    volumes:
+      - .:/workspace:cached
+    environment:
+      TAURI_DEV_HOST: 0.0.0.0
+      TAURI_DEV_PORT: 17420
+      TAURI_DEV_HMR_PORT: 17421
+      PLAYWRIGHT_WEB_PORT: 17473
+      PLAYWRIGHT_BASE_URL: http://localhost:17473
+    ports:
+      - "17420:17420"
+      - "17421:17421"
+      - "17473:17473"

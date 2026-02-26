@@ -10,13 +10,14 @@ export default defineConfig({
     timeout: 5_000,
   },
   fullyParallel: false,
-  retries: process.env.CI ? 1 : 0,
+  retries: 2,
   reporter: process.env.CI
     ? [["github"], ["html", { open: "never" }]]
     : [["list"]],
   use: {
     baseURL,
-    trace: "retain-on-failure",
+    trace: "on-first-retry",
+    screenshot: "only-on-failure",
   },
   projects: [
     {

@@ -87,6 +87,21 @@ if (!("requestAnimationFrame" in globalThis)) {
   });
 }
 
+if (!("PointerEvent" in globalThis)) {
+  const BasePointerEvent =
+    typeof MouseEvent === "function" ? MouseEvent : Event;
+  class PointerEventMock extends BasePointerEvent {
+    constructor(type: string, params: PointerEventInit = {}) {
+      super(type, params);
+    }
+  }
+  Object.defineProperty(globalThis, "PointerEvent", {
+    value: PointerEventMock,
+    writable: true,
+    configurable: true,
+  });
+}
+
 const hasLocalStorage = "localStorage" in globalThis;
 const existingLocalStorage = hasLocalStorage
   ? (globalThis as { localStorage?: Storage }).localStorage

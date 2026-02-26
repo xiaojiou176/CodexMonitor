@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+
+npm run check:commit-message:secrets -- "$1"
+npx --no-install commitlint --edit "$1"

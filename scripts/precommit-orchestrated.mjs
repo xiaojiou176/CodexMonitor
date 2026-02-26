@@ -53,12 +53,38 @@ function runTask(name, args, options = {}) {
 }
 
 async function main() {
-  console.log("[precommit] Phase 1/2: doc drift gate");
+  const complianceMode = process.env.PRECOMMIT_COMPLIANCE_MODE === "warn" ? "warn" : "fail";
+
+  console.log("[precommit] Phase 1/3: doc drift gate");
   await runTask("preflight:doc-drift", ["run", "preflight:doc-drift", ...(DRY_RUN ? ["--", "--dry-run"] : [])]);
 
-  console.log("[precommit] Phase 2/2: parallel fast gates");
+  console.log("[precommit] Phase 2/3: security + compliance gates");
+  await runTask("check:secrets:staged", ["run", "check:secrets:staged"]);
+  await runTask("check:keys:source-policy", ["run", "check:keys:source-policy"]);
+  await runTask("check:critical-path-logging", [
+    "run",
+    "check:critical-path-logging",
+    ...(DRY_RUN ? ["--", "--dry-run"] : []),
+  ]);
+  await runTask("check:lazy-load:evidence-gate", [
+    "run",
+    "check:lazy-load:evidence-gate",
+    "--",
+    `--enforce=${complianceMode}`,
+    ...(DRY_RUN ? ["--dry-run"] : []),
+  ]);
+  await runTask("check:compat:optin-log", [
+    "run",
+    "check:compat:optin-log",
+    "--",
+    `--enforce=${complianceMode}`,
+    ...(DRY_RUN ? ["--dry-run"] : []),
+  ]);
+
+  console.log("[precommit] Phase 3/3: parallel fast gates");
   const results = await Promise.allSettled([
     runTask("test:assertions:guard", ["run", "test:assertions:guard"], { heartbeatMs: HEARTBEAT_MS }),
+    runTask("guard:reuse-search", ["run", "guard:reuse-search"], { heartbeatMs: HEARTBEAT_MS }),
     runTask("lint:strict", ["run", "lint:strict"], { heartbeatMs: HEARTBEAT_MS }),
   ]);
   const failed = results.filter((result) => result.status === "rejected");

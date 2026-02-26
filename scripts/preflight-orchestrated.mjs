@@ -65,7 +65,12 @@ async function runParallelLongTasks(tasks) {
 
 async function main() {
   console.log("[preflight] Phase 1/2: short gates before long jobs");
-  await runTask("preflight:quick", ["run", "preflight:quick"]);
+  await runTask(
+    "preflight:doc-drift (branch)",
+    ["run", "preflight:doc-drift", ...(DRY_RUN ? ["--", "--dry-run", "--mode=branch"] : ["--", "--mode=branch"])],
+    { heartbeatMs: HEARTBEAT_MS },
+  );
+  await runTask("preflight:quick", ["run", "preflight:quick"], { heartbeatMs: HEARTBEAT_MS });
 
   console.log("[preflight] Phase 2/2: long jobs in parallel with heartbeat");
   await runParallelLongTasks([
@@ -73,6 +78,7 @@ async function main() {
     runTask("test:coverage:gate", ["run", "test:coverage:gate"], { heartbeatMs: HEARTBEAT_MS }),
     runTask("check:rust", ["run", "check:rust"], { heartbeatMs: HEARTBEAT_MS }),
     runTask("test:e2e:smoke", ["run", "test:e2e:smoke"], { heartbeatMs: HEARTBEAT_MS }),
+    runTask("test:live:preflight", ["run", "test:live:preflight"], { heartbeatMs: HEARTBEAT_MS }),
   ]);
 
   console.log("[preflight] All gates passed.");

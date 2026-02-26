@@ -40,3 +40,12 @@ On app startup:
 - Logging failures must not block primary product flows.
 - Cache eviction is expected behavior; components must tolerate misses.
 - New long-lived caches must use bounded storage before merge.
+
+## No Logs No Merge (Critical Paths)
+
+For authentication, credential/config mutation, remote backend calls, workspace lifecycle, and destructive operations:
+
+- Merge is blocked if critical-path changes do not include structured logging at key decision points.
+- Required structured fields: `timestamp`, `level`, `event`, `trace_id`, `service`, `action`, `outcome`.
+- Recommended fields: `duration_ms`, `workspace_id`, `thread_id`, `error_code`.
+- Secrets must be redacted in all logs (keys/tokens/passwords are never allowed in plaintext output).
