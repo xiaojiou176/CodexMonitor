@@ -5,6 +5,9 @@ export function buildMutationConfig({ mutate, thresholdBreak }) {
     mutate,
     ignorePatterns: [
       ".runtime-cache/**",
+      ".stryker-tmp/**",
+      ".git/**",
+      "node_modules/**",
       "logs/**",
       "cache/**",
       ".cache/**",
@@ -13,6 +16,8 @@ export function buildMutationConfig({ mutate, thresholdBreak }) {
       "coverage/**",
       "playwright-report/**",
       "test-results/**",
+      "src-tauri/target/**",
+      "src-tauri/gen/**",
     ],
     vitest: {
       configFile: "vite.config.ts",

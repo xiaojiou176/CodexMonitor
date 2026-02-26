@@ -25,25 +25,49 @@ if (!Number.isFinite(thresholdBreak) || thresholdBreak < 0 || thresholdBreak > 1
   process.exit(2);
 }
 
-const defaultMutate = [
-  "src/features/threads/**/*.ts",
-  "src/features/threads/**/*.tsx",
-  "src/services/**/*.ts",
-  "src/services/**/*.tsx",
-  "!src/**/*.test.ts",
-  "!src/**/*.test.tsx",
-  "!src/test/**",
-  "!src/main.tsx",
-];
-const mutate = mutateEnvRaw && mutateEnvRaw.trim() !== ""
-  ? mutateEnvRaw
-    .split(",")
-    .map((value) => value.trim())
+function isMutationTarget(filePath) {
+  if (!filePath.startsWith("src/features/threads/") && !filePath.startsWith("src/services/")) {
+    return false;
+  }
+  if (filePath === "src/main.tsx") {
+    return false;
+  }
+  if (filePath.startsWith("src/test/")) {
+    return false;
+  }
+  return !filePath.endsWith(".test.ts") && !filePath.endsWith(".test.tsx");
+}
+
+function resolveDefaultMutateFiles() {
+  const precheck = spawnSync(
+    "rg",
+    ["--files", "src/features/threads", "src/services", "-g", "*.ts", "-g", "*.tsx"],
+    {
+      cwd: rootDir,
+      encoding: "utf8",
+    },
+  );
+  if (precheck.status !== 0 || precheck.stdout.trim() === "") {
+    throw new Error("mutation target precheck failed: no files found in default critical scopes");
+  }
+  const files = precheck.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
     .filter(Boolean)
-  : defaultMutate;
+    .filter(isMutationTarget);
+  if (files.length === 0) {
+    throw new Error("mutation target precheck failed: default scopes only matched test files");
+  }
+  return files;
+}
 
 function npmCommand() {
   return process.platform === "win32" ? "npm.cmd" : "npm";
+}
+
+function localBinPath(binName) {
+  const executable = process.platform === "win32" ? `${binName}.cmd` : binName;
+  return path.join(rootDir, "node_modules", ".bin", executable);
 }
 
 function runCommand(name, args) {
@@ -68,6 +92,12 @@ function runCommand(name, args) {
 async function main() {
   try {
     await mkdir(reportDir, { recursive: true });
+    const mutate = mutateEnvRaw && mutateEnvRaw.trim() !== ""
+      ? mutateEnvRaw
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+      : resolveDefaultMutateFiles();
 
     console.log("[mutation-gate] Phase 1/2: assertion guard (anti-placebo)");
     await runCommand("assertion-guard", ["run", "test:assertions:guard"]);
@@ -86,31 +116,22 @@ async function main() {
       return;
     }
 
-    if (!mutateEnvRaw || mutateEnvRaw.trim() === "") {
-      const precheck = spawnSync(
-        "rg",
-        ["--files", "src/features/threads", "src/services", "-g", "*.ts", "-g", "*.tsx"],
-        {
-          cwd: rootDir,
-          encoding: "utf8",
-        },
-      );
-      if (precheck.status !== 0 || precheck.stdout.trim() === "") {
-        throw new Error("mutation target precheck failed: no files found in default critical scopes");
-      }
-    }
-
-    await runCommand("mutation", [
-      "exec",
-      "--yes",
-      "--package=typescript@5.8.3",
-      "--package=@stryker-mutator/core@9.5.1",
-      "--package=@stryker-mutator/vitest-runner@9.5.1",
-      "--",
-      "stryker",
-      "run",
-      tempConfigPath,
-    ]);
+    const strykerBin = localBinPath("stryker");
+    await new Promise((resolve, reject) => {
+      const child = spawn(strykerBin, ["run", tempConfigPath], {
+        stdio: "inherit",
+        env: process.env,
+        cwd: rootDir,
+      });
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(`mutation failed with exit code ${code ?? 1}`));
+      });
+    });
 
     console.log("✅ Mutation gate passed");
   } finally {

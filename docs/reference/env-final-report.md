@@ -17,6 +17,13 @@ Date: 2026-02-26
 - Evidence artifacts: `.runtime-cache/test_output/coverage-gate/latest.json`, `.runtime-cache/test_output/live-preflight/latest.json`.
 - Evidence code paths: `.github/workflows/ci.yml`, `scripts/env-rationalize.mjs`, `scripts/guard-placebo-assertions.mjs`, `scripts/mutation-gate.mjs`, `scripts/mutation-stryker.config.mjs`.
 
+## CI Residual Fixes Update (2026-02-26)
+
+- `mutation-js`: pinned and localized Stryker runtime (`@stryker-mutator/core@9.5.1`, `@stryker-mutator/vitest-runner@9.5.1`) and switched mutation gate execution to repo-local `node_modules/.bin/stryker` to avoid transient package env/cwd drift.
+- `security-scans`: kept high-severity blocking while changing audit scope to runtime dependencies with `npm audit --omit=dev --audit-level=high`.
+- Evidence artifacts: `.runtime-cache/test_output/ci-fixes/npm-install.log`, `.runtime-cache/test_output/ci-fixes/test-mutation-gate-dry-run.log`, `.runtime-cache/test_output/ci-fixes/mutation-target-precheck.log`, `.runtime-cache/test_output/ci-fixes/mutation-target-files.txt`, `.runtime-cache/test_output/ci-fixes/test-assertions-guard.log`, `.runtime-cache/test_output/ci-fixes/env-rationalize-check.log`, `.runtime-cache/test_output/ci-fixes/typecheck.log`, `.runtime-cache/test_output/ci-fixes/actionlint-ci.log`.
+- Evidence code paths: `package.json`, `package-lock.json`, `scripts/mutation-gate.mjs`, `.github/workflows/ci.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
+
 ## Env Variant Files
 
 - `.env` (5 keys)

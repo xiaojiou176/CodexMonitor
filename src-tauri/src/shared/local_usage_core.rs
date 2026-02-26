@@ -19,6 +19,12 @@ struct DailyTotals {
     output: i64,
     agent_ms: i64,
     agent_runs: i64,
+    failed_runs: i64,
+    retried_runs: i64,
+    task_starts: i64,
+    user_messages: i64,
+    latency_total_ms: i64,
+    latency_samples: i64,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -121,13 +127,30 @@ fn build_snapshot(
             total_tokens: total,
             agent_time_ms: totals.agent_ms,
             agent_runs: totals.agent_runs,
+            failed_runs: totals.failed_runs,
+            retried_runs: totals.retried_runs,
+            avg_latency_ms: if totals.latency_samples > 0 {
+                ((totals.latency_total_ms as f64) / (totals.latency_samples as f64)).round() as i64
+            } else {
+                0
+            },
         });
     }
 
-    let last7 = days.iter().rev().take(7).cloned().collect::<Vec<_>>();
-    let last7_tokens: i64 = last7.iter().map(|day| day.total_tokens).sum();
-    let last7_input: i64 = last7.iter().map(|day| day.input_tokens).sum();
-    let last7_cached: i64 = last7.iter().map(|day| day.cached_input_tokens).sum();
+    let last7 = day_keys
+        .iter()
+        .rev()
+        .take(7)
+        .map(|day_key| daily.get(day_key).copied().unwrap_or_default())
+        .collect::<Vec<_>>();
+    let last7_tokens: i64 = last7.iter().map(|day| day.input + day.output).sum();
+    let last7_input: i64 = last7.iter().map(|day| day.input).sum();
+    let last7_cached: i64 = last7.iter().map(|day| day.cached).sum();
+    let last7_failures: i64 = last7.iter().map(|day| day.failed_runs).sum();
+    let last7_retries: i64 = last7.iter().map(|day| day.retried_runs).sum();
+    let last7_attempts: i64 = last7.iter().map(|day| day.task_starts).sum();
+    let last7_latency_total_ms: i64 = last7.iter().map(|day| day.latency_total_ms).sum();
+    let last7_latency_samples: i64 = last7.iter().map(|day| day.latency_samples).sum();
 
     let average_daily_tokens = if last7.is_empty() {
         0
@@ -139,6 +162,21 @@ fn build_snapshot(
         ((last7_cached as f64) / (last7_input as f64) * 1000.0).round() / 10.0
     } else {
         0.0
+    };
+    let last7_days_failure_rate_percent = if last7_attempts > 0 {
+        ((last7_failures as f64) / (last7_attempts as f64) * 1000.0).round() / 10.0
+    } else {
+        0.0
+    };
+    let last7_days_retry_rate_percent = if last7_attempts > 0 {
+        ((last7_retries as f64) / (last7_attempts as f64) * 1000.0).round() / 10.0
+    } else {
+        0.0
+    };
+    let average_latency_ms = if last7_latency_samples > 0 {
+        ((last7_latency_total_ms as f64) / (last7_latency_samples as f64)).round() as i64
+    } else {
+        0
     };
 
     let peak = days
@@ -174,6 +212,9 @@ fn build_snapshot(
             cache_hit_rate_percent,
             peak_day,
             peak_day_tokens,
+            last7_days_failure_rate_percent,
+            last7_days_retry_rate_percent,
+            average_latency_ms,
         },
         top_models,
     }
@@ -196,6 +237,7 @@ fn scan_file(
     let mut current_model: Option<String> = None;
     let mut last_activity_ms: Option<i64> = None;
     let mut seen_runs: HashSet<i64> = HashSet::new();
+    let mut started_turns: HashMap<String, i64> = HashMap::new();
     let mut match_known = workspace_path.is_none();
     let mut matches_workspace = workspace_path.is_none();
 
@@ -256,6 +298,73 @@ fn scan_file(
             let payload_type = payload
                 .and_then(|payload| payload.get("type"))
                 .and_then(|value| value.as_str());
+            let timestamp_ms = read_timestamp_ms(&value);
+
+            if payload_type == Some("user_message") {
+                if let Some(day_key) = timestamp_ms.and_then(day_key_for_timestamp_ms) {
+                    if let Some(entry) = daily.get_mut(&day_key) {
+                        entry.user_messages += 1;
+                    }
+                }
+                if let Some(timestamp_ms) = timestamp_ms {
+                    track_activity(daily, &mut last_activity_ms, timestamp_ms);
+                }
+                continue;
+            }
+
+            if payload_type == Some("task_started") {
+                if let Some(turn_id) = payload
+                    .and_then(|payload| payload.get("turn_id"))
+                    .and_then(|value| value.as_str())
+                {
+                    if let Some(timestamp_ms) = timestamp_ms {
+                        started_turns.insert(turn_id.to_string(), timestamp_ms);
+                    }
+                }
+                if let Some(day_key) = timestamp_ms.and_then(day_key_for_timestamp_ms) {
+                    if let Some(entry) = daily.get_mut(&day_key) {
+                        entry.task_starts += 1;
+                        if entry.task_starts > entry.user_messages {
+                            entry.retried_runs += 1;
+                        }
+                    }
+                }
+                if let Some(timestamp_ms) = timestamp_ms {
+                    track_activity(daily, &mut last_activity_ms, timestamp_ms);
+                }
+                continue;
+            }
+
+            if payload_type == Some("task_complete") || payload_type == Some("turn_aborted") {
+                if let Some(timestamp_ms) = timestamp_ms {
+                    if let Some(day_key) = day_key_for_timestamp_ms(timestamp_ms) {
+                        if let Some(entry) = daily.get_mut(&day_key) {
+                            if let Some(turn_id) = payload
+                                .and_then(|payload| payload.get("turn_id"))
+                                .and_then(|value| value.as_str())
+                            {
+                                if let Some(started_at_ms) = started_turns.remove(turn_id) {
+                                    let latency_ms = (timestamp_ms - started_at_ms).max(0);
+                                    entry.latency_total_ms += latency_ms;
+                                    entry.latency_samples += 1;
+                                }
+                            }
+
+                            if payload_type == Some("turn_aborted") {
+                                let reason = payload
+                                    .and_then(|payload| payload.get("reason"))
+                                    .and_then(|value| value.as_str())
+                                    .unwrap_or("");
+                                if !is_interruption_reason(reason) {
+                                    entry.failed_runs += 1;
+                                }
+                            }
+                        }
+                    }
+                    track_activity(daily, &mut last_activity_ms, timestamp_ms);
+                }
+                continue;
+            }
 
             if payload_type == Some("agent_message") {
                 if let Some(timestamp_ms) = read_timestamp_ms(&value) {
@@ -358,7 +467,6 @@ fn scan_file(
                 continue;
             }
 
-            let timestamp_ms = read_timestamp_ms(&value);
             if let Some(day_key) = timestamp_ms.and_then(|ms| day_key_for_timestamp_ms(ms)) {
                 if let Some(entry) = daily.get_mut(&day_key) {
                     let cached = delta.cached.min(delta.input);
@@ -454,6 +562,11 @@ fn read_i64(map: &serde_json::Map<String, Value>, keys: &[&str]) -> i64 {
                 .or_else(|| value.as_f64().map(|value| value as i64))
         })
         .unwrap_or(0)
+}
+
+fn is_interruption_reason(reason: &str) -> bool {
+    let normalized = reason.trim().to_ascii_lowercase();
+    normalized == "interrupted" || normalized == "cancelled" || normalized == "canceled"
 }
 
 fn read_timestamp_ms(value: &Value) -> Option<i64> {
@@ -721,6 +834,50 @@ mod tests {
 
         let totals = daily.get(day_key).copied().unwrap_or_default();
         assert_eq!(totals.agent_runs, 2);
+    }
+
+    #[test]
+    fn scan_file_tracks_latency_failures_and_retries_from_task_events() {
+        let day_key = "2026-01-19";
+        let path = write_temp_jsonl(&[
+            r#"{"timestamp":"2026-01-19T12:00:00.000Z","type":"event_msg","payload":{"type":"user_message","message":"run"}} "#,
+            r#"{"timestamp":"2026-01-19T12:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}} "#,
+            r#"{"timestamp":"2026-01-19T12:00:06.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1"}} "#,
+            r#"{"timestamp":"2026-01-19T12:00:07.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-2"}} "#,
+            r#"{"timestamp":"2026-01-19T12:00:13.000Z","type":"event_msg","payload":{"type":"turn_aborted","turn_id":"turn-2","reason":"failed"}} "#,
+        ]);
+
+        let mut daily: HashMap<String, DailyTotals> = HashMap::new();
+        daily.insert(day_key.to_string(), DailyTotals::default());
+        let mut model_totals: HashMap<String, i64> = HashMap::new();
+        scan_file(&path, &mut daily, &mut model_totals, None).expect("scan file");
+
+        let totals = daily.get(day_key).copied().unwrap_or_default();
+        assert_eq!(totals.task_starts, 2);
+        assert_eq!(totals.user_messages, 1);
+        assert_eq!(totals.retried_runs, 1);
+        assert_eq!(totals.failed_runs, 1);
+        assert_eq!(totals.latency_samples, 2);
+        assert_eq!(totals.latency_total_ms, 11_000);
+    }
+
+    #[test]
+    fn scan_file_ignores_interrupted_aborts_for_failure_rate() {
+        let day_key = "2026-01-19";
+        let path = write_temp_jsonl(&[
+            r#"{"timestamp":"2026-01-19T12:00:00.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}} "#,
+            r#"{"timestamp":"2026-01-19T12:00:04.000Z","type":"event_msg","payload":{"type":"turn_aborted","turn_id":"turn-1","reason":"interrupted"}} "#,
+        ]);
+
+        let mut daily: HashMap<String, DailyTotals> = HashMap::new();
+        daily.insert(day_key.to_string(), DailyTotals::default());
+        let mut model_totals: HashMap<String, i64> = HashMap::new();
+        scan_file(&path, &mut daily, &mut model_totals, None).expect("scan file");
+
+        let totals = daily.get(day_key).copied().unwrap_or_default();
+        assert_eq!(totals.failed_runs, 0);
+        assert_eq!(totals.latency_samples, 1);
+        assert_eq!(totals.latency_total_ms, 4_000);
     }
 
     #[test]

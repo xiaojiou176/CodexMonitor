@@ -81,6 +81,9 @@ describe("Home", () => {
               totalTokens: 15,
               agentTimeMs: 120000,
               agentRuns: 2,
+              failedRuns: 1,
+              retriedRuns: 1,
+              avgLatencyMs: 5500,
             },
           ],
           totals: {
@@ -90,6 +93,9 @@ describe("Home", () => {
             cacheHitRatePercent: 0,
             peakDay: "2026-01-20",
             peakDayTokens: 15,
+            last7DaysFailureRatePercent: 50,
+            last7DaysRetryRatePercent: 50,
+            averageLatencyMs: 5500,
           },
           topModels: [],
         }}
@@ -99,6 +105,10 @@ describe("Home", () => {
     expect(screen.getAllByText("Agent 时长").length).toBeGreaterThan(0);
     expect(screen.getByText("运行次数")).not.toBeNull();
     expect(screen.getByText("峰值日期")).not.toBeNull();
+    expect(screen.getByText("稳定性指标")).not.toBeNull();
+    expect(screen.getByText("平均时延")).not.toBeNull();
+    expect(screen.getByText("失败率")).not.toBeNull();
+    expect(screen.getByText("重试率")).not.toBeNull();
     const usageTrend = screen.getByRole("list", { name: "近7天用量趋势" });
     expect(usageTrend).not.toBeNull();
     expect(screen.getAllByRole("listitem").length).toBeGreaterThan(0);

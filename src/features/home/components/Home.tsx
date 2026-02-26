@@ -154,6 +154,14 @@ export function Home({
     (total, day) => total + (day.agentRuns ?? 0),
     0,
   );
+  const last7FailedRuns = last7Days.reduce(
+    (total, day) => total + (day.failedRuns ?? 0),
+    0,
+  );
+  const last7RetriedRuns = last7Days.reduce(
+    (total, day) => total + (day.retriedRuns ?? 0),
+    0,
+  );
   const peakAgentDay = usageDays.reduce<
     | { day: string; agentTimeMs: number }
     | null
@@ -510,15 +518,17 @@ export function Home({
                     </div>
                   </div>
                   <div className="home-usage-card">
-                    <div className="home-usage-label">缓存命中率</div>
+                    <div className="home-usage-label">失败率</div>
                     <div className="home-usage-value">
                       <span className="home-usage-number">
                         {usageTotals
-                          ? `${usageTotals.cacheHitRatePercent.toFixed(1)}%`
+                          ? `${usageTotals.last7DaysFailureRatePercent.toFixed(1)}%`
                           : "--"}
                       </span>
                     </div>
-                    <div className="home-usage-caption">近 7 天</div>
+                    <div className="home-usage-caption">
+                      失败 {formatCount(last7FailedRuns)} 次
+                    </div>
                   </div>
                   <div className="home-usage-card">
                     <div className="home-usage-label">峰值日期</div>
@@ -622,6 +632,57 @@ export function Home({
                     </div>
                   );
                 })}
+              </div>
+            </div>
+            <div className="home-usage-models">
+              <div className="home-usage-models-label">稳定性指标</div>
+              <div className="home-usage-grid">
+                <div className="home-usage-card">
+                  <div className="home-usage-label">平均时延</div>
+                  <div className="home-usage-value">
+                    <span className="home-usage-number">
+                      {formatDurationCompact(usageTotals?.averageLatencyMs)}
+                    </span>
+                  </div>
+                  <div className="home-usage-caption">近 7 天完成任务</div>
+                </div>
+                <div className="home-usage-card">
+                  <div className="home-usage-label">失败率</div>
+                  <div className="home-usage-value">
+                    <span className="home-usage-number">
+                      {usageTotals
+                        ? `${usageTotals.last7DaysFailureRatePercent.toFixed(1)}%`
+                        : "--"}
+                    </span>
+                  </div>
+                  <div className="home-usage-caption">
+                    失败 {formatCount(last7FailedRuns)} 次
+                  </div>
+                </div>
+                <div className="home-usage-card">
+                  <div className="home-usage-label">重试率</div>
+                  <div className="home-usage-value">
+                    <span className="home-usage-number">
+                      {usageTotals
+                        ? `${usageTotals.last7DaysRetryRatePercent.toFixed(1)}%`
+                        : "--"}
+                    </span>
+                  </div>
+                  <div className="home-usage-caption">
+                    重试 {formatCount(last7RetriedRuns)} 次
+                  </div>
+                </div>
+                <div className="home-usage-card">
+                  <div className="home-usage-label">缓存命中率</div>
+                  <div className="home-usage-value">
+                    <span className="home-usage-number">
+                      {usageTotals
+                        ? `${usageTotals.cacheHitRatePercent.toFixed(1)}%`
+                        : "--"}
+                    </span>
+                  </div>
+                  <div className="home-usage-caption">近 7 天</div>
+                </div>
               </div>
             </div>
             <div className="home-usage-models">

@@ -115,6 +115,8 @@
     "vscode-material-icons": "^0.1.1"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "9.5.1",
+    "@stryker-mutator/vitest-runner": "9.5.1",
     "@playwright/test": "^1.58.2",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",

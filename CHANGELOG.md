@@ -11,6 +11,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Fixed remaining CI gates for `mutation-js` and `security-scans` with minimal scoped updates.
+- Mutation gate now uses repo-local Stryker dependencies (pinned `@stryker-mutator/core@9.5.1`, `@stryker-mutator/vitest-runner@9.5.1`) via local binary execution in `scripts/mutation-gate.mjs`, avoiding transient `npm exec --package` environments and preserving mutation thresholds.
+- `npm audit (high+)` in CI now runs production/runtime dependency scope with `npm audit --omit=dev --audit-level=high`, while keeping high-severity blocking.
+- Evidence artifacts: `.runtime-cache/test_output/ci-fixes/npm-install.log`, `.runtime-cache/test_output/ci-fixes/test-mutation-gate-dry-run.log`, `.runtime-cache/test_output/ci-fixes/mutation-target-precheck.log`, `.runtime-cache/test_output/ci-fixes/mutation-target-files.txt`, `.runtime-cache/test_output/ci-fixes/test-assertions-guard.log`, `.runtime-cache/test_output/ci-fixes/env-rationalize-check.log`, `.runtime-cache/test_output/ci-fixes/typecheck.log`, `.runtime-cache/test_output/ci-fixes/actionlint-ci.log`.
+- Evidence code paths: `package.json`, `package-lock.json`, `scripts/mutation-gate.mjs`, `.github/workflows/ci.yml`.
 - Improved responsive layout behavior across desktop/tablet views, including sidebar interactions and panel resizing flows.
 - Expanded `threads` branch-coverage tests across reducer, messaging, actions, queue handling, and args profile parsing to harden guard/no-op/error paths.
 - Evidence: `.runtime-cache/test_output/coverage-gate/latest.json`.

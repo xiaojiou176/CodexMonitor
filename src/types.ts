@@ -516,6 +516,9 @@ export type LocalUsageDay = {
   totalTokens: number;
   agentTimeMs: number;
   agentRuns: number;
+  failedRuns: number;
+  retriedRuns: number;
+  avgLatencyMs: number;
 };
 
 export type LocalUsageTotals = {
@@ -525,6 +528,9 @@ export type LocalUsageTotals = {
   cacheHitRatePercent: number;
   peakDay: string | null;
   peakDayTokens: number;
+  last7DaysFailureRatePercent: number;
+  last7DaysRetryRatePercent: number;
+  averageLatencyMs: number;
 };
 
 export type LocalUsageModel = {

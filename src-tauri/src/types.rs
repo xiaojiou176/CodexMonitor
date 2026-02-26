@@ -157,6 +157,12 @@ pub(crate) struct LocalUsageDay {
     pub(crate) agent_time_ms: i64,
     #[serde(default)]
     pub(crate) agent_runs: i64,
+    #[serde(default)]
+    pub(crate) failed_runs: i64,
+    #[serde(default)]
+    pub(crate) retried_runs: i64,
+    #[serde(default)]
+    pub(crate) avg_latency_ms: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -168,6 +174,12 @@ pub(crate) struct LocalUsageTotals {
     pub(crate) cache_hit_rate_percent: f64,
     pub(crate) peak_day: Option<String>,
     pub(crate) peak_day_tokens: i64,
+    #[serde(default)]
+    pub(crate) last7_days_failure_rate_percent: f64,
+    #[serde(default)]
+    pub(crate) last7_days_retry_rate_percent: f64,
+    #[serde(default)]
+    pub(crate) average_latency_ms: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
