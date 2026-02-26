@@ -57,7 +57,7 @@ Requested unique-source categories:
 | Source | Count | Keys |
 | --- | ---: | --- |
 | `.env` | 5 | `PLAYWRIGHT_WEB_PORT`, `TAURI_DEV_HMR_PORT`, `TAURI_DEV_HOST`, `TAURI_DEV_PORT`, `VITE_SENTRY_DSN` |
-| `CI secrets` | 11 | `APPLE_API_ISSUER_ID`, `APPLE_API_KEY_ID`, `APPLE_API_PRIVATE_KEY_B64`, `APPLE_CERTIFICATE_P12`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID`, `CODESIGN_IDENTITY`, `GITHUB_TOKEN`, `NOTARY_PROFILE_NAME`, `TAURI_SIGNING_PRIVATE_KEY_B64`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` |
+| `CI secrets` | 10 | `APPLE_API_ISSUER_ID`, `APPLE_API_KEY_ID`, `APPLE_API_PRIVATE_KEY_B64`, `APPLE_CERTIFICATE_P12`, `APPLE_CERTIFICATE_PASSWORD`, `CODESIGN_IDENTITY`, `GITHUB_TOKEN`, `NOTARY_PROFILE_NAME`, `TAURI_SIGNING_PRIVATE_KEY_B64`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` |
 | `release template` | 11 | `APP_ID`, `BETA_DESCRIPTION`, `BETA_GROUP_NAME`, `BUNDLE_ID`, `FEEDBACK_EMAIL`, `LOCALE`, `REVIEW_CONTACT_EMAIL`, `REVIEW_CONTACT_PHONE`, `REVIEW_FIRST_NAME`, `REVIEW_LAST_NAME`, `REVIEW_NOTES` |
 
 Note: Inventory also includes `code/script internal` (152 keys) and `mixed(.env,CI secrets)` (5 keys), retained in the full table for audit completeness.
@@ -139,7 +139,6 @@ ASCII Trend:
 | `APPLE_CERTIFICATE_P12` | CI secrets | no | no |
 | `APPLE_CERTIFICATE_PASSWORD` | CI secrets | no | no |
 | `APPLE_DEVELOPMENT_TEAM` | code/script internal | no | no |
-| `APPLE_TEAM_ID` | CI secrets | no | no |
 | `APPLICATION_CLAUSE` | code/script internal | no | no |
 | `APPLICATION_LINK` | code/script internal | no | no |
 | `APP_ARCH_DIR` | code/script internal | no | no |
