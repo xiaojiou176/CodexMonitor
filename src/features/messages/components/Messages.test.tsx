@@ -13,6 +13,7 @@ const useFileLinkOpenerMock = vi.fn(
 const openFileLinkMock = vi.fn();
 const showFileLinkMenuMock = vi.fn();
 const readWorkspaceFileMock = vi.hoisted(() => vi.fn());
+const openUrlMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../services/tauri", async () => {
   const actual = await vi.importActual<typeof import("../../../services/tauri")>(
@@ -33,6 +34,10 @@ vi.mock("../hooks/useFileLinkOpener", () => ({
   ) => useFileLinkOpenerMock(workspacePath, openTargets, selectedOpenAppId),
 }));
 
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: (url: string) => openUrlMock(url),
+}));
+
 describe("Messages", () => {
   beforeAll(() => {
     if (!HTMLElement.prototype.scrollIntoView) {
@@ -50,6 +55,7 @@ describe("Messages", () => {
     openFileLinkMock.mockReset();
     showFileLinkMenuMock.mockReset();
     readWorkspaceFileMock.mockReset();
+    openUrlMock.mockReset();
     readWorkspaceFileMock.mockResolvedValue({
       content: "line-1\nline-2\nline-3\nline-4",
       truncated: false,
@@ -420,6 +426,60 @@ describe("Messages", () => {
     expect(container.textContent ?? "").toContain("架构优雅性");
     expect(container.querySelector('a[href="可读性"]')).toBeNull();
     expect(container.querySelector('a[href="架构优雅性"]')).toBeNull();
+  });
+
+  it("keeps mixed-case allowed protocols as clickable external links", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-mixed-case-allowed-link",
+        kind: "message",
+        role: "assistant",
+        text: "[Docs](HTTPS://example.com/docs) and [Mail](MAILTO:team@example.com)",
+      },
+    ];
+
+    render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Docs"));
+    fireEvent.click(screen.getByText("Mail"));
+
+    expect(openUrlMock).toHaveBeenNthCalledWith(1, "HTTPS://example.com/docs");
+    expect(openUrlMock).toHaveBeenNthCalledWith(2, "MAILTO:team@example.com");
+  });
+
+  it("blocks obfuscated javascript protocol links from rendering anchors", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-obfuscated-protocol-link",
+        kind: "message",
+        role: "assistant",
+        text: "Blocked [payload](JaVaScRiPt:alert(1)) and [payload2](java\tscript:alert(2))",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector('a[href^="JaVaScRiPt:"]')).toBeNull();
+    expect(container.querySelector('a[href^="java\\tscript:"]')).toBeNull();
+    expect(openUrlMock).not.toHaveBeenCalled();
   });
 
   it("normalizes state_dump blocks into a stable three-level markdown structure", () => {

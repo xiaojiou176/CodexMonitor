@@ -766,22 +766,33 @@ function PreBlock({ node, children, copyUseModifier }: PreProps) {
 
 // Stable regex – created once outside render to avoid per-render allocation
 const FILE_PATH_WITH_OPTIONAL_LINE_RE = /^(.+?)(:\d+(?::\d+)?)?$/;
+const SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
+const ALLOWED_EXTERNAL_PROTOCOL_RE = /^(https?:|mailto:)/i;
 
 // Stable remarkPlugins array – prevents ReactMarkdown from re-parsing
 const REMARK_PLUGINS = [remarkGfm, remarkFileLinks];
 
+function isAllowedExternalUrl(url: string): boolean {
+  return ALLOWED_EXTERNAL_PROTOCOL_RE.test(url.trimStart());
+}
+
+function isHashNavigationUrl(url: string): boolean {
+  return url.trimStart().startsWith("#");
+}
+
+function isRelativeNavigationUrl(url: string): boolean {
+  const trimmed = url.trimStart();
+  return trimmed.startsWith("/") || trimmed.startsWith("./") || trimmed.startsWith("../");
+}
+
 // Stable urlTransform – referentially stable across renders
 function markdownUrlTransform(url: string): string {
-  const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url);
+  const hasScheme = SCHEME_RE.test(url.trimStart());
   if (
     isFileLinkUrl(url) ||
-    url.startsWith("http://") ||
-    url.startsWith("https://") ||
-    url.startsWith("mailto:") ||
-    url.startsWith("#") ||
-    url.startsWith("/") ||
-    url.startsWith("./") ||
-    url.startsWith("../")
+    isAllowedExternalUrl(url) ||
+    isHashNavigationUrl(url) ||
+    isRelativeNavigationUrl(url)
   ) {
     return url;
   }
@@ -895,13 +906,9 @@ export const Markdown = memo(function Markdown({
           );
         }
 
-        const isExternal =
-          url.startsWith("http://") ||
-          url.startsWith("https://") ||
-          url.startsWith("mailto:");
-        const isHashNavigation = url.startsWith("#");
-        const isRelativeNavigation =
-          url.startsWith("/") || url.startsWith("./") || url.startsWith("../");
+        const isExternal = isAllowedExternalUrl(url);
+        const isHashNavigation = isHashNavigationUrl(url);
+        const isRelativeNavigation = isRelativeNavigationUrl(url);
 
         if (isHashNavigation || isRelativeNavigation) {
           return <a href={href}>{children}</a>;
