@@ -49,6 +49,7 @@ If these are set, `env-doctor` fails.
 4. If both `GEMINI_API_KEY` and `REAL_LLM_API_KEY` are set but inconsistent, `env-doctor` warns.
 5. Pre-commit and pre-push run `env-doctor` to block drift and invalid env config.
 6. CI can enable strict alias retirement via `ENV_DOCTOR_STRICT_REAL_LLM_ALIAS=1`.
+7. `scripts/real-llm-smoke.mjs` uses `GEMINI_API_KEY` as internal primary key; `REAL_LLM_API_KEY` is compatibility input only.
 
 ## Commands
 

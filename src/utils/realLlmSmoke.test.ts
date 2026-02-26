@@ -14,7 +14,7 @@ describe("real-llm-smoke helpers", () => {
     const result = resolveConfig({});
     expect(result).toEqual({
       shouldSkip: true,
-      reason: "missing required env: REAL_LLM_BASE_URL, GEMINI_API_KEY (or REAL_LLM_API_KEY)",
+      reason: "missing required env: REAL_LLM_BASE_URL, GEMINI_API_KEY",
     });
   });
 
@@ -45,7 +45,7 @@ describe("real-llm-smoke helpers", () => {
       },
     );
     expect(effective.REAL_LLM_BASE_URL).toBe("https://example.com");
-    expect(effective.REAL_LLM_API_KEY).toBe("sk-from-dotenv");
+    expect(effective.GEMINI_API_KEY).toBe("sk-from-dotenv");
   });
 
   it("maps GEMINI_API_KEY from process env and defaults Gemini base url", () => {
@@ -60,7 +60,7 @@ describe("real-llm-smoke helpers", () => {
         },
       },
     );
-    expect(effective.REAL_LLM_API_KEY).toBe("gemini-process-key");
+    expect(effective.GEMINI_API_KEY).toBe("gemini-process-key");
     expect(effective.REAL_LLM_BASE_URL).toBe(
       "https://generativelanguage.googleapis.com/v1beta/openai",
     );
@@ -80,15 +80,15 @@ describe("real-llm-smoke helpers", () => {
     ) as unknown as {
       sources: Record<string, string>;
     };
-    const apiKeySource = sources.REAL_LLM_API_KEY;
-    expect(apiKeySource).toBe("GEMINI_API_KEY (process env)");
+    const apiKeySource = sources.GEMINI_API_KEY;
+    expect(apiKeySource).toBe("process env");
     expect(apiKeySource).not.toContain("gemini-process-key");
   });
 
   it("normalizes required env and timeout", () => {
     const result = resolveConfig({
       REAL_LLM_BASE_URL: "https://example.com/",
-      REAL_LLM_API_KEY: "sk-test",
+      GEMINI_API_KEY: "sk-test",
       REAL_LLM_TIMEOUT_MS: "5000",
     });
     expect(result).toMatchObject({
@@ -102,7 +102,7 @@ describe("real-llm-smoke helpers", () => {
   it("falls back to default timeout for invalid timeout env", () => {
     const result = resolveConfig({
       REAL_LLM_BASE_URL: "https://example.com/",
-      REAL_LLM_API_KEY: "sk-test",
+      GEMINI_API_KEY: "sk-test",
       REAL_LLM_TIMEOUT_MS: "invalid",
     });
     expect(result).toMatchObject({

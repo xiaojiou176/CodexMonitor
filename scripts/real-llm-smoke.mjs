@@ -20,7 +20,7 @@ const PREFLIGHT_REPORT_DIR = path.join(
 const PREFLIGHT_REPORT_PATH = path.join(PREFLIGHT_REPORT_DIR, "latest.json");
 const LLM_SOURCE_KEYS = [
   "REAL_LLM_BASE_URL",
-  "REAL_LLM_API_KEY",
+  "GEMINI_API_KEY",
   "REAL_LLM_MODEL",
   "REAL_LLM_TIMEOUT_MS",
 ];
@@ -182,13 +182,13 @@ export function resolveEffectiveEnvWithSources(seedEnv = process.env, options = 
     }
   }
 
-  if (!hasEnvValue(effective.REAL_LLM_API_KEY) && hasEnvValue(effective.GEMINI_API_KEY)) {
-    effective.REAL_LLM_API_KEY = cleanEnvValue(effective.GEMINI_API_KEY);
-    sources.REAL_LLM_API_KEY = resolveAliasSource("GEMINI_API_KEY", sources);
+  if (!hasEnvValue(effective.GEMINI_API_KEY) && hasEnvValue(effective.REAL_LLM_API_KEY)) {
+    effective.GEMINI_API_KEY = cleanEnvValue(effective.REAL_LLM_API_KEY);
+    sources.GEMINI_API_KEY = resolveAliasSource("REAL_LLM_API_KEY", sources);
   }
-  if (!hasEnvValue(effective.REAL_LLM_BASE_URL) && hasEnvValue(effective.REAL_LLM_API_KEY)) {
+  if (!hasEnvValue(effective.REAL_LLM_BASE_URL) && hasEnvValue(effective.GEMINI_API_KEY)) {
     effective.REAL_LLM_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
-    sources.REAL_LLM_BASE_URL = "default (REAL_LLM_API_KEY present)";
+    sources.REAL_LLM_BASE_URL = "default (GEMINI_API_KEY present)";
   }
 
   return { effective, sources };
@@ -209,7 +209,7 @@ export function resolveConfig(env = process.env) {
     missing.push("REAL_LLM_BASE_URL");
   }
   if (!apiKey) {
-    missing.push("GEMINI_API_KEY (or REAL_LLM_API_KEY)");
+    missing.push("GEMINI_API_KEY");
   }
 
   if (missing.length > 0) {
@@ -542,7 +542,7 @@ function buildEnvDiagnostics(effectiveEnv, sources, keys) {
       runnable = true;
       note = present ? "configured" : "optional; auto-select from /v1/models";
     }
-    if (key === "REAL_LLM_API_KEY") {
+    if (key === "GEMINI_API_KEY") {
       runnable = present;
       note = present ? "configured (redacted)" : "missing";
     }
@@ -551,7 +551,7 @@ function buildEnvDiagnostics(effectiveEnv, sources, keys) {
       present,
       runnable,
       note,
-      preview: key === "REAL_LLM_API_KEY" ? redactSecret(rawValue) : undefined,
+      preview: key === "GEMINI_API_KEY" ? redactSecret(rawValue) : undefined,
     };
   }
   return diagnostics;
@@ -560,7 +560,7 @@ function buildEnvDiagnostics(effectiveEnv, sources, keys) {
 function printLlmEnvSourceSummary(effectiveEnv, sources) {
   const sourceReport = buildEnvDiagnostics(effectiveEnv, sources, LLM_SOURCE_KEYS);
   for (const [key, info] of Object.entries(sourceReport)) {
-    const suffix = key === "REAL_LLM_API_KEY" ? " (value redacted)" : "";
+    const suffix = key === "GEMINI_API_KEY" ? " (value redacted)" : "";
     console.log(
       `[real-llm-smoke] env ${key}: present=${info.present ? "yes" : "no"} runnable=${info.runnable ? "yes" : "no"} source=${info.source}${suffix}`,
     );
@@ -605,14 +605,14 @@ export async function runLivePreflight(seedEnv = process.env) {
 
   const llmSources = extractLlmEnvSourceReport(effective, sources);
   const missingLlm = llmConfig.shouldSkip ? llmConfig.reason : "";
-  for (const key of ["REAL_LLM_BASE_URL", "REAL_LLM_API_KEY"]) {
+  for (const key of ["REAL_LLM_BASE_URL", "GEMINI_API_KEY"]) {
     const keyPresent = llmSources[key].present;
     checks.push({
       name: key,
       status: keyPresent ? "present" : "missing",
       source: llmSources[key].source,
       message: keyPresent
-        ? key === "REAL_LLM_API_KEY"
+        ? key === "GEMINI_API_KEY"
           ? "configured (value redacted)"
           : "configured"
         : "missing; real llm smoke will be skipped",
