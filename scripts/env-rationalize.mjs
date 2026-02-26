@@ -140,9 +140,6 @@ function main() {
   const directUsageGapCandidates = templateKeys.filter((key) => !runtimeKeysDiscovered.includes(key));
   const compatAliasCandidates = [
     "REAL_LLM_API_KEY",
-    "GEMINI_BASE_URL",
-    "GEMINI_MODEL",
-    "GEMINI_TIMEOUT_MS",
   ].filter((key) => schemaKeys.includes(key));
 
   console.log(`[env-rationalize] runtime discovered=${runtimeKeysDiscovered.length}`);

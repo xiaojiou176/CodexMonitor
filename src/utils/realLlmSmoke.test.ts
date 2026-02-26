@@ -14,7 +14,7 @@ describe("real-llm-smoke helpers", () => {
     const result = resolveConfig({});
     expect(result).toEqual({
       shouldSkip: true,
-      reason: "missing required env: REAL_LLM_BASE_URL, REAL_LLM_API_KEY",
+      reason: "missing required env: REAL_LLM_BASE_URL, GEMINI_API_KEY (or REAL_LLM_API_KEY)",
     });
   });
 
@@ -23,12 +23,10 @@ describe("real-llm-smoke helpers", () => {
       # comment
       REAL_LLM_BASE_URL="https://proxy.local"
       export REAL_LLM_API_KEY='sk-demo'
-      GEMINI_MODEL=gemini-2.5-pro
     `);
     expect(parsed).toMatchObject({
       REAL_LLM_BASE_URL: "https://proxy.local",
       REAL_LLM_API_KEY: "sk-demo",
-      GEMINI_MODEL: "gemini-2.5-pro",
     });
   });
 

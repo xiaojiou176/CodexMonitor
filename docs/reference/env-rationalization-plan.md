@@ -5,16 +5,13 @@ Last updated: 2026-02-26
 ## Snapshot
 
 - Runtime-prefixed keys discovered in repo: `12`
-- Canonical schema keys: `15`
+- Canonical schema keys: `12`
 - Non-template allowlist keys: `7`
 - Unknown runtime-prefixed keys: `0`
 
 ## Keep (Canonical Schema)
 
 - `GEMINI_API_KEY`
-- `GEMINI_BASE_URL`
-- `GEMINI_MODEL`
-- `GEMINI_TIMEOUT_MS`
 - `PLAYWRIGHT_BASE_URL`
 - `PLAYWRIGHT_WEB_PORT`
 - `REAL_EXTERNAL_URL`
@@ -44,16 +41,10 @@ Last updated: 2026-02-26
 ## Compatibility Alias Candidates (Future Reduction)
 
 - `REAL_LLM_API_KEY`
-- `GEMINI_BASE_URL`
-- `GEMINI_MODEL`
-- `GEMINI_TIMEOUT_MS`
 
 ## Direct-Usage Gap Candidates
 
 - `GEMINI_API_KEY`
-- `GEMINI_BASE_URL`
-- `GEMINI_MODEL`
-- `GEMINI_TIMEOUT_MS`
 - `REAL_LLM_API_KEY`
 - `REAL_LLM_BASE_URL`
 - `REAL_LLM_MODEL`

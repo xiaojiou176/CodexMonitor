@@ -186,21 +186,6 @@ export function resolveEffectiveEnvWithSources(seedEnv = process.env, options = 
     effective.REAL_LLM_API_KEY = cleanEnvValue(effective.GEMINI_API_KEY);
     sources.REAL_LLM_API_KEY = resolveAliasSource("GEMINI_API_KEY", sources);
   }
-  if (!hasEnvValue(effective.REAL_LLM_BASE_URL) && hasEnvValue(effective.GEMINI_BASE_URL)) {
-    effective.REAL_LLM_BASE_URL = cleanEnvValue(effective.GEMINI_BASE_URL);
-    sources.REAL_LLM_BASE_URL = resolveAliasSource("GEMINI_BASE_URL", sources);
-  }
-  if (!hasEnvValue(effective.REAL_LLM_MODEL) && hasEnvValue(effective.GEMINI_MODEL)) {
-    effective.REAL_LLM_MODEL = cleanEnvValue(effective.GEMINI_MODEL);
-    sources.REAL_LLM_MODEL = resolveAliasSource("GEMINI_MODEL", sources);
-  }
-  if (
-    !hasEnvValue(effective.REAL_LLM_TIMEOUT_MS) &&
-    hasEnvValue(effective.GEMINI_TIMEOUT_MS)
-  ) {
-    effective.REAL_LLM_TIMEOUT_MS = cleanEnvValue(effective.GEMINI_TIMEOUT_MS);
-    sources.REAL_LLM_TIMEOUT_MS = resolveAliasSource("GEMINI_TIMEOUT_MS", sources);
-  }
   if (!hasEnvValue(effective.REAL_LLM_BASE_URL) && hasEnvValue(effective.REAL_LLM_API_KEY)) {
     effective.REAL_LLM_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
     sources.REAL_LLM_BASE_URL = "default (REAL_LLM_API_KEY present)";
@@ -215,7 +200,7 @@ export function resolveEffectiveEnv(seedEnv = process.env, options = {}) {
 
 export function resolveConfig(env = process.env) {
   const baseUrl = cleanEnvValue(env.REAL_LLM_BASE_URL);
-  const apiKey = cleanEnvValue(env.REAL_LLM_API_KEY);
+  const apiKey = cleanEnvValue(env.GEMINI_API_KEY) || cleanEnvValue(env.REAL_LLM_API_KEY);
   const requestedModel = cleanEnvValue(env.REAL_LLM_MODEL);
   const timeoutMs = parseTimeoutMs(cleanEnvValue(env.REAL_LLM_TIMEOUT_MS));
 
@@ -224,7 +209,7 @@ export function resolveConfig(env = process.env) {
     missing.push("REAL_LLM_BASE_URL");
   }
   if (!apiKey) {
-    missing.push("REAL_LLM_API_KEY");
+    missing.push("GEMINI_API_KEY (or REAL_LLM_API_KEY)");
   }
 
   if (missing.length > 0) {
