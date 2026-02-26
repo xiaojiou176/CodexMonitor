@@ -7,6 +7,11 @@ import path from "node:path";
 const CWD = process.cwd();
 const SELF_PATH = "scripts/check-real-llm-alias-usage.mjs";
 const SCHEMA_PATH = path.join(CWD, "config", "env.schema.json");
+const ALLOWED_PATH_PATTERNS = [
+  /^docs\//,
+  /^config\/env\.schema\.json$/,
+  /^scripts\/check-real-llm-alias-usage\.mjs$/,
+];
 
 function loadAliasKeys() {
   const schema = JSON.parse(readFileSync(SCHEMA_PATH, "utf8"));
@@ -29,13 +34,8 @@ function runRg(aliasKey) {
         "!dist/**",
         "--glob",
         "!.runtime-cache/**",
-        "--glob",
-        `!${SELF_PATH}`,
         aliasKey,
-        "src",
-        "src-tauri",
-        "scripts",
-        "e2e",
+        ".",
       ],
       { encoding: "utf8" },
     );
@@ -66,7 +66,13 @@ function main() {
   for (const aliasKey of aliasKeys) {
     const matches = runRg(aliasKey);
     for (const match of matches) {
-      violations.push(match);
+      const firstColon = match.indexOf(":");
+      const rawPath = firstColon === -1 ? match : match.slice(0, firstColon);
+      const filePath = rawPath.replace(/^\.\//, "");
+      const allowed = ALLOWED_PATH_PATTERNS.some((pattern) => pattern.test(filePath));
+      if (!allowed) {
+        violations.push(match);
+      }
     }
   }
 
@@ -75,6 +81,10 @@ function main() {
     for (const violation of violations) {
       console.error(`  - ${violation}`);
     }
+    console.error("[env-alias-usage] allowed locations:");
+    console.error("  - docs/*");
+    console.error("  - config/env.schema.json");
+    console.error(`  - ${SELF_PATH}`);
     process.exit(1);
   }
 

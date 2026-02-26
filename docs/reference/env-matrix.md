@@ -14,7 +14,7 @@ This matrix defines the canonical env governance model for this repo:
 
 - `canonical_count`: `11` (from `config/env.schema.json` canonical variables).
 - `runtime_usage_count`: `12` (runtime-prefixed keys actually read by code paths scanned by `scripts/env-rationalize.mjs`).
-- `broad_env_like_count`: `180` (broad env-like keys across code reads + `.env*` variants + shell/workflow env-style keys).
+- `broad_env_like_count`: `183` (broad env-like keys across code reads + `.env*` variants + shell/workflow env-style keys).
 - Keys currently templated in `.env.example`: `5`.
 - `.env*` variant files discovered: `4` (`.env`, `.env.example`, `.env.local`, `.testflight.local.env.example`).
 - Keys currently present in local `.env` / `.env.local`: local-machine dependent and intentionally untracked.
@@ -60,6 +60,8 @@ If these are set, `env-doctor` fails.
 5. Pre-commit and pre-push run `env-doctor` to block drift and invalid env config.
 6. `scripts/real-llm-smoke.mjs` only accepts `GEMINI_API_KEY` for live LLM smoke.
 7. `env:rationalize:check` now fails when `.env.example` contains keys not directly read by code paths.
+8. `check:real-llm-alias-usage` blocks deprecated alias references outside `docs/*` and `config/env.schema.json`.
+9. `preflight:doc-drift` enforces strong binding: env-sensitive file changes must include env governance docs updates.
 
 ## Commands
 
@@ -69,3 +71,12 @@ npm run env:doctor:dev
 npm run env:doctor:live
 npm run env:doctor:staged
 ```
+
+## Evidence
+
+- Runtime artifacts:
+  - `.runtime-cache/test_output/real-llm/latest.json`
+  - `.runtime-cache/test_output/live-preflight/latest.json`
+- Changed code references:
+  - `scripts/preflight-doc-drift.mjs`
+  - `scripts/check-real-llm-alias-usage.mjs`

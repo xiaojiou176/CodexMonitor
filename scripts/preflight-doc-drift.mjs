@@ -27,7 +27,24 @@ const DOC_DRIFT_SENSITIVE = [
   /^vite\.config\.ts$/,
   /^playwright(?:\.[^/]+)?\.config\.ts$/,
   /^\.env\.example$/,
+  /^\.testflight\.local\.env\.example$/,
+  /^config\/env\.schema\.json$/,
+  /^config\/env\.runtime-allowlist\.json$/,
+  /^\.github\/workflows\//,
 ];
+
+const ENV_DRIFT_STRONG_BIND_SENSITIVE = [
+  /^\.env\.example$/,
+  /^\.testflight\.local\.env\.example$/,
+  /^config\/env\.schema\.json$/,
+  /^config\/env\.runtime-allowlist\.json$/,
+  /^scripts\/env-[^/]+\.mjs$/,
+  /^scripts\/check-real-llm-alias-usage\.mjs$/,
+  /^scripts\/env-doctor\.mjs$/,
+  /^\.github\/workflows\//,
+];
+
+const ENV_DRIFT_REQUIRED_DOCS = [/^docs\/reference\/env-/, /^README\.md$/];
 
 function runGit(args) {
   const result = spawnSync("git", args, {
@@ -119,6 +136,8 @@ function main() {
 
   const docsTouched = changedFiles.filter((file) => matchesAny(DOC_FILES, file));
   const sensitiveTouched = changedFiles.filter((file) => matchesAny(DOC_DRIFT_SENSITIVE, file));
+  const envSensitiveTouched = changedFiles.filter((file) => matchesAny(ENV_DRIFT_STRONG_BIND_SENSITIVE, file));
+  const envDocsTouched = docsTouched.filter((file) => matchesAny(ENV_DRIFT_REQUIRED_DOCS, file));
 
   if (sensitiveTouched.length === 0) {
     console.log("[doc-drift] No doc-sensitive staged changes. Gate passed.");
@@ -126,10 +145,25 @@ function main() {
   }
 
   if (docsTouched.length > 0) {
+    if (envSensitiveTouched.length > 0 && envDocsTouched.length === 0) {
+      console.error(
+        `[doc-drift] (${MODE}) Env-sensitive changes detected without env governance docs updates.`,
+      );
+      logList("Env-sensitive files", envSensitiveTouched);
+      console.error("[doc-drift] Update at least one env governance doc:");
+      console.error(
+        "[doc-drift] docs/reference/env-matrix.md / docs/reference/env-rationalization-plan.md / docs/reference/env-audit-report.md / README.md",
+      );
+      process.exit(1);
+    }
     console.log(`[doc-drift] (${MODE}) Doc-sensitive changes detected and docs were updated. Gate passed.`);
     if (DRY_RUN) {
       logList("Sensitive files", sensitiveTouched);
       logList("Docs files", docsTouched);
+      if (envSensitiveTouched.length > 0) {
+        logList("Env-sensitive files", envSensitiveTouched);
+        logList("Env docs files", envDocsTouched);
+      }
     }
     return;
   }
