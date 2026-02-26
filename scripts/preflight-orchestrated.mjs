@@ -3,7 +3,20 @@
 import { spawn } from "node:child_process";
 
 const DRY_RUN = process.argv.includes("--dry-run");
-const HEARTBEAT_MS = 20_000;
+const HEARTBEAT_LEVEL = (process.env.PREFLIGHT_HEARTBEAT_LEVEL ?? "normal").toLowerCase();
+
+const HEARTBEAT_CONFIG = {
+  quiet: { intervalMs: 90_000, minElapsedMs: 120_000 },
+  normal: { intervalMs: 60_000, minElapsedMs: 60_000 },
+  debug: { intervalMs: 20_000, minElapsedMs: 20_000 },
+};
+
+function resolveHeartbeatConfig() {
+  if (HEARTBEAT_LEVEL in HEARTBEAT_CONFIG) {
+    return HEARTBEAT_CONFIG[HEARTBEAT_LEVEL];
+  }
+  return HEARTBEAT_CONFIG.normal;
+}
 
 function npmCommand() {
   return process.platform === "win32" ? "npm.cmd" : "npm";
@@ -11,6 +24,7 @@ function npmCommand() {
 
 function runTask(name, args, options = {}) {
   const { heartbeatMs = 0 } = options;
+  const { minElapsedMs } = resolveHeartbeatConfig();
 
   if (DRY_RUN) {
     console.log(`[preflight][dry-run] ${name}: npm ${args.join(" ")}`);
@@ -25,9 +39,15 @@ function runTask(name, args, options = {}) {
     });
 
     let heartbeatTimer = null;
+    let emittedHeartbeat = false;
     if (heartbeatMs > 0) {
       heartbeatTimer = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+        const elapsedMs = Date.now() - startedAt;
+        if (elapsedMs < minElapsedMs) {
+          return;
+        }
+        emittedHeartbeat = true;
+        const elapsed = Math.floor(elapsedMs / 1000);
         console.log(`[heartbeat][preflight] ${name} still running (${elapsed}s)`);
       }, heartbeatMs);
     }
@@ -42,6 +62,10 @@ function runTask(name, args, options = {}) {
     child.on("close", (code) => {
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
+      }
+      if (heartbeatMs > 0 && emittedHeartbeat) {
+        const totalSeconds = Math.floor((Date.now() - startedAt) / 1000);
+        console.log(`[heartbeat][preflight] ${name} completed (${totalSeconds}s)`);
       }
       if (code === 0) {
         resolve();
@@ -64,22 +88,24 @@ async function runParallelLongTasks(tasks) {
 }
 
 async function main() {
+  const { intervalMs } = resolveHeartbeatConfig();
+  const heartbeatMs = HEARTBEAT_LEVEL === "quiet" ? 0 : intervalMs;
   console.log("[preflight] Phase 1/2: short gates before long jobs");
   await runTask(
     "preflight:doc-drift (branch)",
     ["run", "preflight:doc-drift", ...(DRY_RUN ? ["--", "--dry-run", "--mode=branch"] : ["--", "--mode=branch"])],
-    { heartbeatMs: HEARTBEAT_MS },
+    { heartbeatMs },
   );
-  await runTask("env:rationalize:check", ["run", "env:rationalize:check"], { heartbeatMs: HEARTBEAT_MS });
-  await runTask("env:doctor:dev", ["run", "env:doctor:dev"], { heartbeatMs: HEARTBEAT_MS });
-  await runTask("preflight:quick", ["run", "preflight:quick"], { heartbeatMs: HEARTBEAT_MS });
+  await runTask("env:rationalize:check", ["run", "env:rationalize:check"], { heartbeatMs });
+  await runTask("env:doctor:dev", ["run", "env:doctor:dev"], { heartbeatMs });
+  await runTask("preflight:quick", ["run", "preflight:quick"], { heartbeatMs });
 
   console.log("[preflight] Phase 2/2: long jobs in parallel with heartbeat");
   await runParallelLongTasks([
-    runTask("test:coverage:gate", ["run", "test:coverage:gate"], { heartbeatMs: HEARTBEAT_MS }),
-    runTask("check:rust", ["run", "check:rust"], { heartbeatMs: HEARTBEAT_MS }),
-    runTask("test:smoke:ui", ["run", "test:smoke:ui"], { heartbeatMs: HEARTBEAT_MS }),
-    runTask("test:live:preflight", ["run", "test:live:preflight"], { heartbeatMs: HEARTBEAT_MS }),
+    runTask("test:coverage:gate", ["run", "test:coverage:gate"], { heartbeatMs }),
+    runTask("check:rust", ["run", "check:rust"], { heartbeatMs }),
+    runTask("test:smoke:ui", ["run", "test:smoke:ui"], { heartbeatMs }),
+    runTask("test:live:preflight", ["run", "test:live:preflight"], { heartbeatMs }),
   ]);
 
   console.log("[preflight] All gates passed.");

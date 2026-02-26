@@ -34,6 +34,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Optimized pre-push gate runtime by removing duplicate full-test execution in `preflight` long phase while preserving quality enforcement through `test:coverage:gate`.
 - Evidence: `.runtime-cache/test_output/coverage-gate/latest.json`, `.runtime-cache/test_output/live-preflight/latest.json`.
 - Evidence code path: `scripts/preflight-orchestrated.mjs`.
+- Added heartbeat verbosity levels to pre-push orchestration to reduce terminal IO noise while preserving long-task visibility (`PREFLIGHT_HEARTBEAT_LEVEL=normal|debug|quiet`).
+- Default heartbeat now emits only for truly long-running tasks, with completion heartbeat summaries for traceability.
 
 ### Deprecated
 - None
