@@ -1,0 +1,66 @@
+# Env Rationalization Plan
+
+Last updated: 2026-02-26
+
+## Snapshot
+
+- Runtime-prefixed keys discovered in repo: `12`
+- Canonical schema keys: `15`
+- Non-template allowlist keys: `7`
+- Unknown runtime-prefixed keys: `0`
+
+## Keep (Canonical Schema)
+
+- `GEMINI_API_KEY`
+- `GEMINI_BASE_URL`
+- `GEMINI_MODEL`
+- `GEMINI_TIMEOUT_MS`
+- `PLAYWRIGHT_BASE_URL`
+- `PLAYWRIGHT_WEB_PORT`
+- `REAL_EXTERNAL_URL`
+- `REAL_LLM_API_KEY`
+- `REAL_LLM_BASE_URL`
+- `REAL_LLM_MODEL`
+- `REAL_LLM_TIMEOUT_MS`
+- `TAURI_DEV_HMR_PORT`
+- `TAURI_DEV_HOST`
+- `TAURI_DEV_PORT`
+- `VITE_SENTRY_DSN`
+
+## Keep (Non-template Allowlist)
+
+- `CODEX_HOME`
+- `CODEX_MONITOR_DAEMON_TOKEN`
+- `CODEX_MONITOR_ORBIT_AUTH_URL`
+- `CODEX_MONITOR_ORBIT_RUNNER_NAME`
+- `CODEX_MONITOR_ORBIT_TOKEN`
+- `TAURI_SIGNING_PRIVATE_KEY_B64`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+## Unknown Runtime Keys (Must Govern)
+
+- (none)
+
+## Compatibility Alias Candidates (Future Reduction)
+
+- `REAL_LLM_API_KEY`
+- `GEMINI_BASE_URL`
+- `GEMINI_MODEL`
+- `GEMINI_TIMEOUT_MS`
+
+## Direct-Usage Gap Candidates
+
+- `GEMINI_API_KEY`
+- `GEMINI_BASE_URL`
+- `GEMINI_MODEL`
+- `GEMINI_TIMEOUT_MS`
+- `REAL_LLM_API_KEY`
+- `REAL_LLM_BASE_URL`
+- `REAL_LLM_MODEL`
+- `REAL_LLM_TIMEOUT_MS`
+
+## Governance Rules
+
+1. New runtime-prefixed env keys must be added to `config/env.schema.json` or `config/env.runtime-allowlist.json`.
+2. `npm run env:rationalize:check` blocks drift during pre-commit.
+3. Alias candidates should be removed only after all callsites migrate to canonical keys.

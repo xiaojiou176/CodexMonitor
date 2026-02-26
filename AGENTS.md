@@ -422,11 +422,12 @@ At the end of a task:
 1. Run `npm run lint:strict`.
 2. Run `npm run test:assertions:guard`.
 3. Run `npm run guard:reuse-search`.
-4. Run `npm run env:doctor:dev` (or `npm run env:doctor:live` for live-integration work).
-5. Run `npm run test` when you touched threads, settings, updater, shared utils, or backend cores.
-6. Run `npm run typecheck`.
-7. If you changed Rust backend code, run `npm run check:rust`.
-8. Keep Husky hooks enabled (`pre-commit` and `pre-push`) so these checks run before pushing.
+4. Run `npm run env:rationalize:check` for runtime-prefixed env drift.
+5. Run `npm run env:doctor:dev` (or `npm run env:doctor:live` for live-integration work).
+6. Run `npm run test` when you touched threads, settings, updater, shared utils, or backend cores.
+7. Run `npm run typecheck`.
+8. If you changed Rust backend code, run `npm run check:rust`.
+9. Keep Husky hooks enabled (`pre-commit` and `pre-push`) so these checks run before pushing.
 
 ## 测试与质量铁律（2026-02）
 

@@ -303,12 +303,13 @@ Git hooks are enforced with Husky:
 - `pre-commit`: runs `npm run precommit:orchestrated`
   - Phase 1: `preflight:doc-drift` checks staged files and requires staged docs updates for doc-sensitive changes (`README.md`, `AGENTS.md`, `CLAUDE.md`, `src/{AGENTS,CLAUDE}.md`, `src-tauri/{AGENTS,CLAUDE}.md`, `CHANGELOG.md`, or `docs/*`).
   - Phase 2: security + env governance gates: `check:secrets:staged`, `check:keys:source-policy`, and `env:doctor:staged`.
+  - Runtime env drift is blocked by `env:rationalize:check` (runtime-prefixed keys must be declared in schema or allowlist).
   - Phase 3: runs `test:assertions:guard`, `guard:reuse-search`, and `lint:strict` in parallel.
 - `commit-msg`: runs secret scan and conventional-commit lint:
   - `npm run check:commit-message:secrets -- "$1"`
   - `npx --no-install commitlint --edit "$1"`
 - `pre-push`: runs `npm run preflight:orchestrated`
-  - Phase 1 (short first): `preflight:doc-drift (branch)` + `env:doctor:dev` + `preflight:quick` (`test:assertions:guard` then `typecheck`).
+  - Phase 1 (short first): `preflight:doc-drift (branch)` + `env:rationalize:check` + `env:doctor:dev` + `preflight:quick` (`test:assertions:guard` then `typecheck`).
   - Phase 2 (parallel long jobs): `test`, `test:coverage:gate` (strict 80/95), `check:rust`, `test:e2e:smoke`, and `test:live:preflight`, each with heartbeat logs every ~20s.
   - Parallel failure output preserves task names, so gate failures are directly attributable to the failing job.
 
@@ -320,6 +321,7 @@ npm run precommit:orchestrated:dry
 npm run preflight:orchestrated:dry
 npm run env:doctor:dev
 npm run env:doctor:live
+npm run env:rationalize
 ```
 
 Security gate commands:

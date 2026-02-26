@@ -67,6 +67,7 @@ async function main() {
     ...(DRY_RUN ? ["--", "--dry-run"] : []),
   ]);
   await runTask("env:doctor:staged", ["run", "env:doctor:staged"]);
+  await runTask("env:rationalize:check", ["run", "env:rationalize:check"]);
   await runTask("check:lazy-load:evidence-gate", [
     "run",
     "check:lazy-load:evidence-gate",

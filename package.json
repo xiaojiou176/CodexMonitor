@@ -20,6 +20,8 @@
     "env:doctor:dev": "node scripts/env-doctor.mjs --mode=dev",
     "env:doctor:live": "node scripts/env-doctor.mjs --mode=live",
     "env:doctor:staged": "node scripts/env-doctor.mjs --mode=staged",
+    "env:rationalize": "node scripts/env-rationalize.mjs --write-report",
+    "env:rationalize:check": "node scripts/env-rationalize.mjs --check",
     "shortcut:desktop": "bash scripts/create-desktop-shortcut.sh",
     "sync:upstream": "bash scripts/sync-upstream.sh",
     "sync:upstream:dry": "bash scripts/sync-upstream.sh --dry-run",

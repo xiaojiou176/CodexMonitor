@@ -70,6 +70,7 @@ async function main() {
     ["run", "preflight:doc-drift", ...(DRY_RUN ? ["--", "--dry-run", "--mode=branch"] : ["--", "--mode=branch"])],
     { heartbeatMs: HEARTBEAT_MS },
   );
+  await runTask("env:rationalize:check", ["run", "env:rationalize:check"], { heartbeatMs: HEARTBEAT_MS });
   await runTask("env:doctor:dev", ["run", "env:doctor:dev"], { heartbeatMs: HEARTBEAT_MS });
   await runTask("preflight:quick", ["run", "preflight:quick"], { heartbeatMs: HEARTBEAT_MS });
 

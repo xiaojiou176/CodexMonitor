@@ -32,6 +32,7 @@ CodexMonitor reads configuration from these layers:
 - Forbidden key sources: hardcoded literals, query string parameters, browser storage, cookies, or committed non-template env files.
 - Canonical env schema is defined in `config/env.schema.json`.
 - Env drift/validity gate is `npm run env:doctor` (also executed in pre-commit/pre-push orchestrated flows).
+- Runtime-prefixed env key drift gate is `npm run env:rationalize:check`.
 - Canonical env matrix is documented in `docs/reference/env-matrix.md`.
 
 ## Security Gates (Local)
