@@ -105,4 +105,30 @@ describe("useResizablePanels", () => {
     document.body.removeChild(appDiv);
     hook.unmount();
   });
+
+  it("supports keyboard resizing for sidebar separator", () => {
+    const hook = renderResizablePanels();
+    const createEvent = (key: string) =>
+      ({
+        key,
+        preventDefault: () => undefined,
+      }) as unknown as React.KeyboardEvent<HTMLDivElement>;
+
+    act(() => {
+      hook.result.onSidebarResizeKeyDown(createEvent("ArrowRight"));
+    });
+    expect(hook.result.sidebarWidth).toBe(296);
+
+    act(() => {
+      hook.result.onSidebarResizeKeyDown(createEvent("Home"));
+    });
+    expect(hook.result.sidebarWidth).toBe(hook.result.sidebarResizeMin);
+
+    act(() => {
+      hook.result.onSidebarResizeKeyDown(createEvent("End"));
+    });
+    expect(hook.result.sidebarWidth).toBe(hook.result.sidebarResizeMax);
+
+    hook.unmount();
+  });
 });

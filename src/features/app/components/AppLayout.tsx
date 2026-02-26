@@ -1,5 +1,5 @@
 import { memo } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { DesktopLayout } from "../../layout/components/DesktopLayout";
 import { TabletLayout } from "../../layout/components/TabletLayout";
 import { PhoneLayout } from "../../layout/components/PhoneLayout";
@@ -38,6 +38,18 @@ type AppLayoutProps = {
   onSidebarResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
   onRightPanelResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
   onPlanPanelResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
+  onSidebarResizeKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+  onRightPanelResizeKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+  onPlanPanelResizeKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+  sidebarWidth: number;
+  rightPanelWidth: number;
+  planPanelHeight: number;
+  sidebarResizeMin: number;
+  sidebarResizeMax: number;
+  rightPanelResizeMin: number;
+  rightPanelResizeMax: number;
+  planPanelResizeMin: number;
+  planPanelResizeMax: number;
 };
 
 export const AppLayout = memo(function AppLayout({
@@ -75,6 +87,18 @@ export const AppLayout = memo(function AppLayout({
   onSidebarResizeStart,
   onRightPanelResizeStart,
   onPlanPanelResizeStart,
+  onSidebarResizeKeyDown,
+  onRightPanelResizeKeyDown,
+  onPlanPanelResizeKeyDown,
+  sidebarWidth,
+  rightPanelWidth,
+  planPanelHeight,
+  sidebarResizeMin,
+  sidebarResizeMax,
+  rightPanelResizeMin,
+  rightPanelResizeMax,
+  planPanelResizeMin,
+  planPanelResizeMax,
 }: AppLayoutProps) {
   if (isPhone) {
     return (
@@ -115,6 +139,10 @@ export const AppLayout = memo(function AppLayout({
         sidebarNode={sidebarNode}
         tabletTab={tabletTab}
         onSidebarResizeStart={onSidebarResizeStart}
+        onSidebarResizeKeyDown={onSidebarResizeKeyDown}
+        sidebarWidth={sidebarWidth}
+        sidebarResizeMin={sidebarResizeMin}
+        sidebarResizeMax={sidebarResizeMax}
         topbarLeftNode={mainHeaderNode}
         codexTopbarActionsNode={codexTopbarActionsNode}
         messagesNode={messagesNode}
@@ -149,6 +177,18 @@ export const AppLayout = memo(function AppLayout({
       onSidebarResizeStart={onSidebarResizeStart}
       onRightPanelResizeStart={onRightPanelResizeStart}
       onPlanPanelResizeStart={onPlanPanelResizeStart}
+      onSidebarResizeKeyDown={onSidebarResizeKeyDown}
+      onRightPanelResizeKeyDown={onRightPanelResizeKeyDown}
+      onPlanPanelResizeKeyDown={onPlanPanelResizeKeyDown}
+      sidebarWidth={sidebarWidth}
+      rightPanelWidth={rightPanelWidth}
+      planPanelHeight={planPanelHeight}
+      sidebarResizeMin={sidebarResizeMin}
+      sidebarResizeMax={sidebarResizeMax}
+      rightPanelResizeMin={rightPanelResizeMin}
+      rightPanelResizeMax={rightPanelResizeMax}
+      planPanelResizeMin={planPanelResizeMin}
+      planPanelResizeMax={planPanelResizeMax}
     />
   );
 });

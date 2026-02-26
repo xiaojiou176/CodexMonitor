@@ -1322,6 +1322,36 @@ export function SettingsView({
   };
   const activeSectionGroup = getSettingsSectionGroup(activeSection);
   const activeSectionLabel = SETTINGS_SECTION_LABELS[activeSection];
+  const settingsContentRef = useRef<HTMLDivElement | null>(null);
+  const settingsGroupTabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const selectSiblingSection = useCallback(
+    (direction: 1 | -1) => {
+      const tabs = activeSectionGroup.sections;
+      const idx = tabs.indexOf(activeSection as (typeof tabs)[number]);
+      if (idx < 0 || tabs.length < 2) {
+        return;
+      }
+      const nextSection = tabs[(idx + direction + tabs.length) % tabs.length];
+      handleSelectSection(nextSection);
+      requestAnimationFrame(() => {
+        settingsGroupTabRefs.current[nextSection]?.focus();
+      });
+    },
+    [activeSection, activeSectionGroup.sections, handleSelectSection],
+  );
+
+  useEffect(() => {
+    const content = settingsContentRef.current;
+    if (!content) {
+      return;
+    }
+    if (typeof content.scrollTo === "function") {
+      content.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+    content.scrollTop = 0;
+  }, [activeSection]);
+
   const settingsBodyClassName = `settings-body${
     useMobileMasterDetail ? " settings-body-mobile-master-detail" : ""
   }${useMobileMasterDetail && showMobileDetail ? " is-detail-visible" : ""}`;
@@ -1374,7 +1404,7 @@ export function SettingsView({
                 </div>
               </div>
             )}
-            <div className="settings-content">
+            <div className="settings-content" ref={settingsContentRef}>
           {activeSectionGroup.sections.length > 1 && (
             <div
               className="settings-group-tabs"
@@ -1388,10 +1418,30 @@ export function SettingsView({
                 }
                 if (e.key === "ArrowRight") {
                   e.preventDefault();
-                  handleSelectSection(tabs[(idx + 1) % tabs.length]);
+                  selectSiblingSection(1);
                 } else if (e.key === "ArrowLeft") {
                   e.preventDefault();
-                  handleSelectSection(tabs[(idx - 1 + tabs.length) % tabs.length]);
+                  selectSiblingSection(-1);
+                } else if (e.key === "Home") {
+                  e.preventDefault();
+                  const [firstSection] = tabs;
+                  if (!firstSection) {
+                    return;
+                  }
+                  handleSelectSection(firstSection);
+                  requestAnimationFrame(() => {
+                    settingsGroupTabRefs.current[firstSection]?.focus();
+                  });
+                } else if (e.key === "End") {
+                  e.preventDefault();
+                  const lastSection = tabs[tabs.length - 1];
+                  if (!lastSection) {
+                    return;
+                  }
+                  handleSelectSection(lastSection);
+                  requestAnimationFrame(() => {
+                    settingsGroupTabRefs.current[lastSection]?.focus();
+                  });
                 }
               }}
             >
@@ -1399,6 +1449,9 @@ export function SettingsView({
                 <button
                   key={section}
                   type="button"
+                  ref={(node) => {
+                    settingsGroupTabRefs.current[section] = node;
+                  }}
                   className={`settings-group-tab${activeSection === section ? " is-active" : ""}`}
                   onClick={() => handleSelectSection(section)}
                   role="tab"

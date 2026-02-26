@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { MainTopbar } from "../../app/components/MainTopbar";
 
 type TabletLayoutProps = {
@@ -12,6 +12,10 @@ type TabletLayoutProps = {
   sidebarNode: ReactNode;
   tabletTab: "projects" | "codex" | "git" | "log";
   onSidebarResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
+  onSidebarResizeKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+  sidebarWidth: number;
+  sidebarResizeMin: number;
+  sidebarResizeMax: number;
   topbarLeftNode: ReactNode;
   codexTopbarActionsNode?: ReactNode;
   messagesNode: ReactNode;
@@ -32,6 +36,10 @@ export function TabletLayout({
   sidebarNode,
   tabletTab,
   onSidebarResizeStart,
+  onSidebarResizeKeyDown,
+  sidebarWidth,
+  sidebarResizeMin,
+  sidebarResizeMax,
   topbarLeftNode,
   codexTopbarActionsNode,
   messagesNode,
@@ -49,7 +57,12 @@ export function TabletLayout({
         role="separator"
         aria-orientation="vertical"
         aria-label="调整项目面板大小"
+        tabIndex={0}
+        aria-valuemin={sidebarResizeMin}
+        aria-valuemax={sidebarResizeMax}
+        aria-valuenow={sidebarWidth}
         onMouseDown={onSidebarResizeStart}
+        onKeyDown={onSidebarResizeKeyDown}
       />
       <main className="tablet-main" aria-label="主内容">
         {approvalToastsNode}

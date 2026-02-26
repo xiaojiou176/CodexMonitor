@@ -6,7 +6,8 @@ import Link2 from "lucide-react/dist/esm/icons/link-2";
 import ListFilter from "lucide-react/dist/esm/icons/list-filter";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Search from "lucide-react/dist/esm/icons/search";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ThreadListSortKey } from "../../../types";
 import {
   PopoverMenuItem,
@@ -45,20 +46,107 @@ export function SidebarHeader({
 }: SidebarHeaderProps) {
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
+  const sortToggleRef = useRef<HTMLButtonElement | null>(null);
+  const sortDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  const closeSortMenu = useCallback((restoreFocus: boolean) => {
+    setSortMenuOpen(false);
+    if (!restoreFocus) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      sortToggleRef.current?.focus();
+    });
+  }, []);
 
   useDismissibleMenu({
     isOpen: sortMenuOpen,
     containerRef: sortMenuRef,
-    onClose: () => setSortMenuOpen(false),
+    onClose: () => closeSortMenu(false),
   });
 
   const handleSelectSort = (sortKey: ThreadListSortKey) => {
-    setSortMenuOpen(false);
+    closeSortMenu(true);
     if (sortKey === threadListSortKey) {
       return;
     }
     onSetThreadListSortKey(sortKey);
   };
+
+  const focusSortOption = useCallback((index: number) => {
+    const options = sortDropdownRef.current?.querySelectorAll<HTMLButtonElement>(
+      "[role='menuitemradio']",
+    );
+    if (!options || options.length === 0) {
+      return;
+    }
+    const normalizedIndex = Math.min(options.length - 1, Math.max(0, index));
+    options[normalizedIndex]?.focus();
+  }, []);
+
+  const handleSortToggleKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setSortMenuOpen(true);
+        requestAnimationFrame(() => {
+          focusSortOption(0);
+        });
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setSortMenuOpen(true);
+        requestAnimationFrame(() => {
+          focusSortOption(1);
+        });
+      }
+    },
+    [focusSortOption],
+  );
+
+  const handleSortMenuKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      const options = sortDropdownRef.current?.querySelectorAll<HTMLButtonElement>(
+        "[role='menuitemradio']",
+      );
+      if (!options || options.length === 0) {
+        return;
+      }
+      const activeElement = document.activeElement as HTMLButtonElement | null;
+      const currentIndex = Array.from(options).findIndex((option) => option === activeElement);
+      const focusAt = (index: number) => {
+        const normalized = (index + options.length) % options.length;
+        options[normalized]?.focus();
+      };
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        focusAt(currentIndex < 0 ? 0 : currentIndex + 1);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        focusAt(currentIndex < 0 ? options.length - 1 : currentIndex - 1);
+        return;
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        focusAt(0);
+        return;
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        focusAt(options.length - 1);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeSortMenu(true);
+      }
+    },
+    [closeSortMenu],
+  );
 
   return (
     <div className="sidebar-header">
@@ -99,17 +187,24 @@ export function SidebarHeader({
           <button
             className={`ghost sidebar-sort-toggle${sortMenuOpen ? " is-active" : ""}`}
             onClick={() => setSortMenuOpen((open) => !open)}
+            onKeyDown={handleSortToggleKeyDown}
             data-tauri-drag-region="false"
             aria-label="排序对话"
             aria-haspopup="menu"
             aria-expanded={sortMenuOpen}
+            ref={sortToggleRef}
             type="button"
             title="排序对话"
           >
             <ListFilter aria-hidden />
           </button>
           {sortMenuOpen && (
-            <PopoverSurface className="sidebar-sort-dropdown" role="menu">
+            <PopoverSurface
+              className="sidebar-sort-dropdown"
+              role="menu"
+              onKeyDown={handleSortMenuKeyDown}
+              ref={sortDropdownRef}
+            >
               <PopoverMenuItem
                 className="sidebar-sort-option"
                 role="menuitemradio"

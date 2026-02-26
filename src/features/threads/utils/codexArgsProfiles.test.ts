@@ -209,7 +209,7 @@ describe("codexArgsProfiles", () => {
     expect(buildCodexArgsOptionLabel("--model gpt-5 --sandbox workspace-write")).toBe(
       "--model gpt-5 --san…",
     );
-    expect(buildCodexArgsBadgeLabel("--model gpt-5 --full-auto")).toBe("--model gpt-5 --ful…");
+    expect(buildCodexArgsBadgeLabel("--model gpt-5 --full-auto")).toBe("--model gpt-5 --full…");
   });
 
   it("keeps options default-only for nullish/blank candidates", () => {

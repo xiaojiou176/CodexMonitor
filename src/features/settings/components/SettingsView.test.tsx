@@ -454,6 +454,56 @@ describe("SettingsView Display", () => {
       );
     });
   });
+
+  it("supports keyboard section tab navigation and resets content scroll", async () => {
+    const props: ComponentProps<typeof SettingsView> = {
+      reduceTransparency: false,
+      onToggleTransparency: vi.fn(),
+      appSettings: baseSettings,
+      openAppIconById: {},
+      onUpdateAppSettings: vi.fn().mockResolvedValue(undefined),
+      workspaceGroups: [],
+      groupedWorkspaces: [],
+      ungroupedLabel: "Ungrouped",
+      onClose: vi.fn(),
+      onMoveWorkspace: vi.fn(),
+      onDeleteWorkspace: vi.fn(),
+      onCreateWorkspaceGroup: vi.fn().mockResolvedValue(null),
+      onRenameWorkspaceGroup: vi.fn().mockResolvedValue(null),
+      onMoveWorkspaceGroup: vi.fn().mockResolvedValue(null),
+      onDeleteWorkspaceGroup: vi.fn().mockResolvedValue(null),
+      onAssignWorkspaceGroup: vi.fn().mockResolvedValue(null),
+      onRunDoctor: vi.fn().mockResolvedValue(createDoctorResult()),
+      onUpdateWorkspaceCodexBin: vi.fn().mockResolvedValue(undefined),
+      onUpdateWorkspaceSettings: vi.fn().mockResolvedValue(undefined),
+      scaleShortcutTitle: "Scale shortcut",
+      scaleShortcutText: "Use Command +/-",
+      onTestNotificationSound: vi.fn(),
+      onTestSystemNotification: vi.fn(),
+      dictationModelStatus: null,
+      onDownloadDictationModel: vi.fn(),
+      onCancelDictationDownload: vi.fn(),
+      onRemoveDictationModel: vi.fn(),
+      initialSection: "server",
+    };
+
+    const { container } = render(<SettingsView {...props} />);
+    const content = container.querySelector(".settings-content") as HTMLElement | null;
+    if (!content) {
+      throw new Error("Expected settings content container");
+    }
+    content.scrollTop = 120;
+
+    const serverTab = screen.getByRole("tab", { name: "服务" });
+    fireEvent.keyDown(serverTab, { key: "ArrowRight" });
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Codex" }).getAttribute("aria-selected")).toBe(
+        "true",
+      );
+      expect(content.scrollTop).toBe(0);
+    });
+  });
 });
 
 describe("SettingsView Environments", () => {

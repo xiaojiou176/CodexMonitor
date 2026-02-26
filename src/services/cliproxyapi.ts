@@ -1,6 +1,6 @@
 /**
  * CLIProxyAPI Service
- * 
+ *
  * 直接与 CLIProxyAPI 通信，提供模型列表获取和配置更新功能。
  * 这是一个补充服务，允许用户在 UI 中直接配置模型，而不需要手动编辑 config.toml。
  */
@@ -117,7 +117,7 @@ export async function testCLIProxyAPIConnection(config?: CLIProxyAPIConfig): Pro
   error?: string;
 }> {
   const testConfig = config || getCLIProxyAPIConfig();
-  
+
   try {
     const response = await fetch(`${testConfig.baseUrl}/v1/models`, {
       method: "GET",
@@ -126,7 +126,7 @@ export async function testCLIProxyAPIConnection(config?: CLIProxyAPIConfig): Pro
         "Content-Type": "application/json",
       },
     });
-    
+
     if (!response.ok) {
       return {
         success: false,
@@ -134,7 +134,7 @@ export async function testCLIProxyAPIConnection(config?: CLIProxyAPIConfig): Pro
         error: `HTTP ${response.status}: ${response.statusText}`,
       };
     }
-    
+
     const data: CLIProxyAPIModelsResponse = await response.json();
     return {
       success: true,
@@ -189,7 +189,7 @@ export function categorizeModels(models: CLIProxyAPIModel[]): ModelCategory[] {
       models: [],
     },
   };
-  
+
   for (const model of models) {
     const id = model.id.toLowerCase();
     if (id.includes("codex") || id.includes("gpt-5")) {
@@ -202,7 +202,7 @@ export function categorizeModels(models: CLIProxyAPIModel[]): ModelCategory[] {
       categories.other.models.push(model);
     }
   }
-  
+
   // 只返回有模型的分类
   return Object.values(categories).filter((cat) => cat.models.length > 0);
 }
@@ -224,6 +224,6 @@ export function getModelDisplayName(modelId: string): string {
     "gemini-2.5-flash-lite": "Gemini 2.5 Flash Lite",
     "gemini-2.5-pro": "Gemini 2.5 Pro",
   };
-  
+
   return displayNames[modelId] || modelId;
 }

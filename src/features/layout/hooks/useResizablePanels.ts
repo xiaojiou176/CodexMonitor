@@ -1,4 +1,7 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+} from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY_SIDEBAR = "codexmonitor.sidebarWidth";
@@ -21,6 +24,7 @@ const DEFAULT_RIGHT_PANEL_WIDTH = 230;
 const DEFAULT_PLAN_PANEL_HEIGHT = 220;
 const DEFAULT_TERMINAL_PANEL_HEIGHT = 220;
 const DEFAULT_DEBUG_PANEL_HEIGHT = 180;
+const KEYBOARD_RESIZE_STEP = 16;
 
 type ResizeState = {
   type: "sidebar" | "right-panel" | "plan-panel" | "terminal-panel" | "debug-panel";
@@ -56,6 +60,31 @@ function readStoredWidth(key: string, fallback: number, min: number, max: number
   }
   return clamp(parsed, min, max);
 }
+
+type ResizeType = ResizeState["type"];
+
+const RESIZE_LIMITS: Record<ResizeType, { min: number; max: number }> = {
+  sidebar: {
+    min: MIN_SIDEBAR_WIDTH,
+    max: MAX_SIDEBAR_WIDTH,
+  },
+  "right-panel": {
+    min: MIN_RIGHT_PANEL_WIDTH,
+    max: MAX_RIGHT_PANEL_WIDTH,
+  },
+  "plan-panel": {
+    min: MIN_PLAN_PANEL_HEIGHT,
+    max: MAX_PLAN_PANEL_HEIGHT,
+  },
+  "terminal-panel": {
+    min: MIN_TERMINAL_PANEL_HEIGHT,
+    max: MAX_TERMINAL_PANEL_HEIGHT,
+  },
+  "debug-panel": {
+    min: MIN_DEBUG_PANEL_HEIGHT,
+    max: MAX_DEBUG_PANEL_HEIGHT,
+  },
+};
 
 export function useResizablePanels() {
   const [sidebarWidth, setSidebarWidth] = useState(() =>
@@ -320,6 +349,89 @@ export function useResizablePanels() {
     [debugPanelHeight, rightPanelWidth],
   );
 
+  const applyKeyboardResize = useCallback(
+    (type: ResizeType, nextValue: number) => {
+      const { min, max } = RESIZE_LIMITS[type];
+      const clamped = clamp(nextValue, min, max);
+      switch (type) {
+        case "sidebar":
+          setSidebarWidth(clamped);
+          break;
+        case "right-panel":
+          setRightPanelWidth(clamped);
+          break;
+        case "plan-panel":
+          setPlanPanelHeight(clamped);
+          break;
+        case "terminal-panel":
+          setTerminalPanelHeight(clamped);
+          break;
+        case "debug-panel":
+          setDebugPanelHeight(clamped);
+          break;
+      }
+    },
+    [],
+  );
+
+  const handleResizeKeyDown = useCallback(
+    (
+      event: ReactKeyboardEvent<HTMLDivElement>,
+      type: ResizeType,
+      currentValue: number,
+      shrinkKeys: string[],
+      growKeys: string[],
+    ) => {
+      if (event.key === "Home") {
+        event.preventDefault();
+        applyKeyboardResize(type, RESIZE_LIMITS[type].min);
+        return;
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        applyKeyboardResize(type, RESIZE_LIMITS[type].max);
+        return;
+      }
+      if (shrinkKeys.includes(event.key)) {
+        event.preventDefault();
+        applyKeyboardResize(type, currentValue - KEYBOARD_RESIZE_STEP);
+        return;
+      }
+      if (growKeys.includes(event.key)) {
+        event.preventDefault();
+        applyKeyboardResize(type, currentValue + KEYBOARD_RESIZE_STEP);
+      }
+    },
+    [applyKeyboardResize],
+  );
+
+  const onSidebarResizeKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      handleResizeKeyDown(event, "sidebar", sidebarWidth, ["ArrowLeft"], ["ArrowRight"]);
+    },
+    [handleResizeKeyDown, sidebarWidth],
+  );
+
+  const onRightPanelResizeKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      handleResizeKeyDown(
+        event,
+        "right-panel",
+        rightPanelWidth,
+        ["ArrowRight"],
+        ["ArrowLeft"],
+      );
+    },
+    [handleResizeKeyDown, rightPanelWidth],
+  );
+
+  const onPlanPanelResizeKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      handleResizeKeyDown(event, "plan-panel", planPanelHeight, ["ArrowDown"], ["ArrowUp"]);
+    },
+    [handleResizeKeyDown, planPanelHeight],
+  );
+
   return {
     sidebarWidth,
     rightPanelWidth,
@@ -331,5 +443,14 @@ export function useResizablePanels() {
     onPlanPanelResizeStart,
     onTerminalPanelResizeStart,
     onDebugPanelResizeStart,
+    onSidebarResizeKeyDown,
+    onRightPanelResizeKeyDown,
+    onPlanPanelResizeKeyDown,
+    sidebarResizeMin: MIN_SIDEBAR_WIDTH,
+    sidebarResizeMax: MAX_SIDEBAR_WIDTH,
+    rightPanelResizeMin: MIN_RIGHT_PANEL_WIDTH,
+    rightPanelResizeMax: MAX_RIGHT_PANEL_WIDTH,
+    planPanelResizeMin: MIN_PLAN_PANEL_HEIGHT,
+    planPanelResizeMax: MAX_PLAN_PANEL_HEIGHT,
   };
 }

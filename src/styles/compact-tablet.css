@@ -148,6 +148,11 @@
   opacity: 1;
 }
 
+.projects-resizer:focus-visible {
+  outline: 2px solid var(--border-accent);
+  outline-offset: -2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app.layout-tablet,
   .app.layout-tablet *,

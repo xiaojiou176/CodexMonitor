@@ -477,6 +477,15 @@ function MainApp() {
     onTerminalPanelResizeStart,
     debugPanelHeight,
     onDebugPanelResizeStart,
+    onSidebarResizeKeyDown,
+    onRightPanelResizeKeyDown,
+    onPlanPanelResizeKeyDown,
+    sidebarResizeMin,
+    sidebarResizeMax,
+    rightPanelResizeMin,
+    rightPanelResizeMax,
+    planPanelResizeMin,
+    planPanelResizeMax,
     isCompact,
     isTablet,
     isPhone,
@@ -3368,6 +3377,18 @@ function MainApp() {
         onSidebarResizeStart={onSidebarResizeStart}
         onRightPanelResizeStart={onRightPanelResizeStart}
         onPlanPanelResizeStart={onPlanPanelResizeStart}
+        onSidebarResizeKeyDown={onSidebarResizeKeyDown}
+        onRightPanelResizeKeyDown={onRightPanelResizeKeyDown}
+        onPlanPanelResizeKeyDown={onPlanPanelResizeKeyDown}
+        sidebarWidth={sidebarWidth}
+        rightPanelWidth={rightPanelWidth}
+        planPanelHeight={planPanelHeight}
+        sidebarResizeMin={sidebarResizeMin}
+        sidebarResizeMax={sidebarResizeMax}
+        rightPanelResizeMin={rightPanelResizeMin}
+        rightPanelResizeMax={rightPanelResizeMax}
+        planPanelResizeMin={planPanelResizeMin}
+        planPanelResizeMax={planPanelResizeMax}
       />
       <AppModals
         renamePrompt={renamePrompt}

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { act, createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Sidebar } from "./Sidebar";
@@ -179,6 +179,26 @@ describe("Sidebar", () => {
 
     expect(onSetThreadListSortKey).toHaveBeenCalledWith("created_at");
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("supports keyboard navigation and close for thread sort menu", async () => {
+    render(<Sidebar {...baseProps} />);
+
+    const toggleButton = screen.getByRole("button", { name: "排序对话" });
+    toggleButton.focus();
+    fireEvent.keyDown(toggleButton, { key: "ArrowDown" });
+
+    const menu = screen.getByRole("menu");
+    fireEvent.keyDown(menu, { key: "ArrowDown" });
+    const firstOption = screen.getByRole("menuitemradio", { name: "最近更新" });
+    expect(document.activeElement).toBe(firstOption);
+
+    fireEvent.keyDown(menu, { key: "Escape" });
+
+    expect(screen.queryByRole("menu")).toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(toggleButton);
+    });
   });
 
   it("refreshes all workspace threads from the header button", () => {
