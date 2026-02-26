@@ -6,7 +6,7 @@ Last updated: 2026-02-26
 
 - Runtime-prefixed keys discovered in repo: `14`
 - Canonical schema keys: `12`
-- Broad env-like keys discovered in repo: `198`
+- Broad env-like keys discovered in repo: `199`
 - Non-template allowlist keys: `7`
 - Unknown runtime-prefixed keys: `0`
 

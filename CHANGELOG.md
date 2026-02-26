@@ -35,6 +35,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Raised `threads` critical branch-coverage threshold from `91%` to `92%` to tighten enforcement while matching the current measurable baseline.
 - Evidence: `.runtime-cache/test_output/coverage-gate/latest.json`.
 - Evidence code path: `scripts/coverage-gate.mjs`.
+- Hardened CI portability by adding ripgrep-independent fallbacks in env/assertion/mutation guards and fixing workflow hygiene/toolchain wiring in `ci.yml`.
+- Evidence: `.runtime-cache/test_output/coverage-gate/latest.json`, `.runtime-cache/test_output/live-preflight/latest.json`.
+- Evidence code paths: `.github/workflows/ci.yml`, `scripts/env-rationalize.mjs`, `scripts/guard-placebo-assertions.mjs`, `scripts/mutation-gate.mjs`, `scripts/mutation-stryker.config.mjs`.
 - Optimized pre-push gate runtime by removing duplicate full-test execution in `preflight` long phase while preserving quality enforcement through `test:coverage:gate`.
 - Evidence: `.runtime-cache/test_output/coverage-gate/latest.json`, `.runtime-cache/test_output/live-preflight/latest.json`.
 - Evidence code path: `scripts/preflight-orchestrated.mjs`.

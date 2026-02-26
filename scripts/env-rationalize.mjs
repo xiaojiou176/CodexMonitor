@@ -19,6 +19,16 @@ const ENV_ACCESS_PATTERNS = [
   "env!\\(\"[A-Z0-9_]+\"\\)",
 ];
 const ENV_VARIANT_FILES = [".env", ".env.example", ".env.local", ".testflight.local.env.example"];
+const RG_EXCLUDE_GLOBS = [
+  "--glob",
+  "!node_modules/**",
+  "--glob",
+  "!.git/**",
+  "--glob",
+  "!dist/**",
+  "--glob",
+  "!.runtime-cache/**",
+];
 
 function parseEnvFile(filePath) {
   const content = readFileSync(filePath, "utf8");
@@ -44,88 +54,118 @@ function parseEnvFileSafe(filePath) {
 }
 
 function runRg(patterns) {
+  const rgPaths = [
+    "src",
+    "src-tauri",
+    "scripts",
+    "e2e",
+    "playwright.config.ts",
+    "playwright.external.config.ts",
+    "vite.config.ts",
+  ];
+  const rgArgs = [
+    "-n",
+    "--no-heading",
+    ...RG_EXCLUDE_GLOBS,
+    "--glob",
+    "!docs/**",
+    "--glob",
+    "!audit/**",
+    "-e",
+    patterns[0],
+    "-e",
+    patterns[1],
+    "-e",
+    patterns[2],
+    "-e",
+    patterns[3],
+    "-e",
+    patterns[4],
+    ...rgPaths,
+  ];
   try {
-    const output = execFileSync(
-      "rg",
-      [
-        "-n",
-        "--no-heading",
-        "--glob",
-        "!node_modules/**",
-        "--glob",
-        "!.git/**",
-        "--glob",
-        "!dist/**",
-        "--glob",
-        "!.runtime-cache/**",
-        "--glob",
-        "!docs/**",
-        "--glob",
-        "!audit/**",
-        "-e",
-        patterns[0],
-        "-e",
-        patterns[1],
-        "-e",
-        patterns[2],
-        "-e",
-        patterns[3],
-        "-e",
-        patterns[4],
-        "src",
-        "src-tauri",
-        "scripts",
-        "e2e",
-        "playwright.config.ts",
-        "playwright.external.config.ts",
-        "vite.config.ts",
-      ],
-      { encoding: "utf8", cwd: CWD },
-    );
+    const output = execFileSync("rg", rgArgs, { encoding: "utf8", cwd: CWD });
     return output
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
   } catch (error) {
-    const stdout = error?.stdout;
-    if (typeof stdout === "string" && stdout.trim() !== "") {
-      return stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (error?.code !== "ENOENT") {
+      const stdout = error?.stdout;
+      if (typeof stdout === "string" && stdout.trim() !== "") {
+        return stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      }
+      return [];
     }
-    return [];
+
+    const gitArgs = [
+      "grep",
+      "-n",
+      "-I",
+      "-E",
+      "-e",
+      patterns[0],
+      "-e",
+      patterns[1],
+      "-e",
+      patterns[2],
+      "-e",
+      patterns[3],
+      "-e",
+      patterns[4],
+      "--",
+      ...rgPaths,
+    ];
+    try {
+      const output = execFileSync("git", gitArgs, {
+        encoding: "utf8",
+        cwd: CWD,
+      });
+      return output
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    } catch (gitError) {
+      const stdout = gitError?.stdout;
+      if (typeof stdout === "string" && stdout.trim() !== "") {
+        return stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      }
+      return [];
+    }
   }
 }
 
-function runRgSingle(pattern, searchPaths) {
+function runRgSingle(pattern, searchPaths, gitFallbackPattern = pattern) {
+  const rgArgs = ["-n", "--no-heading", ...RG_EXCLUDE_GLOBS, "-e", pattern, ...searchPaths];
   try {
-    const output = execFileSync(
-      "rg",
-      [
-        "-n",
-        "--no-heading",
-        "--glob",
-        "!node_modules/**",
-        "--glob",
-        "!.git/**",
-        "--glob",
-        "!dist/**",
-        "--glob",
-        "!.runtime-cache/**",
-        "-e",
-        pattern,
-        ...searchPaths,
-      ],
-      { encoding: "utf8", cwd: CWD },
-    );
+    const output = execFileSync("rg", rgArgs, { encoding: "utf8", cwd: CWD });
     return output
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
   } catch (error) {
-    const stdout = error?.stdout;
-    if (typeof stdout === "string" && stdout.trim() !== "") {
-      return stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (error?.code !== "ENOENT") {
+      const stdout = error?.stdout;
+      if (typeof stdout === "string" && stdout.trim() !== "") {
+        return stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      }
+      return [];
     }
-    return [];
+
+    const gitArgs = ["grep", "-n", "-I", "-E", "-e", gitFallbackPattern, "--", ...searchPaths];
+    try {
+      const output = execFileSync("git", gitArgs, { encoding: "utf8", cwd: CWD });
+      return output
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    } catch (gitError) {
+      const stdout = gitError?.stdout;
+      if (typeof stdout === "string" && stdout.trim() !== "") {
+        return stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      }
+      return [];
+    }
   }
 }
 
@@ -183,6 +223,7 @@ function main() {
     runRgSingle(
       "\\b([A-Z][A-Z0-9_]*)\\s*=",
       ["scripts", ".github/workflows"],
+      "([A-Z][A-Z0-9_]*)[[:space:]]*=",
     )
       .map((line) => line.match(/\b([A-Z][A-Z0-9_]*)\s*=/)?.[1] ?? "")
       .filter(Boolean),
@@ -191,6 +232,7 @@ function main() {
     runRgSingle(
       "\\$\\{\\{\\s*(?:vars|secrets)\\.([A-Z0-9_]+)",
       [".github/workflows"],
+      "\\$\\{\\{[[:space:]]*(vars|secrets)\\.([A-Z0-9_]+)",
     )
       .map((line) => line.match(/\$\{\{\s*(?:vars|secrets)\.([A-Z0-9_]+)/)?.[1] ?? "")
       .filter(Boolean),

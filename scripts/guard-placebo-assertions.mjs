@@ -19,20 +19,44 @@ const globArgs = [
   "e2e/**/*.test.ts",
 ];
 
-const rgResult = spawnSync("rg", globArgs, {
-  cwd: rootDir,
-  encoding: "utf8",
-});
+function listTestFiles() {
+  const rgResult = spawnSync("rg", globArgs, {
+    cwd: rootDir,
+    encoding: "utf8",
+  });
+  if (!rgResult.error && rgResult.status === 0) {
+    return rgResult.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
 
-if (rgResult.error) {
-  console.error("[guard-placebo-assertions] Failed to run rg:", rgResult.error.message);
+  const gitLsFilesArgs = [
+    "ls-files",
+    "--",
+    ":(glob)src/**/*.test.ts",
+    ":(glob)src/**/*.test.tsx",
+    ":(glob)e2e/**/*.spec.ts",
+    ":(glob)e2e/**/*.test.ts",
+  ];
+  const gitResult = spawnSync("git", gitLsFilesArgs, {
+    cwd: rootDir,
+    encoding: "utf8",
+  });
+  if (!gitResult.error && gitResult.status === 0) {
+    return gitResult.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
+  const rgError = rgResult.error ? `rg: ${rgResult.error.message}` : `rg exit=${rgResult.status}`;
+  const gitError = gitResult.error ? `git: ${gitResult.error.message}` : `git exit=${gitResult.status}`;
+  console.error(`[guard-placebo-assertions] Failed to enumerate test files (${rgError}; ${gitError})`);
   process.exit(2);
 }
 
-const files = rgResult.stdout
-  .split("\n")
-  .map((line) => line.trim())
-  .filter(Boolean);
+const files = listTestFiles();
 
 const simpleLiteralPattern =
   /(?:true|false|null|undefined|-?\d+(?:\.\d+)?|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/;

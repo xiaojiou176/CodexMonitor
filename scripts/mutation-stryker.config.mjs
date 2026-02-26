@@ -3,6 +3,17 @@ export function buildMutationConfig({ mutate, thresholdBreak }) {
     testRunner: "vitest",
     checkers: [],
     mutate,
+    ignorePatterns: [
+      ".runtime-cache/**",
+      "logs/**",
+      "cache/**",
+      ".cache/**",
+      "build/**",
+      "dist/**",
+      "coverage/**",
+      "playwright-report/**",
+      "test-results/**",
+    ],
     vitest: {
       configFile: "vite.config.ts",
     },

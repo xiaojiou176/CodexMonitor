@@ -10,6 +10,13 @@ Date: 2026-02-26
 - .env variant files: **4**
 - .env union keys: **21**
 
+## CI Portability Update (2026-02-26)
+
+- Runtime env checks now support runner portability when `rg` is unavailable.
+- GitHub workflow hygiene and Rust toolchain wiring were updated to remove CI-only failures.
+- Evidence artifacts: `.runtime-cache/test_output/coverage-gate/latest.json`, `.runtime-cache/test_output/live-preflight/latest.json`.
+- Evidence code paths: `.github/workflows/ci.yml`, `scripts/env-rationalize.mjs`, `scripts/guard-placebo-assertions.mjs`, `scripts/mutation-gate.mjs`, `scripts/mutation-stryker.config.mjs`.
+
 ## Env Variant Files
 
 - `.env` (5 keys)
