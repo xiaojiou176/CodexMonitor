@@ -128,11 +128,6 @@ function resolveEnvSourceLabel(filePath, cwd) {
   return filePath;
 }
 
-function resolveAliasSource(sourceKey, sources) {
-  const sourceLabel = sources[sourceKey] ?? "unknown";
-  return `${sourceKey} (${sourceLabel})`;
-}
-
 function addGithubOutput(key, value) {
   const outputPath = cleanEnvValue(process.env.GITHUB_OUTPUT);
   if (!outputPath) {
@@ -182,10 +177,6 @@ export function resolveEffectiveEnvWithSources(seedEnv = process.env, options = 
     }
   }
 
-  if (!hasEnvValue(effective.GEMINI_API_KEY) && hasEnvValue(effective.REAL_LLM_API_KEY)) {
-    effective.GEMINI_API_KEY = cleanEnvValue(effective.REAL_LLM_API_KEY);
-    sources.GEMINI_API_KEY = resolveAliasSource("REAL_LLM_API_KEY", sources);
-  }
   if (!hasEnvValue(effective.REAL_LLM_BASE_URL) && hasEnvValue(effective.GEMINI_API_KEY)) {
     effective.REAL_LLM_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
     sources.REAL_LLM_BASE_URL = "default (GEMINI_API_KEY present)";
@@ -200,7 +191,7 @@ export function resolveEffectiveEnv(seedEnv = process.env, options = {}) {
 
 export function resolveConfig(env = process.env) {
   const baseUrl = cleanEnvValue(env.REAL_LLM_BASE_URL);
-  const apiKey = cleanEnvValue(env.GEMINI_API_KEY) || cleanEnvValue(env.REAL_LLM_API_KEY);
+  const apiKey = cleanEnvValue(env.GEMINI_API_KEY);
   const requestedModel = cleanEnvValue(env.REAL_LLM_MODEL);
   const timeoutMs = parseTimeoutMs(cleanEnvValue(env.REAL_LLM_TIMEOUT_MS));
 

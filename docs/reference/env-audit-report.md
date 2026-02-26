@@ -4,17 +4,19 @@ Generated: 2026-02-26
 
 ## Executive Summary
 
-1. Repo-wide env scan currently identifies `80` env-like keys (runtime + OS + CI + release + test).
-2. Product/runtime-focused keys are a smaller subset (`18` by prefix scan), and only a core subset should be managed in local `.env` templates.
+1. Repo-wide broad env scan identifies `182` env-like keys (runtime + shell + OS + CI + release + test).
+2. Strict governance-scope unique key count is `72`; product/runtime-focused keys remain a smaller subset (`18` by prefix scan).
 3. `.env.example` is now governed by `config/env.schema.json` and validated by `scripts/env-doctor.mjs`.
 4. Pre-commit and pre-push orchestrators now run env governance checks to prevent config drift.
 5. Gemini is the default live LLM path; OpenAI/Anthropic env keys are treated as deprecated and blocked by `env-doctor`.
 
 ## Inventory Snapshot
 
-- Full scan artifact: `.runtime-cache/env_inventory.json`
-- Total discovered keys: `80`
+- Full scan artifact: `.runtime-cache/env_audit_latest.json`
+- Broad discovered keys: `182`
+- Strict governance keys: `72`
 - In `.env.example`: `10`
+- `.env*` variants discovered: `4` (`.env`, `.env.example`, `.env.local`, `.testflight.local.env.example`)
 - In local `.env` (machine-local): `5` at scan time
 - In local `.env.local` (machine-local): `5` at scan time
 - In `.testflight.local.env.example`: `11`
@@ -42,9 +44,10 @@ Deprecated/blocked:
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
 
-Deprecated alias (compatibility-only):
-- `REAL_LLM_API_KEY` (retirement target: 2026-06-01)
-- CI strict mode can enforce retirement immediately with `ENV_DOCTOR_STRICT_REAL_LLM_ALIAS=1`.
+Deprecated keys (blocked):
+- `REAL_LLM_API_KEY`
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
 
 ## Evidence Paths
 

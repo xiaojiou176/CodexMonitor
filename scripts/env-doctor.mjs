@@ -10,8 +10,6 @@ const SCHEMA_PATH = path.join(CWD, "config", "env.schema.json");
 const EXAMPLE_PATH = path.join(CWD, ".env.example");
 const LOCAL_PATH = path.join(CWD, ".env.local");
 const ROOT_ENV_PATH = path.join(CWD, ".env");
-const ALIAS_STRICT = process.env.ENV_DOCTOR_STRICT_REAL_LLM_ALIAS === "1";
-const REAL_LLM_ALIAS_SUNSET = "2026-06-01";
 
 function parseEnvFile(filePath) {
   if (!existsSync(filePath)) {
@@ -146,18 +144,6 @@ function main() {
   }
 
   const geminiKey = resolveKeyValue("GEMINI_API_KEY", rootEnv, localEnv);
-  const realLlmKey = resolveKeyValue("REAL_LLM_API_KEY", rootEnv, localEnv);
-  if (hasValue(realLlmKey)) {
-    const deprecationMessage = `REAL_LLM_API_KEY is deprecated; migrate to GEMINI_API_KEY before ${REAL_LLM_ALIAS_SUNSET}`;
-    if (ALIAS_STRICT) {
-      errors.push(`${deprecationMessage} (strict mode enabled)`);
-    } else {
-      warnings.push(deprecationMessage);
-    }
-  }
-  if (hasValue(geminiKey) && hasValue(realLlmKey) && geminiKey !== realLlmKey) {
-    warnings.push("GEMINI_API_KEY and REAL_LLM_API_KEY are both set but inconsistent");
-  }
 
   const realLlmBaseUrl = resolveKeyValue("REAL_LLM_BASE_URL", rootEnv, localEnv);
   if (!validateUrlMaybe(realLlmBaseUrl)) {
@@ -184,9 +170,6 @@ function main() {
     "REAL_LLM_TIMEOUT_MS",
     "REAL_EXTERNAL_URL",
   ].map((key) => `${key}=${safeSourceFor(key, rootEnv, localEnv)}`);
-  if (hasValue(realLlmKey)) {
-    sourcesReport.push(`LEGACY_REAL_LLM_API_KEY=${safeSourceFor("REAL_LLM_API_KEY", rootEnv, localEnv)}`);
-  }
 
   if (MODE === "live" && !hasValue(geminiKey)) {
     errors.push("mode=live requires GEMINI_API_KEY");

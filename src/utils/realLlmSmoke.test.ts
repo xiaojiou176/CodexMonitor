@@ -22,11 +22,11 @@ describe("real-llm-smoke helpers", () => {
     const parsed = parseKeyValueLines(`
       # comment
       REAL_LLM_BASE_URL="https://proxy.local"
-      export REAL_LLM_API_KEY='sk-demo'
+      export GEMINI_API_KEY='sk-demo'
     `);
     expect(parsed).toMatchObject({
       REAL_LLM_BASE_URL: "https://proxy.local",
-      REAL_LLM_API_KEY: "sk-demo",
+      GEMINI_API_KEY: "sk-demo",
     });
   });
 
@@ -38,7 +38,7 @@ describe("real-llm-smoke helpers", () => {
         home: "/home/user",
         readText: (filePath: string) => {
           if (filePath === "/repo/.env") {
-            return "REAL_LLM_BASE_URL=https://example.com\nREAL_LLM_API_KEY=sk-from-dotenv";
+            return "REAL_LLM_BASE_URL=https://example.com\nGEMINI_API_KEY=sk-from-dotenv";
           }
           throw new Error("missing");
         },

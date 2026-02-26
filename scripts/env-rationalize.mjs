@@ -138,9 +138,7 @@ function main() {
   const unknownRuntimeKeys = runtimeKeysDiscovered.filter((key) => !known.has(key));
 
   const directUsageGapCandidates = templateKeys.filter((key) => !runtimeKeysDiscovered.includes(key));
-  const compatAliasCandidates = [
-    "REAL_LLM_API_KEY",
-  ].filter((key) => schemaKeys.includes(key));
+  const deprecatedRuntimeKeys = uniqueSorted((schema.deprecatedKeys || []).filter((key) => /^REAL_/.test(key)));
 
   console.log(`[env-rationalize] runtime discovered=${runtimeKeysDiscovered.length}`);
   console.log(`[env-rationalize] schema keys=${schemaKeys.length}`);
@@ -178,9 +176,9 @@ ${toBullets(allowlistKeys)}
 
 ${toBullets(unknownRuntimeKeys)}
 
-## Compatibility Alias Candidates (Future Reduction)
+## Deprecated Runtime Keys (Blocked)
 
-${toBullets(compatAliasCandidates)}
+${toBullets(deprecatedRuntimeKeys)}
 
 ## Direct-Usage Gap Candidates
 
@@ -190,7 +188,7 @@ ${toBullets(directUsageGapCandidates)}
 
 1. New runtime-prefixed env keys must be added to \`config/env.schema.json\` or \`config/env.runtime-allowlist.json\`.
 2. \`npm run env:rationalize:check\` blocks drift during pre-commit.
-3. Alias candidates should be removed only after all callsites migrate to canonical keys.
+3. Deprecated runtime keys are blocked from runtime codepaths.
 `;
     mkdirSync(path.dirname(REPORT_PATH), { recursive: true });
     writeFileSync(REPORT_PATH, report, "utf8");

@@ -87,8 +87,6 @@ jobs:
         run: npm run docs:check:app-server-events
   env-governance:
     runs-on: ubuntu-latest
-    env:
-      ENV_DOCTOR_STRICT_REAL_LLM_ALIAS: "1"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -101,7 +99,7 @@ jobs:
         run: npm run env:rationalize:check
       - name: Real LLM alias usage guard
         run: npm run check:real-llm-alias-usage
-      - name: Env doctor (strict alias policy)
+      - name: Env doctor
         run: npm run env:doctor:dev
   test-js:
     runs-on: ubuntu-latest

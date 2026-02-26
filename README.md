@@ -312,7 +312,6 @@ Git hooks are enforced with Husky:
   - Phase 1 (short first): `preflight:doc-drift (branch)` + `env:rationalize:check` + `env:doctor:dev` + `preflight:quick` (`test:assertions:guard` then `typecheck`).
   - Phase 2 (parallel long jobs): `test`, `test:coverage:gate` (strict 80/95), `check:rust`, `test:e2e:smoke`, and `test:live:preflight`, each with heartbeat logs every ~20s.
   - Parallel failure output preserves task names, so gate failures are directly attributable to the failing job.
-  - CI enforces strict alias retirement with `ENV_DOCTOR_STRICT_REAL_LLM_ALIAS=1`.
 
 Dry-run commands:
 
@@ -385,8 +384,6 @@ npm run test:real:llm
 - Env source resolution:
   - First uses current process environment (including exported zsh variables).
   - If missing, falls back to repo `.env.local`, then repo `.env`, then `~/.zshrc`.
-  - `REAL_LLM_API_KEY` remains temporary compatibility-only alias (deprecated; migrate before 2026-06-01).
-  - In CI, `ENV_DOCTOR_STRICT_REAL_LLM_ALIAS=1` disallows the alias and requires `GEMINI_API_KEY`.
   - If only key is present, base URL defaults to `https://generativelanguage.googleapis.com/v1beta/openai`.
 - Optional env:
   - `REAL_LLM_MODEL` (if omitted, script auto-selects the first model from `/v1/models`)

@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
-const ALLOWED_PATHS = new Set([
-  "scripts/real-llm-smoke.mjs",
-  "scripts/env-doctor.mjs",
-  "scripts/env-rationalize.mjs",
-  "config/env.schema.json",
-  "src/utils/realLlmSmoke.test.ts",
-  "scripts/check-real-llm-alias-usage.mjs",
-]);
+const CWD = process.cwd();
+const SELF_PATH = "scripts/check-real-llm-alias-usage.mjs";
+const SCHEMA_PATH = path.join(CWD, "config", "env.schema.json");
 
-function runRg() {
+function loadAliasKeys() {
+  const schema = JSON.parse(readFileSync(SCHEMA_PATH, "utf8"));
+  const deprecatedKeys = Array.isArray(schema.deprecatedKeys) ? schema.deprecatedKeys : [];
+  return deprecatedKeys.filter((key) => key === "REAL_LLM_API_KEY");
+}
+
+function runRg(aliasKey) {
   try {
     const output = execFileSync(
       "rg",
@@ -26,12 +29,13 @@ function runRg() {
         "!dist/**",
         "--glob",
         "!.runtime-cache/**",
-        "REAL_LLM_API_KEY",
+        "--glob",
+        `!${SELF_PATH}`,
+        aliasKey,
         "src",
         "src-tauri",
         "scripts",
         "e2e",
-        "config",
       ],
       { encoding: "utf8" },
     );
@@ -52,28 +56,24 @@ function runRg() {
 }
 
 function main() {
-  const matches = runRg();
-  const violations = [];
+  const aliasKeys = loadAliasKeys();
+  if (aliasKeys.length === 0) {
+    console.log("[env-alias-usage] passed (no alias keys configured).");
+    return;
+  }
 
-  for (const match of matches) {
-    const separator = match.indexOf(":");
-    if (separator === -1) {
-      continue;
-    }
-    const filePath = match.slice(0, separator);
-    if (!ALLOWED_PATHS.has(filePath)) {
+  const violations = [];
+  for (const aliasKey of aliasKeys) {
+    const matches = runRg(aliasKey);
+    for (const match of matches) {
       violations.push(match);
     }
   }
 
   if (violations.length > 0) {
-    console.error("[env-alias-usage] FAIL: unexpected REAL_LLM_API_KEY references detected.");
+    console.error("[env-alias-usage] FAIL: deprecated alias references are forbidden.");
     for (const violation of violations) {
       console.error(`  - ${violation}`);
-    }
-    console.error("[env-alias-usage] allowed files:");
-    for (const filePath of ALLOWED_PATHS) {
-      console.error(`  - ${filePath}`);
     }
     process.exit(1);
   }
