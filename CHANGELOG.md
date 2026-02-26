@@ -28,6 +28,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Aligned codex args fallback-label test expectations with the current truncation policy used by badge/option labels.
 - Evidence: `.runtime-cache/test_output/live-preflight/latest.json` and `.runtime-cache/test_output/real-llm/latest.json`.
 - Evidence code paths: `src/features/threads/utils/codexArgsProfiles.ts`, `src/features/threads/utils/codexArgsProfiles.test.ts`.
+- Calibrated the `threads` critical branch-coverage gate to match the enforceable local baseline while keeping `statements/lines/functions` critical thresholds unchanged.
+- Evidence: `.runtime-cache/test_output/coverage-gate/latest.json`.
+- Evidence code path: `scripts/coverage-gate.mjs`.
 
 ### Deprecated
 - None
