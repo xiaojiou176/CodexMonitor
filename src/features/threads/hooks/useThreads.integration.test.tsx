@@ -823,14 +823,20 @@ describe("useThreads UX integration", () => {
       failed: [],
       total: 1,
     });
+    const nativeSetInterval: typeof setInterval = globalThis.setInterval;
+    const nativeClearInterval: typeof clearInterval = globalThis.clearInterval;
     const intervalCallbacks: Array<() => void> = [];
-    const setIntervalSpy = vi.spyOn(window, "setInterval").mockImplementation((...args) => {
+    const setIntervalSpy = vi
+      .spyOn(window, "setInterval")
+      .mockImplementation((...args): ReturnType<typeof setInterval> => {
       const [handler, delay] = args;
       if (typeof handler === "function" && delay === 60 * 1000) {
         intervalCallbacks.push(handler as () => void);
       }
-      return 1;
-    });
+      const intervalHandle = nativeSetInterval(() => undefined, delay ?? 0);
+      nativeClearInterval(intervalHandle);
+      return intervalHandle;
+      });
     const clearIntervalSpy = vi.spyOn(window, "clearInterval").mockImplementation(() => undefined);
     try {
       const { result } = renderHook(() =>
@@ -879,14 +885,20 @@ describe("useThreads UX integration", () => {
       failed: [],
       total: 1,
     });
+    const nativeSetInterval: typeof setInterval = globalThis.setInterval;
+    const nativeClearInterval: typeof clearInterval = globalThis.clearInterval;
     const intervalCallbacks: Array<() => void> = [];
-    const setIntervalSpy = vi.spyOn(window, "setInterval").mockImplementation((...args) => {
+    const setIntervalSpy = vi
+      .spyOn(window, "setInterval")
+      .mockImplementation((...args): ReturnType<typeof setInterval> => {
       const [handler] = args;
       if (typeof handler === "function") {
         intervalCallbacks.push(handler as () => void);
       }
-      return 1;
-    });
+      const intervalHandle = nativeSetInterval(() => undefined, 0);
+      nativeClearInterval(intervalHandle);
+      return intervalHandle;
+      });
     const clearIntervalSpy = vi.spyOn(window, "clearInterval").mockImplementation(() => undefined);
     try {
       const { result } = renderHook(() =>
@@ -930,14 +942,20 @@ describe("useThreads UX integration", () => {
       failed: [],
       total: 1,
     });
+    const nativeSetInterval: typeof setInterval = globalThis.setInterval;
+    const nativeClearInterval: typeof clearInterval = globalThis.clearInterval;
     const minuteIntervalCallbacks: Array<() => void> = [];
-    const setIntervalSpy = vi.spyOn(window, "setInterval").mockImplementation((...args) => {
+    const setIntervalSpy = vi
+      .spyOn(window, "setInterval")
+      .mockImplementation((...args): ReturnType<typeof setInterval> => {
       const [handler, delay] = args;
       if (typeof handler === "function" && delay === 60 * 1000) {
         minuteIntervalCallbacks.push(handler as () => void);
       }
-      return 1;
-    });
+      const intervalHandle = nativeSetInterval(() => undefined, delay ?? 0);
+      nativeClearInterval(intervalHandle);
+      return intervalHandle;
+      });
     const clearIntervalSpy = vi.spyOn(window, "clearInterval").mockImplementation(() => undefined);
     try {
       const { result } = renderHook(() =>

@@ -108,6 +108,36 @@ describe("useThreadAccountInfo", () => {
     });
   });
 
+  it("normalizes root snake_case auth flags with invalid account payloads", async () => {
+    vi.mocked(getAccountInfo).mockResolvedValue({
+      account: "not-an-object",
+      requires_openai_auth: false,
+    } as unknown as Awaited<ReturnType<typeof getAccountInfo>>);
+
+    const dispatch = vi.fn();
+
+    renderHook(() =>
+      useThreadAccountInfo({
+        activeWorkspaceId: "ws-1",
+        activeWorkspaceConnected: true,
+        dispatch,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "setAccountInfo",
+        workspaceId: "ws-1",
+        account: {
+          type: "unknown",
+          email: null,
+          planType: null,
+          requiresOpenaiAuth: false,
+        },
+      });
+    });
+  });
+
   it("does nothing when no workspace id is available", async () => {
     const dispatch = vi.fn();
 
@@ -176,5 +206,57 @@ describe("useThreadAccountInfo", () => {
       );
     });
     expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("logs client/server debug entries on successful refresh and honors explicit workspace override", async () => {
+    vi.mocked(getAccountInfo).mockResolvedValue({
+      result: {
+        account: { type: "chatgpt", email: "a@b.com", planType: "free" },
+        requiresOpenaiAuth: true,
+      },
+    });
+    const dispatch = vi.fn();
+    const onDebug = vi.fn();
+
+    const { result } = renderHook(() =>
+      useThreadAccountInfo({
+        activeWorkspaceId: "ws-active",
+        activeWorkspaceConnected: false,
+        dispatch,
+        onDebug,
+      }),
+    );
+
+    await result.current.refreshAccountInfo("ws-override");
+
+    expect(getAccountInfo).toHaveBeenCalledWith("ws-override");
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "client",
+        label: "account/read",
+        payload: { workspaceId: "ws-override" },
+      }),
+    );
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "server",
+        label: "account/read response",
+        payload: expect.objectContaining({
+          result: expect.objectContaining({
+            requiresOpenaiAuth: true,
+          }),
+        }),
+      }),
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setAccountInfo",
+      workspaceId: "ws-override",
+      account: {
+        type: "chatgpt",
+        email: "a@b.com",
+        planType: "free",
+        requiresOpenaiAuth: true,
+      },
+    });
   });
 });

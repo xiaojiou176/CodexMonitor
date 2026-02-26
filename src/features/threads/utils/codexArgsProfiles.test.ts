@@ -150,4 +150,196 @@ describe("codexArgsProfiles", () => {
     );
     expect(labelForCodexArgs("just fallback label path")).toBe("just fallback label…");
   });
+
+  it("supports compat short flags and keeps ignored metadata canonicalized", () => {
+    const parsed = parseCodexArgsProfile(
+      '-c ./conf.toml -C /repo -i image.png -p dev -m gpt-5 -s workspace-write -a on-request',
+    );
+
+    expect(parsed.recognizedSegments.map((segment) => segment.canonicalFlag)).toEqual([
+      "--config",
+      "--cd",
+      "--image",
+      "--profile",
+    ]);
+    expect(parsed.ignoredFlags).toEqual([
+      { flag: "-m", canonicalFlag: "--model", value: "gpt-5" },
+      { flag: "-s", canonicalFlag: "--sandbox", value: "workspace-write" },
+      { flag: "-a", canonicalFlag: "--ask-for-approval", value: "on-request" },
+    ]);
+    expect(parsed.effectiveArgs).toBe("-c ./conf.toml -C /repo -i image.png -p dev");
+  });
+
+  it("drops invalid required recognized values while preserving unknown tokens", () => {
+    const parsed = parseCodexArgsProfile("--enable= --add-dir --unknown= --search");
+
+    expect(parsed.recognizedSegments).toEqual([
+      {
+        flag: "--search",
+        canonicalFlag: "--search",
+        value: null,
+        label: "search",
+      },
+    ]);
+    expect(parsed.effectiveArgs).toBe("--unknown= --search");
+  });
+
+  it("keeps optional recognized flags when inline value is empty", () => {
+    const parsed = parseCodexArgsProfile("--search= --enable web_search");
+
+    expect(parsed.recognizedSegments).toEqual([
+      {
+        flag: "--search",
+        canonicalFlag: "--search",
+        value: null,
+        label: "search",
+      },
+      {
+        flag: "--enable",
+        canonicalFlag: "--enable",
+        value: "web_search",
+        label: "enable:web_search",
+      },
+    ]);
+    expect(parsed.effectiveArgs).toBe("--search --enable web_search");
+    expect(buildCodexArgsBadgeLabel("--search=")).toBe("search");
+  });
+
+  it("falls back to original args labels when sanitized args become empty", () => {
+    expect(buildCodexArgsOptionLabel("--model gpt-5 --sandbox workspace-write")).toBe(
+      "--model gpt-5 --san…",
+    );
+    expect(buildCodexArgsBadgeLabel("--model gpt-5 --full-auto")).toBe("--model gpt-5 --ful…");
+  });
+
+  it("keeps options default-only for nullish/blank candidates", () => {
+    expect(
+      buildCodexArgsOptions({
+        appCodexArgs: null,
+        additionalCodexArgs: [undefined, null, "   "],
+      }),
+    ).toEqual([{ value: "", codexArgs: null, label: "Default" }]);
+  });
+
+  it("covers quote/escape tokenization and keeps parsed values stable", () => {
+    const parsed = parseCodexArgsProfile(
+      '--config "C:\\\\temp\\\\config.toml" --enable "say \\"hello\\"" --search',
+    );
+
+    expect(parsed.recognizedSegments).toEqual([
+      {
+        flag: "--config",
+        canonicalFlag: "--config",
+        value: "C:\\temp\\config.toml",
+        label: "config:temp/config.toml",
+      },
+      {
+        flag: "--enable",
+        canonicalFlag: "--enable",
+        value: 'say "hello"',
+        label: 'enable:say "hello"',
+      },
+      {
+        flag: "--search",
+        canonicalFlag: "--search",
+        value: null,
+        label: "search",
+      },
+    ]);
+    expect(parsed.effectiveArgs).toBe(
+      '--config "C:\\\\temp\\\\config.toml" --enable "say \\"hello\\"" --search',
+    );
+    expect(parsed.ignoredFlags).toEqual([]);
+    expect(
+      sanitizeRuntimeCodexArgs(
+        '--config "C:\\\\temp\\\\config.toml" --enable "say \\"hello\\"" --search',
+      ),
+    ).toBe('--config "C:\\\\temp\\\\config.toml" --enable "say \\"hello\\"" --search');
+  });
+
+  it("handles non-flag dash tokens and missing ignored required values", () => {
+    const parsed = parseCodexArgsProfile("- --model --search");
+
+    expect(parsed.recognizedSegments).toEqual([
+      {
+        flag: "--search",
+        canonicalFlag: "--search",
+        value: null,
+        label: "search",
+      },
+    ]);
+    expect(parsed.ignoredFlags).toEqual([
+      {
+        flag: "--model",
+        canonicalFlag: "--model",
+        value: null,
+      },
+    ]);
+    expect(parsed.effectiveArgs).toBe("- --search");
+    expect(buildCodexArgsBadgeLabel("- --model --search")).toBe("search");
+  });
+
+  it("adds +N suffix for option labels with more than two recognized segments", () => {
+    expect(
+      buildCodexArgsOptionLabel("--config a.toml --enable web_search --cd /repo --search"),
+    ).toBe("config:a.toml • enable:web_search +2");
+  });
+
+  it("handles short URLs, empty quoted values, and root paths in labels", () => {
+    expect(buildCodexArgsBadgeLabel("--config \"/\"")).toBe("config:/");
+    expect(buildCodexArgsBadgeLabel("--config \"\"")).toBe('--config ""');
+    expect(buildCodexArgsBadgeLabel("--config https://x.co")).toBe("config:https://x.co");
+  });
+
+  it("keeps non-flag tokens and handles flags with equals at index <= 1", () => {
+    const parsed = parseCodexArgsProfile("-x -- -a= --search=");
+
+    expect(parsed.recognizedSegments).toEqual([
+      {
+        flag: "--search",
+        canonicalFlag: "--search",
+        value: null,
+        label: "search",
+      },
+    ]);
+    expect(parsed.effectiveArgs).toBe("-x -- --search");
+  });
+
+  it("returns null effective badge label for whitespace-only sanitized output", () => {
+    expect(buildEffectiveCodexArgsBadgeLabel("   --model gpt-5   --full-auto   ")).toBeNull();
+  });
+
+  it("supports single-quoted values and keeps additional args optional", () => {
+    const parsed = parseCodexArgsProfile("--config '/tmp/single.toml' --enable 'x y'");
+    expect(parsed.recognizedSegments).toEqual([
+      {
+        flag: "--config",
+        canonicalFlag: "--config",
+        value: "/tmp/single.toml",
+        label: "config:tmp/single.toml",
+      },
+      {
+        flag: "--enable",
+        canonicalFlag: "--enable",
+        value: "x y",
+        label: "enable:x y",
+      },
+    ]);
+    expect(
+      buildCodexArgsOptions({
+        appCodexArgs: "--config '/tmp/single.toml'",
+      }),
+    ).toHaveLength(2);
+  });
+
+  it("sorts by args value when labels collide", () => {
+    const options = buildCodexArgsOptions({
+      appCodexArgs: "https://example.com/path/that/is/very/very/long/for/label/aaa",
+      additionalCodexArgs: [
+        "https://example.com/path/that/is/very/very/long/for/label/bbb",
+      ],
+    });
+    expect(options[1]?.label).toBe(options[2]?.label);
+    expect((options[1]?.value ?? "") < (options[2]?.value ?? "")).toBe(true);
+  });
 });

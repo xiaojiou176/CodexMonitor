@@ -8,14 +8,14 @@ export type SidebarTicker = {
 
 export function createSidebarTicker(intervalMs = 1000): SidebarTicker {
   let snapshot = Date.now();
-  let timer: ReturnType<typeof window.setInterval> | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
   const listeners = new Set<() => void>();
 
   const stop = () => {
     if (timer === null) {
       return;
     }
-    window.clearInterval(timer);
+    clearInterval(timer);
     timer = null;
   };
 
@@ -23,7 +23,7 @@ export function createSidebarTicker(intervalMs = 1000): SidebarTicker {
     if (timer !== null) {
       return;
     }
-    timer = window.setInterval(() => {
+    timer = setInterval(() => {
       snapshot = Date.now();
       listeners.forEach((listener) => listener());
     }, intervalMs);

@@ -741,4 +741,401 @@ describe("useReviewPrompt", () => {
     expect(result.current.reviewPrompt?.step).toBe("baseBranch");
     expect(result.current.reviewPrompt?.selectedBranch).toBe("release");
   });
+
+  it("handles rejected commit payload with non-Error reason and keeps empty commit defaults", async () => {
+    vi.mocked(listGitBranches).mockResolvedValue({
+      result: {
+        branches: "bad-branches-payload",
+      },
+    } as unknown as Awaited<ReturnType<typeof listGitBranches>>);
+    vi.mocked(getGitLog).mockRejectedValue("commit rejected as string");
+    const startReviewTarget = vi.fn().mockResolvedValue(true);
+    const onDebug = vi.fn();
+
+    const { result } = renderHook(() =>
+      useReviewPrompt({
+        activeWorkspace: WORKSPACE,
+        activeThreadId: "thread-1",
+        onDebug,
+        startReviewTarget,
+      }),
+    );
+
+    act(() => {
+      result.current.openReviewPrompt();
+    });
+
+    await waitFor(() => {
+      expect(result.current.reviewPrompt?.isLoadingBranches).toBe(false);
+      expect(result.current.reviewPrompt?.isLoadingCommits).toBe(false);
+    });
+
+    expect(result.current.reviewPrompt?.branches).toEqual([]);
+    expect(result.current.reviewPrompt?.commits).toEqual([]);
+    expect(result.current.reviewPrompt?.selectedBranch).toBe("");
+    expect(result.current.reviewPrompt?.selectedCommitSha).toBe("");
+    expect(result.current.reviewPrompt?.selectedCommitTitle).toBe("");
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "review/prompt load response",
+        payload: expect.objectContaining({
+          branchesError: null,
+          commitsError: "commit rejected as string",
+        }),
+      }),
+    );
+  });
+
+  it("submits baseBranch and custom targets from Enter keydown", async () => {
+    vi.mocked(listGitBranches).mockResolvedValue({
+      branches: [{ name: "main", lastCommit: 10 }],
+    });
+    vi.mocked(getGitLog).mockResolvedValue({
+      total: 1,
+      ahead: 0,
+      behind: 0,
+      aheadEntries: [],
+      behindEntries: [],
+      upstream: null,
+      entries: [{ sha: "sha-1", summary: "first", author: "alice", timestamp: 1 }],
+    });
+    const startReviewTarget = vi.fn().mockResolvedValue(true);
+
+    const { result } = renderHook(() =>
+      useReviewPrompt({
+        activeWorkspace: WORKSPACE,
+        activeThreadId: "thread-1",
+        startReviewTarget,
+      }),
+    );
+
+    act(() => {
+      result.current.openReviewPrompt();
+    });
+    await waitFor(() => {
+      expect(result.current.reviewPrompt?.isLoadingBranches).toBe(false);
+      expect(result.current.reviewPrompt?.isLoadingCommits).toBe(false);
+    });
+
+    act(() => {
+      result.current.choosePreset("baseBranch");
+    });
+    const branchEnter = vi.fn();
+    await act(async () => {
+      result.current.handleReviewPromptKeyDown({
+        key: "Enter",
+        preventDefault: branchEnter,
+      });
+    });
+    expect(branchEnter).toHaveBeenCalledTimes(1);
+    expect(startReviewTarget).toHaveBeenCalledWith(
+      { type: "baseBranch", branch: "main" },
+      "ws-1",
+    );
+    expect(result.current.reviewPrompt).toBeNull();
+
+    act(() => {
+      result.current.openReviewPrompt();
+    });
+    await waitFor(() => {
+      expect(result.current.reviewPrompt?.isLoadingBranches).toBe(false);
+      expect(result.current.reviewPrompt?.isLoadingCommits).toBe(false);
+    });
+
+    act(() => {
+      result.current.choosePreset("custom");
+      result.current.updateCustomInstructions("review API schema drift");
+    });
+    const customEnter = vi.fn();
+    await act(async () => {
+      result.current.handleReviewPromptKeyDown({
+        key: "Enter",
+        preventDefault: customEnter,
+      });
+    });
+    expect(customEnter).toHaveBeenCalledTimes(1);
+    expect(startReviewTarget).toHaveBeenLastCalledWith(
+      { type: "custom", instructions: "review API schema drift" },
+      "ws-1",
+    );
+    expect(result.current.reviewPrompt).toBeNull();
+  });
+
+  it("treats non-control keys as handled while submitting without preventDefault", async () => {
+    vi.mocked(listGitBranches).mockResolvedValue({
+      branches: [{ name: "main", lastCommit: 1 }],
+    });
+    vi.mocked(getGitLog).mockResolvedValue({
+      total: 0,
+      ahead: 0,
+      behind: 0,
+      aheadEntries: [],
+      behindEntries: [],
+      upstream: null,
+      entries: [],
+    });
+    let resolveSubmit: ((value: boolean) => void) | null = null;
+    const startReviewTarget = vi.fn().mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveSubmit = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() =>
+      useReviewPrompt({
+        activeWorkspace: WORKSPACE,
+        activeThreadId: "thread-1",
+        startReviewTarget,
+      }),
+    );
+
+    act(() => {
+      result.current.openReviewPrompt();
+    });
+    await waitFor(() => {
+      expect(result.current.reviewPrompt?.isLoadingBranches).toBe(false);
+      expect(result.current.reviewPrompt?.isLoadingCommits).toBe(false);
+    });
+
+    act(() => {
+      result.current.choosePreset("uncommitted");
+    });
+    await waitFor(() => {
+      expect(result.current.reviewPrompt?.isSubmitting).toBe(true);
+    });
+
+    const preventDefault = vi.fn();
+    const handled = result.current.handleReviewPromptKeyDown({
+      key: "a",
+      preventDefault,
+    });
+    expect(handled).toBe(true);
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(result.current.reviewPrompt?.isSubmitting).toBe(true);
+
+    await act(async () => {
+      resolveSubmit?.(false);
+    });
+    await waitFor(() => {
+      expect(result.current.reviewPrompt?.isSubmitting).toBe(false);
+    });
+  });
+
+  it("submits commit target from Enter keydown when prompt is on commit step", async () => {
+    vi.mocked(listGitBranches).mockResolvedValue({
+      branches: [{ name: "main", lastCommit: 10 }],
+    });
+    vi.mocked(getGitLog).mockResolvedValue({
+      total: 1,
+      ahead: 0,
+      behind: 0,
+      aheadEntries: [],
+      behindEntries: [],
+      upstream: null,
+      entries: [{ sha: "sha-commit", summary: "review me", author: "alice", timestamp: 1 }],
+    });
+    const startReviewTarget = vi.fn().mockResolvedValue(true);
+
+    const { result } = renderHook(() =>
+      useReviewPrompt({
+        activeWorkspace: WORKSPACE,
+        activeThreadId: "thread-1",
+        startReviewTarget,
+      }),
+    );
+
+    act(() => {
+      result.current.openReviewPrompt();
+    });
+    await waitFor(() => {
+      expect(result.current.reviewPrompt?.isLoadingBranches).toBe(false);
+      expect(result.current.reviewPrompt?.isLoadingCommits).toBe(false);
+    });
+
+    act(() => {
+      result.current.choosePreset("commit");
+      result.current.selectCommit("sha-commit", "review me");
+    });
+
+    const preventDefault = vi.fn();
+    await act(async () => {
+      const handled = result.current.handleReviewPromptKeyDown({
+        key: "Enter",
+        preventDefault,
+      });
+      expect(handled).toBe(true);
+    });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(startReviewTarget).toHaveBeenCalledTimes(1);
+    expect(startReviewTarget).toHaveBeenCalledWith(
+      { type: "commit", sha: "sha-commit", title: "review me" },
+      "ws-1",
+    );
+    expect(result.current.reviewPrompt).toBeNull();
+  });
+
+  it("normalizes malformed branch/commit entries and keeps only valid rows", async () => {
+    vi.mocked(listGitBranches).mockResolvedValue({
+      branches: [
+        {},
+        { name: "  ", lastCommit: 1 },
+        { name: "release", last_commit: "12" },
+      ],
+    } as unknown as Awaited<ReturnType<typeof listGitBranches>>);
+    vi.mocked(getGitLog).mockResolvedValue({
+      entries: [
+        {},
+        { sha: "  ", summary: "bad", author: "x", timestamp: 1 },
+        { sha: "abc123", summary: null, author: null, timestamp: "99" },
+      ],
+    } as unknown as GitLogResponse);
+
+    const startReviewTarget = vi.fn().mockResolvedValue(true);
+    const { result } = renderHook(() =>
+      useReviewPrompt({
+        activeWorkspace: WORKSPACE,
+        activeThreadId: "thread-1",
+        startReviewTarget,
+      }),
+    );
+
+    act(() => {
+      result.current.openReviewPrompt();
+    });
+    await waitFor(() => {
+      expect(result.current.reviewPrompt?.isLoadingBranches).toBe(false);
+      expect(result.current.reviewPrompt?.isLoadingCommits).toBe(false);
+    });
+
+    expect(result.current.reviewPrompt?.branches).toEqual([
+      { name: "release", lastCommit: 12 },
+    ]);
+    expect(result.current.reviewPrompt?.commits).toEqual([
+      { sha: "abc123", summary: "", author: "", timestamp: 99 },
+    ]);
+  });
+
+  it("handles both branch and commit Promise rejection as non-Error reasons", async () => {
+    vi.mocked(listGitBranches).mockRejectedValue("branch-fail-string");
+    vi.mocked(getGitLog).mockRejectedValue("commit-fail-string");
+    const onDebug = vi.fn();
+    const startReviewTarget = vi.fn().mockResolvedValue(true);
+
+    const { result } = renderHook(() =>
+      useReviewPrompt({
+        activeWorkspace: WORKSPACE,
+        activeThreadId: "thread-1",
+        onDebug,
+        startReviewTarget,
+      }),
+    );
+
+    act(() => {
+      result.current.openReviewPrompt();
+    });
+
+    await waitFor(() => {
+      expect(result.current.reviewPrompt?.isLoadingBranches).toBe(false);
+      expect(result.current.reviewPrompt?.isLoadingCommits).toBe(false);
+    });
+
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "review/prompt load response",
+        payload: expect.objectContaining({
+          branchesError: "branch-fail-string",
+          commitsError: "commit-fail-string",
+        }),
+      }),
+    );
+  });
+
+  it("keeps empty commit title when first commit summary is empty", async () => {
+    vi.mocked(listGitBranches).mockResolvedValue({
+      branches: [{ name: "main", lastCommit: 10 }],
+    });
+    vi.mocked(getGitLog).mockResolvedValue({
+      total: 1,
+      ahead: 0,
+      behind: 0,
+      aheadEntries: [],
+      behindEntries: [],
+      upstream: null,
+      entries: [{ sha: "sha-fallback", summary: "   ", author: "alice", timestamp: 1 }],
+    });
+    const startReviewTarget = vi.fn().mockResolvedValue(false);
+
+    const { result } = renderHook(() =>
+      useReviewPrompt({
+        activeWorkspace: WORKSPACE,
+        activeThreadId: "thread-1",
+        startReviewTarget,
+      }),
+    );
+
+    act(() => {
+      result.current.openReviewPrompt();
+    });
+    await waitFor(() => {
+      expect(result.current.reviewPrompt?.isLoadingBranches).toBe(false);
+      expect(result.current.reviewPrompt?.isLoadingCommits).toBe(false);
+    });
+
+    act(() => {
+      result.current.choosePreset("commit");
+    });
+
+    expect(result.current.reviewPrompt?.selectedCommitSha).toBe("sha-fallback");
+    expect(result.current.reviewPrompt?.selectedCommitTitle).toBe("");
+  });
+
+  it("clamps branch/commit index selections at bounds", async () => {
+    vi.mocked(listGitBranches).mockResolvedValue({
+      branches: [
+        { name: "main", lastCommit: 10 },
+        { name: "feature/a", lastCommit: 9 },
+      ],
+    });
+    vi.mocked(getGitLog).mockResolvedValue({
+      total: 2,
+      ahead: 0,
+      behind: 0,
+      aheadEntries: [],
+      behindEntries: [],
+      upstream: null,
+      entries: [
+        { sha: "sha-1", summary: "one", author: "alice", timestamp: 1 },
+        { sha: "sha-2", summary: "two", author: "bob", timestamp: 2 },
+      ],
+    });
+    const startReviewTarget = vi.fn().mockResolvedValue(false);
+
+    const { result } = renderHook(() =>
+      useReviewPrompt({
+        activeWorkspace: WORKSPACE,
+        activeThreadId: "thread-1",
+        startReviewTarget,
+      }),
+    );
+
+    act(() => {
+      result.current.openReviewPrompt();
+    });
+    await waitFor(() => {
+      expect(result.current.reviewPrompt?.isLoadingBranches).toBe(false);
+      expect(result.current.reviewPrompt?.isLoadingCommits).toBe(false);
+    });
+
+    act(() => {
+      result.current.selectBranchAtIndex(-99);
+      result.current.choosePreset("commit");
+      result.current.selectCommitAtIndex(999);
+    });
+
+    expect(result.current.reviewPrompt?.selectedBranch).toBe("main");
+    expect(result.current.reviewPrompt?.selectedCommitSha).toBe("sha-2");
+    expect(result.current.reviewPrompt?.selectedCommitTitle).toBe("two");
+  });
 });

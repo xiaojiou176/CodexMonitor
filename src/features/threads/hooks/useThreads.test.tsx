@@ -3,7 +3,10 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as Sentry from "@sentry/react";
 import { resumeThread, setThreadName } from "../../../services/tauri";
+import * as threadStorageUtils from "../utils/threadStorage";
 import { useThreads } from "./useThreads";
+
+type ArchiveFailure = { threadId: string; error: string };
 
 const useThreadActionsMocks = vi.hoisted(() => ({
   startThreadForWorkspace: vi.fn(),
@@ -14,7 +17,12 @@ const useThreadActionsMocks = vi.hoisted(() => ({
   resetWorkspaceThreads: vi.fn(),
   listThreadsForWorkspace: vi.fn(),
   loadOlderThreadsForWorkspace: vi.fn(),
-  archiveThreads: vi.fn(async () => ({ allSucceeded: true, okIds: [], failed: [], total: 0 })),
+  archiveThreads: vi.fn(async () => ({
+    allSucceeded: true,
+    okIds: [] as string[],
+    failed: [] as ArchiveFailure[],
+    total: 0,
+  })),
 }));
 
 const useThreadMessagingCapture = vi.hoisted(() => ({
@@ -22,6 +30,10 @@ const useThreadMessagingCapture = vi.hoisted(() => ({
 }));
 
 const useThreadEventHandlersCapture = vi.hoisted(() => ({
+  latestArgs: null as Record<string, unknown> | null,
+}));
+
+const useThreadActionsCapture = vi.hoisted(() => ({
   latestArgs: null as Record<string, unknown> | null,
 }));
 
@@ -40,7 +52,12 @@ vi.mock("../../../services/tauri", () => ({
   forkThread: vi.fn(),
   listThreads: vi.fn(),
   resumeThread: vi.fn(),
-  archiveThreads: vi.fn(async () => ({ allSucceeded: true, okIds: [], failed: [], total: 0 })),
+  archiveThreads: vi.fn(async () => ({
+    allSucceeded: true,
+    okIds: [] as string[],
+    failed: [] as ArchiveFailure[],
+    total: 0,
+  })),
   setThreadName: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAccountInfo: vi.fn(),
@@ -57,7 +74,10 @@ vi.mock("@sentry/react", () => ({
 }));
 
 vi.mock("./useThreadActions", () => ({
-  useThreadActions: vi.fn(() => useThreadActionsMocks),
+  useThreadActions: vi.fn((args: Record<string, unknown>) => {
+    useThreadActionsCapture.latestArgs = args;
+    return useThreadActionsMocks;
+  }),
 }));
 
 vi.mock("./useThreadMessaging", () => ({
@@ -120,6 +140,7 @@ describe("useThreads branch guards", () => {
     localStorage.clear();
     useThreadMessagingCapture.latestArgs = null;
     useThreadEventHandlersCapture.latestArgs = null;
+    useThreadActionsCapture.latestArgs = null;
     useThreadActionsMocks.startThreadForWorkspace.mockReset();
     useThreadActionsMocks.forkThreadForWorkspace.mockReset();
     useThreadActionsMocks.resumeThreadForWorkspace.mockReset();
@@ -131,8 +152,8 @@ describe("useThreads branch guards", () => {
     useThreadActionsMocks.archiveThreads.mockReset();
     useThreadActionsMocks.archiveThreads.mockResolvedValue({
       allSucceeded: true,
-      okIds: [],
-      failed: [],
+      okIds: [] as string[],
+      failed: [] as ArchiveFailure[],
       total: 0,
     });
     useThreadActionsMocks.resumeThreadForWorkspace.mockImplementation(
@@ -154,6 +175,78 @@ describe("useThreads branch guards", () => {
     useThreadActionsMocks.startThreadForWorkspace.mockResolvedValue("thread-started");
   });
 
+  it("hydrates custom thread names from workspace settings and persists normalized entries", async () => {
+    const saveCustomNamesSpy = vi.spyOn(threadStorageUtils, "saveCustomNames");
+    const threadDisplayNamesWithInvalidValue = {
+      "thread-a": "  Keep Me  ",
+      "thread-empty": "   ",
+      "thread-non-string": 123,
+    } as unknown as Record<string, string>;
+    const ws = {
+      ...activeWorkspace,
+      id: "ws-custom",
+      settings: {
+        sidebarCollapsed: false,
+        threadDisplayNames: threadDisplayNamesWithInvalidValue,
+      },
+    };
+
+    const { rerender } = renderHook(
+      (props: { workspaces: Array<typeof ws> }) =>
+        useThreads({
+          workspaces: props.workspaces,
+          activeWorkspace: ws,
+          onWorkspaceConnected: vi.fn(),
+        }),
+      {
+        initialProps: { workspaces: [ws] },
+      },
+    );
+
+    await waitFor(() => {
+      expect(saveCustomNamesSpy).toHaveBeenCalledTimes(1);
+    });
+
+    const getCustomName = useThreadActionsCapture.latestArgs
+      ?.getCustomName as ((workspaceId: string, threadId: string) => string | undefined);
+    expect(getCustomName("ws-custom", "thread-a")).toBe("Keep Me");
+    expect(getCustomName("ws-custom", "thread-empty")).toBeUndefined();
+
+    rerender({ workspaces: [ws] });
+    expect(saveCustomNamesSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not persist custom names when hydrated values already exist", async () => {
+    const saveCustomNamesSpy = vi.spyOn(threadStorageUtils, "saveCustomNames");
+    window.localStorage.setItem(
+      threadStorageUtils.STORAGE_KEY_CUSTOM_NAMES,
+      JSON.stringify({ "ws-custom:thread-a": "Keep Me" }),
+    );
+    const ws = {
+      ...activeWorkspace,
+      id: "ws-custom",
+      settings: {
+        sidebarCollapsed: false,
+        threadDisplayNames: {
+          "thread-a": "  Keep Me  ",
+        },
+      },
+    };
+
+    renderHook(() =>
+      useThreads({
+        workspaces: [ws],
+        activeWorkspace: ws,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(saveCustomNamesSpy).not.toHaveBeenCalled();
+  });
+
   it("returns null from startThread when there is no active workspace", async () => {
     const { result } = renderHook(() =>
       useThreads({
@@ -170,6 +263,24 @@ describe("useThreads branch guards", () => {
     expect(started).toBeNull();
   });
 
+  it("starts a thread for active workspace when startThread is called", async () => {
+    useThreadActionsMocks.startThreadForWorkspace.mockResolvedValueOnce("thread-created");
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    let started: string | null = null;
+    await act(async () => {
+      started = await result.current.startThread();
+    });
+
+    expect(started).toBe("thread-created");
+    expect(useThreadActionsMocks.startThreadForWorkspace).toHaveBeenCalledWith("ws-active");
+  });
+
   it("does not resume thread when setActiveThreadId has no resolvable workspace id", async () => {
     const { result } = renderHook(() =>
       useThreads({
@@ -183,6 +294,25 @@ describe("useThreads branch guards", () => {
     });
 
     expect(resumeThread).not.toHaveBeenCalled();
+  });
+
+  it("returns null when ensureThreadForActiveWorkspace has no active workspace", async () => {
+    renderHook(() =>
+      useThreads({
+        activeWorkspace: null,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+    const ensureThreadForActiveWorkspace = useThreadMessagingCapture
+      .latestArgs?.ensureThreadForActiveWorkspace as (() => Promise<string | null>);
+
+    let ensured: string | null = "placeholder";
+    await act(async () => {
+      ensured = await ensureThreadForActiveWorkspace();
+    });
+
+    expect(ensured).toBeNull();
+    expect(useThreadActionsMocks.startThreadForWorkspace).not.toHaveBeenCalled();
   });
 
   it("resumes thread when caller provides explicit workspace id", async () => {
@@ -391,6 +521,34 @@ describe("useThreads branch guards", () => {
     void result;
   });
 
+  it("keeps existing thread when ensureThreadForActiveWorkspace resume succeeds", async () => {
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+    await act(async () => {
+      result.current.setActiveThreadId("thread-existing");
+    });
+    const ensureThreadForActiveWorkspace = useThreadMessagingCapture
+      .latestArgs?.ensureThreadForActiveWorkspace as (() => Promise<string | null>);
+    useThreadActionsMocks.startThreadForWorkspace.mockClear();
+    useThreadActionsMocks.resumeThreadForWorkspace.mockClear();
+
+    let ensured: string | null = null;
+    await act(async () => {
+      ensured = await ensureThreadForActiveWorkspace();
+    });
+
+    expect(ensured).toBe("thread-existing");
+    expect(useThreadActionsMocks.resumeThreadForWorkspace).toHaveBeenCalledWith(
+      "ws-active",
+      "thread-existing",
+    );
+    expect(useThreadActionsMocks.startThreadForWorkspace).not.toHaveBeenCalled();
+  });
+
   it("retries with new thread when ensureThreadForActiveWorkspace resume returns false", async () => {
     useThreadActionsMocks.resumeThreadForWorkspace.mockResolvedValueOnce(false);
     useThreadActionsMocks.startThreadForWorkspace.mockResolvedValueOnce("thread-recovered");
@@ -413,6 +571,37 @@ describe("useThreads branch guards", () => {
     await act(async () => {
       result.current.setActiveThreadId("thread-stale");
     });
+
+    let ensured: string | null = null;
+    await act(async () => {
+      ensured = await ensureThreadForActiveWorkspace();
+    });
+
+    expect(useThreadActionsMocks.resumeThreadForWorkspace).toHaveBeenCalledWith(
+      "ws-active",
+      "thread-stale",
+    );
+    expect(useThreadActionsMocks.startThreadForWorkspace).toHaveBeenCalledWith("ws-active");
+    expect(ensured).toBe("thread-recovered");
+  });
+
+  it("falls back to a fresh thread when ensureThreadForActiveWorkspace resume throws", async () => {
+    vi.mocked(resumeThread)
+      .mockRejectedValueOnce(new Error("initial resume failed"))
+      .mockRejectedValueOnce(new Error("stale resume failed"));
+    useThreadActionsMocks.startThreadForWorkspace.mockResolvedValueOnce("thread-recovered");
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      result.current.setActiveThreadId("thread-stale");
+    });
+    const ensureThreadForActiveWorkspace = useThreadMessagingCapture
+      .latestArgs?.ensureThreadForActiveWorkspace as (() => Promise<string | null>);
 
     let ensured: string | null = null;
     await act(async () => {
@@ -501,6 +690,49 @@ describe("useThreads branch guards", () => {
     expect(labels).toContain("thread/name/set error");
   });
 
+  it("normalizes non-Error rename failures into string payloads", async () => {
+    const onDebug = vi.fn();
+    const persistThreadDisplayName = vi.fn().mockRejectedValue("persist-string-failure");
+    vi.mocked(setThreadName).mockRejectedValueOnce("rename-string-failure");
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+        onDebug,
+        persistThreadDisplayName,
+      }),
+    );
+
+    await act(async () => {
+      result.current.renameThread("ws-active", "thread-string-errors", "  Name  ");
+    });
+
+    await waitFor(() => {
+      expect(onDebug).toHaveBeenCalled();
+    });
+    const payloads = onDebug.mock.calls.map((call) => call[0]?.payload);
+    expect(payloads).toContain("persist-string-failure");
+    expect(payloads).toContain("rename-string-failure");
+  });
+
+  it("ignores blank names in renameThread", async () => {
+    const persistThreadDisplayName = vi.fn();
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+        persistThreadDisplayName,
+      }),
+    );
+
+    await act(async () => {
+      result.current.renameThread("ws-active", "thread-blank", "   ");
+    });
+
+    expect(persistThreadDisplayName).not.toHaveBeenCalled();
+    expect(setThreadName).not.toHaveBeenCalled();
+  });
+
   it("does not emit switch metric when target thread stays null", async () => {
     const { result } = renderHook(() =>
       useThreads({
@@ -543,6 +775,37 @@ describe("useThreads branch guards", () => {
   });
 
   it("returns null when ensureThreadForActiveWorkspace cannot create a new thread", async () => {
+    vi.mocked(resumeThread)
+      .mockRejectedValueOnce(new Error("initial resume failed"))
+      .mockRejectedValueOnce(new Error("stale resume failed"));
+    useThreadActionsMocks.startThreadForWorkspace.mockResolvedValueOnce(null);
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      result.current.setActiveThreadId("thread-stale");
+    });
+    const ensureThreadForActiveWorkspace = useThreadMessagingCapture
+      .latestArgs?.ensureThreadForActiveWorkspace as (() => Promise<string | null>);
+
+    let ensured: string | null = "placeholder";
+    await act(async () => {
+      ensured = await ensureThreadForActiveWorkspace();
+    });
+
+    expect(ensured).toBeNull();
+    expect(useThreadActionsMocks.resumeThreadForWorkspace).toHaveBeenCalledWith(
+      "ws-active",
+      "thread-stale",
+    );
+    expect(useThreadActionsMocks.startThreadForWorkspace).toHaveBeenCalledWith("ws-active");
+  });
+
+  it("returns null when ensureThreadForActiveWorkspace cannot start from empty state", async () => {
     useThreadActionsMocks.startThreadForWorkspace.mockResolvedValueOnce(null);
     renderHook(() =>
       useThreads({
@@ -560,11 +823,102 @@ describe("useThreads branch guards", () => {
 
     expect(ensured).toBeNull();
     expect(useThreadActionsMocks.startThreadForWorkspace).toHaveBeenCalledWith("ws-active");
+    expect(useThreadActionsMocks.resumeThreadForWorkspace).not.toHaveBeenCalled();
   });
 
   it("returns null when ensureThreadForWorkspace fallback creation fails", async () => {
-    useThreadActionsMocks.resumeThreadForWorkspace.mockResolvedValueOnce(false);
+    vi.mocked(resumeThread)
+      .mockRejectedValueOnce(new Error("initial resume failed"))
+      .mockRejectedValueOnce(new Error("stale resume failed"));
     useThreadActionsMocks.startThreadForWorkspace.mockResolvedValueOnce(null);
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      result.current.setActiveThreadId("thread-missing", "ws-active");
+    });
+    const ensureThreadForWorkspace = useThreadMessagingCapture
+      .latestArgs?.ensureThreadForWorkspace as ((workspaceId: string) => Promise<string | null>);
+
+    let ensured: string | null = "placeholder";
+    await act(async () => {
+      ensured = await ensureThreadForWorkspace("ws-active");
+    });
+
+    expect(useThreadActionsMocks.resumeThreadForWorkspace).toHaveBeenCalledWith(
+      "ws-active",
+      "thread-missing",
+    );
+    expect(useThreadActionsMocks.startThreadForWorkspace).toHaveBeenCalledWith("ws-active", {
+      activate: true,
+    });
+    expect(ensured).toBeNull();
+  });
+
+  it("returns null when ensureThreadForWorkspace cannot start from empty state", async () => {
+    useThreadActionsMocks.startThreadForWorkspace.mockResolvedValueOnce(null);
+    renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+    const ensureThreadForWorkspace = useThreadMessagingCapture
+      .latestArgs?.ensureThreadForWorkspace as ((workspaceId: string) => Promise<string | null>);
+
+    let ensured: string | null = "placeholder";
+    await act(async () => {
+      ensured = await ensureThreadForWorkspace("ws-active");
+    });
+
+    expect(ensured).toBeNull();
+    expect(useThreadActionsMocks.startThreadForWorkspace).toHaveBeenCalledWith("ws-active", {
+      activate: true,
+    });
+    expect(useThreadActionsMocks.resumeThreadForWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("falls back to a fresh active thread when ensureThreadForWorkspace resume throws", async () => {
+    vi.mocked(resumeThread)
+      .mockRejectedValueOnce(new Error("initial resume failed"))
+      .mockRejectedValueOnce(new Error("stale resume failed"));
+    useThreadActionsMocks.startThreadForWorkspace.mockResolvedValueOnce("thread-restored");
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      result.current.setActiveThreadId("thread-stale", "ws-active");
+    });
+    const ensureThreadForWorkspace = useThreadMessagingCapture
+      .latestArgs?.ensureThreadForWorkspace as ((workspaceId: string) => Promise<string | null>);
+
+    let ensured: string | null = null;
+    await act(async () => {
+      ensured = await ensureThreadForWorkspace("ws-active");
+    });
+
+    expect(useThreadActionsMocks.resumeThreadForWorkspace).toHaveBeenCalledWith(
+      "ws-active",
+      "thread-stale",
+    );
+    expect(useThreadActionsMocks.startThreadForWorkspace).toHaveBeenCalledWith("ws-active", {
+      activate: true,
+    });
+    expect(ensured).toBe("thread-restored");
+  });
+
+  it("activates the workspace thread when ensureThreadForWorkspace starts a new active thread", async () => {
+    useThreadActionsMocks.startThreadForWorkspace.mockResolvedValueOnce("thread-active-new");
 
     const { result } = renderHook(() =>
       useThreads({
@@ -575,22 +929,533 @@ describe("useThreads branch guards", () => {
     const ensureThreadForWorkspace = useThreadMessagingCapture
       .latestArgs?.ensureThreadForWorkspace as ((workspaceId: string) => Promise<string | null>);
 
+    let ensured: string | null = null;
     await act(async () => {
-      result.current.setActiveThreadId("thread-missing", "ws-explicit");
+      ensured = await ensureThreadForWorkspace("ws-active");
     });
 
-    let ensured: string | null = "placeholder";
-    await act(async () => {
-      ensured = await ensureThreadForWorkspace("ws-explicit");
+    expect(ensured).toBe("thread-active-new");
+    expect(useThreadActionsMocks.startThreadForWorkspace).toHaveBeenCalledWith("ws-active", {
+      activate: true,
     });
+    expect(result.current.activeThreadId).toBe("thread-active-new");
+  });
 
-    expect(useThreadActionsMocks.resumeThreadForWorkspace).toHaveBeenCalledWith(
-      "ws-explicit",
-      "thread-missing",
+  it("reuses stale active workspace thread when ensureThreadForWorkspace resume succeeds", async () => {
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+      }),
     );
-    expect(useThreadActionsMocks.startThreadForWorkspace).toHaveBeenCalledWith("ws-explicit", {
-      activate: false,
+    await act(async () => {
+      result.current.setActiveThreadId("thread-existing", "ws-active");
     });
-    expect(ensured).toBeNull();
+    const ensureThreadForWorkspace = useThreadMessagingCapture
+      .latestArgs?.ensureThreadForWorkspace as ((workspaceId: string) => Promise<string | null>);
+    useThreadActionsMocks.startThreadForWorkspace.mockClear();
+    useThreadActionsMocks.resumeThreadForWorkspace.mockClear();
+
+    let ensured: string | null = null;
+    await act(async () => {
+      ensured = await ensureThreadForWorkspace("ws-active");
+    });
+
+    expect(ensured).toBe("thread-existing");
+    expect(useThreadActionsMocks.resumeThreadForWorkspace).toHaveBeenCalledWith(
+      "ws-active",
+      "thread-existing",
+    );
+    expect(useThreadActionsMocks.startThreadForWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("delegates removeThread and exposes non-subagent default", async () => {
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.removeThread("ws-active", "thread-remove");
+    });
+
+    expect(useThreadActionsMocks.archiveThreads).toHaveBeenCalledWith("ws-active", [
+      "thread-remove",
+    ]);
+    expect(result.current.isSubAgentThread("ws-active", "thread-remove")).toBe(false);
+  });
+
+  it("skips auto-archive timer setup when subagent auto-archive is disabled", () => {
+    const setIntervalSpy = vi.spyOn(window, "setInterval");
+    renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+        autoArchiveSubAgentThreadsEnabled: false,
+      }),
+    );
+
+    const intervalDurations = setIntervalSpy.mock.calls.map((call) => Number(call[1]));
+    expect(intervalDurations).not.toContain(60_000);
+    setIntervalSpy.mockRestore();
+  });
+
+  it("falls back to default auto-archive age when max age input is non-finite", () => {
+    const setIntervalSpy = vi.spyOn(window, "setInterval");
+    renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+        autoArchiveSubAgentThreadsMaxAgeMinutes: Number.NaN,
+      }),
+    );
+
+    const intervalDurations = setIntervalSpy.mock.calls.map((call) => Number(call[1]));
+    expect(intervalDurations).toContain(60_000);
+    setIntervalSpy.mockRestore();
+  });
+
+  it("auto-archives stale subagent threads when eligible", async () => {
+    vi.useFakeTimers();
+    try {
+      const now = new Date("2026-02-26T08:00:00.000Z");
+      vi.setSystemTime(now);
+      useThreadActionsMocks.archiveThreads.mockResolvedValueOnce({
+        allSucceeded: true,
+        okIds: ["thread-sub"],
+        failed: [],
+        total: 1,
+      });
+
+      renderHook(() =>
+        useThreads({
+          activeWorkspace: { ...activeWorkspace },
+          onWorkspaceConnected: vi.fn(),
+          autoArchiveSubAgentThreadsMaxAgeMinutes: 5,
+        }),
+      );
+
+      const eventArgs = useThreadEventHandlersCapture.latestArgs as Record<string, unknown>;
+      const dispatch = eventArgs.dispatch as (action: Record<string, unknown>) => void;
+      const markSubAgentThread = eventArgs.markSubAgentThread as ((threadId: string) => void);
+      const recordThreadCreatedAt = eventArgs.recordThreadCreatedAt as (
+        threadId: string,
+        createdAt: number,
+        fallbackTimestamp?: number,
+      ) => void;
+      const recordThreadActivity = eventArgs.recordThreadActivity as (
+        workspaceId: string,
+        threadId: string,
+        timestamp?: number,
+      ) => void;
+      const staleAt = now.getTime() - 20 * 60 * 1000;
+
+      act(() => {
+        dispatch({
+          type: "setThreads",
+          workspaceId: "ws-active",
+          threads: [{ id: "thread-sub", name: "Sub agent", updatedAt: staleAt }],
+          sortKey: "updated_at",
+        });
+        dispatch({
+          type: "setActiveThreadId",
+          workspaceId: "ws-active",
+          threadId: "thread-main",
+        });
+        dispatch({
+          type: "setThreadParent",
+          threadId: "thread-sub",
+          parentId: "thread-parent",
+        });
+        markSubAgentThread("thread-sub");
+        recordThreadCreatedAt("thread-sub", staleAt, staleAt);
+        recordThreadActivity("ws-active", "thread-sub", staleAt);
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+        await Promise.resolve();
+      });
+
+      expect(useThreadActionsMocks.archiveThreads).toHaveBeenCalledWith("ws-active", [
+        "thread-sub",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("blocks auto-archive when subagent parent link is missing", async () => {
+    vi.useFakeTimers();
+    try {
+      const now = new Date("2026-02-26T08:30:00.000Z");
+      vi.setSystemTime(now);
+      const onDebug = vi.fn();
+
+      renderHook(() =>
+        useThreads({
+          activeWorkspace: { ...activeWorkspace },
+          onWorkspaceConnected: vi.fn(),
+          onDebug,
+          autoArchiveSubAgentThreadsMaxAgeMinutes: 5,
+        }),
+      );
+
+      const eventArgs = useThreadEventHandlersCapture.latestArgs as Record<string, unknown>;
+      const dispatch = eventArgs.dispatch as (action: Record<string, unknown>) => void;
+      const markSubAgentThread = eventArgs.markSubAgentThread as ((threadId: string) => void);
+      const recordThreadCreatedAt = eventArgs.recordThreadCreatedAt as (
+        threadId: string,
+        createdAt: number,
+        fallbackTimestamp?: number,
+      ) => void;
+      const recordThreadActivity = eventArgs.recordThreadActivity as (
+        workspaceId: string,
+        threadId: string,
+        timestamp?: number,
+      ) => void;
+      const staleAt = now.getTime() - 20 * 60 * 1000;
+
+      act(() => {
+        dispatch({
+          type: "setThreads",
+          workspaceId: "ws-active",
+          threads: [{ id: "thread-sub", name: "Sub agent", updatedAt: staleAt }],
+          sortKey: "updated_at",
+        });
+        dispatch({
+          type: "setActiveThreadId",
+          workspaceId: "ws-active",
+          threadId: "thread-main",
+        });
+        markSubAgentThread("thread-sub");
+        recordThreadCreatedAt("thread-sub", staleAt, staleAt);
+        recordThreadActivity("ws-active", "thread-sub", staleAt);
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+        await Promise.resolve();
+      });
+
+      expect(useThreadActionsMocks.archiveThreads).not.toHaveBeenCalled();
+      expect(
+        onDebug.mock.calls.some(([event]) => {
+          const candidate = event as {
+            label?: string;
+            payload?: { reason?: { hasSubAgentParent?: boolean }; threadId?: string };
+          };
+          return (
+            candidate?.label === "thread/auto-archive blocked"
+            && candidate?.payload?.threadId === "thread-sub"
+            && candidate?.payload?.reason?.hasSubAgentParent === false
+          );
+        }),
+      ).toBe(true);
+      expect(onDebug).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns no-op summary when removeThreads has empty workspace id", async () => {
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    let summary:
+      | { allSucceeded: boolean; okIds: string[]; failed: Array<unknown>; total: number }
+      | undefined;
+    await act(async () => {
+      summary = await result.current.removeThreads("", ["thread-1"]);
+    });
+
+    expect(summary).toEqual({
+      allSucceeded: true,
+      okIds: [],
+      failed: [],
+      total: 0,
+    });
+    expect(useThreadActionsMocks.archiveThreads).not.toHaveBeenCalled();
+  });
+
+  it("returns no-op summary when removeThreads receives only blank thread ids", async () => {
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    let summary:
+      | { allSucceeded: boolean; okIds: string[]; failed: Array<unknown>; total: number }
+      | undefined;
+    await act(async () => {
+      summary = await result.current.removeThreads("ws-active", [" ", "", "\n"]);
+    });
+
+    expect(summary).toEqual({
+      allSucceeded: true,
+      okIds: [],
+      failed: [],
+      total: 0,
+    });
+    expect(useThreadActionsMocks.archiveThreads).not.toHaveBeenCalled();
+  });
+
+  it("keeps subagent flag false when markSubAgentThread receives an empty thread id", () => {
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: { ...activeWorkspace },
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+    const eventArgs = useThreadEventHandlersCapture.latestArgs as Record<string, unknown>;
+    const markSubAgentThread = eventArgs.markSubAgentThread as ((threadId: string) => void);
+
+    act(() => {
+      markSubAgentThread("");
+    });
+
+    expect(result.current.isSubAgentThread("ws-active", "")).toBe(false);
+    expect(result.current.isSubAgentThread("ws-active", "thread-any")).toBe(false);
+  });
+
+  it("blocks auto-archive when subagent thread is pinned", async () => {
+    vi.useFakeTimers();
+    try {
+      const now = new Date("2026-02-26T09:00:00.000Z");
+      vi.setSystemTime(now);
+      const onDebug = vi.fn();
+
+      const { result } = renderHook(() =>
+        useThreads({
+          activeWorkspace: { ...activeWorkspace },
+          onWorkspaceConnected: vi.fn(),
+          onDebug,
+          autoArchiveSubAgentThreadsMaxAgeMinutes: 5,
+        }),
+      );
+
+      const eventArgs = useThreadEventHandlersCapture.latestArgs as Record<string, unknown>;
+      const dispatch = eventArgs.dispatch as (action: Record<string, unknown>) => void;
+      const markSubAgentThread = eventArgs.markSubAgentThread as ((threadId: string) => void);
+      const recordThreadCreatedAt = eventArgs.recordThreadCreatedAt as (
+        threadId: string,
+        createdAt: number,
+        fallbackTimestamp?: number,
+      ) => void;
+      const recordThreadActivity = eventArgs.recordThreadActivity as (
+        workspaceId: string,
+        threadId: string,
+        timestamp?: number,
+      ) => void;
+      const staleAt = now.getTime() - 20 * 60 * 1000;
+
+      act(() => {
+        dispatch({
+          type: "setThreads",
+          workspaceId: "ws-active",
+          threads: [{ id: "thread-sub", name: "Sub agent", updatedAt: staleAt }],
+          sortKey: "updated_at",
+        });
+        dispatch({
+          type: "setActiveThreadId",
+          workspaceId: "ws-active",
+          threadId: "thread-main",
+        });
+        dispatch({
+          type: "setThreadParent",
+          threadId: "thread-sub",
+          parentId: "thread-parent",
+        });
+        markSubAgentThread("thread-sub");
+        recordThreadCreatedAt("thread-sub", staleAt, staleAt);
+        recordThreadActivity("ws-active", "thread-sub", staleAt);
+        result.current.pinThread("ws-active", "thread-sub");
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+        await Promise.resolve();
+      });
+
+      expect(useThreadActionsMocks.archiveThreads).not.toHaveBeenCalled();
+      expect(
+        onDebug.mock.calls.some(([event]) => {
+          const candidate = event as { label?: string; payload?: { threadId?: string } };
+          return (
+            candidate?.label === "thread/auto-archive"
+            && candidate?.payload?.threadId === "thread-sub"
+          );
+        }),
+      ).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("logs eligible auto-archive payload before removing stale subagent thread", async () => {
+    vi.useFakeTimers();
+    try {
+      const now = new Date("2026-02-26T09:30:00.000Z");
+      vi.setSystemTime(now);
+      const onDebug = vi.fn();
+      useThreadActionsMocks.archiveThreads.mockResolvedValueOnce({
+        allSucceeded: true,
+        okIds: ["thread-sub"],
+        failed: [],
+        total: 1,
+      });
+
+      renderHook(() =>
+        useThreads({
+          activeWorkspace: { ...activeWorkspace },
+          onWorkspaceConnected: vi.fn(),
+          onDebug,
+          autoArchiveSubAgentThreadsMaxAgeMinutes: 5,
+        }),
+      );
+
+      const eventArgs = useThreadEventHandlersCapture.latestArgs as Record<string, unknown>;
+      const dispatch = eventArgs.dispatch as (action: Record<string, unknown>) => void;
+      const markSubAgentThread = eventArgs.markSubAgentThread as ((threadId: string) => void);
+      const recordThreadCreatedAt = eventArgs.recordThreadCreatedAt as (
+        threadId: string,
+        createdAt: number,
+        fallbackTimestamp?: number,
+      ) => void;
+      const recordThreadActivity = eventArgs.recordThreadActivity as (
+        workspaceId: string,
+        threadId: string,
+        timestamp?: number,
+      ) => void;
+      const staleAt = now.getTime() - 20 * 60 * 1000;
+
+      act(() => {
+        dispatch({
+          type: "setThreads",
+          workspaceId: "ws-active",
+          threads: [{ id: "thread-sub", name: "Sub agent", updatedAt: staleAt }],
+          sortKey: "updated_at",
+        });
+        dispatch({
+          type: "setActiveThreadId",
+          workspaceId: "ws-active",
+          threadId: "thread-main",
+        });
+        dispatch({
+          type: "setThreadParent",
+          threadId: "thread-sub",
+          parentId: "thread-parent",
+        });
+        markSubAgentThread("thread-sub");
+        recordThreadCreatedAt("thread-sub", staleAt, staleAt);
+        recordThreadActivity("ws-active", "thread-sub", staleAt);
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+        await Promise.resolve();
+      });
+
+      expect(useThreadActionsMocks.archiveThreads).toHaveBeenCalledWith("ws-active", [
+        "thread-sub",
+      ]);
+      expect(
+        onDebug.mock.calls.some(([event]) => {
+          const candidate = event as {
+            label?: string;
+            payload?: { workspaceId?: string; threadId?: string; hasUnread?: boolean };
+          };
+          return (
+            candidate?.label === "thread/auto-archive"
+            && candidate?.payload?.workspaceId === "ws-active"
+            && candidate?.payload?.threadId === "thread-sub"
+            && candidate?.payload?.hasUnread === false
+          );
+        }),
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("skips queued auto-archive work after hook unmount disposes timer loop", async () => {
+    vi.useFakeTimers();
+    try {
+      const now = new Date("2026-02-26T10:00:00.000Z");
+      vi.setSystemTime(now);
+      const onDebug = vi.fn();
+
+      const { unmount } = renderHook(() =>
+        useThreads({
+          activeWorkspace: { ...activeWorkspace },
+          onWorkspaceConnected: vi.fn(),
+          onDebug,
+          autoArchiveSubAgentThreadsMaxAgeMinutes: 5,
+        }),
+      );
+
+      const eventArgs = useThreadEventHandlersCapture.latestArgs as Record<string, unknown>;
+      const dispatch = eventArgs.dispatch as (action: Record<string, unknown>) => void;
+      const markSubAgentThread = eventArgs.markSubAgentThread as ((threadId: string) => void);
+      const recordThreadCreatedAt = eventArgs.recordThreadCreatedAt as (
+        threadId: string,
+        createdAt: number,
+        fallbackTimestamp?: number,
+      ) => void;
+      const recordThreadActivity = eventArgs.recordThreadActivity as (
+        workspaceId: string,
+        threadId: string,
+        timestamp?: number,
+      ) => void;
+      const staleAt = now.getTime() - 20 * 60 * 1000;
+
+      act(() => {
+        dispatch({
+          type: "setThreads",
+          workspaceId: "ws-active",
+          threads: [{ id: "thread-sub", name: "Sub agent", updatedAt: staleAt }],
+          sortKey: "updated_at",
+        });
+        dispatch({
+          type: "setActiveThreadId",
+          workspaceId: "ws-active",
+          threadId: "thread-main",
+        });
+        dispatch({
+          type: "setThreadParent",
+          threadId: "thread-sub",
+          parentId: "thread-parent",
+        });
+        markSubAgentThread("thread-sub");
+        recordThreadCreatedAt("thread-sub", staleAt, staleAt);
+        recordThreadActivity("ws-active", "thread-sub", staleAt);
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(60_000);
+        unmount();
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(useThreadActionsMocks.archiveThreads).not.toHaveBeenCalled();
+      expect(
+        onDebug.mock.calls.some(([event]) => {
+          const candidate = event as { label?: string };
+          return candidate?.label === "thread/auto-archive";
+        }),
+      ).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

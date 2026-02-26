@@ -12,6 +12,19 @@
 - Vitest + Testing Library
 - Playwright（E2E）
 
+## 最小可执行导航（索引化 + 懒加载）
+
+1. 先读根规则：`AGENTS.md`、`CLAUDE.md`。
+2. 进入前端域后只加载：`src/AGENTS.md`、`src/CLAUDE.md`。
+3. 仅当涉及 Tauri/Rust/daemon 时，再懒加载：`src-tauri/AGENTS.md`、`src-tauri/CLAUDE.md`。
+
+## 14条强制规范（前端执行视角）
+
+前端任务必须遵循根 `AGENTS.md` 的“文档与规则宪法（2026-02，14条）”，本文件不降级任何根规则。
+
+- 默认模型策略：Gemini-only（当前）。
+- 兼容路线：仅可选、非默认，且必须记录触发原因与回退条件。
+
 ## 目录导航
 
 - 组合入口：`src/App.tsx`
@@ -38,6 +51,14 @@ npm run test:watch
 npm run test:e2e:smoke
 npm run test:assertions:guard
 ```
+
+## Gate 对齐（前端最小清单）
+
+- Lint Gate: `npm run lint:strict`
+- Assertion Gate: `npm run test:assertions:guard`
+- Coverage Gate: `npm run test:coverage`（若本次任务触及核心路径，需校验关键模块 `>=95%`）
+- Type Gate: `npm run typecheck`
+- Doc-Drift Gate: 行为/配置/接口变更需同步文档
 
 ## 变更注意事项
 

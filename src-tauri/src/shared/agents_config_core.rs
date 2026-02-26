@@ -12,7 +12,7 @@ const MIN_AGENT_MAX_THREADS: u32 = 1;
 const MAX_AGENT_MAX_THREADS: u32 = 12;
 const MANAGED_AGENTS_DIR: &str = "agents";
 const TEMPLATE_BLANK: &str = "blank";
-const DEFAULT_AGENT_MODEL: &str = "gpt-5-codex";
+const DEFAULT_AGENT_MODEL: &str = "gemini-3.1-pro-preview";
 const DEFAULT_REASONING_EFFORT: &str = "medium";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

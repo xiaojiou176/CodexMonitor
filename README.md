@@ -465,6 +465,8 @@ src-tauri/
 - 触发原因: 本次引入兼容识别与门禁审计脚本，确保在 Gemini-only 主路径下仍可审计兼容场景。
 - 回退条件: 若兼容门禁导致误报或阻塞开发，先回退到 Gemini-only 严格路径并关闭兼容提示检查。
 - 结果差异: 默认运行逻辑不变，新增的是门禁校验、证据日志和提交前合规拦截行为。
+- 证据路径: `.runtime-cache/test_output/coverage-gate/latest.json` 与 `.runtime-cache/test_output/real-llm/latest.json`。
+- 本次相关改动文件: `src/features/threads/hooks/useQueuedSend.test.tsx`、`src/features/threads/hooks/useThreadsReducer.test.ts`、`src-tauri/src/shared/agents_config_core.rs`。
 
 ## Tauri IPC Surface
 

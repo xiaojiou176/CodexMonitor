@@ -10,6 +10,22 @@
 - React 19、TypeScript、Vite
 - ESLint、Vitest、Playwright
 
+## 最小可执行导航（索引化 + 懒加载）
+
+1. 根规则先行：`AGENTS.md` → `CLAUDE.md`。
+2. 前端任务加载：`src/AGENTS.md` → `src/CLAUDE.md`。
+3. 仅跨域时补读：`src-tauri/AGENTS.md`、`src-tauri/CLAUDE.md`。
+
+## 14条规范与14项Gate对齐
+
+- 完全继承根 `AGENTS.md` 的 14 条强制规范与 14 项 Gate。
+- 本文件只做前端执行摘要，不新增与根规则冲突的例外。
+
+## Gemini 策略
+
+- 默认：Gemini-only（当前）。
+- 兼容：可选且非默认；启用时必须记录触发条件、影响面和回退方案。
+
 ## 目录导航
 
 - App 组装层：`src/App.tsx`

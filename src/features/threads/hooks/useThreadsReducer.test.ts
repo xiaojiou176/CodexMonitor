@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ApprovalRequest, ConversationItem, ThreadSummary } from "../../../types";
 import { initialState, threadReducer } from "./useThreadsReducer";
 import type { ThreadState } from "./useThreadsReducer";
@@ -46,6 +46,32 @@ describe("threadReducer", () => {
       expect(items[0].id).toBe("user-1");
       expect(items[0].text).toBe("Hello there");
     }
+  });
+
+  it("does not rename auto-generated thread when user message text is empty", () => {
+    const threads: ThreadSummary[] = [
+      { id: "thread-empty", name: "New Agent", updatedAt: 1 },
+    ];
+    const next = threadReducer(
+      {
+        ...initialState,
+        threadsByWorkspace: { "ws-1": threads },
+      },
+      {
+        type: "upsertItem",
+        workspaceId: "ws-1",
+        threadId: "thread-empty",
+        item: {
+          id: "user-empty",
+          kind: "message",
+          role: "user",
+          text: "",
+        },
+        hasCustomName: false,
+      },
+    );
+
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.name).toBe("New Agent");
   });
 
   it("renames auto-generated thread from assistant output when no user message", () => {
@@ -1696,5 +1722,1500 @@ describe("threadReducer", () => {
       expect(second.turnId).toBe("turn-new");
       expect(second.contextWindow).toBe(4096);
     }
+  });
+
+  it("does not rename from agent output when thread already has a user message", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "New Agent", updatedAt: 1 }],
+      },
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "user-1",
+            kind: "message",
+            role: "user",
+            text: "keep existing title",
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-1",
+      delta: "assistant title candidate",
+      hasCustomName: false,
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.name).toBe("New Agent");
+  });
+
+  it("does not rename from agent output when custom name flag is set", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "New Agent", updatedAt: 1 }],
+      },
+    };
+    const next = threadReducer(base, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-1",
+      delta: "assistant title candidate",
+      hasCustomName: true,
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.name).toBe("New Agent");
+  });
+
+  it("keeps assistant text unchanged when incoming delta is a prefix of existing text", () => {
+    const base = threadReducer(initialState, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-1",
+      delta: "hello world",
+      hasCustomName: false,
+    });
+    const next = threadReducer(base, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-1",
+      delta: "hello",
+      hasCustomName: false,
+    });
+
+    const item = next.itemsByThread["thread-1"]?.[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind === "message") {
+      expect(item.text).toBe("hello world");
+    }
+  });
+
+  it("replaces assistant text when incoming delta fully extends existing text", () => {
+    const base = threadReducer(initialState, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-1",
+      delta: "hello",
+      hasCustomName: false,
+    });
+    const next = threadReducer(base, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-1",
+      delta: "hello world",
+      hasCustomName: false,
+    });
+
+    const item = next.itemsByThread["thread-1"]?.[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind === "message") {
+      expect(item.text).toBe("hello world");
+    }
+  });
+
+  it("ignores setThreadParent when incoming ordering rank is older than current rank", () => {
+    const withParent = threadReducer(initialState, {
+      type: "setThreadParent",
+      threadId: "thread-1",
+      parentId: "parent-1",
+      ordering: { timestamp: 200 },
+    });
+    const next = threadReducer(withParent, {
+      type: "setThreadParent",
+      threadId: "thread-1",
+      parentId: "parent-2",
+      ordering: { timestamp: 100 },
+    });
+
+    expect(next).toBe(withParent);
+    expect(next.threadParentById["thread-1"]).toBe("parent-1");
+  });
+
+  it("resolves waitReason back to retry after removing only user-input request", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: false,
+          hasUnread: false,
+          isReviewing: false,
+          phase: "waiting_user",
+          processingStartedAt: null,
+          lastDurationMs: null,
+          waitReason: "retry",
+          retryState: "retrying",
+          activeItemStatuses: {},
+          messagePhase: "unknown",
+          lastMcpProgressMessage: null,
+        },
+      },
+      userInputRequests: [
+        {
+          workspace_id: "ws-1",
+          request_id: 11,
+          params: {
+            thread_id: "thread-1",
+            turn_id: "turn-1",
+            item_id: "call-1",
+            questions: [],
+          },
+        },
+      ],
+    };
+
+    const next = threadReducer(base, {
+      type: "removeUserInputRequest",
+      workspaceId: "ws-1",
+      requestId: 11,
+    });
+
+    expect(next.userInputRequests).toHaveLength(0);
+    expect(next.threadStatusById["thread-1"]?.waitReason).toBe("retry");
+  });
+
+  it("keeps custom thread titles when assistant rename candidate is blank or unchanged", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "Project Alpha", updatedAt: 1 }],
+      },
+    };
+
+    const blankRename = threadReducer(base, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-1",
+      delta: "   ",
+      hasCustomName: false,
+    });
+    expect(blankRename.threadsByWorkspace["ws-1"]?.[0]?.name).toBe("Project Alpha");
+
+    const sameNameBase: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "Agent 1", updatedAt: 1 }],
+      },
+    };
+    const unchanged = threadReducer(sameNameBase, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-2",
+      delta: "Agent 1",
+      hasCustomName: false,
+    });
+    expect(unchanged.threadsByWorkspace["ws-1"]?.[0]?.name).toBe("Agent 1");
+  });
+
+  it("sanitizes user rename text by stripping image and skill markers", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "New Agent", updatedAt: 1 }],
+      },
+      threadSortKeyByWorkspace: { "ws-1": "updated_at" },
+    };
+
+    const next = threadReducer(base, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      hasCustomName: false,
+      item: {
+        id: "user-1",
+        kind: "message",
+        role: "user",
+        text: "  [image x2]   $Skill_Agent   Build me a roadmap  ",
+      },
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.name).toBe("Build me a roadmap");
+  });
+
+  it("handles setThreadPhase active and final transitions", () => {
+    const running = threadReducer(initialState, {
+      type: "setThreadPhase",
+      threadId: "thread-1",
+      phase: "tool_running",
+    });
+    expect(running.threadStatusById["thread-1"]?.isProcessing).toBe(true);
+    expect(running.threadStatusById["thread-1"]?.waitReason).toBe("tool_wait");
+    expect(running.threadStatusById["thread-1"]?.retryState).toBe("none");
+
+    const streaming = threadReducer(running, {
+      type: "setThreadPhase",
+      threadId: "thread-1",
+      phase: "streaming",
+    });
+    expect(streaming.threadStatusById["thread-1"]?.waitReason).toBe("none");
+
+    const completed = threadReducer(streaming, {
+      type: "setThreadPhase",
+      threadId: "thread-1",
+      phase: "completed",
+    });
+    expect(completed.threadStatusById["thread-1"]?.isProcessing).toBe(false);
+    expect(completed.threadStatusById["thread-1"]?.processingStartedAt).toBeNull();
+    expect(completed.threadStatusById["thread-1"]?.activeItemStatuses).toEqual({});
+  });
+
+  it("returns unchanged state for timestamp updates with empty or stale data", () => {
+    const noThreads = threadReducer(initialState, {
+      type: "setThreadTimestamp",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      timestamp: 100,
+    });
+    expect(noThreads).toBe(initialState);
+
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "Agent 1", updatedAt: 500 }],
+      },
+    };
+    const stale = threadReducer(base, {
+      type: "setThreadTimestamp",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      timestamp: 500,
+    });
+    expect(stale).toBe(base);
+  });
+
+  it("keeps state when no-op reasoning updates are received", () => {
+    const boundaryNoop = threadReducer(initialState, {
+      type: "appendReasoningSummaryBoundary",
+      threadId: "thread-1",
+      itemId: "reasoning-missing",
+    });
+    expect(boundaryNoop).toBe(initialState);
+
+    const contentNoop = threadReducer(initialState, {
+      type: "appendReasoningContent",
+      threadId: "thread-1",
+      itemId: "reasoning-missing",
+      delta: "",
+    });
+    expect(contentNoop).toBe(initialState);
+  });
+
+  it("keeps assistant items unchanged when turn context update targets a different turn", () => {
+    const base = threadReducer(initialState, {
+      type: "setThreadItems",
+      threadId: "thread-1",
+      items: [
+        {
+          id: "assistant-other-turn",
+          kind: "message",
+          role: "assistant",
+          text: "Existing output",
+          turnId: "turn-other",
+          contextWindow: 8000,
+        },
+      ],
+    });
+
+    const next = threadReducer(base, {
+      type: "setThreadTurnContextWindow",
+      threadId: "thread-1",
+      turnId: "turn-new",
+      contextWindow: 16000,
+    });
+
+    expect(next.itemsByThread["thread-1"]).toBe(base.itemsByThread["thread-1"]);
+    const item = next.itemsByThread["thread-1"]?.[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind === "message") {
+      expect(item.turnId).toBe("turn-other");
+      expect(item.contextWindow).toBe(8000);
+    }
+  });
+
+  it("keeps assistant items unchanged when turn model update targets a different turn", () => {
+    const base = threadReducer(initialState, {
+      type: "setThreadItems",
+      threadId: "thread-1",
+      items: [
+        {
+          id: "assistant-other-turn",
+          kind: "message",
+          role: "assistant",
+          text: "Existing output",
+          turnId: "turn-other",
+          model: "gpt-4o",
+        },
+      ],
+    });
+
+    const next = threadReducer(base, {
+      type: "setThreadTurnMeta",
+      threadId: "thread-1",
+      turnId: "turn-new",
+      model: "gpt-5",
+    });
+
+    expect(next.itemsByThread["thread-1"]).toBe(base.itemsByThread["thread-1"]);
+    const item = next.itemsByThread["thread-1"]?.[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind === "message") {
+      expect(item.turnId).toBe("turn-other");
+      expect(item.model).toBe("gpt-4o");
+    }
+  });
+
+  it("keeps state when appendReasoningSummary receives an empty delta for existing summary", () => {
+    const base = threadReducer(initialState, {
+      type: "setThreadItems",
+      threadId: "thread-1",
+      items: [
+        {
+          id: "reasoning-1",
+          kind: "reasoning",
+          summary: "Already summarized",
+          content: "details",
+        },
+      ],
+    });
+
+    const next = threadReducer(base, {
+      type: "appendReasoningSummary",
+      threadId: "thread-1",
+      itemId: "reasoning-1",
+      delta: "",
+    });
+
+    expect(next).toBe(base);
+  });
+
+  it("keeps state when appendPlanDelta does not change existing plan output", () => {
+    const base = threadReducer(initialState, {
+      type: "setThreadItems",
+      threadId: "thread-1",
+      items: [
+        {
+          id: "plan-1",
+          kind: "tool",
+          toolType: "plan",
+          title: "方案",
+          detail: "Generating plan...",
+          status: "in_progress",
+          output: "- Step 1",
+        },
+      ],
+    });
+
+    const next = threadReducer(base, {
+      type: "appendPlanDelta",
+      threadId: "thread-1",
+      itemId: "plan-1",
+      delta: "",
+    });
+
+    expect(next).toBe(base);
+  });
+
+  it("clears active thread when hiding the only visible active thread", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "Only", updatedAt: 1 }],
+      },
+      activeThreadIdByWorkspace: {
+        "ws-1": "thread-1",
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "hideThread",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]).toEqual([]);
+    expect(next.activeThreadIdByWorkspace["ws-1"]).toBeNull();
+  });
+
+  it("drops stored parent rank when parent changes without valid ordering rank", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadParentById: { "thread-child": "thread-parent-a" },
+      threadParentRankById: { "thread-child": 42 },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadParent",
+      threadId: "thread-child",
+      parentId: "thread-parent-b",
+      ordering: { timestamp: 0, version: 0 },
+    });
+
+    expect(next.threadParentById["thread-child"]).toBe("thread-parent-b");
+    expect(next.threadParentRankById["thread-child"]).toBeUndefined();
+  });
+
+  it("concatenates assistant delta when merge text has no overlap", () => {
+    const seeded = threadReducer(initialState, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-no-overlap",
+      delta: "hello",
+      hasCustomName: false,
+    });
+
+    const next = threadReducer(seeded, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-no-overlap",
+      delta: "XYZ",
+      hasCustomName: false,
+    });
+
+    const item = next.itemsByThread["thread-1"]?.[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind === "message") {
+      expect(item.text).toBe("helloXYZ");
+    }
+  });
+
+  it("uses ordering.version when timestamp is NaN in parent-rank updates", () => {
+    const next = threadReducer(initialState, {
+      type: "setThreadParent",
+      threadId: "thread-child",
+      parentId: "thread-parent",
+      ordering: { timestamp: Number.NaN, version: 123 },
+    });
+
+    expect(next.threadParentById["thread-child"]).toBe("thread-parent");
+    expect(next.threadParentRankById["thread-child"]).toBe(123);
+  });
+
+  it("keeps retry waitReason after removing the last approval when retry is active", () => {
+    const approval = {
+      workspace_id: "ws-1",
+      request_id: 11,
+      method: "exec/approveCommand",
+      params: { thread_id: "thread-1" },
+      command: { kind: "exec", args: ["echo"], parsed_cmd: ["echo"] },
+      status: "pending",
+      title: "Needs approval",
+      options: [],
+      created_at: "2026-01-01T00:00:00Z",
+      id: "approval-11",
+    };
+    const base: ThreadState = {
+      ...initialState,
+      approvals: [approval],
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: false,
+          hasUnread: false,
+          isReviewing: false,
+          phase: "completed",
+          processingStartedAt: null,
+          lastDurationMs: null,
+          waitReason: "retry",
+          retryState: "retrying",
+          messagePhase: "unknown",
+          activeItemStatuses: {},
+          lastMcpProgressMessage: null,
+        },
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "removeApproval",
+      requestId: 11,
+      workspaceId: "ws-1",
+    });
+
+    expect(next.approvals).toEqual([]);
+    expect(next.threadStatusById["thread-1"]?.waitReason).toBe("retry");
+  });
+
+  it("treats setThreadTurnMeta as no-op when turn id is invalid", () => {
+    const next = threadReducer(initialState, {
+      type: "setThreadTurnMeta",
+      threadId: "thread-1",
+      turnId: "   ",
+      model: "gpt-5.3-codex",
+    });
+
+    expect(next).toBe(initialState);
+  });
+
+  it("reuses prior context window and updates matching assistant model on turn meta refresh", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "Existing output",
+            turnId: "turn-1",
+          },
+        ],
+      },
+      turnMetaByThread: {
+        "thread-1": {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          model: "old-model",
+          contextWindow: 8192,
+        },
+      },
+      turnMetaByTurnId: {
+        "turn-1": {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          model: "old-model",
+          contextWindow: 8192,
+        },
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadTurnMeta",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      model: "new-model",
+    });
+
+    expect(next.turnMetaByThread["thread-1"]?.contextWindow).toBe(8192);
+    expect(next.turnMetaByThread["thread-1"]?.model).toBe("new-model");
+    expect(next.turnMetaByTurnId["turn-1"]?.contextWindow).toBe(8192);
+    expect(next.turnMetaByTurnId["turn-1"]?.model).toBe("new-model");
+    const message = next.itemsByThread["thread-1"]?.[0];
+    expect(message?.kind).toBe("message");
+    if (message?.kind === "message") {
+      expect(message.text).toBe("Existing output");
+      expect(message.model).toBe("new-model");
+      expect(message.turnId).toBe("turn-1");
+    }
+    expect(next.itemsByThread["thread-1"]).not.toBe(base.itemsByThread["thread-1"]);
+  });
+
+  it("keeps existing assistant text when complete payload is shorter", () => {
+    const withMessage = threadReducer(initialState, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-shorter",
+      text: "longer-final-output",
+      hasCustomName: false,
+    });
+
+    const next = threadReducer(withMessage, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-shorter",
+      text: "short",
+      hasCustomName: false,
+    });
+
+    expect(next).toBe(withMessage);
+    const item = next.itemsByThread["thread-1"]?.[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind === "message") {
+      expect(item.text).toBe("longer-final-output");
+    }
+  });
+
+  it("treats setThreadTurnContextWindow as no-op when turn id is invalid", () => {
+    const next = threadReducer(initialState, {
+      type: "setThreadTurnContextWindow",
+      threadId: "thread-1",
+      turnId: "",
+      contextWindow: 1024,
+    });
+
+    expect(next).toBe(initialState);
+  });
+
+  it("resets retry wait state when processing stops after retry", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          phase: "starting",
+          processingStartedAt: 100,
+          lastDurationMs: null,
+          waitReason: "retry",
+          retryState: "retrying",
+          messagePhase: "unknown",
+          activeItemStatuses: { "tool-1": "inProgress" },
+          lastMcpProgressMessage: "waiting retry",
+        },
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "markProcessing",
+      threadId: "thread-1",
+      isProcessing: false,
+      timestamp: 250,
+    });
+
+    expect(next.threadStatusById["thread-1"]?.phase).toBe("completed");
+    expect(next.threadStatusById["thread-1"]?.waitReason).toBe("retry");
+    expect(next.threadStatusById["thread-1"]?.retryState).toBe("none");
+    expect(next.threadStatusById["thread-1"]?.lastDurationMs).toBe(150);
+    expect(next.threadStatusById["thread-1"]?.lastMcpProgressMessage).toBeNull();
+  });
+
+  it("keeps terminal phases when markProcessing stops an already-terminal thread", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          phase: "stale_recovered",
+          processingStartedAt: 20,
+          lastDurationMs: null,
+          waitReason: "none",
+          retryState: "none",
+          messagePhase: "unknown",
+        },
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "markProcessing",
+      threadId: "thread-1",
+      isProcessing: false,
+      timestamp: 30,
+    });
+
+    expect(next.threadStatusById["thread-1"]?.phase).toBe("stale_recovered");
+  });
+
+  it("clears terminal turn metadata fields when setThreadTurnStatus receives terminal status", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: false,
+          hasUnread: false,
+          isReviewing: false,
+          phase: "tool_running",
+          processingStartedAt: null,
+          lastDurationMs: null,
+          waitReason: "tool_wait",
+          retryState: "retrying",
+          turnStatus: "inProgress",
+          activeItemStatuses: { "tool-1": "inProgress" },
+          messagePhase: "unknown",
+          lastMcpProgressMessage: "streaming tools",
+        },
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadTurnStatus",
+      threadId: "thread-1",
+      turnStatus: "completed",
+    });
+
+    expect(next.threadStatusById["thread-1"]?.turnStatus).toBe("completed");
+    expect(next.threadStatusById["thread-1"]?.waitReason).toBe("none");
+    expect(next.threadStatusById["thread-1"]?.retryState).toBe("none");
+    expect(next.threadStatusById["thread-1"]?.activeItemStatuses).toEqual({});
+    expect(next.threadStatusById["thread-1"]?.lastMcpProgressMessage).toBeNull();
+  });
+
+  it("transitions tool wait and completion duration through setThreadPhase", () => {
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    try {
+      const running = threadReducer(initialState, {
+        type: "setThreadPhase",
+        threadId: "thread-1",
+        phase: "tool_running",
+      });
+      expect(running.threadStatusById["thread-1"]?.waitReason).toBe("tool_wait");
+      expect(running.threadStatusById["thread-1"]?.isProcessing).toBe(true);
+
+      const streaming = threadReducer(running, {
+        type: "setThreadPhase",
+        threadId: "thread-1",
+        phase: "streaming",
+      });
+      expect(streaming.threadStatusById["thread-1"]?.waitReason).toBe("none");
+
+      const done = threadReducer(streaming, {
+        type: "setThreadPhase",
+        threadId: "thread-1",
+        phase: "completed",
+      });
+      expect(done.threadStatusById["thread-1"]?.isProcessing).toBe(false);
+      expect(done.threadStatusById["thread-1"]?.lastDurationMs).toBe(0);
+      expect(done.threadStatusById["thread-1"]?.activeItemStatuses).toEqual({});
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it("falls back from reviewing tool_running phase to starting when still processing", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: true,
+          phase: "tool_running",
+          processingStartedAt: 1,
+          lastDurationMs: null,
+          waitReason: "none",
+          retryState: "none",
+          messagePhase: "unknown",
+        },
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "markReviewing",
+      threadId: "thread-1",
+      isReviewing: false,
+    });
+
+    expect(next.threadStatusById["thread-1"]?.isReviewing).toBe(false);
+    expect(next.threadStatusById["thread-1"]?.phase).toBe("starting");
+  });
+
+  it("stores null error message when markThreadError receives only whitespace", () => {
+    const next = threadReducer(initialState, {
+      type: "markThreadError",
+      threadId: "thread-1",
+      timestamp: 222,
+      message: "   ",
+    });
+
+    expect(next.threadStatusById["thread-1"]?.lastErrorMessage).toBeNull();
+    expect(next.threadStatusById["thread-1"]?.lastErrorAt).toBe(222);
+  });
+
+  it("renames from long first user message and bumps thread when sorted by updated_at", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadSortKeyByWorkspace: { "ws-1": "updated_at" },
+      threadsByWorkspace: {
+        "ws-1": [
+          { id: "thread-1", name: "New Agent", updatedAt: 10 },
+          { id: "thread-2", name: "Another", updatedAt: 9 },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      hasCustomName: false,
+      item: {
+        id: "user-long",
+        kind: "message",
+        role: "user",
+        text: "This is a very long first user message that should be truncated in preview naming",
+      },
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.id).toBe("thread-1");
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.name).toBe(
+      "This is a very long first user message…",
+    );
+  });
+
+  it("replaces non-reasoning item when reasoning delta targets existing id", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          { id: "mixed-1", kind: "message", role: "assistant", text: "plain" },
+        ],
+      },
+    };
+
+    const summaryNext = threadReducer(base, {
+      type: "appendReasoningSummary",
+      threadId: "thread-1",
+      itemId: "mixed-1",
+      delta: "why",
+    });
+    const summaryItem = summaryNext.itemsByThread["thread-1"]?.[0];
+    expect(summaryItem?.kind).toBe("reasoning");
+
+    const contentNext = threadReducer(summaryNext, {
+      type: "appendReasoningContent",
+      threadId: "thread-1",
+      itemId: "mixed-1",
+      delta: "details",
+    });
+    const contentItem = contentNext.itemsByThread["thread-1"]?.[0];
+    expect(contentItem?.kind).toBe("reasoning");
+    if (contentItem?.kind === "reasoning") {
+      expect(contentItem.summary).toBe("why");
+      expect(contentItem.content).toBe("details");
+    }
+  });
+
+  it("keeps state when setLastAgentMessagesBulk only contains invalid updates", () => {
+    const base: ThreadState = {
+      ...initialState,
+      lastAgentMessageByThread: {
+        "thread-1": { text: "stable", timestamp: 100 },
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setLastAgentMessagesBulk",
+      updates: [
+        { threadId: "", text: "skip", timestamp: 101 },
+        { threadId: "thread-2", text: "", timestamp: 102 },
+        { threadId: "thread-1", text: "older", timestamp: 99 },
+      ],
+    });
+
+    expect(next).toBe(base);
+  });
+
+  it("keeps assistant context window unchanged when latest assistant belongs to another turn", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "hello",
+            turnId: "turn-old",
+            contextWindow: 1024,
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadTurnContextWindow",
+      threadId: "thread-1",
+      turnId: "turn-new",
+      contextWindow: 2048,
+    });
+
+    expect(next).toEqual({
+      ...base,
+      turnMetaByThread: {
+        "thread-1": { threadId: "thread-1", turnId: "turn-new", contextWindow: 2048, model: null },
+      },
+      turnMetaByTurnId: {
+        "turn-new": { threadId: "thread-1", turnId: "turn-new", contextWindow: 2048, model: null },
+      },
+    });
+    const item = next.itemsByThread["thread-1"]?.[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind === "message") {
+      expect(item.turnId).toBe("turn-old");
+      expect(item.contextWindow).toBe(1024);
+    }
+  });
+
+  it("keeps assistant model unchanged when latest assistant belongs to another turn", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "hello",
+            turnId: "turn-old",
+            model: "model-old",
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadTurnMeta",
+      threadId: "thread-1",
+      turnId: "turn-new",
+      model: "model-new",
+    });
+
+    const item = next.itemsByThread["thread-1"]?.[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind === "message") {
+      expect(item.turnId).toBe("turn-old");
+      expect(item.model).toBe("model-old");
+    }
+  });
+
+  it("keeps non-assistant role when appendAgentDelta collides with existing user message id", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "shared-id",
+            kind: "message",
+            role: "user",
+            text: "first",
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "shared-id",
+      delta: " update",
+      hasCustomName: false,
+      turnId: "turn-1",
+    });
+
+    const item = next.itemsByThread["thread-1"]?.[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind === "message") {
+      expect(item.role).toBe("user");
+      expect(item.text).toBe("first update");
+      expect(item.turnId).toBeUndefined();
+      expect(item.model).toBeUndefined();
+    }
+  });
+
+  it("ignores mismatched turn id when only thread-level turn meta exists", () => {
+    const withThreadMeta = threadReducer(initialState, {
+      type: "setThreadTurnMeta",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      model: "model-1",
+    });
+
+    const next = threadReducer(withThreadMeta, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-mismatch",
+      delta: "reply",
+      hasCustomName: false,
+      turnId: "turn-2",
+    });
+
+    const item = next.itemsByThread["thread-1"]?.[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind === "message") {
+      expect(item.turnId).toBe("turn-2");
+      expect(item.model).toBeNull();
+    }
+  });
+
+  it("renames hex-like auto thread names from assistant text", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "a1b2c3d4", updatedAt: 1 }],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-sanitize",
+      delta: "Ship status now",
+      hasCustomName: false,
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.name).toBe("Ship status now");
+  });
+
+  it("does not rename non-auto custom thread names from assistant output", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "Pinned Project Thread", updatedAt: 1 }],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-custom",
+      delta: "Fresh assistant summary",
+      hasCustomName: false,
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.name).toBe("Pinned Project Thread");
+  });
+
+  it("normalizes non-positive turn context window values to null", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "assistant-ctx",
+            kind: "message",
+            role: "assistant",
+            text: "answer",
+            turnId: "turn-1",
+            contextWindow: 2048,
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadTurnContextWindow",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      contextWindow: 0,
+    });
+
+    const item = next.itemsByThread["thread-1"]?.[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind === "message") {
+      expect(item.turnId).toBe("turn-1");
+      expect(item.contextWindow).toBeNull();
+    }
+    expect(next.turnMetaByThread["thread-1"]?.contextWindow).toBeNull();
+  });
+
+  it("returns same state when hiding an already hidden thread", () => {
+    const base: ThreadState = {
+      ...initialState,
+      hiddenThreadIdsByWorkspace: { "ws-1": { "thread-1": true } },
+    };
+    const next = threadReducer(base, {
+      type: "hideThread",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+    });
+    expect(next).toBe(base);
+  });
+
+  it("sets active thread to null when hiding the only active thread", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: { "ws-1": [{ id: "thread-1", name: "Solo", updatedAt: 1 }] },
+      activeThreadIdByWorkspace: { "ws-1": "thread-1" },
+    };
+    const next = threadReducer(base, {
+      type: "hideThread",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+    });
+    expect(next.activeThreadIdByWorkspace["ws-1"]).toBeNull();
+    expect(next.threadsByWorkspace["ws-1"]).toEqual([]);
+  });
+
+  it("preserves retry waitReason transitions across markProcessing start/stop", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: false,
+          hasUnread: false,
+          isReviewing: false,
+          phase: "starting",
+          processingStartedAt: null,
+          lastDurationMs: null,
+          waitReason: "retry",
+          retryState: "none",
+          messagePhase: "unknown",
+          activeItemStatuses: {},
+          turnStatus: null,
+          lastActivityAt: null,
+          lastErrorAt: null,
+          lastErrorMessage: null,
+          lastMcpProgressMessage: null,
+        },
+      },
+    };
+
+    const running = threadReducer(base, {
+      type: "markProcessing",
+      threadId: "thread-1",
+      isProcessing: true,
+      timestamp: 100,
+    });
+    expect(running.threadStatusById["thread-1"]?.retryState).toBe("retrying");
+
+    const stopped = threadReducer(running, {
+      type: "markProcessing",
+      threadId: "thread-1",
+      isProcessing: false,
+      timestamp: 200,
+    });
+    expect(stopped.threadStatusById["thread-1"]?.waitReason).toBe("retry");
+    expect(stopped.threadStatusById["thread-1"]?.retryState).toBe("none");
+  });
+
+  it("switches tool_wait waitReason when thread phase enters and exits tool_running", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: false,
+          hasUnread: false,
+          isReviewing: false,
+          phase: "starting",
+          processingStartedAt: null,
+          lastDurationMs: null,
+          waitReason: "none",
+          retryState: "retrying",
+          messagePhase: "unknown",
+          activeItemStatuses: { item: "inProgress" },
+          turnStatus: null,
+          lastActivityAt: null,
+          lastErrorAt: null,
+          lastErrorMessage: null,
+          lastMcpProgressMessage: "working",
+        },
+      },
+    };
+
+    const toolRunning = threadReducer(base, {
+      type: "setThreadPhase",
+      threadId: "thread-1",
+      phase: "tool_running",
+    });
+    expect(toolRunning.threadStatusById["thread-1"]?.waitReason).toBe("tool_wait");
+    expect(toolRunning.threadStatusById["thread-1"]?.retryState).toBe("none");
+
+    const streaming = threadReducer(toolRunning, {
+      type: "setThreadPhase",
+      threadId: "thread-1",
+      phase: "streaming",
+    });
+    expect(streaming.threadStatusById["thread-1"]?.waitReason).toBe("none");
+  });
+
+  it("handles non-string thread ids for approval/user-input and keeps queue updates", () => {
+    const badApproval = {
+      workspace_id: "ws-1",
+      request_id: 7,
+      params: { thread_id: 42 },
+    } as unknown as ApprovalRequest;
+    const afterApproval = threadReducer(initialState, {
+      type: "addApproval",
+      approval: badApproval,
+    });
+    expect(afterApproval.approvals).toHaveLength(1);
+
+    const badInput = {
+      workspace_id: "ws-1",
+      request_id: 9,
+      params: { thread_id: 42, questions: [] },
+    } as unknown as ThreadState["userInputRequests"][number];
+    const afterInput = threadReducer(afterApproval, {
+      type: "addUserInputRequest",
+      request: badInput,
+    });
+    expect(afterInput.userInputRequests).toHaveLength(1);
+  });
+
+  it("falls back to none waitReason when removing non-existing approval/input requests", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: false,
+          hasUnread: false,
+          isReviewing: false,
+          phase: "completed",
+          processingStartedAt: null,
+          lastDurationMs: null,
+          waitReason: "none",
+          retryState: "none",
+          messagePhase: "unknown",
+          activeItemStatuses: {},
+          turnStatus: null,
+          lastActivityAt: null,
+          lastErrorAt: null,
+          lastErrorMessage: null,
+          lastMcpProgressMessage: null,
+        },
+      },
+      approvals: [],
+      userInputRequests: [],
+    };
+    const afterRemoveApproval = threadReducer(base, {
+      type: "removeApproval",
+      requestId: 123,
+      workspaceId: "ws-1",
+    });
+    expect(afterRemoveApproval.approvals).toEqual([]);
+    const afterRemoveInput = threadReducer(afterRemoveApproval, {
+      type: "removeUserInputRequest",
+      requestId: 456,
+      workspaceId: "ws-1",
+    });
+    expect(afterRemoveInput.userInputRequests).toEqual([]);
+  });
+
+  it("creates reasoning and plan entries from non-matching existing kinds", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "mixed-1",
+            kind: "message",
+            role: "assistant",
+            text: "hello",
+          },
+        ],
+      },
+    };
+    const withReasoning = threadReducer(base, {
+      type: "appendReasoningSummary",
+      threadId: "thread-1",
+      itemId: "mixed-1",
+      delta: "plan",
+    });
+    const reasoningItem = withReasoning.itemsByThread["thread-1"]?.find((i) => i.id === "mixed-1");
+    expect(reasoningItem?.kind).toBe("reasoning");
+
+    const withPlan = threadReducer(base, {
+      type: "appendPlanDelta",
+      threadId: "thread-1",
+      itemId: "mixed-1",
+      delta: "step",
+    });
+    const planItem = withPlan.itemsByThread["thread-1"]?.find((i) => i.id === "mixed-1");
+    expect(planItem?.kind).toBe("tool");
+  });
+
+  it("truncates very long auto-generated thread names from user messages", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "New Agent", updatedAt: 1 }],
+      },
+    };
+    const next = threadReducer(base, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      item: {
+        id: "u-1",
+        kind: "message",
+        role: "user",
+        text: "A".repeat(120),
+      },
+      hasCustomName: false,
+    });
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.name.endsWith("…")).toBe(true);
+  });
+
+  it("keeps reducer idempotent for unchanged status updates", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: false,
+          hasUnread: false,
+          isReviewing: false,
+          phase: "completed",
+          processingStartedAt: null,
+          lastDurationMs: null,
+          waitReason: "none",
+          retryState: "none",
+          messagePhase: "unknown",
+          activeItemStatuses: { step: "completed" },
+          turnStatus: null,
+          lastActivityAt: 100,
+          lastErrorAt: 200,
+          lastErrorMessage: "boom",
+          lastMcpProgressMessage: "done",
+        },
+      },
+    };
+
+    const sameActivity = threadReducer(base, {
+      type: "touchThreadActivity",
+      threadId: "thread-1",
+      timestamp: 100,
+    });
+    expect(sameActivity).toBe(base);
+
+    const sameActiveItem = threadReducer(base, {
+      type: "setActiveItemStatus",
+      threadId: "thread-1",
+      itemId: "step",
+      status: "completed",
+    });
+    expect(sameActiveItem).toBe(base);
+
+    const sameMcp = threadReducer(base, {
+      type: "setMcpProgressMessage",
+      threadId: "thread-1",
+      message: "done",
+    });
+    expect(sameMcp).toBe(base);
+
+    const sameError = threadReducer(base, {
+      type: "markThreadError",
+      threadId: "thread-1",
+      timestamp: 200,
+      message: "boom",
+    });
+    expect(sameError.threadStatusById["thread-1"]?.phase).toBe("failed");
+  });
+
+  it("keeps summary/content boundary reducers no-op when content does not change", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          { id: "r-1", kind: "reasoning", summary: "Line 1\n\n", content: "Body" },
+          {
+            id: "tool-1",
+            kind: "tool",
+            toolType: "plan",
+            title: "方案",
+            detail: "Generating plan...",
+            status: "in_progress",
+          },
+        ],
+      },
+    };
+
+    const sameSummary = threadReducer(base, {
+      type: "appendReasoningSummary",
+      threadId: "thread-1",
+      itemId: "r-1",
+      delta: "",
+    });
+    expect(sameSummary).toBe(base);
+
+    const sameBoundary = threadReducer(base, {
+      type: "appendReasoningSummaryBoundary",
+      threadId: "thread-1",
+      itemId: "r-1",
+    });
+    expect(sameBoundary).toBe(base);
+
+    const sameContent = threadReducer(base, {
+      type: "appendReasoningContent",
+      threadId: "thread-1",
+      itemId: "r-1",
+      delta: "",
+    });
+    expect(sameContent).toBe(base);
+
+    const sameToolOutput = threadReducer(base, {
+      type: "appendToolOutput",
+      threadId: "thread-1",
+      itemId: "tool-1",
+      delta: "",
+    });
+    expect(sameToolOutput).toBe(base);
+  });
+
+  it("preserves retry waitReason when clearing approval/user-input queues", () => {
+    const base: ThreadState = {
+      ...initialState,
+      approvals: [
+        {
+          workspace_id: "ws-1",
+          request_id: 1,
+          params: { thread_id: "thread-1" },
+        } as unknown as ApprovalRequest,
+      ],
+      userInputRequests: [
+        ({
+          workspace_id: "ws-1",
+          request_id: 2,
+          params: {
+            thread_id: "thread-1",
+            turn_id: "turn-1",
+            item_id: "item-1",
+            questions: [],
+          },
+        } as unknown) as ThreadState["userInputRequests"][number],
+      ],
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: false,
+          hasUnread: false,
+          isReviewing: false,
+          phase: "completed",
+          processingStartedAt: null,
+          lastDurationMs: null,
+          waitReason: "retry",
+          retryState: "retrying",
+          messagePhase: "unknown",
+          activeItemStatuses: {},
+          turnStatus: null,
+          lastActivityAt: null,
+          lastErrorAt: null,
+          lastErrorMessage: null,
+          lastMcpProgressMessage: null,
+        },
+      },
+    };
+
+    const afterApproval = threadReducer(base, {
+      type: "removeApproval",
+      requestId: 1,
+      workspaceId: "ws-1",
+    });
+    expect(afterApproval.threadStatusById["thread-1"]?.waitReason).toBe("user_input");
+
+    const afterInput = threadReducer(afterApproval, {
+      type: "removeUserInputRequest",
+      requestId: 2,
+      workspaceId: "ws-1",
+    });
+    expect(afterInput.threadStatusById["thread-1"]?.waitReason).toBe("none");
+  });
+
+  it("uses thread-level model fallback when setting turn context window", () => {
+    const base: ThreadState = {
+      ...initialState,
+      turnMetaByThread: {
+        "thread-1": {
+          threadId: "thread-1",
+          turnId: "turn-old",
+          model: "gemini-3.1-pro",
+          contextWindow: 1024,
+        },
+      },
+    };
+    const next = threadReducer(base, {
+      type: "setThreadTurnContextWindow",
+      threadId: "thread-1",
+      turnId: "turn-new",
+      contextWindow: 4096,
+    });
+    expect(next.turnMetaByTurnId["turn-new"]?.model).toBe("gemini-3.1-pro");
+    expect(next.turnMetaByTurnId["turn-new"]?.contextWindow).toBe(4096);
   });
 });

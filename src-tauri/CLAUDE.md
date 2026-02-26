@@ -11,6 +11,22 @@
 - Tauri 2
 - Tokio / Serde
 
+## 最小可执行导航（索引化 + 懒加载）
+
+1. 根规则：`AGENTS.md`、`CLAUDE.md`。
+2. 后端域：`src-tauri/AGENTS.md`、`src-tauri/CLAUDE.md`。
+3. 涉及前端联动时，补读 `src/AGENTS.md`、`src/CLAUDE.md`。
+
+## 14条规范与14项Gate对齐
+
+- 完全继承根 `AGENTS.md` 的 14 条强制规范与 14 项 Gate。
+- 本文件仅保留后端最短执行路径，不引入冲突性例外。
+
+## Gemini 策略
+
+- 默认：Gemini-only（当前）。
+- 兼容：可选且非默认；启用时必须记录触发条件、影响面和回退方案。
+
 ## 目录导航
 
 - App 主入口：`src-tauri/src/lib.rs`

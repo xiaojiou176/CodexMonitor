@@ -60,6 +60,20 @@ describe("rpc extractors", () => {
     expect(extractReviewThreadId({ result: {} })).toBeNull();
     expect(extractReviewThreadId(null)).toBeNull();
   });
+
+  it("extracts snake_case top-level ids and ignores blank review ids", () => {
+    expect(
+      extractReviewThreadId({
+        review_thread_id: "thread-snake",
+      }),
+    ).toBe("thread-snake");
+
+    expect(
+      extractReviewThreadId({
+        result: { reviewThreadId: "   " },
+      }),
+    ).toBe("   ");
+  });
 });
 
 describe("usage and rate-limit normalization", () => {
@@ -133,6 +147,144 @@ describe("usage and rate-limit normalization", () => {
 
     expect(normalizeRateLimits({}, previous)).toEqual(previous);
   });
+
+  it("handles invalid/nullish rate-limit payloads and compat numeric fallbacks", () => {
+    expect(normalizeRateLimits({ primary: { used_percent: "oops" } }, null)).toEqual({
+      primary: null,
+      secondary: null,
+      credits: null,
+      planType: null,
+    });
+
+    expect(
+      normalizeRateLimits(
+        {
+          primary: { remainingPercent: 130, windowDurationMins: "45", resetsAt: "1500" },
+          secondary: { remaining_percent: -20, window_duration_mins: "bad" },
+        },
+        null,
+      ),
+    ).toEqual({
+      primary: { usedPercent: 0, windowDurationMins: 45, resetsAt: 1500 },
+      secondary: { usedPercent: 100, windowDurationMins: null, resetsAt: null },
+      credits: null,
+      planType: null,
+    });
+
+    expect(
+      normalizeRateLimits(
+        {
+          planType: "enterprise",
+          plan_type: "team",
+        },
+        null,
+      ),
+    ).toEqual({
+      primary: null,
+      secondary: null,
+      credits: null,
+      planType: "enterprise",
+    });
+  });
+
+  it("normalizes token usage with nullish and invalid modelContextWindow inputs", () => {
+    expect(normalizeTokenUsage(undefined)).toEqual({
+      total: {
+        totalTokens: 0,
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        outputTokens: 0,
+        reasoningOutputTokens: 0,
+      },
+      last: {
+        totalTokens: 0,
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        outputTokens: 0,
+        reasoningOutputTokens: 0,
+      },
+      modelContextWindow: null,
+    });
+
+    expect(normalizeTokenUsage({ model_context_window: "not-a-number" }).modelContextWindow).toBe(
+      null,
+    );
+  });
+
+  it("falls back to previous numeric window values when payload omits/invalidates them", () => {
+    const previous = {
+      primary: { usedPercent: 41, windowDurationMins: 60, resetsAt: 1234 },
+      secondary: null,
+      credits: null,
+      planType: null,
+    };
+
+    expect(
+      normalizeRateLimits(
+        {
+          primary: {
+            window_duration_mins: "bad-value",
+            resets_at: undefined,
+          },
+        } as never,
+        previous,
+      ),
+    ).toEqual({
+      primary: { usedPercent: 41, windowDurationMins: 60, resetsAt: 1234 },
+      secondary: null,
+      credits: null,
+      planType: null,
+    });
+  });
+
+  it("normalizes credit fallbacks for invalid booleans and null balance", () => {
+    const previous = {
+      primary: null,
+      secondary: null,
+      credits: { hasCredits: true, unlimited: false, balance: "9.99" },
+      planType: null,
+    };
+
+    expect(
+      normalizeRateLimits(
+        {
+          credits: {
+            hasCredits: "yes",
+            unlimited: 1,
+            balance: 88,
+          },
+        } as never,
+        previous,
+      ),
+    ).toEqual({
+      primary: null,
+      secondary: null,
+      credits: { hasCredits: true, unlimited: false, balance: "9.99" },
+      planType: null,
+    });
+
+    expect(
+      normalizeRateLimits(
+        {
+          credits: {
+            has_credits: false,
+            unlimited: true,
+            balance: null,
+          },
+        },
+        previous,
+      ),
+    ).toEqual({
+      primary: null,
+      secondary: null,
+      credits: { hasCredits: false, unlimited: true, balance: null },
+      planType: null,
+    });
+  });
+
+  it("keeps numeric modelContextWindow values unchanged", () => {
+    expect(normalizeTokenUsage({ modelContextWindow: 16384 }).modelContextWindow).toBe(16384);
+  });
 });
 
 describe("plan and review normalization", () => {
@@ -192,6 +344,46 @@ describe("normalizePlanUpdate", () => {
       ],
     });
   });
+
+  it("uses compat plan container and top-level explanation precedence", () => {
+    expect(
+      normalizePlanUpdate("turn-5", "  external note  ", {
+        plan: [{ title: "Via plan", status: "in-progress" }],
+        explanation: "ignored when explicit explanation exists",
+      }),
+    ).toEqual({
+      turnId: "turn-5",
+      explanation: "external note",
+      steps: [{ step: "Via plan", status: "inProgress" }],
+    });
+  });
+
+  it("returns null for invalid step containers without usable explanation", () => {
+    expect(
+      normalizePlanUpdate("turn-6", null, {
+        steps: "not-an-array",
+        explanation: "   ",
+      }),
+    ).toBeNull();
+  });
+
+  it("normalizes compat entries container and non-object plan payload fallback", () => {
+    expect(
+      normalizePlanUpdate("turn-7", null, {
+        entries: [{ step: "Run checks", status: "in-progress" }],
+      }),
+    ).toEqual({
+      turnId: "turn-7",
+      explanation: null,
+      steps: [{ step: "Run checks", status: "inProgress" }],
+    });
+
+    expect(normalizePlanUpdate("turn-8", " keep note ", "bad-plan-shape")).toEqual({
+      turnId: "turn-8",
+      explanation: "keep note",
+      steps: [],
+    });
+  });
 });
 
 describe("parseReviewTarget", () => {
@@ -214,6 +406,21 @@ describe("parseReviewTarget", () => {
     expect(parseReviewTarget("/review compare release")).toEqual({
       type: "custom",
       instructions: "compare release",
+    });
+  });
+
+  it("keeps compat parsing behavior for edge command variants", () => {
+    expect(parseReviewTarget("/review COMMIT abcdef")).toEqual({
+      type: "commit",
+      sha: "abcdef",
+    });
+    expect(parseReviewTarget("/review base    release/v1")).toEqual({
+      type: "baseBranch",
+      branch: "release/v1",
+    });
+    expect(parseReviewTarget("/review custom   ")).toEqual({
+      type: "custom",
+      instructions: "custom",
     });
   });
 });

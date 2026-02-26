@@ -419,10 +419,11 @@ At the end of a task:
 
 1. Run `npm run lint:strict`.
 2. Run `npm run test:assertions:guard`.
-3. Run `npm run test` when you touched threads, settings, updater, shared utils, or backend cores.
-4. Run `npm run typecheck`.
-5. If you changed Rust backend code, run `npm run check:rust`.
-6. Keep Husky hooks enabled (`pre-commit` and `pre-push`) so these checks run before pushing.
+3. Run `npm run guard:reuse-search`.
+4. Run `npm run test` when you touched threads, settings, updater, shared utils, or backend cores.
+5. Run `npm run typecheck`.
+6. If you changed Rust backend code, run `npm run check:rust`.
+7. Keep Husky hooks enabled (`pre-commit` and `pre-push`) so these checks run before pushing.
 
 ## 测试与质量铁律（2026-02）
 
@@ -434,11 +435,12 @@ This section is mandatory for all future AI code changes in this repository.
 2. Pre-Commit 前必须确保 lint 全绿；任何 error 或 warning 未清零都禁止提交。
 3. Unit Test 覆盖率必须满足：全局 `>= 80%`，关键模块 `>= 95%`；任一阈值不达标视为未完成。
 4. 禁止安慰剂断言（例如无业务价值断言、恒真断言）；Commit 前必须通过 assertion guard（`npm run test:assertions:guard`）。
-5. 可并发执行的检查必须并发执行，禁止无理由串行；并发执行不得牺牲结果准确性与流程稳健性。
-6. 长耗时测试（含 E2E/集成/端到端链路）必须输出心跳日志，持续报告当前阶段与进度，避免“静默运行”。
-7. 执行长测试前，必须先执行短测试（lint、快速单测、核心 smoke）；短测试未通过时禁止进入长测试阶段。
-8. Pre-Commit 必须执行文档漂移检查；凡代码行为、配置、命令、接口有变更，必须同步更新对应文档（含 README/参考文档/操作说明）。
-9. AGENTS/CLAUDE 导航文档覆盖必须满足：根目录必须有导航入口；主要模块目录必须有可达导航或明确跳转说明，确保人类与 AI 可快速定位规则与入口。
+5. 新增导出函数/组件/命令前必须先搜索复用候选；Commit 前必须通过复用门禁（`npm run guard:reuse-search`）。
+6. 可并发执行的检查必须并发执行，禁止无理由串行；并发执行不得牺牲结果准确性与流程稳健性。
+7. 长耗时测试（含 E2E/集成/端到端链路）必须输出心跳日志，持续报告当前阶段与进度，避免“静默运行”。
+8. 执行长测试前，必须先执行短测试（lint、快速单测、核心 smoke）；短测试未通过时禁止进入长测试阶段。
+9. Pre-Commit 必须执行文档漂移检查；凡代码行为、配置、命令、接口有变更，必须同步更新对应文档（含 README/参考文档/操作说明）。
+10. AGENTS/CLAUDE 导航文档覆盖必须满足：根目录必须有导航入口；主要模块目录必须有可达导航或明确跳转说明，确保人类与 AI 可快速定位规则与入口。
 
 ### 验收标准（Gate）
 
@@ -451,6 +453,69 @@ This section is mandatory for all future AI code changes in this repository.
 7. Test-Order Gate：日志中能证明“短测试先于长测试”执行顺序。
 8. Doc-Drift Gate：代码变更 PR/提交包含对应文档更新，或显式说明“无文档影响”的可审计理由。
 9. 导航覆盖 Gate：根目录与主要模块目录导航文档齐备，路径可达且未失效。
+
+## 文档与规则宪法（2026-02，14条）
+
+本节与“测试与质量铁律（2026-02）”并行生效；若条款冲突，以“更严格、可验证、可审计”为准。
+
+### 强制执行规范（MUST / 禁止，14条）
+
+1. Live 测试在具备条件时（真实 Key、外部服务可访问）必须读取真实 Key，并与真实外部 API/网页进行交互验证；禁止仅用本地 mock 替代该类验证。
+2. Pre-Commit 前必须确保 lint 全绿；任何 error 或 warning 未清零都禁止提交。
+3. Unit Test 覆盖率必须满足：全局 `>= 80%`，关键模块 `>= 95%`；任一阈值不达标视为未完成。
+4. 禁止安慰剂断言（例如无业务价值断言、恒真断言）；Commit 前必须通过 assertion guard（`npm run test:assertions:guard`）。
+5. 可并发执行的检查必须并发执行，禁止无理由串行；并发执行不得牺牲结果准确性与流程稳健性。
+6. 长耗时测试（含 E2E/集成/端到端链路）必须输出心跳日志，持续报告当前阶段与进度，避免“静默运行”。
+7. 执行长测试前，必须先执行短测试（lint、快速单测、核心 smoke）；短测试未通过时禁止进入长测试阶段。
+8. Pre-Commit 必须执行文档漂移检查；凡代码行为、配置、命令、接口有变更，必须同步更新对应文档（含 README/参考文档/操作说明）。
+9. AGENTS/CLAUDE 导航文档覆盖必须满足：根目录必须有导航入口；主要模块目录必须有可达导航或明确跳转说明，确保人类与 AI 可快速定位规则与入口。
+10. 文档读取必须“索引优先 + 懒加载”：先读根索引，再按任务只加载最小必要模块文档；禁止无差别全量展开导致上下文污染。
+11. 模型策略为 `Gemini-only（当前默认）`：新任务默认走 Gemini 主链路，不得在未声明的情况下切到其他模型族。
+12. `兼容可选（非默认）`：仅在 Gemini 不可用、能力缺口或外部硬约束时，才允许启用兼容路线；且必须记录触发条件、回退条件与结果差异。
+13. 规则层级必须一致：根文档是宪法，模块文档是局部执行细则；模块规则不得弱化根规则，冲突时以根规则为准。
+14. 所有结论必须证据化：至少包含命令/日志/变更文件/测试结果之一；“无证据结论”视为未完成。
+
+### 验收标准（Gate，14项）
+
+1. Live 验证 Gate：有条件时必须提供真实外部交互证据（请求记录、响应摘要或测试日志）。
+2. Lint Gate：`npm run lint:strict` 结果为零错误、零警告。
+3. Coverage Gate：覆盖率报告显示全局 `>= 80%`，关键模块 `>= 95%`。
+4. Assertion Gate：`npm run test:assertions:guard` 必须通过。
+5. 并发 Gate：可并发检查任务需有并发执行记录或等价日志证据。
+6. Long-Test Heartbeat Gate：长测试日志必须出现连续心跳信息（阶段、时间、进度）。
+7. Test-Order Gate：日志中能证明“短测试先于长测试”执行顺序。
+8. Doc-Drift Gate：代码变更 PR/提交包含对应文档更新，或显式说明“无文档影响”的可审计理由。
+9. 导航覆盖 Gate：根目录与主要模块目录导航文档齐备，路径可达且未失效。
+10. Lazy-Load Gate：执行记录体现“先读根索引，再按需加载模块文档”的最小化读取路径。
+11. Gemini-Default Gate：任务日志/配置显示默认执行链路为 Gemini。
+12. Compatibility-Opt-In Gate：若启用兼容路线，必须有显式触发原因、审批语句或任务注记，且标明非默认。
+13. Rule-Hierarchy Gate：模块文档内容与根文档不冲突；若存在差异，已给出根文档优先的对齐说明。
+14. Evidence Gate：每个关键结论都能追溯到可审计证据，不存在“口头通过”。
+
+## 导航索引与懒加载协议
+
+### 根索引（先读）
+
+- `AGENTS.md`：仓库级规则宪法与 Gate（本文件）
+- `CLAUDE.md`：仓库级执行摘要与最短路径
+
+### 模块索引（按任务懒加载）
+
+- 前端任务：`src/AGENTS.md` → `src/CLAUDE.md`
+- 后端任务：`src-tauri/AGENTS.md` → `src-tauri/CLAUDE.md`
+
+### 懒加载执行顺序（最小可执行）
+
+1. 先读根索引，确认强制规范与 Gate。
+2. 按任务域只加载一个模块文档族（`src/` 或 `src-tauri/`）。
+3. 仅在出现跨域变更时，补读另一模块文档族。
+4. 回写时检查根规则与模块细则一致，不得降级根规则。
+
+## 模型策略（Gemini-only 当前）
+
+- 默认：Gemini-only（当前），所有新任务默认使用 Gemini 路线。
+- 兼容：仅可选、非默认，仅在出现明确阻塞时启用。
+- 记录：一旦启用兼容路线，必须记录原因、影响面、回退计划与结果差异。
 
 ## Notes
 

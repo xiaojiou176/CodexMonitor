@@ -165,6 +165,73 @@ describe("useThreadRateLimits", () => {
     );
   });
 
+  it("returns early when neither explicit workspace id nor active workspace id exists", async () => {
+    const dispatch = vi.fn();
+    const onDebug = vi.fn();
+    const { result } = renderHook(() =>
+      useThreadRateLimits({
+        activeWorkspaceId: null,
+        dispatch,
+        onDebug,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.refreshAccountRateLimits();
+    });
+
+    expect(getAccountRateLimits).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(onDebug).not.toHaveBeenCalled();
+  });
+
+  it("does not dispatch when payload has no rate limits object", async () => {
+    const dispatch = vi.fn();
+    vi.mocked(getAccountRateLimits).mockResolvedValue({
+      result: { note: "no limits" },
+    } as unknown as Awaited<ReturnType<typeof getAccountRateLimits>>);
+
+    const { result } = renderHook(() =>
+      useThreadRateLimits({
+        activeWorkspaceId: "ws-1",
+        dispatch,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.refreshAccountRateLimits();
+    });
+
+    expect(getAccountRateLimits).toHaveBeenCalledWith("ws-1");
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("stringifies non-Error failures in debug payload", async () => {
+    const dispatch = vi.fn();
+    const onDebug = vi.fn();
+    vi.mocked(getAccountRateLimits).mockRejectedValue("network-down");
+
+    const { result } = renderHook(() =>
+      useThreadRateLimits({
+        activeWorkspaceId: "ws-1",
+        dispatch,
+        onDebug,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.refreshAccountRateLimits();
+    });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "account/rateLimits/read error",
+        payload: "network-down",
+      }),
+    );
+  });
+
   it("merges partial payloads with previous workspace rate limits", async () => {
     const dispatch = vi.fn();
     const previousRateLimits = {

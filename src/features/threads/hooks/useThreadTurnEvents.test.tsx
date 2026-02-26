@@ -359,6 +359,28 @@ describe("useThreadTurnEvents", () => {
     expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", null);
   });
 
+  it("classifies failed turn completion and includes the explicit error message", () => {
+    const { result, markThreadError, pushThreadErrorMessage, setThreadPhase } =
+      makeOptions();
+
+    act(() => {
+      result.current.onTurnCompleted("ws-1", "thread-1", "turn-1", {
+        status: "failed",
+        errorMessage: "Gateway timeout",
+      });
+    });
+
+    expect(markThreadError).toHaveBeenCalledWith(
+      "thread-1",
+      "Turn failed: Gateway timeout",
+    );
+    expect(pushThreadErrorMessage).toHaveBeenCalledWith(
+      "thread-1",
+      "Turn failed: Gateway timeout",
+    );
+    expect(setThreadPhase).toHaveBeenCalledWith("thread-1", "failed");
+  });
+
   it("classifies interrupted turn completion", () => {
     const { result, setThreadPhase, markThreadError, pushThreadErrorMessage } =
       makeOptions();

@@ -99,4 +99,46 @@ describe("useCopyThread", () => {
       }),
     );
   });
+
+  it("skips clipboard write when transcript is empty", async () => {
+    vi.mocked(buildThreadTranscript).mockReturnValue("");
+    const onDebug = vi.fn();
+    const { result } = renderHook(() =>
+      useCopyThread({ activeItems: makeItems(), onDebug }),
+    );
+
+    await act(async () => {
+      await result.current.handleCopyThread();
+    });
+
+    expect(buildThreadTranscript).toHaveBeenCalledTimes(1);
+    expect(globalThis.navigator.clipboard.writeText).not.toHaveBeenCalled();
+    expect(onDebug).not.toHaveBeenCalled();
+  });
+
+  it("stringifies non-Error clipboard failures", async () => {
+    vi.mocked(buildThreadTranscript).mockReturnValue("transcript body");
+    const onDebug = vi.fn();
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: {
+        writeText: vi.fn().mockRejectedValue("permission denied"),
+      },
+      configurable: true,
+    });
+
+    const { result } = renderHook(() =>
+      useCopyThread({ activeItems: makeItems(), onDebug }),
+    );
+
+    await act(async () => {
+      await result.current.handleCopyThreadWithOptions({ toolOutputMode: "compact" });
+    });
+
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "thread/copy error",
+        payload: "permission denied",
+      }),
+    );
+  });
 });

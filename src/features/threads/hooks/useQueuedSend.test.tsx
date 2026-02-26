@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
 import { useQueuedSend } from "./useQueuedSend";
 
-const { flushScheduledLocalStorageWritesMock } = vi.hoisted(() => ({
+const {
+  evaluateThreadStaleStateMock,
+  flushScheduledLocalStorageWritesMock,
+  hasRunningCommandExecutionMock,
+} = vi.hoisted(() => ({
+  evaluateThreadStaleStateMock: vi.fn(),
   flushScheduledLocalStorageWritesMock: vi.fn(),
+  hasRunningCommandExecutionMock: vi.fn(),
 }));
 
 vi.mock("../../../utils/localStorageWriteScheduler", () => ({
@@ -15,6 +21,11 @@ vi.mock("../../../utils/localStorageWriteScheduler", () => ({
   flushScheduledLocalStorageWrites: flushScheduledLocalStorageWritesMock,
 }));
 
+vi.mock("./threadStalePolicy", () => ({
+  evaluateThreadStaleState: evaluateThreadStaleStateMock,
+  hasRunningCommandExecution: hasRunningCommandExecutionMock,
+}));
+
 const workspace: WorkspaceInfo = {
   id: "workspace-1",
   name: "CodexMonitor",
@@ -22,6 +33,8 @@ const workspace: WorkspaceInfo = {
   connected: true,
   settings: { sidebarCollapsed: false },
 };
+
+const pendingResolutions: Array<() => void> = [];
 
 const makeOptions = (
   overrides: Partial<Parameters<typeof useQueuedSend>[0]> = {},
@@ -48,6 +61,12 @@ const makeOptions = (
   ...overrides,
 });
 
+function createPendingPromise(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    pendingResolutions.push(resolve);
+  });
+}
+
 async function flushAsyncTicks(ticks = 1): Promise<void> {
   for (let index = 0; index < ticks; index += 1) {
     await act(async () => {
@@ -62,6 +81,105 @@ describe("useQueuedSend", () => {
   beforeEach(() => {
     window.localStorage.clear();
     flushScheduledLocalStorageWritesMock.mockClear();
+    evaluateThreadStaleStateMock.mockReset();
+    evaluateThreadStaleStateMock.mockReturnValue({
+      isStale: false,
+      processingAgeMs: 0,
+      silenceMs: 0,
+      silenceThresholdMs: 90_000,
+    });
+    hasRunningCommandExecutionMock.mockReset();
+    hasRunningCommandExecutionMock.mockReturnValue(false);
+  });
+
+  afterEach(async () => {
+    while (pendingResolutions.length > 0) {
+      pendingResolutions.pop()?.();
+    }
+    await flushAsyncTicks(1);
+    vi.clearAllTimers();
+  });
+
+  it("sanitizes persisted queue payloads and keeps only valid queued messages", () => {
+    window.localStorage.setItem(
+      "codexmonitor.queuedMessagesByThread",
+      JSON.stringify({
+        "thread-1": [
+          { id: "ok-1", text: "valid", createdAt: 1, images: ["img-1"] },
+          { id: 123, text: "bad id", createdAt: 2 },
+          { id: "bad-2", text: "bad createdAt", createdAt: "2" },
+          { id: "bad-3", text: "bad images", createdAt: 3, images: [1] },
+        ],
+        "thread-2": "not-an-array",
+      }),
+    );
+
+    const options = makeOptions({ activeThreadId: "thread-1", isProcessing: true });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    expect(result.current.activeQueue.map((item) => item.id)).toEqual(["ok-1"]);
+    expect(result.current.activeQueue[0]?.workspaceId).toBe("workspace-1");
+  });
+
+  it("falls back to empty queue when persisted queue JSON is malformed", () => {
+    window.localStorage.setItem(
+      "codexmonitor.queuedMessagesByThread",
+      "{ this is not valid json",
+    );
+
+    const options = makeOptions({ activeThreadId: "thread-1" });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    expect(result.current.activeQueue).toEqual([]);
+    expect(result.current.queueHealthEntries).toEqual([]);
+  });
+
+  it("routes slash commands to the matching command handlers", async () => {
+    const options = makeOptions();
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    const commandCases = [
+      { text: "/fork branch", fn: options.startFork },
+      { text: "/review pr", fn: options.startReview },
+      { text: "/resume task", fn: options.startResume },
+      { text: "/compact now", fn: options.startCompact },
+      { text: "/mcp status", fn: options.startMcp },
+      { text: "/status", fn: options.startStatus },
+      { text: "/apps", fn: options.startApps },
+    ];
+
+    for (const commandCase of commandCases) {
+      await act(async () => {
+        await result.current.handleSend(commandCase.text);
+      });
+      expect(commandCase.fn).toHaveBeenCalledWith(commandCase.text.trim());
+    }
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.clearActiveImages).toHaveBeenCalledTimes(commandCases.length);
+  });
+
+  it("handles /new command without posting a follow-up when no prompt body exists", async () => {
+    const options = makeOptions({
+      startThreadForWorkspace: vi.fn().mockResolvedValue("thread-new"),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/new");
+    });
+
+    expect(options.startThreadForWorkspace).toHaveBeenCalledWith("workspace-1");
+    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
   });
 
   it("sends queued messages one at a time after processing completes", async () => {
@@ -1031,9 +1149,7 @@ describe("useQueuedSend", () => {
   it("requeues an in-flight message when retryThreadQueue is triggered", async () => {
     const options = makeOptions({
       sendUserMessage: vi.fn().mockImplementation(
-        () => new Promise<void>(() => {
-          // keep in-flight unresolved for retry path
-        }),
+        () => createPendingPromise(),
       ),
     });
     const { result } = renderHook((props) => useQueuedSend(props), {
@@ -1142,9 +1258,7 @@ describe("useQueuedSend", () => {
   });
 
   it("keeps subsequent queued message blocked while first dispatch is still in flight", async () => {
-    const sendFirstPending = new Promise<void>(() => {
-      // keep first dispatch pending to verify serialized queue behavior
-    });
+    const sendFirstPending = createPendingPromise();
     const options = makeOptions({
       sendUserMessage: vi
         .fn()
@@ -1219,6 +1333,850 @@ describe("useQueuedSend", () => {
 
     expect(result.current.activeQueue.map((item) => item.text)).toEqual(["manual-retry-target"]);
     expect(onRecoverStaleThread).toHaveBeenCalledWith("thread-1");
+  });
+
+  it("does not duplicate requeue when retryThreadQueue is re-entered", async () => {
+    const options = makeOptions({
+      sendUserMessage: vi.fn().mockImplementation(
+        () => createPendingPromise(),
+      ),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("dedupe-retry");
+    });
+    await flushAsyncTicks(2);
+
+    await act(async () => {
+      result.current.retryThreadQueue("thread-1");
+      result.current.retryThreadQueue("thread-1");
+    });
+    await flushAsyncTicks(2);
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(result.current.activeQueue.filter((item) => item.text === "dedupe-retry")).toHaveLength(0);
+  });
+
+  it("captures non-Error dispatch failures for background thread send and keeps queue", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      activeModel: "gpt-5",
+      activeEffort: "high",
+      activeCollaborationMode: { mode: "pair" },
+      activeWorkspace: workspace,
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: false },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+      sendUserMessageToThread: vi.fn().mockRejectedValue("queue exploded"),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessageForThread("thread-2", "retry background");
+    });
+    await flushAsyncTicks(3);
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspaceTwo,
+      "thread-2",
+      "retry background",
+      [],
+      {
+        model: "gpt-5",
+        effort: "high",
+        collaborationMode: { mode: "pair" },
+      },
+    );
+    expect(result.current.queuedByThread["thread-2"]?.map((item) => item.text)).toEqual([
+      "retry background",
+    ]);
+    expect(
+      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-2")
+        ?.lastFailureReason,
+    ).toBe("queue exploded");
+  });
+
+  it("filters persisted queue items when model/effort/collaborationMode payloads are invalid", () => {
+    window.localStorage.setItem(
+      "codexmonitor.queuedMessagesByThread",
+      JSON.stringify({
+        "thread-1": [
+          { id: "ok", text: "valid", createdAt: 1, model: null, effort: null },
+          { id: "bad-model", text: "x", createdAt: 2, model: 123 },
+          { id: "bad-effort", text: "x", createdAt: 3, effort: 5 },
+          { id: "bad-collab", text: "x", createdAt: 4, collaborationMode: "pair" },
+        ],
+      }),
+    );
+
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: makeOptions({ activeThreadId: "thread-1", isProcessing: true }),
+    });
+
+    expect(result.current.activeQueue).toHaveLength(1);
+    expect(result.current.activeQueue[0]?.id).toBe("ok");
+  });
+
+  it("returns early while reviewing and does not enqueue or dispatch", async () => {
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      isReviewing: true,
+      isProcessing: false,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.handleSend("blocked while reviewing");
+    });
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.clearActiveImages).not.toHaveBeenCalled();
+    expect(result.current.activeQueue).toEqual([]);
+  });
+
+  it("sends immediately when processing=true but active thread is missing", async () => {
+    const options = makeOptions({
+      activeThreadId: null,
+      isProcessing: true,
+      activeWorkspace: null,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.handleSend("send without thread");
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenCalledWith("send without thread", []);
+  });
+
+  it("runs /new with prompt body and forwards model options to new thread", async () => {
+    const options = makeOptions({
+      activeModel: "gpt-5",
+      activeEffort: "high",
+      activeCollaborationMode: { mode: "pair" },
+      startThreadForWorkspace: vi.fn().mockResolvedValue("thread-new"),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.handleSend("/new continue this task", ["img-1"]);
+    });
+
+    expect(options.startThreadForWorkspace).toHaveBeenCalledWith("workspace-1");
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspace,
+      "thread-new",
+      "continue this task",
+      [],
+      { model: "gpt-5", effort: "high", collaborationMode: { mode: "pair" } },
+    );
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.clearActiveImages).toHaveBeenCalledTimes(1);
+  });
+
+  it("no-ops queueMessage when active thread is null", async () => {
+    const options = makeOptions({ activeThreadId: null });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.queueMessage("will be ignored");
+    });
+
+    expect(result.current.queuedByThread).toEqual({});
+  });
+
+  it("ignores queueMessageForThread when target thread is reviewing", async () => {
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: true },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-1",
+      },
+      workspacesById: new Map([["workspace-1", workspace]]),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.queueMessageForThread("thread-2", "review lock");
+    });
+
+    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
+    expect(result.current.queuedByThread["thread-2"] ?? []).toEqual([]);
+  });
+
+  it("rejects steering queued slash commands on the active thread", async () => {
+    const options = makeOptions({ steerEnabled: true, isProcessing: true });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.queueMessage("/status now");
+    });
+    const queued = result.current.activeQueue[0];
+
+    await act(async () => {
+      const ok = await result.current.steerQueuedMessage("thread-1", queued?.id ?? "");
+      expect(ok).toBe(false);
+    });
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(result.current.activeQueue).toHaveLength(1);
+    expect(result.current.activeQueue[0]?.text).toBe("/status now");
+  });
+
+  it("requeues item when steer dispatch throws and returns false", async () => {
+    const options = makeOptions({
+      steerEnabled: true,
+      isProcessing: true,
+      sendUserMessage: vi.fn().mockRejectedValueOnce(new Error("steer failed")),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.queueMessage("steer me");
+    });
+    const queued = result.current.activeQueue[0];
+
+    await act(async () => {
+      const ok = await result.current.steerQueuedMessage("thread-1", queued?.id ?? "");
+      expect(ok).toBe(false);
+    });
+
+    expect(result.current.activeQueue.map((item) => item.text)).toEqual(["steer me"]);
+  });
+
+  it("returns zero migration counts when queue is empty", () => {
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: makeOptions({ activeThreadId: "thread-empty" }),
+    });
+    const migrated = result.current.migrateLegacyQueueWorkspaceIds();
+    expect(migrated).toEqual({ migratedMessages: 0, migratedThreads: 0 });
+  });
+
+  it("migrates legacy queue workspace ids using active workspace fallback", async () => {
+    window.localStorage.setItem(
+      "codexmonitor.queuedMessagesByThread",
+      JSON.stringify({
+        "thread-1": [{ id: "legacy-1", text: "legacy", createdAt: 1, images: [] }],
+      }),
+    );
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      isProcessing: true,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      result.current.migrateLegacyQueueWorkspaceIds();
+    });
+    await flushAsyncTicks(1);
+
+    expect(result.current.activeQueue[0]?.workspaceId).toBe("workspace-1");
+    expect(result.current.legacyQueueMessageCount).toBe(0);
+  });
+
+  it("keeps non-active slash command queued with command_requires_active_thread health", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.queueMessageForThread("thread-2", "/status");
+    });
+    await flushAsyncTicks(2);
+
+    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
+    expect(result.current.queuedByThread["thread-2"]?.map((item) => item.text)).toEqual(["/status"]);
+    expect(
+      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-2")
+        ?.blockedReason,
+    ).toBe("command_requires_active_thread");
+  });
+
+  it("returns false when steering is requested with empty ids", async () => {
+    const options = makeOptions({ steerEnabled: true });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      expect(await result.current.steerQueuedMessage("", "message-1")).toBe(false);
+      expect(await result.current.steerQueuedMessage("thread-1", "")).toBe(false);
+    });
+  });
+
+  it("returns false when steering target message id is missing", async () => {
+    const options = makeOptions({ steerEnabled: true, isProcessing: true });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.queueMessage("existing queued item");
+    });
+
+    await act(async () => {
+      expect(await result.current.steerQueuedMessage("thread-1", "missing-id")).toBe(false);
+    });
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(result.current.activeQueue).toHaveLength(1);
+  });
+
+  it("connects disconnected workspace before steering queued message", async () => {
+    const options = makeOptions({
+      steerEnabled: true,
+      isProcessing: true,
+      activeWorkspace: { ...workspace, connected: false },
+      activeModel: null,
+      activeEffort: null,
+      activeCollaborationMode: null,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.queueMessage("steer after reconnect");
+    });
+    const queued = result.current.activeQueue[0];
+
+    await act(async () => {
+      expect(await result.current.steerQueuedMessage("thread-1", queued?.id ?? "")).toBe(true);
+    });
+
+    expect(options.connectWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "workspace-1", connected: false }),
+    );
+    expect(options.sendUserMessage).toHaveBeenCalledWith("steer after reconnect", [], {
+      forceSteer: true,
+    });
+  });
+
+  it("queues active-thread message with undefined workspace id when workspace cannot be resolved", async () => {
+    const options = makeOptions({
+      activeWorkspace: null,
+      activeThreadId: "thread-1",
+      threadWorkspaceById: {},
+      workspacesById: new Map(),
+      isProcessing: true,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.queueMessageForThread("thread-1", "no workspace mapping");
+    });
+
+    const queued = result.current.queuedByThread["thread-1"]?.[0];
+    expect(queued?.workspaceId).toBeUndefined();
+  });
+
+  it("does not auto-dispatch queued messages while thread is reviewing", async () => {
+    window.localStorage.setItem(
+      "codexmonitor.queuedMessagesByThread",
+      JSON.stringify({
+        "thread-1": [{ id: "queued-1", text: "blocked", createdAt: 1, images: [] }],
+      }),
+    );
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      isReviewing: true,
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: true, phase: "completed" },
+      },
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await flushAsyncTicks(2);
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(result.current.activeQueue.map((item) => item.id)).toEqual(["queued-1"]);
+  });
+
+  it("does not auto-dispatch queued messages while waiting for user input", async () => {
+    window.localStorage.setItem(
+      "codexmonitor.queuedMessagesByThread",
+      JSON.stringify({
+        "thread-1": [{ id: "queued-2", text: "blocked", createdAt: 2, images: [] }],
+      }),
+    );
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false, phase: "waiting_user" },
+      },
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await flushAsyncTicks(2);
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(result.current.activeQueue.map((item) => item.id)).toEqual(["queued-2"]);
+  });
+
+  it("connects workspace before auto-dispatching queued active-thread message", async () => {
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: { ...workspace, connected: false },
+      isProcessing: true,
+    });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("auto-connect then send");
+    });
+
+    await act(async () => {
+      rerender({ ...options, isProcessing: false });
+    });
+    await flushAsyncTicks(2);
+
+    expect(options.connectWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "workspace-1", connected: false }),
+    );
+    expect(options.sendUserMessage).toHaveBeenCalledWith("auto-connect then send", []);
+  });
+
+  it("keeps background queue blocked when processing thread is not stale", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    evaluateThreadStaleStateMock.mockReturnValue({
+      isStale: false,
+      processingAgeMs: 5_000,
+      silenceMs: 5_000,
+      silenceThresholdMs: 90_000,
+    });
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: true, isReviewing: false, processingStartedAt: Date.now() },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), { initialProps: options });
+
+    await act(async () => {
+      await result.current.queueMessageForThread("thread-2", "blocked background");
+    });
+    await flushAsyncTicks(3);
+
+    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
+    expect(result.current.queuedByThread["thread-2"]?.map((item) => item.text)).toEqual([
+      "blocked background",
+    ]);
+    expect(
+      result.current.queueHealthEntries.find((entry) => entry.threadId === "thread-2")
+        ?.blockedReason,
+    ).toBe("processing");
+  });
+
+  it("auto-dispatches queued active-thread message with preserved model options", async () => {
+    const options = makeOptions({
+      isProcessing: true,
+      activeModel: "gpt-5",
+      activeEffort: "high",
+      activeCollaborationMode: { mode: "pair" },
+    });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("send with options");
+    });
+    await flushAsyncTicks(1);
+
+    await act(async () => {
+      rerender({ ...options, isProcessing: false });
+    });
+    await flushAsyncTicks(2);
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenCalledWith(
+      "send with options",
+      [],
+      { model: "gpt-5", effort: "high", collaborationMode: { mode: "pair" } },
+    );
+    expect(result.current.activeQueue).toEqual([]);
+  });
+
+  it("dispatches queued /status command after processing ends without sending chat text", async () => {
+    const options = makeOptions({ isProcessing: true });
+    const { result, rerender } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/status");
+    });
+    expect(result.current.activeQueue.map((item) => item.text)).toEqual(["/status"]);
+
+    await act(async () => {
+      rerender({ ...options, isProcessing: false });
+    });
+    await flushAsyncTicks(2);
+
+    expect(options.startStatus).toHaveBeenCalledWith("/status");
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("filters persisted queue entries with invalid workspace id type", async () => {
+    window.localStorage.setItem(
+      "codexmonitor.queuedMessagesByThread",
+      JSON.stringify({
+        "thread-1": [
+          { id: "ok-1", text: "valid", createdAt: 1, workspaceId: "workspace-1" },
+          { id: "bad-workspace", text: "bad", createdAt: 2, workspaceId: 42 },
+        ],
+      }),
+    );
+
+    const options = makeOptions({ activeThreadId: "thread-1" });
+    renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+    await flushAsyncTicks(1);
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenCalledWith("valid", []);
+  });
+
+  it("sanitizes persisted entries with invalid model/effort/collaborationMode payloads", () => {
+    window.localStorage.setItem(
+      "codexmonitor.queuedMessagesByThread",
+      JSON.stringify({
+        "thread-1": [
+          { id: "ok-1", text: "valid", createdAt: 1, model: "gpt-5", effort: "high" },
+          { id: "bad-model", text: "invalid", createdAt: 2, model: 123 },
+          { id: "bad-effort", text: "invalid", createdAt: 3, effort: 456 },
+          { id: "bad-collab", text: "invalid", createdAt: 4, collaborationMode: "pair" },
+        ],
+      }),
+    );
+
+    const options = makeOptions({ activeThreadId: "thread-1", isProcessing: true });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    expect(result.current.activeQueue).toHaveLength(1);
+    expect(result.current.activeQueue[0]?.id).toBe("ok-1");
+  });
+
+  it("ignores /new command when no active workspace is available", async () => {
+    const options = makeOptions({
+      activeWorkspace: null,
+      startThreadForWorkspace: vi.fn().mockResolvedValue("thread-new"),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/new run this");
+    });
+
+    expect(options.startThreadForWorkspace).not.toHaveBeenCalled();
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
+  });
+
+  it("normalizes null stale-state signals from getWorkspaceLastAliveAt", async () => {
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      getWorkspaceLastAliveAt: vi.fn().mockReturnValue(NaN),
+      threadStatusById: {
+        "thread-1": { isProcessing: true, isReviewing: false, processingStartedAt: Date.now() - 1000 },
+      },
+    });
+    renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+    await flushAsyncTicks(1);
+
+    expect(evaluateThreadStaleStateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lastAliveAt: null,
+      }),
+    );
+  });
+
+  it("ignores empty text submissions when there are no images", async () => {
+    const options = makeOptions();
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("   ", []);
+    });
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
+    expect(options.clearActiveImages).not.toHaveBeenCalled();
+  });
+
+  it("sends image-only payloads even when text is whitespace", async () => {
+    const options = makeOptions({
+      activeWorkspace: null,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("   ", ["img-1"]);
+    });
+
+    expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(options.sendUserMessage).toHaveBeenCalledWith("", ["img-1"]);
+    expect(options.clearActiveImages).toHaveBeenCalledTimes(1);
+  });
+
+  it("connects disconnected workspace before direct send and forwards model options", async () => {
+    const options = makeOptions({
+      activeWorkspace: { ...workspace, connected: false },
+      activeModel: "gpt-5",
+      activeEffort: "high",
+      activeCollaborationMode: { mode: "pair" },
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("Ship it");
+    });
+
+    expect(options.connectWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "workspace-1", connected: false }),
+    );
+    expect(options.sendUserMessage).toHaveBeenCalledWith(
+      "Ship it",
+      [],
+      { model: "gpt-5", effort: "high", collaborationMode: { mode: "pair" } },
+    );
+    expect(options.clearActiveImages).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats /apps as plain text when apps feature is disabled", async () => {
+    const options = makeOptions({
+      appsEnabled: false,
+      activeWorkspace: null,
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/apps open");
+    });
+
+    expect(options.startApps).not.toHaveBeenCalled();
+    expect(options.sendUserMessage).toHaveBeenCalledWith("/apps open", []);
+  });
+
+  it("prioritizes the active thread in queue health ordering", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      isProcessing: true,
+      activeWorkspace: workspace,
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+      threadStatusById: {
+        "thread-1": { isProcessing: true, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: false },
+      },
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessage("active-first");
+      await result.current.queueMessageForThread("thread-2", "background");
+    });
+
+    const entries = result.current.queueHealthEntries.map((entry) => entry.threadId);
+    expect(entries[0]).toBe("thread-1");
+    expect(entries).toContain("thread-2");
+  });
+
+  it("migrates legacy workspace ids even when unrelated empty queues are dropped by sanitization", async () => {
+    window.localStorage.setItem(
+      "codexmonitor.queuedMessagesByThread",
+      JSON.stringify({
+        "thread-empty": [],
+        "thread-1": [{ id: "m-1", text: "hello", createdAt: 1 }],
+      }),
+    );
+    const options = makeOptions({
+      isProcessing: true,
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+      },
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      result.current.migrateLegacyQueueWorkspaceIds();
+    });
+
+    expect(result.current.queuedByThread["thread-empty"]).toBeUndefined();
+    expect(result.current.queuedByThread["thread-1"]?.[0]?.workspaceId).toBe("workspace-1");
+  });
+
+  it("rejects steering when queued thread is not the active thread", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      steerEnabled: true,
+      activeThreadId: "thread-1",
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: true, isReviewing: false },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessageForThread("thread-2", "background steer");
+    });
+
+    const queued = result.current.queuedByThread["thread-2"]?.[0];
+    expect(typeof queued?.id).toBe("string");
+
+    await act(async () => {
+      const ok = await result.current.steerQueuedMessage("thread-2", queued?.id ?? "");
+      expect(ok).toBe(false);
+    });
+
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("dispatches background queued messages with model options", async () => {
+    const workspaceTwo: WorkspaceInfo = {
+      ...workspace,
+      id: "workspace-2",
+      name: "Another",
+      path: "/tmp/another",
+    };
+    const options = makeOptions({
+      activeThreadId: "thread-1",
+      activeWorkspace: workspace,
+      activeModel: "gemini-3.1-pro",
+      activeEffort: "high",
+      activeCollaborationMode: { mode: "pair" },
+      threadStatusById: {
+        "thread-1": { isProcessing: false, isReviewing: false },
+        "thread-2": { isProcessing: false, isReviewing: false },
+      },
+      threadWorkspaceById: {
+        "thread-1": "workspace-1",
+        "thread-2": "workspace-2",
+      },
+      workspacesById: new Map([
+        ["workspace-1", workspace],
+        ["workspace-2", workspaceTwo],
+      ]),
+    });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.queueMessageForThread("thread-2", "send with options");
+    });
+    await flushAsyncTicks(2);
+
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspaceTwo,
+      "thread-2",
+      "send with options",
+      [],
+      {
+        model: "gemini-3.1-pro",
+        effort: "high",
+        collaborationMode: { mode: "pair" },
+      },
+    );
   });
 
 });

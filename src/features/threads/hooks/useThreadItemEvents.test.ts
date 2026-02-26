@@ -329,6 +329,58 @@ describe("useThreadItemEvents", () => {
     });
   });
 
+  it("routes reasoning and tool output deltas through shared update paths", () => {
+    const {
+      result,
+      dispatch,
+      touchThreadActivity,
+      markProcessing,
+      setThreadPhase,
+      setActiveItemStatus,
+      setMcpProgressMessage,
+      safeMessageActivity,
+    } = makeOptions();
+
+    act(() => {
+      result.current.onReasoningSummaryDelta("ws-1", "thread-1", "summary-1", "sum");
+      result.current.onReasoningTextDelta("ws-1", "thread-1", "reasoning-1", "reason");
+      result.current.onCommandOutputDelta("ws-1", "thread-1", "tool-1", "stdout");
+      result.current.onFileChangeOutputDelta("ws-1", "thread-1", "file-1", "diff");
+      result.current.onMcpToolCallProgress("ws-1", "thread-1", "mcp-1", "running");
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "appendReasoningSummary",
+      threadId: "thread-1",
+      itemId: "summary-1",
+      delta: "sum",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "appendReasoningContent",
+      threadId: "thread-1",
+      itemId: "reasoning-1",
+      delta: "reason",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "appendToolOutput",
+      threadId: "thread-1",
+      itemId: "tool-1",
+      delta: "stdout",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "appendToolOutput",
+      threadId: "thread-1",
+      itemId: "file-1",
+      delta: "diff",
+    });
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", true);
+    expect(setThreadPhase).toHaveBeenCalledWith("thread-1", "tool_running");
+    expect(setActiveItemStatus).toHaveBeenCalledWith("thread-1", "mcp-1", "inProgress");
+    expect(setMcpProgressMessage).toHaveBeenCalledWith("thread-1", "running");
+    expect(touchThreadActivity).toHaveBeenCalledWith("thread-1");
+    expect(safeMessageActivity).toHaveBeenCalled();
+  });
+
   it("ignores empty stdin terminal interaction payloads", () => {
     const { result, dispatch, markProcessing } = makeOptions();
 
@@ -340,6 +392,44 @@ describe("useThreadItemEvents", () => {
       expect.objectContaining({ type: "appendToolOutput" }),
     );
     expect(markProcessing).not.toHaveBeenCalled();
+  });
+
+  it("normalizes terminal stdin CRLF payloads and appends trailing newline once", () => {
+    const { result, dispatch, markProcessing, setThreadPhase } = makeOptions();
+
+    act(() => {
+      result.current.onTerminalInteraction("ws-1", "thread-1", "tool-1", "line1\r\nline2");
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "appendToolOutput",
+      threadId: "thread-1",
+      itemId: "tool-1",
+      delta: "\n[stdin]\nline1\nline2\n",
+    });
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", true);
+    expect(setThreadPhase).toHaveBeenCalledWith("thread-1", "tool_running");
+  });
+
+  it("does not append an extra newline when terminal stdin already ends with one", () => {
+    const { result, dispatch } = makeOptions();
+
+    act(() => {
+      result.current.onTerminalInteraction("ws-1", "thread-1", "tool-1", "line1\r\n");
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "appendToolOutput",
+      threadId: "thread-1",
+      itemId: "tool-1",
+      delta: "\n[stdin]\nline1\n",
+    });
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "appendToolOutput",
+        delta: "\n[stdin]\nline1\n\n",
+      }),
+    );
   });
 
   it("avoids processing phase changes for terminal turns on tool output and mcp progress", () => {
@@ -393,6 +483,95 @@ describe("useThreadItemEvents", () => {
       hasCustomName: true,
       turnId: "turn-1",
     });
+  });
+
+  it("keeps previous turnId when subsequent delta omits turnId", async () => {
+    const { result, dispatch } = makeOptions();
+
+    act(() => {
+      result.current.onAgentMessageDelta({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        itemId: "assistant-1",
+        delta: "hello",
+        turnId: "turn-1",
+      });
+      result.current.onAgentMessageDelta({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        itemId: "assistant-1",
+        delta: " world",
+      });
+    });
+
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "appendAgentDelta",
+        threadId: "thread-1",
+        itemId: "assistant-1",
+        delta: "hello world",
+        turnId: "turn-1",
+      }),
+    );
+  });
+
+  it("skips thread message phase updates when messagePhase is unknown", () => {
+    const { result, setThreadMessagePhase, markProcessing } = makeOptions();
+
+    act(() => {
+      result.current.onAgentMessageDelta({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        itemId: "assistant-unknown",
+        delta: "chunk",
+        messagePhase: "unknown",
+      });
+    });
+
+    expect(setThreadMessagePhase).not.toHaveBeenCalled();
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", true);
+  });
+
+  it("applies non-unknown message phase updates for agent deltas", () => {
+    const { result, setThreadMessagePhase, setThreadPhase, markProcessing } = makeOptions();
+
+    act(() => {
+      result.current.onAgentMessageDelta({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        itemId: "assistant-phase",
+        delta: "chunk",
+        messagePhase: "finalAnswer",
+      });
+    });
+
+    expect(setThreadMessagePhase).toHaveBeenCalledWith("thread-1", "finalAnswer");
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", true);
+    expect(setThreadPhase).toHaveBeenCalledWith("thread-1", "streaming");
+  });
+
+  it("uses streaming phase for agentMessage item starts and tool_running for unknown events", () => {
+    const { result, setThreadPhase, setActiveItemStatus } = makeOptions();
+
+    act(() => {
+      result.current.onItemStarted("ws-1", "thread-1", {
+        type: "agent_message",
+        id: "agent-start-1",
+      });
+      result.current.onItemStarted("ws-1", "thread-1", {
+        type: "totallyUnknownEvent",
+        id: "unknown-1",
+      });
+    });
+
+    expect(setThreadPhase).toHaveBeenCalledWith("thread-1", "streaming");
+    expect(setThreadPhase).toHaveBeenCalledWith("thread-1", "tool_running");
+    expect(setActiveItemStatus).toHaveBeenCalledWith("thread-1", "agent-start-1", "inProgress");
+    expect(setActiveItemStatus).toHaveBeenCalledWith("thread-1", "unknown-1", "inProgress");
   });
 
   it("falls back to setTimeout when requestAnimationFrame is unavailable", () => {

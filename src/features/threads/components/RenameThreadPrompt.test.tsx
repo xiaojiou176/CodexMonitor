@@ -87,4 +87,26 @@ describe("RenameThreadPrompt", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onConfirm).toHaveBeenCalledTimes(0);
   });
+
+  it("submits from Enter without triggering cancel path", () => {
+    const onCancel = vi.fn();
+    const onConfirm = vi.fn();
+    render(
+      <RenameThreadPrompt
+        currentName="Current"
+        name="Renamed"
+        onChange={vi.fn()}
+        onCancel={onCancel}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    const input = screen.getByLabelText("新名称");
+    const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    fireEvent(input, event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
+  });
 });

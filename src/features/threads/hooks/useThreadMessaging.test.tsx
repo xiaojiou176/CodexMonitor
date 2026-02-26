@@ -2158,4 +2158,269 @@ describe("useThreadMessaging branch coverage", () => {
     expect(text).toContain("- app-direct (app-direct) — connected");
     expect(text).not.toContain("install:");
   });
+
+  it("ignores skill mentions when names or paths normalize to invalid values", async () => {
+    const { result } = renderHook(() =>
+      useThreadMessaging(
+        createOptions({
+          skills: [
+            { name: "   ", path: "/Users/me/.codex/skills/blank/SKILL.md" },
+            { name: "validSkill", path: "   " },
+          ],
+        }),
+      ),
+    );
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "run $validSkill now",
+        [],
+      );
+    });
+
+    expect(sendUserMessageService).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "run $validSkill now",
+      expect.objectContaining({
+        skillMentions: [],
+      }),
+    );
+  });
+
+  it("falls back to turn/start when steer mismatch reports null active turn id", async () => {
+    vi.mocked(steerTurnService).mockRejectedValueOnce(
+      new Error("expected active turn id turn-1 but found null"),
+    );
+
+    const { result } = renderHook(() =>
+      useThreadMessaging(
+        createOptions({
+          steerEnabled: true,
+          threadStatusById: {
+            "thread-1": {
+              isProcessing: true,
+              isReviewing: false,
+              hasUnread: false,
+              phase: "streaming",
+              processingStartedAt: 0,
+              lastDurationMs: null,
+            },
+          },
+          activeTurnIdByThread: {
+            "thread-1": "turn-1",
+          },
+        }),
+      ),
+    );
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(workspace, "thread-1", "fallback", []);
+    });
+
+    expect(steerTurnService).toHaveBeenCalledTimes(1);
+    expect(sendUserMessageService).toHaveBeenCalledTimes(1);
+    expect(sendUserMessageService).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "fallback",
+      expect.any(Object),
+    );
+  });
+
+  it("startMcp falls back to generic message for non-Error failures", async () => {
+    vi.mocked(listMcpServerStatusService).mockRejectedValueOnce("mcp exploded");
+    const dispatch = vi.fn();
+    const { result } = renderHook(() => useThreadMessaging(createOptions({ dispatch })));
+
+    await act(async () => {
+      await result.current.startMcp("/mcp");
+    });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "addAssistantMessage",
+        text: "MCP tools:\n- Failed to load MCP status.",
+      }),
+    );
+  });
+
+  it("startReview no-ops for whitespace input", async () => {
+    const { result } = renderHook(() => useThreadMessaging(createOptions()));
+
+    await act(async () => {
+      await result.current.startReview("   ");
+    });
+
+    expect(reviewPromptMocks.openReviewPrompt).not.toHaveBeenCalled();
+    expect(startReviewService).not.toHaveBeenCalled();
+  });
+
+  it("startMcp renders top-level payloads with auth object and resource_templates fallback", async () => {
+    vi.mocked(listMcpServerStatusService).mockResolvedValueOnce({
+      data: [
+        {
+          name: "serverB",
+          auth_status: { status: "required" },
+          tools: {
+            mcp__serverB__beta: {},
+            alpha: {},
+          },
+          resources: [{ id: "r1" }],
+          resource_templates: [{ id: "t1" }, { id: "t2" }],
+        },
+      ],
+    } as Awaited<ReturnType<typeof listMcpServerStatusService>>);
+    const dispatch = vi.fn();
+    const { result } = renderHook(() => useThreadMessaging(createOptions({ dispatch })));
+
+    await act(async () => {
+      await result.current.startMcp("/mcp");
+    });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "addAssistantMessage",
+        text: expect.stringContaining("- serverB (auth: required)"),
+      }),
+    );
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "addAssistantMessage",
+        text: expect.stringContaining("tools: alpha, beta"),
+      }),
+    );
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "addAssistantMessage",
+        text: expect.stringContaining("resources: 1, templates: 2"),
+      }),
+    );
+  });
+
+  it("startApps treats invalid payload as empty list and reports no-op state", async () => {
+    vi.mocked(getAppsListService).mockResolvedValueOnce({
+      result: {
+        data: "not-an-array",
+      },
+    } as Awaited<ReturnType<typeof getAppsListService>>);
+    const dispatch = vi.fn();
+    const { result } = renderHook(() => useThreadMessaging(createOptions({ dispatch })));
+
+    await act(async () => {
+      await result.current.startApps("/apps");
+    });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "addAssistantMessage",
+        text: "Apps:\n- No apps available.",
+      }),
+    );
+  });
+
+  it("startApps renders top-level data payload and skips install link for accessible apps", async () => {
+    vi.mocked(getAppsListService).mockResolvedValueOnce({
+      data: [
+        {
+          id: "app-2",
+          isAccessible: true,
+          description: "   ",
+        },
+      ],
+    } as Awaited<ReturnType<typeof getAppsListService>>);
+    const dispatch = vi.fn();
+    const { result } = renderHook(() => useThreadMessaging(createOptions({ dispatch })));
+
+    await act(async () => {
+      await result.current.startApps("/apps");
+    });
+
+    const action = dispatch.mock.calls[0]?.[0];
+    expect(action).toEqual(
+      expect.objectContaining({
+        type: "addAssistantMessage",
+      }),
+    );
+    expect(String(action?.text)).toContain("- app-2 (app-2) — connected");
+    expect(String(action?.text)).not.toContain("install:");
+  });
+
+  it("startMcp tolerates invalid event payload rows and omits empty resource output", async () => {
+    vi.mocked(listMcpServerStatusService).mockResolvedValueOnce({
+      result: {
+        data: [
+          {
+            name: null,
+            auth_status: null,
+            tools: "invalid-tools",
+            resources: "invalid-resources",
+            resource_templates: "invalid-templates",
+          },
+          {
+            name: "zeta",
+            auth_status: { status: "ok" },
+            tools: { mcp__zeta__tool_b: {}, mcp__zeta__tool_a: {} },
+            resources: [],
+            resourceTemplates: [],
+          },
+        ],
+      },
+    } as Awaited<ReturnType<typeof listMcpServerStatusService>>);
+    const dispatch = vi.fn();
+    const { result } = renderHook(() => useThreadMessaging(createOptions({ dispatch })));
+
+    await act(async () => {
+      await result.current.startMcp("/mcp");
+    });
+
+    const payload = dispatch.mock.calls[0]?.[0] as { text?: string } | undefined;
+    const text = payload?.text ?? "";
+    expect(text).toContain("MCP tools:");
+    expect(text).toContain("- unknown");
+    expect(text).toContain("- zeta (auth: ok)");
+    expect(text).toContain("tools: tool_a, tool_b");
+    expect(text).toContain("tools: none");
+    expect(text).not.toContain("resources: 0, templates: 0");
+  });
+
+  it("startApps sorts multiple invalid event rows and keeps no-output install section hidden", async () => {
+    vi.mocked(getAppsListService).mockResolvedValueOnce({
+      result: {
+        data: [
+          {
+            id: "beta-id",
+            name: "Beta",
+            is_accessible: "false",
+            description: "   ",
+            install_url: 42,
+          },
+          {
+            id: "alpha-id",
+            name: "Alpha",
+            is_accessible: false,
+            description: "",
+            install_url: "",
+          },
+        ],
+      },
+    } as Awaited<ReturnType<typeof getAppsListService>>);
+    const dispatch = vi.fn();
+    const { result } = renderHook(() => useThreadMessaging(createOptions({ dispatch })));
+
+    await act(async () => {
+      await result.current.startApps("/apps");
+    });
+
+    const payload = dispatch.mock.calls[0]?.[0] as { text?: string } | undefined;
+    const text = payload?.text ?? "";
+    expect(text).toContain("Apps:");
+    expect(text.indexOf("- Alpha (alpha-id)")).toBeGreaterThan(-1);
+    expect(text.indexOf("- Beta (beta-id)")).toBeGreaterThan(text.indexOf("- Alpha (alpha-id)"));
+    expect(text).toContain("- Alpha (alpha-id) — can be installed");
+    expect(text).toContain("- Beta (beta-id) — connected");
+    expect(text).not.toContain("install:");
+  });
 });

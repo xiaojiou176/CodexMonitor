@@ -458,6 +458,7 @@ describe("SettingsView Codex overrides", () => {
 
   it("polls Orbit sign-in using deviceCode until authorized", async () => {
     cleanup();
+    vi.useFakeTimers();
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     const startSpy = vi.fn().mockResolvedValueOnce({
       deviceCode: "device-code-123",
@@ -552,53 +553,58 @@ describe("SettingsView Codex overrides", () => {
       />,
     );
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "登录" }));
-    });
-    await waitFor(() => {
+    try {
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "登录" }));
+        await vi.advanceTimersByTimeAsync(1000);
+        await Promise.resolve();
+      });
       expect(pollSpy).toHaveBeenCalledTimes(1);
-    }, { timeout: 2500 });
 
-    rendered.rerender(
-      <SettingsView
-        workspaceGroups={[]}
-        groupedWorkspaces={[]}
-        ungroupedLabel="Ungrouped"
-        onClose={vi.fn()}
-        onMoveWorkspace={vi.fn()}
-        onDeleteWorkspace={vi.fn()}
-        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        reduceTransparency={false}
-        onToggleTransparency={vi.fn()}
-        appSettings={{
-          ...baseSettings,
-          backendMode: "remote",
-          remoteBackendProvider: "orbit",
-          theme: "dark",
-        }}
-        openAppIconById={{}}
-        onUpdateAppSettings={onUpdateAppSettings}
-        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
-        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
-        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
-        scaleShortcutTitle="Scale shortcut"
-        scaleShortcutText="Use Command +/-"
-        onTestNotificationSound={vi.fn()}
-        onTestSystemNotification={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
-        initialSection="server"
-        orbitServiceClient={orbitServiceClient}
-      />,
-    );
+      rendered.rerender(
+        <SettingsView
+          workspaceGroups={[]}
+          groupedWorkspaces={[]}
+          ungroupedLabel="Ungrouped"
+          onClose={vi.fn()}
+          onMoveWorkspace={vi.fn()}
+          onDeleteWorkspace={vi.fn()}
+          onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+          onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+          onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+          onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+          onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+          reduceTransparency={false}
+          onToggleTransparency={vi.fn()}
+          appSettings={{
+            ...baseSettings,
+            backendMode: "remote",
+            remoteBackendProvider: "orbit",
+            theme: "dark",
+          }}
+          openAppIconById={{}}
+          onUpdateAppSettings={onUpdateAppSettings}
+          onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+          onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+          onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+          scaleShortcutTitle="Scale shortcut"
+          scaleShortcutText="Use Command +/-"
+          onTestNotificationSound={vi.fn()}
+          onTestSystemNotification={vi.fn()}
+          dictationModelStatus={null}
+          onDownloadDictationModel={vi.fn()}
+          onCancelDictationDownload={vi.fn()}
+          onRemoveDictationModel={vi.fn()}
+          initialSection="server"
+          orbitServiceClient={orbitServiceClient}
+        />,
+      );
 
-    await waitFor(() => {
+      await act(async () => {
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(1000);
+        await Promise.resolve();
+      });
       expect(startSpy).toHaveBeenCalledTimes(1);
       expect(pollSpy).toHaveBeenCalledTimes(2);
       expect(pollSpy).toHaveBeenCalledWith("device-code-123");
@@ -607,7 +613,9 @@ describe("SettingsView Codex overrides", () => {
       );
       expect(screen.getByText(/授权码：/).textContent ?? "").toContain("ABCD-1234");
       expect(screen.getByText("Orbit 登录完成。")).not.toBeNull();
-    }, { timeout: 3500 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("syncs token state after Orbit sign-out", async () => {

@@ -193,7 +193,9 @@ describe("Messages", () => {
         "src/features/messages/components/Markdown.tsx",
       );
     });
-    expect(screen.getByText("line-5 target")).not.toBeNull();
+    await waitFor(() => {
+      expect(screen.getByText("line-5 target")).not.toBeNull();
+    });
   });
 
   it("clamps preview line lookup when requested line exceeds file length", async () => {

@@ -42,7 +42,7 @@ const DEFAULT_PREMIUM_MODELS: ModelOption[] = [
       { reasoningEffort: "high", description: "High reasoning" },
     ],
     defaultReasoningEffort: "medium",
-    isDefault: true,
+    isDefault: false,
     contextWindow: 192_000,  // 192K tokens
   },
   {
@@ -52,7 +52,7 @@ const DEFAULT_PREMIUM_MODELS: ModelOption[] = [
     description: "Google's most capable model",
     supportedReasoningEfforts: [],
     defaultReasoningEffort: null,
-    isDefault: false,
+    isDefault: true,
     contextWindow: 1_000_000,  // 1M tokens
   },
   {

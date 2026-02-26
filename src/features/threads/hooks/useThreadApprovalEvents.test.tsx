@@ -229,4 +229,36 @@ describe("useThreadApprovalEvents", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "addApproval", approval });
     expect(respondToServerRequest).not.toHaveBeenCalled();
   });
+
+  it("handles missing params by falling back to empty object", () => {
+    const dispatch = vi.fn();
+    const setThreadPhase = vi.fn();
+    const setThreadWaitReason = vi.fn();
+    const approvalAllowlistRef = { current: {} };
+    const approval = {
+      workspace_id: "ws-5",
+      request_id: 99,
+      method: "approval/request",
+    } as ApprovalRequest;
+
+    vi.mocked(getApprovalCommandInfo).mockReturnValue(null);
+
+    const { result } = renderHook(() =>
+      useThreadApprovalEvents({
+        dispatch,
+        approvalAllowlistRef,
+        setThreadPhase,
+        setThreadWaitReason,
+      }),
+    );
+
+    act(() => {
+      result.current(approval);
+    });
+
+    expect(getApprovalCommandInfo).toHaveBeenCalledWith({});
+    expect(setThreadPhase).not.toHaveBeenCalled();
+    expect(setThreadWaitReason).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith({ type: "addApproval", approval });
+  });
 });
