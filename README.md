@@ -310,8 +310,19 @@ Git hooks are enforced with Husky:
   - `npx --no-install commitlint --edit "$1"`
 - `pre-push`: runs `npm run preflight:orchestrated`
   - Phase 1 (short first): `preflight:doc-drift (branch)` + `env:rationalize:check` + `env:doctor:dev` + `preflight:quick` (`test:assertions:guard` then `typecheck`).
-  - Phase 2 (parallel long jobs): `test`, `test:coverage:gate` (strict 80/95), `check:rust`, `test:e2e:smoke`, and `test:live:preflight`, each with heartbeat logs every ~20s.
+  - Phase 2 (parallel long jobs): `test`, `test:coverage:gate` (strict 80/95), `check:rust`, `test:smoke:ui`, and `test:live:preflight`, each with heartbeat logs every ~20s.
   - Parallel failure output preserves task names, so gate failures are directly attributable to the failing job.
+
+UI smoke gate command:
+
+```bash
+npm run test:smoke:ui
+```
+
+- Runs `e2e/smoke.spec.ts` against the local app target.
+- Supports optional skip flags: `SKIP_UI_SMOKE=1` or `PREFLIGHT_SKIP_UI_SMOKE=1`.
+- Implementation references: `scripts/test-smoke-ui.mjs`, `scripts/preflight-orchestrated.mjs`, `package.json`.
+- Runtime evidence artifacts: `.runtime-cache/test_output/live-preflight/latest.json`, `.runtime-cache/test_output/real-llm/latest.json`.
 
 Dry-run commands:
 

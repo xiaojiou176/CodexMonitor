@@ -50,6 +50,7 @@
     "test:mutation:gate": "node scripts/mutation-gate.mjs",
     "test:quality:gates": "npm run test:assertions:guard && npm run test:coverage:gate && npm run test:mutation:gate",
     "test:e2e:smoke": "playwright test e2e/smoke.spec.ts",
+    "test:smoke:ui": "node scripts/test-smoke-ui.mjs",
     "test:e2e:external": "playwright test --config playwright.external.config.ts",
     "test:live:preflight": "node scripts/real-llm-smoke.mjs --preflight",
     "test:real:llm": "node scripts/real-llm-smoke.mjs",

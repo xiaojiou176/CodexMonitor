@@ -79,3 +79,64 @@ test("home smoke supports a minimal interaction journey", async ({ page }) => {
     .evaluate((element) => (element as HTMLElement).click());
   await expect(page.getByRole("menuitemradio", { name: "最新创建" })).toHaveCount(0);
 });
+
+test("session smoke covers create flow and creation-mode switch", async ({ page }) => {
+  await page.addInitScript(() => {
+    const mockWorkspace = {
+      id: "ws-smoke",
+      name: "Smoke Workspace",
+      path: "/tmp/smoke-workspace",
+      connected: false,
+      kind: "main",
+      parentId: null,
+      worktree: null,
+      settings: {
+        sidebarCollapsed: false,
+      },
+    };
+
+    const tauriInternals = (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ as
+      | { invoke?: (command: string, payload: unknown) => Promise<unknown> }
+      | undefined;
+    const originalInvoke = tauriInternals?.invoke;
+
+    (window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string, payload: unknown) => Promise<unknown> } }).__TAURI_INTERNALS__ =
+      {
+        invoke: async (command: string, payload: unknown) => {
+          if (command === "list_workspaces") {
+            return [mockWorkspace];
+          }
+          if (command === "list_workspace_groups") {
+            return [];
+          }
+          if (typeof originalInvoke === "function") {
+            return originalInvoke(command, payload);
+          }
+          throw new Error(`[smoke-ui] unmocked tauri command: ${command}`);
+        },
+      };
+  });
+
+  await page.goto("/");
+
+  const addSessionButton = page.getByRole("button", { name: "添加对话选项" }).first();
+  await addSessionButton.evaluate((element) => (element as HTMLButtonElement).click());
+  await expect(page.getByRole("button", { name: "新建对话" })).toBeVisible();
+  await page
+    .getByRole("button", { name: "新建对话" })
+    .evaluate((element) => (element as HTMLButtonElement).click());
+
+  const draftRow = page.locator(".thread-row-draft").first();
+  await expect(draftRow).toBeVisible();
+  await expect(draftRow).toContainText("新建对话");
+
+  await addSessionButton.evaluate((element) => (element as HTMLButtonElement).click());
+  await page
+    .getByRole("button", { name: "新建工作树对话" })
+    .evaluate((element) => (element as HTMLButtonElement).click());
+  await expect(page.getByRole("dialog", { name: "新建工作树对话" })).toBeVisible();
+  await page
+    .getByRole("button", { name: "取消" })
+    .evaluate((element) => (element as HTMLButtonElement).click());
+  await expect(page.getByRole("dialog", { name: "新建工作树对话" })).toHaveCount(0);
+});

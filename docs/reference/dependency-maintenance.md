@@ -28,7 +28,7 @@ CodexMonitor.
    - `npm run lint`
    - `npm run typecheck`
    - `npm run test`
-   - `npm run test:e2e:smoke`
+   - `npm run test:smoke:ui`
    - `cd src-tauri && cargo check && cargo test`
 4. Merge only with green CI and no unresolved high/critical advisories.
 

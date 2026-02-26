@@ -79,7 +79,7 @@ async function main() {
     runTask("test", ["run", "test"], { heartbeatMs: HEARTBEAT_MS }),
     runTask("test:coverage:gate", ["run", "test:coverage:gate"], { heartbeatMs: HEARTBEAT_MS }),
     runTask("check:rust", ["run", "check:rust"], { heartbeatMs: HEARTBEAT_MS }),
-    runTask("test:e2e:smoke", ["run", "test:e2e:smoke"], { heartbeatMs: HEARTBEAT_MS }),
+    runTask("test:smoke:ui", ["run", "test:smoke:ui"], { heartbeatMs: HEARTBEAT_MS }),
     runTask("test:live:preflight", ["run", "test:live:preflight"], { heartbeatMs: HEARTBEAT_MS }),
   ]);
 
