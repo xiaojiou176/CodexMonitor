@@ -76,7 +76,6 @@ async function main() {
 
   console.log("[preflight] Phase 2/2: long jobs in parallel with heartbeat");
   await runParallelLongTasks([
-    runTask("test", ["run", "test"], { heartbeatMs: HEARTBEAT_MS }),
     runTask("test:coverage:gate", ["run", "test:coverage:gate"], { heartbeatMs: HEARTBEAT_MS }),
     runTask("check:rust", ["run", "check:rust"], { heartbeatMs: HEARTBEAT_MS }),
     runTask("test:smoke:ui", ["run", "test:smoke:ui"], { heartbeatMs: HEARTBEAT_MS }),
