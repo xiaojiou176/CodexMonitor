@@ -11,6 +11,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Exported `App` and `MainApp` from `src/App.tsx` to support phase-1 composition split and direct smoke-test coverage.
 - Sidebar thread status visuals now distinguish `waiting` from `processing`, and shift `reviewing` to a separate blue-green tone so status dot + badge are easier to scan.
 - Evidence code path: `src/styles/sidebar.css`.
 - Fixed remaining CI gates for `mutation-js` and `security-scans` with minimal scoped updates.

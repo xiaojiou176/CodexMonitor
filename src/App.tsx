@@ -217,7 +217,7 @@ const THREAD_COPY_PRESET_COMPACT: ThreadTranscriptOptions = {
   toolOutputMode: "compact",
 };
 
-function MainApp() {
+export function MainApp() {
   const {
     appSettings,
     setAppSettings,
@@ -3341,7 +3341,7 @@ function MainApp() {
   );
 }
 
-function App() {
+export function App() {
   const windowLabel = useWindowLabel();
   if (windowLabel === "about") {
     return (
