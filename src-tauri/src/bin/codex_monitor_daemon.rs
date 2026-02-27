@@ -17,6 +17,8 @@ mod file_policy;
 mod git_utils;
 #[path = "codex_monitor_daemon/rpc.rs"]
 mod rpc;
+#[path = "codex_monitor_daemon/meta.rs"]
+mod meta;
 #[path = "../rules.rs"]
 mod rules;
 #[path = "../shared/mod.rs"]
@@ -99,7 +101,6 @@ use workspace_settings::apply_workspace_settings_update;
 
 const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:4732";
 const MAX_IN_FLIGHT_RPC_PER_CONNECTION: usize = 32;
-const DAEMON_NAME: &str = "codex-monitor-daemon";
 
 fn spawn_with_client(
     event_sink: DaemonEventSink,
@@ -211,13 +212,7 @@ impl DaemonState {
     }
 
     fn daemon_info(&self) -> Value {
-        json!({
-            "name": DAEMON_NAME,
-            "version": env!("CARGO_PKG_VERSION"),
-            "pid": std::process::id(),
-            "mode": self.daemon_mode,
-            "binaryPath": self.daemon_binary_path,
-        })
+        meta::daemon_info(&self.daemon_mode, self.daemon_binary_path.as_deref())
     }
 
     async fn list_workspaces(&self) -> Vec<WorkspaceInfo> {
@@ -1788,7 +1783,7 @@ mod tests {
 
             assert_eq!(
                 result.get("name").and_then(Value::as_str),
-                Some(DAEMON_NAME)
+                Some(meta::DAEMON_NAME)
             );
             assert_eq!(result.get("mode").and_then(Value::as_str), Some("tcp"));
             assert_eq!(

@@ -123,7 +123,6 @@ import {
 } from "./utils/workspaceOrderRecovery";
 import type {
   ComposerEditorSettings,
-  GitFileStatus,
   ThreadToolOutputMode,
   ThreadTranscriptOptions,
   WorkspaceInfo,
@@ -150,6 +149,14 @@ import {
   useThreadCodexSyncOrchestration,
   useThreadSelectionHandlersOrchestration,
 } from "./features/app/orchestration/useThreadOrchestration";
+import {
+  applyDiffStatsToFiles,
+  clampMessageFontSize,
+  countDiffLineStats,
+  type DiffLineStats,
+  loadMessageFontSize,
+  MESSAGE_FONT_SIZE_STORAGE_NAME,
+} from "./features/app/utils/appUiHelpers";
 
 const AboutView = lazy(() =>
   import("./features/about/components/AboutView").then((module) => ({
@@ -169,10 +176,6 @@ const GitHubPanelData = lazy(() =>
   })),
 );
 
-const MESSAGE_FONT_SIZE_STORAGE_KEY = "codexmonitor.messageFontSize";
-const MESSAGE_FONT_SIZE_MIN = 11;
-const MESSAGE_FONT_SIZE_MAX = 16;
-const MESSAGE_FONT_SIZE_DEFAULT = 13;
 const CONTINUE_PROMPT_DEFAULT = "请继续完成我和你讨论的Plan！";
 
 type ContinueThreadConfig = {
@@ -197,77 +200,6 @@ const THREAD_COPY_PRESET_COMPACT: ThreadTranscriptOptions = {
   includeAssistantMessages: true,
   toolOutputMode: "compact",
 };
-
-function clampMessageFontSize(value: number): number {
-  if (!Number.isFinite(value)) {
-    return MESSAGE_FONT_SIZE_DEFAULT;
-  }
-  return Math.min(
-    MESSAGE_FONT_SIZE_MAX,
-    Math.max(MESSAGE_FONT_SIZE_MIN, Math.round(value)),
-  );
-}
-
-function loadMessageFontSize(): number {
-  if (typeof window === "undefined") {
-    return MESSAGE_FONT_SIZE_DEFAULT;
-  }
-  try {
-    const raw = window.localStorage.getItem(MESSAGE_FONT_SIZE_STORAGE_KEY);
-    if (!raw) {
-      return MESSAGE_FONT_SIZE_DEFAULT;
-    }
-    return clampMessageFontSize(Number(raw));
-  } catch {
-    return MESSAGE_FONT_SIZE_DEFAULT;
-  }
-}
-
-type DiffLineStats = {
-  additions: number;
-  deletions: number;
-};
-
-function countDiffLineStats(diffText: string): DiffLineStats {
-  let additions = 0;
-  let deletions = 0;
-  for (const line of diffText.split("\n")) {
-    if (
-      !line ||
-      line.startsWith("+++") ||
-      line.startsWith("---") ||
-      line.startsWith("diff --git") ||
-      line.startsWith("@@") ||
-      line.startsWith("index ") ||
-      line.startsWith("\\ No newline")
-    ) {
-      continue;
-    }
-    if (line.startsWith("+")) {
-      additions += 1;
-    } else if (line.startsWith("-")) {
-      deletions += 1;
-    }
-  }
-  return { additions, deletions };
-}
-
-function applyDiffStatsToFiles(
-  files: GitFileStatus[],
-  statsByPath: Record<string, DiffLineStats>,
-): GitFileStatus[] {
-  return files.map((file) => {
-    const stats = statsByPath[file.path];
-    if (!stats) {
-      return file;
-    }
-    return {
-      ...file,
-      additions: stats.additions,
-      deletions: stats.deletions,
-    };
-  });
-}
 
 function MainApp() {
   const {
@@ -319,7 +251,7 @@ function MainApp() {
     const clamped = clampMessageFontSize(next);
     setMessageFontSize(clamped);
     try {
-      window.localStorage.setItem(MESSAGE_FONT_SIZE_STORAGE_KEY, String(clamped));
+      window.localStorage.setItem(MESSAGE_FONT_SIZE_STORAGE_NAME, String(clamped));
     } catch {
       // Best-effort persistence.
     }

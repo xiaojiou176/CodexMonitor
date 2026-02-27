@@ -28,7 +28,9 @@
 ## 目录导航
 
 - 组合入口：`src/App.tsx`
+- App UI helper：`src/features/app/utils/appUiHelpers.ts`
 - 功能域：`src/features/*`
+- Threads reducer helper：`src/features/threads/hooks/threadReducerHelpers.ts`
 - IPC 与事件：`src/services/tauri.ts`、`src/services/events.ts`
 - 工具与纯函数：`src/utils/*`
 - 样式：`src/styles/*`（含 design-system `ds-*` 样式）

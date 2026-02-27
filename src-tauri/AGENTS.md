@@ -30,6 +30,7 @@
 
 - Tauri 命令入口：`src-tauri/src/lib.rs`
 - Daemon 入口：`src-tauri/src/bin/codex_monitor_daemon.rs`
+- Daemon meta helper：`src-tauri/src/bin/codex_monitor_daemon/meta.rs`
 - 共享核心：`src-tauri/src/shared/*`
 - 业务适配：`src-tauri/src/codex/`、`src-tauri/src/files/`、`src-tauri/src/workspaces/`
 - 配置文件：`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`
