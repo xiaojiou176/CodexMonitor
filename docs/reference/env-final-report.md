@@ -9,6 +9,13 @@ Date: 2026-02-26
 - Keeps failure semantics strict (final attempt still hard-fails), while reducing flaky red runs unrelated to product code.
 - Evidence code paths: `.github/workflows/ci.yml`, `docs/reference/env-final-report.md`.
 
+## CI Concurrency Unblock Update (2026-02-27)
+
+- Updated CI workflow concurrency policy to `cancel-in-progress: true` for all refs.
+- New commits now preempt long-tail stale runs on the same concurrency key, preventing mainline queue starvation.
+- This is especially important when heavy jobs (for example mutation runs) stretch unexpectedly and block fresh verification for critical fixes.
+- Evidence code paths: `.github/workflows/ci.yml`, `docs/reference/env-final-report.md`.
+
 ## Final Counts (Single Source of Truth)
 
 - canonical_count: **12**
