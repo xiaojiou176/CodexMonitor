@@ -11,8 +11,123 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust_tauri_changed: ${{ steps.detect.outputs.rust_tauri_changed }}
+      mutation_targets: ${{ steps.detect.outputs.mutation_targets }}
+      force_full: ${{ steps.detect.outputs.force_full }}
+      run_js_tests: ${{ steps.detect.outputs.run_js_tests }}
+      run_e2e: ${{ steps.detect.outputs.run_e2e }}
+      run_rust_tests: ${{ steps.detect.outputs.run_rust_tests }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - name: Detect change scopes
+        id: detect
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+          fi
+
+          force_full=false
+          run_js_tests=false
+          run_e2e=false
+          run_rust_tests=false
+
+          if [ -z "${BASE_SHA:-}" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            force_full=true
+            run_js_tests=true
+            run_e2e=true
+            run_rust_tests=true
+            CHANGED_FILES="$(git ls-files)"
+          else
+            CHANGED_FILES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" || true)"
+
+            if printf '%s\n' "$CHANGED_FILES" | rg -q \
+              '^(\.github/workflows/|package\.json|package-lock\.json|tsconfig(\..+)?\.json|vite\.config\..+|vitest\.config\..+|playwright(\..+)?\.config\..+)'; then
+              force_full=true
+            fi
+
+            if [ "$force_full" = "true" ]; then
+              run_js_tests=true
+              run_e2e=true
+              run_rust_tests=true
+            else
+              if printf '%s\n' "$CHANGED_FILES" | rg -q \
+                '^(src/|e2e/|scripts/|config/|package\.json|package-lock\.json|playwright(\..+)?\.config\..+|vitest\.config\..+|vite\.config\..+|tsconfig(\..+)?\.json)'; then
+                run_js_tests=true
+              fi
+
+              # Conservative fallback: JS changes also trigger smoke E2E.
+              if [ "$run_js_tests" = "true" ] || printf '%s\n' "$CHANGED_FILES" | rg -q \
+                '^(e2e/|playwright(\..+)?\.config\..+|src/features/|src/services/)'; then
+                run_e2e=true
+              fi
+
+              if printf '%s\n' "$CHANGED_FILES" | rg -q \
+                '^(src-tauri/|src/services/tauri\.ts|src/types\.ts)'; then
+                run_rust_tests=true
+              fi
+            fi
+          fi
+
+          if [ "$run_rust_tests" = "true" ]; then
+            echo "rust_tauri_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "rust_tauri_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          MUTATION_TARGETS="$(
+            (
+              printf '%s\n' "$CHANGED_FILES" \
+                | rg '^(src/features/threads/|src/services/).*\.(ts|tsx)$' \
+                | rg -v '(\.test\.ts$|\.test\.tsx$)' \
+                | paste -sd, -
+            ) || true
+          )"
+          echo "mutation_targets=$MUTATION_TARGETS" >> "$GITHUB_OUTPUT"
+          echo "force_full=$force_full" >> "$GITHUB_OUTPUT"
+          echo "run_js_tests=$run_js_tests" >> "$GITHUB_OUTPUT"
+          echo "run_e2e=$run_e2e" >> "$GITHUB_OUTPUT"
+          echo "run_rust_tests=$run_rust_tests" >> "$GITHUB_OUTPUT"
+
+  node-deps-preheat:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.run_js_tests == 'true' || needs.changes.outputs.run_e2e == 'true'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies (cache-aware)
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.node_modules_cache.outputs.cache-hit }}" = "true" ] && [ -f node_modules/.package-lock.json ]; then
+            echo "node_modules cache hit, skipping npm ci."
+          else
+            echo "node_modules cache miss/incomplete, running npm ci."
+            npm ci
+          fi
+
   workflow-hygiene:
     runs-on: ubuntu-latest
+    needs: [changes]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install shellcheck and actionlint
@@ -28,6 +143,7 @@ jobs:
 
   commitlint:
     runs-on: ubuntu-latest
+    needs: [changes]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -49,6 +165,8 @@ jobs:
 
   pre-commit:
     runs-on: ubuntu-latest
+    needs: [changes]
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -75,6 +193,7 @@ jobs:
 
   lint-frontend:
     runs-on: ubuntu-latest
+    needs: [changes]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -89,6 +208,8 @@ jobs:
         run: npm run test:assertions:guard
   lint-backend:
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.rust_tauri_changed == 'true'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
@@ -113,6 +234,7 @@ jobs:
         working-directory: src-tauri
   typecheck:
     runs-on: ubuntu-latest
+    needs: [changes]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -125,6 +247,7 @@ jobs:
         run: npm run typecheck
   docs-drift:
     runs-on: ubuntu-latest
+    needs: [changes]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -177,6 +300,7 @@ jobs:
         run: npm run docs:check:app-server-events
   env-governance:
     runs-on: ubuntu-latest
+    needs: [changes]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -193,6 +317,7 @@ jobs:
         run: npm run env:doctor:dev
   env-var-audit:
     runs-on: ubuntu-latest
+    needs: [changes]
     env:
       PROCESS_ENV_REF_MAX: "70"
       OS_GETENV_REF_MAX: "5"
@@ -218,35 +343,79 @@ jobs:
           fi
   test-js:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard_index: [1, 2]
+    needs:
+      - changes
+      - node-deps-preheat
+      - lint-frontend
+      - typecheck
+    if: needs.changes.outputs.run_js_tests == 'true'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
-      - name: Install dependencies
-        run: npm ci
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies (cache-aware)
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.node_modules_cache.outputs.cache-hit }}" = "true" ] && [ -f node_modules/.package-lock.json ]; then
+            echo "node_modules cache hit, skipping npm ci."
+          else
+            echo "node_modules cache miss/incomplete, running npm ci."
+            npm ci
+          fi
       - name: Tests
         run: |
           set -euo pipefail
           while true; do
-            echo "[heartbeat][test-js] $(date -u +'%Y-%m-%dT%H:%M:%SZ') npm run test running..."
+            echo "[heartbeat][test-js][shard-${{ matrix.shard_index }}/2] $(date -u +'%Y-%m-%dT%H:%M:%SZ') unit tests running..."
             sleep 20
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npm run test
+          npm run test -- --maxWorkers=50% --shard=${{ matrix.shard_index }}/2
 
   coverage-js:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs:
+      - changes
+      - node-deps-preheat
+      - lint-frontend
+      - typecheck
+    if: needs.changes.outputs.run_js_tests == 'true'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
-      - name: Install dependencies
-        run: npm ci
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies (cache-aware)
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.node_modules_cache.outputs.cache-hit }}" = "true" ] && [ -f node_modules/.package-lock.json ]; then
+            echo "node_modules cache hit, skipping npm ci."
+          else
+            echo "node_modules cache miss/incomplete, running npm ci."
+            npm ci
+          fi
       - name: Coverage gate
         run: |
           set -euo pipefail
@@ -260,27 +429,79 @@ jobs:
 
   mutation-js:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - changes
+      - node-deps-preheat
+      - lint-frontend
+      - typecheck
+    if: needs.changes.outputs.run_js_tests == 'true'
+    env:
+      MUTATION_SKIP_ASSERTION_GUARD: "true"
+      MUTATION_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+      MUTATION_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+      MUTATION_MUTATE: ${{ needs.changes.outputs.mutation_targets }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
-      - name: Install dependencies
-        run: npm ci
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies (cache-aware)
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.node_modules_cache.outputs.cache-hit }}" = "true" ] && [ -f node_modules/.package-lock.json ]; then
+            echo "node_modules cache hit, skipping npm ci."
+          else
+            echo "node_modules cache miss/incomplete, running npm ci."
+            npm ci
+          fi
       - name: Mutation gate (critical modules)
         run: npm run test:mutation:gate
 
   e2e-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs:
+      - changes
+      - node-deps-preheat
+      - lint-frontend
+      - typecheck
+    if: needs.changes.outputs.run_e2e == 'true'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
-      - name: Install dependencies
-        run: npm ci
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies (cache-aware)
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.node_modules_cache.outputs.cache-hit }}" = "true" ] && [ -f node_modules/.package-lock.json ]; then
+            echo "node_modules cache hit, skipping npm ci."
+          else
+            echo "node_modules cache miss/incomplete, running npm ci."
+            npm ci
+          fi
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-ms-playwright-
       - name: Install Playwright browser
         run: |
           set -euo pipefail
@@ -311,6 +532,7 @@ jobs:
 
   security-scans:
     runs-on: ubuntu-latest
+    needs: [changes]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -337,6 +559,12 @@ jobs:
   test-tauri:
     name: Rust tests (${{ matrix.platform.name }})
     runs-on: ${{ matrix.platform.os }}
+    timeout-minutes: 50
+    needs:
+      - changes
+      - lint-frontend
+      - typecheck
+    if: needs.changes.outputs.run_rust_tests == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -362,6 +590,14 @@ jobs:
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-test-
+      - name: Cache cargo-nextest (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cargo/bin/cargo-nextest
+          key: ${{ runner.os }}-cargo-nextest-v0.9.85
+          restore-keys: |
+            ${{ runner.os }}-cargo-nextest-
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: command -v cmake >/dev/null 2>&1 || brew install cmake
@@ -377,6 +613,16 @@ jobs:
             librsvg2-dev \
             libasound2-dev \
             pkg-config
+      - name: Install cargo-nextest (Linux, cache-aware)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          if command -v cargo-nextest >/dev/null 2>&1; then
+            echo "cargo-nextest already available (cache hit), skip install."
+          else
+            echo "cargo-nextest missing (cache miss), installing..."
+            cargo install --locked cargo-nextest --version 0.9.85
+          fi
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         run: choco install cmake llvm -y --no-progress
@@ -385,8 +631,19 @@ jobs:
         run: |
           printf '%s\n' 'LIBCLANG_PATH=C:\Program Files\LLVM\bin' >> "$env:GITHUB_ENV"
           printf '%s\n' 'C:\Program Files\LLVM\bin' >> "$env:GITHUB_PATH"
-      - name: Rust tests (Unix heartbeat)
-        if: runner.os != 'Windows'
+      - name: Rust tests (Linux nextest heartbeat)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][test-tauri] $(date -u +'%Y-%m-%dT%H:%M:%SZ') cargo nextest running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          cargo nextest run --manifest-path src-tauri/Cargo.toml
+      - name: Rust tests (macOS heartbeat)
+        if: runner.os == 'macOS'
         run: |
           set -euo pipefail
           while true; do
@@ -418,7 +675,9 @@ jobs:
   build-tauri:
     name: Tauri build (${{ matrix.platform.name }})
     runs-on: ${{ matrix.platform.os }}
+    timeout-minutes: 90
     needs:
+      - changes
       - workflow-hygiene
       - commitlint
       - pre-commit
@@ -434,6 +693,11 @@ jobs:
       - e2e-smoke
       - security-scans
       - test-tauri
+    if: |
+      always() &&
+      needs.changes.outputs.run_rust_tests == 'true' &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
     strategy:
       fail-fast: false
       matrix:
