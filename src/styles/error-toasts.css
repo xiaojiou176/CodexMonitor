@@ -23,6 +23,7 @@
 .error-toast-title {
   font-weight: 600;
   font-size: 14px;
+  color: var(--text-stronger);
 }
 
 .error-toast-dismiss {

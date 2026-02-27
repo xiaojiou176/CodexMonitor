@@ -703,7 +703,7 @@
   font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-faint);
+  color: var(--text-subtle);
 }
 
 .home-latest-time {
@@ -768,7 +768,7 @@
 
 .home-latest-empty-subtitle {
   font-size: 14px;
-  color: var(--text-faint);
+  color: var(--text-subtle);
 }
 
 @media (max-width: 900px) {

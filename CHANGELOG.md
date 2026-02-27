@@ -11,6 +11,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Fixed serious a11y contrast regressions on home/latest metadata text and error toast titles so dual-engine Playwright axe gates (Chromium + WebKit) pass under `critical+serious` blocking.
+- Evidence code paths: `src/styles/home.css`, `src/styles/error-toasts.css`.
+- Evidence: `.runtime-cache/test_output/a11y-local/latest.log`.
 - Stabilized smoke E2E surfaces by removing brittle state-coupled assertions and keeping smoke focused on deterministic entry-point availability across Chromium/WebKit.
 - Aligned pinned thread row tests with updated keyboard-accessible row semantics (`role="button"` + `tabIndex=0`) after accessibility hardening.
 - Increased non-threads frontend coverage with new branch-focused tests for workspace URL prompt UI, GitHub PR comments/diffs hooks, workspace group domain edge cases, and request-user-input rendering/answer construction paths.
