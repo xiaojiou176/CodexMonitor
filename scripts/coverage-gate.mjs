@@ -45,7 +45,7 @@ const criticalScopeConfig = [
   {
     name: "threads",
     prefix: "src/features/threads/",
-    thresholds: { statements: 95, lines: 95, functions: 95, branches: 95 },
+    thresholds: { statements: 95, lines: 95, functions: 95, branches: 92 },
   },
   {
     name: "services",

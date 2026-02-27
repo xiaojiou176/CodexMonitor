@@ -861,6 +861,8 @@ jobs:
     needs: [changes]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
@@ -1285,7 +1287,11 @@ jobs:
 
           assert_success_when_expected "lint-backend" "${expected_rust}" "${LINT_BACKEND_RESULT}"
           assert_success_when_expected "test-tauri" "${expected_rust}" "${TEST_TAURI_RESULT}"
-          assert_success_when_expected "build-tauri" "${expected_rust}" "${BUILD_TAURI_RESULT}"
+          expect_build_tauri=false
+          if [ "${expected_rust}" = "true" ] && [ "${TEST_TAURI_RESULT}" = "success" ]; then
+            expect_build_tauri=true
+          fi
+          assert_success_when_expected "build-tauri" "${expect_build_tauri}" "${BUILD_TAURI_RESULT}"
 
           if [ "$failures" -gt 0 ]; then
             echo "required-gate detected ${failures} blocking issue(s)."
