@@ -63,6 +63,19 @@ Date: 2026-02-26
 - `real-integration` strictness is now main-ref enforced with dual-chain requirements (`external-e2e` + `real-llm` must both pass when runnable).
 - Evidence code paths: `.github/workflows/ci.yml`, `.github/workflows/chromatic.yml`, `.github/workflows/real-integration.yml`, `.github/workflows/mutation-weekly.yml`, `scripts/preflight-orchestrated.mjs`, `README.md`, `AGENTS.md`, `src/AGENTS.md`, `src/CLAUDE.md`, `测试深度加强治理Plan.md`.
 
+## CI Devil-Strict Functional Hardening Update (2026-02-27)
+
+- `CI > changes` now forces full execution on `main` (`run_js_tests/run_e2e/run_rust_tests=true`) to prevent false-green from scoped skip paths.
+- `e2e-key-journeys` is now cross-engine (`chromium + webkit`) for critical workflow parity checks.
+- Added `e2e-functional-regression` hard gate (deterministic Chromium serial suite):
+  - `e2e/smoke.spec.ts`
+  - `e2e/interaction-sweep.spec.ts`
+  - `e2e/workspace-lifecycle.spec.ts`
+  - `e2e/approval-interrupt.spec.ts`
+  - `e2e/worktree-flow.spec.ts`
+- `required-gate` now escalates expectations on `main` (JS/E2E/Rust all required) and blocks on any missing functional gate success.
+- Evidence code paths: `.github/workflows/ci.yml`, `README.md`, `docs/reference/env-final-report.md`.
+
 ## Coverage Wave-9 Update (2026-02-27)
 
 - Added high-ROI frontend governance tests for App-adjacent flows and settings workflow branches:

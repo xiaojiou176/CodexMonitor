@@ -79,6 +79,14 @@ jobs:
             fi
           fi
 
+          # Main branch is always full strict mode: never allow scoped skip to look green.
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            force_full=true
+            run_js_tests=true
+            run_e2e=true
+            run_rust_tests=true
+          fi
+
           if [ "$run_rust_tests" = "true" ]; then
             echo "rust_tauri_changed=true" >> "$GITHUB_OUTPUT"
           else
@@ -682,9 +690,81 @@ jobs:
           if-no-files-found: ignore
 
   e2e-key-journeys:
-    name: e2e-key-journeys
+    name: e2e-key-journeys (${{ matrix.browser }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    needs:
+      - changes
+      - node-deps-preheat
+      - lint-frontend
+      - typecheck
+    if: needs.changes.outputs.run_e2e == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies (cache-aware)
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.node_modules_cache.outputs.cache-hit }}" = "true" ] && [ -f node_modules/.package-lock.json ]; then
+            echo "node_modules cache hit, skipping npm ci."
+          else
+            echo "node_modules cache miss/incomplete, running npm ci."
+            npm ci
+          fi
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-ms-playwright-
+      - name: Install Playwright browser (${{ matrix.browser }})
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][e2e-key-journeys-install] $(date -u +'%Y-%m-%dT%H:%M:%SZ') playwright install running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          npx playwright install --with-deps "${{ matrix.browser }}"
+      - name: E2E key journeys (${{ matrix.browser }})
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][e2e-key-journeys] $(date -u +'%Y-%m-%dT%H:%M:%SZ') key journeys running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          npx playwright test e2e/workspace-lifecycle.spec.ts e2e/approval-interrupt.spec.ts e2e/worktree-flow.spec.ts --project="${{ matrix.browser }}"
+      - name: Upload Playwright key journey artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-key-journey-artifacts-${{ matrix.browser }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+  e2e-functional-regression:
+    name: e2e-functional-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
     needs:
       - changes
       - node-deps-preheat
@@ -723,27 +803,34 @@ jobs:
         run: |
           set -euo pipefail
           while true; do
-            echo "[heartbeat][e2e-key-journeys-install] $(date -u +'%Y-%m-%dT%H:%M:%SZ') playwright install running..."
+            echo "[heartbeat][e2e-functional-install] $(date -u +'%Y-%m-%dT%H:%M:%SZ') playwright install running..."
             sleep 20
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
           npx playwright install --with-deps chromium
-      - name: E2E key journeys (workspace-lifecycle/approval-interrupt/worktree-flow)
+      - name: E2E functional regression suite (chromium)
         run: |
           set -euo pipefail
           while true; do
-            echo "[heartbeat][e2e-key-journeys] $(date -u +'%Y-%m-%dT%H:%M:%SZ') key journeys running..."
+            echo "[heartbeat][e2e-functional] $(date -u +'%Y-%m-%dT%H:%M:%SZ') functional regression suite running..."
             sleep 20
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npx playwright test e2e/workspace-lifecycle.spec.ts e2e/approval-interrupt.spec.ts e2e/worktree-flow.spec.ts --project=chromium
-      - name: Upload Playwright key journey artifacts
+          npx playwright test \
+            e2e/smoke.spec.ts \
+            e2e/interaction-sweep.spec.ts \
+            e2e/workspace-lifecycle.spec.ts \
+            e2e/approval-interrupt.spec.ts \
+            e2e/worktree-flow.spec.ts \
+            --project=chromium \
+            --workers=1
+      - name: Upload Playwright functional artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-key-journey-artifacts
+          name: playwright-functional-regression-artifacts
           path: |
             playwright-report
             test-results
@@ -977,6 +1064,7 @@ jobs:
       - e2e-a11y
       - e2e-interaction-sweep
       - e2e-key-journeys
+      - e2e-functional-regression
       - security-scans
       - visual-regression
       - test-tauri
@@ -1069,6 +1157,7 @@ jobs:
       - e2e-a11y
       - e2e-interaction-sweep
       - e2e-key-journeys
+      - e2e-functional-regression
       - security-scans
       - visual-regression
       - test-tauri
@@ -1093,6 +1182,7 @@ jobs:
       E2E_A11Y_RESULT: ${{ needs.e2e-a11y.result }}
       E2E_INTERACTION_RESULT: ${{ needs.e2e-interaction-sweep.result }}
       E2E_KEY_JOURNEYS_RESULT: ${{ needs.e2e-key-journeys.result }}
+      E2E_FUNCTIONAL_RESULT: ${{ needs.e2e-functional-regression.result }}
       SECURITY_SCANS_RESULT: ${{ needs.security-scans.result }}
       VISUAL_REGRESSION_RESULT: ${{ needs.visual-regression.result }}
       TEST_TAURI_RESULT: ${{ needs.test-tauri.result }}
@@ -1105,6 +1195,15 @@ jobs:
           strict_main=false
           if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
             strict_main=true
+          fi
+
+          expected_js="${RUN_JS_TESTS}"
+          expected_e2e="${RUN_E2E}"
+          expected_rust="${RUN_RUST_TESTS}"
+          if [ "$strict_main" = "true" ]; then
+            expected_js=true
+            expected_e2e=true
+            expected_rust=true
           fi
 
           failures=0
@@ -1134,23 +1233,22 @@ jobs:
           assert_success_when_expected "security-scans" true "${SECURITY_SCANS_RESULT}"
 
           # Main branch must prove visual gate executed.
-          if [ "$strict_main" = "true" ]; then
-            assert_success_when_expected "visual-regression" true "${VISUAL_REGRESSION_RESULT}"
-          fi
+          assert_success_when_expected "visual-regression" "$strict_main" "${VISUAL_REGRESSION_RESULT}"
 
           # Conditionally-required jobs must never be silently skipped when enabled.
-          assert_success_when_expected "test-js" "${RUN_JS_TESTS}" "${TEST_JS_RESULT}"
-          assert_success_when_expected "coverage-js" "${RUN_JS_TESTS}" "${COVERAGE_JS_RESULT}"
-          assert_success_when_expected "mutation-js" "${RUN_JS_TESTS}" "${MUTATION_JS_RESULT}"
+          assert_success_when_expected "test-js" "${expected_js}" "${TEST_JS_RESULT}"
+          assert_success_when_expected "coverage-js" "${expected_js}" "${COVERAGE_JS_RESULT}"
+          assert_success_when_expected "mutation-js" "${expected_js}" "${MUTATION_JS_RESULT}"
 
-          assert_success_when_expected "e2e-smoke" "${RUN_E2E}" "${E2E_SMOKE_RESULT}"
-          assert_success_when_expected "e2e-a11y" "${RUN_E2E}" "${E2E_A11Y_RESULT}"
-          assert_success_when_expected "e2e-interaction-sweep" "${RUN_E2E}" "${E2E_INTERACTION_RESULT}"
-          assert_success_when_expected "e2e-key-journeys" "${RUN_E2E}" "${E2E_KEY_JOURNEYS_RESULT}"
+          assert_success_when_expected "e2e-smoke" "${expected_e2e}" "${E2E_SMOKE_RESULT}"
+          assert_success_when_expected "e2e-a11y" "${expected_e2e}" "${E2E_A11Y_RESULT}"
+          assert_success_when_expected "e2e-interaction-sweep" "${expected_e2e}" "${E2E_INTERACTION_RESULT}"
+          assert_success_when_expected "e2e-key-journeys" "${expected_e2e}" "${E2E_KEY_JOURNEYS_RESULT}"
+          assert_success_when_expected "e2e-functional-regression" "${expected_e2e}" "${E2E_FUNCTIONAL_RESULT}"
 
-          assert_success_when_expected "lint-backend" "${RUN_RUST_TESTS}" "${LINT_BACKEND_RESULT}"
-          assert_success_when_expected "test-tauri" "${RUN_RUST_TESTS}" "${TEST_TAURI_RESULT}"
-          assert_success_when_expected "build-tauri" "${RUN_RUST_TESTS}" "${BUILD_TAURI_RESULT}"
+          assert_success_when_expected "lint-backend" "${expected_rust}" "${LINT_BACKEND_RESULT}"
+          assert_success_when_expected "test-tauri" "${expected_rust}" "${TEST_TAURI_RESULT}"
+          assert_success_when_expected "build-tauri" "${expected_rust}" "${BUILD_TAURI_RESULT}"
 
           if [ "$failures" -gt 0 ]; then
             echo "required-gate detected ${failures} blocking issue(s)."
