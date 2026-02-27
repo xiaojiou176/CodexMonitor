@@ -420,3 +420,25 @@ ASCII Trend:
 - 触发原因: Wave-2 为严格覆盖率目标实施多组件并发补测，触发兼容可选记录门禁。
 - 回退条件: 如新增测试在 CI 环境出现不可接受波动，按文件粒度回退本波新增测试并重跑 strict gate 验证。
 - 结果差异: 测试覆盖显著提升且未改变产品运行时行为；仅提升可证明真绿能力与审计证据完整性。
+
+## 2026-02-27 Coverage Wave-3 Audit
+
+- Scope: 0%/低覆盖入口文件补测（git commit controller, command palette, app layout, launch script button, git actions）。
+- Changed test files:
+  - `src/features/app/hooks/useGitCommitController.test.tsx`
+  - `src/features/app/components/CommandPalette.test.tsx`
+  - `src/features/app/components/AppLayout.test.tsx`
+  - `src/features/app/components/LaunchScriptButton.test.tsx`
+  - `src/features/git/hooks/useGitActions.test.tsx`
+  - `测试深度加强治理Plan.md`
+- Gate evidence:
+  - `npm run test:coverage:gate:strict` executed with all tests passing.
+  - Global coverage moved to `60.63/76.92/71.11/60.63` (S/B/F/L), still below strict 80.
+- Env governance impact:
+  - No environment variable policy, schema, or runtime env key behavior changed.
+
+### Compatibility Opt-In Record
+
+- 触发原因: Wave-3 继续执行并发补测，属于兼容可选治理增强路径，需显式记录触发与回退策略。
+- 回退条件: 若新增测试导致 CI 波动或伪失败，则按文件维度回退本波新增测试并保留既有稳定测试集。
+- 结果差异: 覆盖率与可证明真绿证据进一步提升；未改动业务运行时逻辑和环境治理行为。

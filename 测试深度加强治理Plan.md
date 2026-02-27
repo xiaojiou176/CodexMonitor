@@ -1099,6 +1099,45 @@ Context：
 - 同步评估超大文件策略：
   - `src/App.tsx`（3432 行，0%）需拆分+契约测试协同推进。
 
+### 13.6 Coverage 冲刺 Wave-3（2026-02-27）
+
+本波次目标：继续并发清理 0% 高体量入口文件，优先覆盖可独立验证的 Hook/组件。
+
+1. 本波次新增测试文件
+- `src/features/app/hooks/useGitCommitController.test.tsx`
+- `src/features/app/components/CommandPalette.test.tsx`
+- `src/features/app/components/AppLayout.test.tsx`
+- `src/features/app/components/LaunchScriptButton.test.tsx`
+- `src/features/git/hooks/useGitActions.test.tsx`
+
+2. 单文件覆盖样本（Wave-3 结果）
+- `useGitCommitController.ts`：Statements `96.19%` / Branches `85.54%`
+- `CommandPalette.tsx`：Statements `100%` / Branches `97.82%`
+- `AppLayout.tsx`：Statements/Branches/Functions/Lines `100%`
+- `LaunchScriptButton.tsx`：Statements `95.77%` / Branches `89.47%`
+- `useGitActions.ts`：Statements `94.64%` / Branches `90.56%`
+
+3. 全量 strict gate 结果
+- `npm run test:coverage:gate:strict`
+- 全量测试：`155 files / 1473 tests` 全通过。
+- 覆盖率提升到：
+  - Statements `60.63%`
+  - Lines `60.63%`
+  - Functions `71.11%`
+  - Branches `76.92%`
+
+4. 差距与下一波策略
+- 与 strict 80 的差距仍主要来自：
+  - `src/App.tsx`（3432 行，0%）
+  - `src/types.ts`、`layoutNodes/types.ts` 等低可执行价值文件
+  - 多个 0% 的 orchestration/hook 入口文件
+- Wave-4 将并发推进：
+  - `useThreadOrchestration.ts`
+  - `useTerminalSession.ts`
+  - `DebugPanel.tsx`
+  - `buildPrimaryNodes.tsx`
+  - `DesktopLayout.tsx`
+
 ## 14. Lazy-Load Evidence（Refactor Batch）
 
 - Runtime evidence references:
