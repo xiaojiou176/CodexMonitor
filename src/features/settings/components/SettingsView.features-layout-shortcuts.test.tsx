@@ -265,6 +265,26 @@ describe("SettingsView Features", () => {
     });
   });
 
+  it("toggles collaboration modes in stable features", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderFeaturesSection({
+      onUpdateAppSettings,
+      appSettings: { collaborationModesEnabled: true },
+    });
+
+    const title = screen.getByText("协作模式");
+    const row = title.closest(".settings-toggle-row");
+    expect(row).not.toBeNull();
+
+    fireEvent.click(within(row as HTMLElement).getByRole("button"));
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ collaborationModesEnabled: false }),
+      );
+    });
+  });
+
   it("toggles background terminal in stable features", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderFeaturesSection({
@@ -345,6 +365,48 @@ describe("SettingsView Features", () => {
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ autoArchiveSubAgentThreadsMaxAgeMinutes: 240 }),
+      );
+    });
+  });
+
+  it("keeps auto-archive minutes input disabled when auto-archive is off", async () => {
+    renderFeaturesSection({
+      appSettings: {
+        remoteBackendProvider: "orbit",
+        autoArchiveSubAgentThreadsEnabled: false,
+        autoArchiveSubAgentThreadsMaxAgeMinutes: 30,
+      },
+    });
+
+    const minutesInput = screen.getByLabelText(
+      "自动归档分钟数",
+    ) as HTMLInputElement;
+    expect(minutesInput.disabled).toBe(true);
+  });
+
+  it("updates settings when enabling auto-archive from disabled state", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderFeaturesSection({
+      onUpdateAppSettings,
+      appSettings: {
+        remoteBackendProvider: "orbit",
+        autoArchiveSubAgentThreadsEnabled: false,
+        autoArchiveSubAgentThreadsMaxAgeMinutes: 30,
+      },
+    });
+
+    const minutesInput = screen.getByLabelText(
+      "自动归档分钟数",
+    ) as HTMLInputElement;
+    expect(minutesInput.disabled).toBe(true);
+
+    const title = screen.getByText("自动归档子代理线程");
+    const row = title.closest(".settings-toggle-row");
+    expect(row).not.toBeNull();
+    fireEvent.click(within(row as HTMLElement).getByRole("button"));
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ autoArchiveSubAgentThreadsEnabled: true }),
       );
     });
   });

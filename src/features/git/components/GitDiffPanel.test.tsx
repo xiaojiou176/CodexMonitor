@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GitLogEntry } from "../../../types";
 import { GitDiffPanel } from "./GitDiffPanel";
 import { fileManagerName } from "../../../utils/platformPaths";
@@ -67,7 +68,31 @@ const baseProps = {
   unstagedFiles: [],
 };
 
+afterEach(() => {
+  cleanup();
+});
+
 describe("GitDiffPanel", () => {
+  it("shows default diff empty state when there are no changes", () => {
+    render(<GitDiffPanel {...baseProps} />);
+
+    expect(screen.getByText("未检测到更改。")).not.toBeNull();
+  });
+
+  it("shows scoped empty state when switched to staged without staged changes", () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        unstagedFiles={[
+          { path: "src/unstaged.ts", status: "M", additions: 1, deletions: 0 },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Staged" })[0]);
+    expect(screen.getByText("当前范围没有已暂存改动。")).not.toBeNull();
+  });
+
   it("enables commit when message exists and only unstaged changes", () => {
     const onCommit = vi.fn();
     render(
@@ -314,4 +339,102 @@ describe("GitDiffPanel", () => {
     expect(onStageFile).toHaveBeenCalledWith("src/beta-unstaged.ts");
   });
 
+  it("shows counted batch actions for shift-range multi-selection", async () => {
+    menuNew.mockClear();
+    const onStageFile = vi.fn(async () => {});
+    const onUnstageFile = vi.fn(async () => {});
+
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        stagedFiles={[
+          { path: "src/alpha-staged.ts", status: "M", additions: 1, deletions: 0 },
+        ]}
+        unstagedFiles={[
+          { path: "src/beta-unstaged.ts", status: "M", additions: 1, deletions: 0 },
+          { path: "src/gamma-unstaged.ts", status: "M", additions: 1, deletions: 0 },
+        ]}
+        onStageFile={onStageFile}
+        onUnstageFile={onUnstageFile}
+      />,
+    );
+
+    const alphaButton = screen.getAllByRole("button", { name: /alpha-staged/i })[0];
+    const gammaButton = screen.getAllByRole("button", { name: /gamma-unstaged/i })[0];
+
+    fireEvent.click(alphaButton);
+    fireEvent.click(gammaButton, { shiftKey: true });
+
+    fireEvent.contextMenu(gammaButton.closest(".diff-row") as Element);
+
+    await waitFor(() => expect(menuNew).toHaveBeenCalled());
+    const menuArgs = menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
+    const unstageItem = menuArgs.items.find(
+      (item: { text: string }) => item.text === "取消暂存",
+    );
+    const stageItem = menuArgs.items.find(
+      (item: { text: string }) => item.text === "暂存文件（2 个）",
+    );
+
+    expect(unstageItem).not.toBeUndefined();
+    expect(stageItem).not.toBeUndefined();
+
+    await unstageItem.action();
+    await stageItem.action();
+
+    expect(onUnstageFile).toHaveBeenCalledTimes(1);
+    expect(onUnstageFile).toHaveBeenCalledWith("src/alpha-staged.ts");
+    expect(onStageFile).toHaveBeenCalledTimes(2);
+    expect(onStageFile).toHaveBeenNthCalledWith(1, "src/beta-unstaged.ts");
+    expect(onStageFile).toHaveBeenNthCalledWith(2, "src/gamma-unstaged.ts");
+  });
+
+  it("switches among diff/log/issues/prs modes and renders mode-specific empty states", async () => {
+    const onModeChange = vi.fn();
+
+    function ControlledModePanel() {
+      const [mode, setMode] = useState<"diff" | "log" | "issues" | "prs">("diff");
+      return (
+        <GitDiffPanel
+          {...baseProps}
+          mode={mode}
+          onModeChange={(nextMode) => {
+            onModeChange(nextMode);
+            setMode(nextMode);
+          }}
+        />
+      );
+    }
+
+    render(<ControlledModePanel />);
+
+    const modeSelect = screen.getAllByRole("combobox", { name: "Git 面板视图" })[0];
+
+    fireEvent.change(modeSelect, {
+      target: { value: "log" },
+    });
+    expect(await screen.findByText("暂无提交。")).not.toBeNull();
+
+    fireEvent.change(modeSelect, {
+      target: { value: "issues" },
+    });
+    expect(await screen.findByText("暂无未关闭 Issue。")).not.toBeNull();
+
+    fireEvent.change(modeSelect, {
+      target: { value: "prs" },
+    });
+    expect(await screen.findByText("暂无未关闭 PR。")).not.toBeNull();
+
+    expect(onModeChange).toHaveBeenCalledWith("log");
+    expect(onModeChange).toHaveBeenCalledWith("issues");
+    expect(onModeChange).toHaveBeenCalledWith("prs");
+  });
+
+  it("shows sidebar error and allows dismissing it", () => {
+    render(<GitDiffPanel {...baseProps} error="fatal diff error" />);
+
+    expect(screen.getByText("fatal diff error")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "关闭错误提示" }));
+    expect(screen.queryByText("fatal diff error")).toBeNull();
+  });
 });

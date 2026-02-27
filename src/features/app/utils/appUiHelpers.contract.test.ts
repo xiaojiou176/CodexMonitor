@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { GitFileStatus } from "../../../types";
+import type { GitFileStatus, WorkspaceInfo } from "../../../types";
 import {
   applyDiffStatsToFiles,
   buildAppCssVars,
+  buildCommandPaletteItems,
   buildCompactThreadConnectionIndicatorMeta,
   buildGitStatusForPanel,
   deriveTabletTab,
@@ -117,6 +118,99 @@ function legacyBuildAppCssVars(params: {
   };
 }
 
+function legacyBuildCommandPaletteItems(params: {
+  activeWorkspace: WorkspaceInfo | null;
+  newAgentShortcut: string | null;
+  newWorktreeAgentShortcut: string | null;
+  toggleTerminalShortcut: string | null;
+  toggleProjectsSidebarShortcut: string | null;
+  sidebarCollapsed: boolean;
+  onAddWorkspace: () => void;
+  onAddWorkspaceFromUrl: () => void;
+  onAddAgent: (workspace: WorkspaceInfo) => void;
+  onAddWorktreeAgent: (workspace: WorkspaceInfo) => void;
+  onToggleTerminal: () => void;
+  onExpandSidebar: () => void;
+  onCollapseSidebar: () => void;
+  onOpenSettings: () => void;
+}) {
+  const activeWorkspace = params.activeWorkspace;
+  return [
+    {
+      id: "add-workspace",
+      label: "添加工作区",
+      section: "工作区",
+      action: () => {
+        params.onAddWorkspace();
+      },
+    },
+    {
+      id: "add-workspace-from-url",
+      label: "从 URL 添加工作区",
+      section: "工作区",
+      action: params.onAddWorkspaceFromUrl,
+    },
+    ...(activeWorkspace
+      ? [
+          {
+            id: "new-agent",
+            label: "新建 Agent",
+            shortcut: params.newAgentShortcut ?? "⌘N",
+            section: "工作区",
+            action: () => {
+              params.onAddAgent(activeWorkspace);
+            },
+          },
+          {
+            id: "new-worktree",
+            label: "新建工作树 Agent",
+            shortcut: params.newWorktreeAgentShortcut ?? undefined,
+            section: "工作区",
+            action: () => {
+              params.onAddWorktreeAgent(activeWorkspace);
+            },
+          },
+        ]
+      : []),
+    {
+      id: "toggle-terminal",
+      label: "切换终端",
+      shortcut: params.toggleTerminalShortcut ?? "⌘`",
+      section: "面板",
+      action: params.onToggleTerminal,
+    },
+    {
+      id: "toggle-sidebar",
+      label: "切换侧栏",
+      shortcut: params.toggleProjectsSidebarShortcut ?? undefined,
+      section: "面板",
+      action: () => {
+        params.sidebarCollapsed ? params.onExpandSidebar() : params.onCollapseSidebar();
+      },
+    },
+    {
+      id: "open-settings",
+      label: "打开设置",
+      section: "导航",
+      action: () => {
+        params.onOpenSettings();
+      },
+    },
+  ];
+}
+
+function summarizeCommandItems(
+  items: Array<{ id: string; label: string; section: string; shortcut?: string; action: () => void }>,
+) {
+  return items.map(({ id, label, section, shortcut, action }) => ({
+    id,
+    label,
+    section,
+    shortcut,
+    hasAction: typeof action === "function",
+  }));
+}
+
 describe("appUiHelpers contract", () => {
   it("keeps tablet tab derivation semantics", () => {
     const allTabs: AppTab[] = ["home", "projects", "codex", "git", "log"];
@@ -219,5 +313,124 @@ describe("appUiHelpers contract", () => {
 
     expect(buildAppCssVars(compactValues)).toEqual(legacyBuildAppCssVars(compactValues));
     expect(buildAppCssVars(desktopValues)).toEqual(legacyBuildAppCssVars(desktopValues));
+  });
+
+  it("keeps command palette item shape semantics", () => {
+    const noop = () => {};
+    const activeWorkspace = { id: "workspace-1", name: "Main" } as WorkspaceInfo;
+    const baseParams = {
+      newAgentShortcut: null,
+      newWorktreeAgentShortcut: null,
+      toggleTerminalShortcut: null,
+      toggleProjectsSidebarShortcut: null,
+      onAddWorkspace: noop,
+      onAddWorkspaceFromUrl: noop,
+      onAddAgent: (_workspace: WorkspaceInfo) => {},
+      onAddWorktreeAgent: (_workspace: WorkspaceInfo) => {},
+      onToggleTerminal: noop,
+      onExpandSidebar: noop,
+      onCollapseSidebar: noop,
+      onOpenSettings: noop,
+    };
+
+    const withoutWorkspaceParams = {
+      ...baseParams,
+      activeWorkspace: null,
+      sidebarCollapsed: false,
+    };
+    const withWorkspaceParams = {
+      ...baseParams,
+      activeWorkspace,
+      sidebarCollapsed: true,
+    };
+
+    expect(summarizeCommandItems(buildCommandPaletteItems(withoutWorkspaceParams))).toEqual(
+      summarizeCommandItems(legacyBuildCommandPaletteItems(withoutWorkspaceParams)),
+    );
+    expect(summarizeCommandItems(buildCommandPaletteItems(withWorkspaceParams))).toEqual(
+      summarizeCommandItems(legacyBuildCommandPaletteItems(withWorkspaceParams)),
+    );
+  });
+
+  it("keeps command palette action routing semantics", () => {
+    const activeWorkspace = { id: "workspace-1", name: "Main" } as WorkspaceInfo;
+
+    const runScenario = (sidebarCollapsed: boolean) => {
+      const legacyCalls: string[] = [];
+      const nextCalls: string[] = [];
+      const baseParams = {
+        activeWorkspace,
+        newAgentShortcut: null,
+        newWorktreeAgentShortcut: null,
+        toggleTerminalShortcut: null,
+        toggleProjectsSidebarShortcut: null,
+        sidebarCollapsed,
+        onAddWorkspace: () => {
+          legacyCalls.push("add-workspace");
+        },
+        onAddWorkspaceFromUrl: () => {
+          legacyCalls.push("add-workspace-from-url");
+        },
+        onAddAgent: (workspace: WorkspaceInfo) => {
+          legacyCalls.push(`new-agent:${workspace.id}`);
+        },
+        onAddWorktreeAgent: (workspace: WorkspaceInfo) => {
+          legacyCalls.push(`new-worktree:${workspace.id}`);
+        },
+        onToggleTerminal: () => {
+          legacyCalls.push("toggle-terminal");
+        },
+        onExpandSidebar: () => {
+          legacyCalls.push("expand-sidebar");
+        },
+        onCollapseSidebar: () => {
+          legacyCalls.push("collapse-sidebar");
+        },
+        onOpenSettings: () => {
+          legacyCalls.push("open-settings");
+        },
+      };
+      const legacyItems = legacyBuildCommandPaletteItems(baseParams);
+      for (const item of legacyItems) {
+        item.action();
+      }
+
+      const nextParams = {
+        ...baseParams,
+        onAddWorkspace: () => {
+          nextCalls.push("add-workspace");
+        },
+        onAddWorkspaceFromUrl: () => {
+          nextCalls.push("add-workspace-from-url");
+        },
+        onAddAgent: (workspace: WorkspaceInfo) => {
+          nextCalls.push(`new-agent:${workspace.id}`);
+        },
+        onAddWorktreeAgent: (workspace: WorkspaceInfo) => {
+          nextCalls.push(`new-worktree:${workspace.id}`);
+        },
+        onToggleTerminal: () => {
+          nextCalls.push("toggle-terminal");
+        },
+        onExpandSidebar: () => {
+          nextCalls.push("expand-sidebar");
+        },
+        onCollapseSidebar: () => {
+          nextCalls.push("collapse-sidebar");
+        },
+        onOpenSettings: () => {
+          nextCalls.push("open-settings");
+        },
+      };
+      const nextItems = buildCommandPaletteItems(nextParams);
+      for (const item of nextItems) {
+        item.action();
+      }
+
+      expect(nextCalls).toEqual(legacyCalls);
+    };
+
+    runScenario(true);
+    runScenario(false);
   });
 });

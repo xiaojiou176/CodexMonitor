@@ -145,6 +145,41 @@ describe("FileTreePanel", () => {
     });
   });
 
+  it("toggles file filter mode between all and modified counts", () => {
+    render(
+      <FileTreePanel
+        {...defaultProps}
+        files={["src/main.ts", "README.md"]}
+        modifiedFiles={["src/main.ts"]}
+      />,
+    );
+
+    expect(screen.getByText("2 个文件")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "仅显示改动文件" }));
+    expect(screen.getByText("1 modified")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "显示全部文件" }));
+    expect(screen.getByText("2 个文件")).not.toBeNull();
+  });
+
+  it("shows all-files query empty state when no match is found", async () => {
+    render(
+      <FileTreePanel
+        {...defaultProps}
+        files={["src/main.ts", "README.md"]}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "筛选文件和文件夹" }), {
+      target: { value: "not-found-in-all-mode" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("未找到匹配项。")).not.toBeNull();
+    });
+  });
+
   it("shows preview error when file content loading fails", async () => {
     readWorkspaceFileMock.mockRejectedValueOnce(new Error("read failed"));
 
@@ -164,6 +199,68 @@ describe("FileTreePanel", () => {
     await waitFor(() => {
       expect(screen.getByText("read failed")).not.toBeNull();
     });
+  });
+
+  it("renders image preview without reading text content", async () => {
+    readWorkspaceFileMock.mockClear();
+    render(
+      <FileTreePanel
+        {...defaultProps}
+        files={["assets/logo.png"]}
+      />,
+    );
+
+    const imageRowButton = screen
+      .getByText("logo.png")
+      .closest("button.file-tree-row") as HTMLButtonElement;
+
+    fireEvent.click(imageRowButton);
+
+    expect(await screen.findByText("图片预览")).not.toBeNull();
+    expect(await screen.findByAltText("assets/logo.png")).not.toBeNull();
+    expect(readWorkspaceFileMock).not.toHaveBeenCalled();
+  });
+
+  it("supports shift multi-line selection in preview and inserts ranged snippet", async () => {
+    const onInsertText = vi.fn();
+    readWorkspaceFileMock.mockResolvedValueOnce({
+      content: "line-1\nline-2\nline-3",
+      truncated: false,
+    });
+
+    render(
+      <FileTreePanel
+        {...defaultProps}
+        files={["src/main.ts"]}
+        onInsertText={onInsertText}
+      />,
+    );
+
+    const mainRowButton = screen
+      .getByText("main.ts")
+      .closest("button.file-tree-row") as HTMLButtonElement;
+    fireEvent.click(mainRowButton);
+
+    await waitFor(() => {
+      expect(document.querySelectorAll(".file-preview-line").length).toBe(3);
+    });
+
+    const lineButtons = document.querySelectorAll(
+      ".file-preview-line",
+    ) as NodeListOf<HTMLButtonElement>;
+    fireEvent.click(lineButtons[0]);
+    fireEvent.click(lineButtons[2], { shiftKey: true });
+
+    expect(screen.getByText("第 1-3 行")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "添加到对话" }));
+
+    expect(onInsertText).toHaveBeenCalledTimes(1);
+    expect(onInsertText).toHaveBeenCalledWith(
+      expect.stringContaining("src/main.ts:L1-L3"),
+    );
+    expect(onInsertText).toHaveBeenCalledWith(
+      expect.stringContaining("line-1\nline-2\nline-3"),
+    );
   });
 
   it("disables mention action when insertion is blocked", () => {

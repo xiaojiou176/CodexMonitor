@@ -151,6 +151,7 @@ import {
 } from "./features/app/orchestration/useThreadOrchestration";
 import {
   buildAppCssVars,
+  buildCommandPaletteItems,
   buildCompactThreadConnectionIndicatorMeta,
   buildGitStatusForPanel,
   clampMessageFontSize,
@@ -3110,68 +3111,31 @@ function MainApp() {
 
   // ── Command Palette (⌘K) ──
   const commandItems: CommandItem[] = useMemo(
-    () => [
-      {
-        id: "add-workspace",
-        label: "添加工作区",
-        section: "工作区",
-        action: () => {
+    () =>
+      buildCommandPaletteItems({
+        activeWorkspace,
+        newAgentShortcut: appSettings.newAgentShortcut,
+        newWorktreeAgentShortcut: appSettings.newWorktreeAgentShortcut,
+        toggleTerminalShortcut: appSettings.toggleTerminalShortcut,
+        toggleProjectsSidebarShortcut: appSettings.toggleProjectsSidebarShortcut,
+        sidebarCollapsed,
+        onAddWorkspace: () => {
           void handleAddWorkspace();
         },
-      },
-      {
-        id: "add-workspace-from-url",
-        label: "从 URL 添加工作区",
-        section: "工作区",
-        action: handleAddWorkspaceFromUrl,
-      },
-      ...(activeWorkspace
-        ? [
-            {
-              id: "new-agent",
-              label: "新建 Agent",
-              shortcut: appSettings.newAgentShortcut ?? "⌘N",
-              section: "工作区",
-              action: () => {
-                void handleAddAgent(activeWorkspace);
-              },
-            },
-            {
-              id: "new-worktree",
-              label: "新建工作树 Agent",
-              shortcut: appSettings.newWorktreeAgentShortcut ?? undefined,
-              section: "工作区",
-              action: () => {
-                void handleAddWorktreeAgent(activeWorkspace);
-              },
-            },
-          ]
-        : []),
-      {
-        id: "toggle-terminal",
-        label: "切换终端",
-        shortcut: appSettings.toggleTerminalShortcut ?? "⌘`",
-        section: "面板",
-        action: handleToggleTerminal,
-      },
-      {
-        id: "toggle-sidebar",
-        label: "切换侧栏",
-        shortcut: appSettings.toggleProjectsSidebarShortcut ?? undefined,
-        section: "面板",
-        action: () => {
-          sidebarCollapsed
-            ? sidebarToggleProps.onExpandSidebar()
-            : sidebarToggleProps.onCollapseSidebar();
+        onAddWorkspaceFromUrl: handleAddWorkspaceFromUrl,
+        onAddAgent: (workspace) => {
+          void handleAddAgent(workspace);
         },
-      },
-      {
-        id: "open-settings",
-        label: "打开设置",
-        section: "导航",
-        action: () => openSettings(),
-      },
-    ],
+        onAddWorktreeAgent: (workspace) => {
+          void handleAddWorktreeAgent(workspace);
+        },
+        onToggleTerminal: handleToggleTerminal,
+        onExpandSidebar: sidebarToggleProps.onExpandSidebar,
+        onCollapseSidebar: sidebarToggleProps.onCollapseSidebar,
+        onOpenSettings: () => {
+          openSettings();
+        },
+      }),
     [
       appSettings,
       activeWorkspace,

@@ -599,4 +599,59 @@ describe("SettingsView Environments", () => {
       }
     }
   });
+
+  it("shows error and keeps draft when saving setup script fails", async () => {
+    const onUpdateWorkspaceSettings = vi
+      .fn()
+      .mockRejectedValue(new Error("save failed"));
+    renderEnvironmentsSection({ onUpdateWorkspaceSettings });
+
+    const textarea = screen.getByPlaceholderText("pnpm install");
+    fireEvent.change(textarea, { target: { value: "echo broken" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("save failed")).not.toBeNull();
+      expect((textarea as HTMLTextAreaElement).value).toBe("echo broken");
+      expect(
+        (screen.getByRole("button", { name: "保存" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false);
+    });
+  });
+
+  it("disables environment controls while setup script is saving", async () => {
+    let resolveSave: (() => void) | null = null;
+    const onUpdateWorkspaceSettings = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    renderEnvironmentsSection({ onUpdateWorkspaceSettings });
+
+    fireEvent.change(screen.getByPlaceholderText("pnpm install"), {
+      target: { value: "echo wait" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(
+        (screen.getByRole("button", { name: "保存中..." }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+      expect(
+        (screen.getByLabelText("项目") as HTMLSelectElement).disabled,
+      ).toBe(true);
+    });
+
+    resolveSave?.();
+
+    await waitFor(() => {
+      expect(
+        (screen.getByRole("button", { name: "保存" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+    });
+  });
 });

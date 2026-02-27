@@ -362,6 +362,71 @@ describe("useWorkspaces.updateWorkspaceSettings", () => {
     ).toBeFalsy();
   });
 
+  it("ignores stale success responses from older concurrent updates", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    const updateWorkspaceSettingsMock = vi.mocked(updateWorkspaceSettings);
+    listWorkspacesMock.mockResolvedValue([workspaceOne]);
+
+    let resolveFirst: (workspace: WorkspaceInfo) => void = () => {};
+    let resolveSecond: (workspace: WorkspaceInfo) => void = () => {};
+    const first = new Promise<WorkspaceInfo>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const second = new Promise<WorkspaceInfo>((resolve) => {
+      resolveSecond = resolve;
+    });
+    updateWorkspaceSettingsMock
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second);
+
+    const { result } = renderHook(() => useWorkspaces());
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    let firstCall: Promise<WorkspaceInfo>;
+    let secondCall: Promise<WorkspaceInfo>;
+    act(() => {
+      firstCall = result.current.updateWorkspaceSettings(workspaceOne.id, {
+        sidebarCollapsed: true,
+      });
+      secondCall = result.current.updateWorkspaceSettings(workspaceOne.id, {
+        sidebarCollapsed: false,
+        groupId: "group-latest",
+      });
+    });
+
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    resolveSecond({
+      ...workspaceOne,
+      settings: {
+        ...workspaceOne.settings,
+        sidebarCollapsed: false,
+        groupId: "group-latest",
+      },
+    });
+    resolveFirst({
+      ...workspaceOne,
+      settings: { ...workspaceOne.settings, sidebarCollapsed: true, groupId: null },
+    });
+
+    await act(async () => {
+      await Promise.all([firstCall, secondCall]);
+    });
+
+    expect(
+      result.current.workspaces.find((entry) => entry.id === workspaceOne.id)
+        ?.settings.groupId,
+    ).toBe("group-latest");
+    expect(
+      result.current.workspaces.find((entry) => entry.id === workspaceOne.id)
+        ?.settings.sidebarCollapsed,
+    ).toBeFalsy();
+  });
+
   it("throws when updating a workspace that does not exist", async () => {
     const listWorkspacesMock = vi.mocked(listWorkspaces);
     listWorkspacesMock.mockResolvedValue([workspaceOne]);
@@ -478,6 +543,30 @@ describe("useWorkspaces.loading", () => {
 
     expect(pushErrorToastMock).toHaveBeenCalledTimes(1);
   });
+
+  it("shows the same error again after a successful retry reset", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    listWorkspacesMock
+      .mockRejectedValueOnce(new Error("bridge unavailable"))
+      .mockResolvedValueOnce([workspaceOne])
+      .mockRejectedValueOnce(new Error("bridge unavailable"));
+
+    const { result } = renderHook(() => useWorkspaces());
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+    await act(async () => {
+      await result.current.refreshWorkspaces();
+    });
+    await act(async () => {
+      await result.current.refreshWorkspaces();
+    });
+
+    expect(pushErrorToastMock).toHaveBeenCalledTimes(2);
+    expect(result.current.workspaces.map((entry) => entry.id)).toContain(
+      workspaceOne.id,
+    );
+  });
 });
 
 describe("useWorkspaces.grouping and sorting", () => {
@@ -565,6 +654,44 @@ describe("useWorkspaces.grouping and sorting", () => {
     ]);
     expect(result.current.getWorkspaceGroupName("wt-child")).toBe("Beta Group");
     expect(result.current.getWorkspaceGroupName("unknown")).toBeNull();
+  });
+
+  it("falls back to ungrouped when workspace.groupId does not exist in app settings", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    const orphanGroupedWorkspace: WorkspaceInfo = {
+      ...workspaceOne,
+      id: "ws-orphan-group",
+      name: "orphan-group-workspace",
+      settings: {
+        sidebarCollapsed: false,
+        groupId: "missing-group",
+        sortOrder: 7,
+      },
+    };
+    listWorkspacesMock.mockResolvedValue([orphanGroupedWorkspace]);
+
+    const { result } = renderHook(() =>
+      useWorkspaces({
+        appSettings: createAppSettings([
+          {
+            id: "known-group",
+            name: "Known",
+            sortOrder: 0,
+            copiesFolder: null,
+          },
+        ]),
+      }),
+    );
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    expect(result.current.groupedWorkspaces).toHaveLength(1);
+    expect(result.current.groupedWorkspaces[0].name).toBe("未分组");
+    expect(result.current.groupedWorkspaces[0].workspaces[0].id).toBe(
+      "ws-orphan-group",
+    );
+    expect(result.current.getWorkspaceGroupName("ws-orphan-group")).toBeNull();
   });
 });
 

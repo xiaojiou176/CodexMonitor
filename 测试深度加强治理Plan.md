@@ -41,6 +41,26 @@
   - `branches: 77.86%`
 - 判定：已稳定通过全量测试与 strict gate 执行链路，但距离 `80/80/80/80` 终态仍有约 `9.92pp / 4.69pp / 2.14pp` 差距，下一阶段需继续并发冲刺 `App.tsx` 与 `threadItems.ts` 高 ROI 缺口。
 
+### Wave-10 最新进展（2026-02-27）
+
+- 本波并发 6 路完成高 ROI 测试补强与 App 可测性拆分：
+  - `src/utils/threadItems.test.ts`
+  - `src/features/app/components/Sidebar.test.tsx`
+  - `src/features/git/components/GitDiffPanel.test.tsx`
+  - `src/features/files/components/FileTreePanel.test.tsx`
+  - `src/features/workspaces/hooks/useWorkspaces.test.tsx`
+  - `src/features/settings/components/SettingsView.test.tsx`
+  - `src/features/settings/components/SettingsView.features-layout-shortcuts.test.tsx`
+  - `src/features/settings/components/SettingsView.codex-overrides.test.tsx`
+  - `src/features/app/utils/appUiHelpers.ts`
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`
+  - `src/App.tsx`
+- strict 覆盖门禁进一步提升到：
+  - `statements/lines: 70.61%`
+  - `functions: 75.80%`
+  - `branches: 78.27%`
+- 当前最大瓶颈仍是 `src/App.tsx`（未覆盖行约 3375），已确认为下一阶段主攻目标；其余高缺口文件已进入 70-80% 区间的持续抬升阶段。
+
 ---
 
 ## 2. 当前已做到什么（优势盘点）

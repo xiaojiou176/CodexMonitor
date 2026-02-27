@@ -1,4 +1,4 @@
-import type { GitFileStatus } from "../../../types";
+import type { GitFileStatus, WorkspaceInfo } from "../../../types";
 
 export const MESSAGE_FONT_SIZE_STORAGE_NAME = "codexmonitor.messageFontSize";
 const MESSAGE_FONT_SIZE_MIN = 11;
@@ -21,6 +21,14 @@ export type CompactThreadConnectionIndicatorMeta = {
   stateClassName: "is-live" | "is-polling" | "is-disconnected";
   title: string;
   label: "Live" | "Polling" | "Disconnected";
+};
+
+export type CommandPaletteItem = {
+  id: string;
+  label: string;
+  section: string;
+  shortcut?: string;
+  action: () => void;
 };
 
 export function deriveTabletTab(activeTab: AppTab): "codex" | "git" | "log" {
@@ -203,4 +211,85 @@ export function buildAppCssVars(params: {
     "--code-font-size": `${params.codeFontSize}px`,
     "--message-font-size": `${params.messageFontSize}px`,
   };
+}
+
+export function buildCommandPaletteItems(params: {
+  activeWorkspace: WorkspaceInfo | null;
+  newAgentShortcut: string | null;
+  newWorktreeAgentShortcut: string | null;
+  toggleTerminalShortcut: string | null;
+  toggleProjectsSidebarShortcut: string | null;
+  sidebarCollapsed: boolean;
+  onAddWorkspace: () => void;
+  onAddWorkspaceFromUrl: () => void;
+  onAddAgent: (workspace: WorkspaceInfo) => void;
+  onAddWorktreeAgent: (workspace: WorkspaceInfo) => void;
+  onToggleTerminal: () => void;
+  onExpandSidebar: () => void;
+  onCollapseSidebar: () => void;
+  onOpenSettings: () => void;
+}): CommandPaletteItem[] {
+  const activeWorkspace = params.activeWorkspace;
+  return [
+    {
+      id: "add-workspace",
+      label: "添加工作区",
+      section: "工作区",
+      action: () => {
+        params.onAddWorkspace();
+      },
+    },
+    {
+      id: "add-workspace-from-url",
+      label: "从 URL 添加工作区",
+      section: "工作区",
+      action: params.onAddWorkspaceFromUrl,
+    },
+    ...(activeWorkspace
+      ? [
+          {
+            id: "new-agent",
+            label: "新建 Agent",
+            shortcut: params.newAgentShortcut ?? "⌘N",
+            section: "工作区",
+            action: () => {
+              params.onAddAgent(activeWorkspace);
+            },
+          },
+          {
+            id: "new-worktree",
+            label: "新建工作树 Agent",
+            shortcut: params.newWorktreeAgentShortcut ?? undefined,
+            section: "工作区",
+            action: () => {
+              params.onAddWorktreeAgent(activeWorkspace);
+            },
+          },
+        ]
+      : []),
+    {
+      id: "toggle-terminal",
+      label: "切换终端",
+      shortcut: params.toggleTerminalShortcut ?? "⌘`",
+      section: "面板",
+      action: params.onToggleTerminal,
+    },
+    {
+      id: "toggle-sidebar",
+      label: "切换侧栏",
+      shortcut: params.toggleProjectsSidebarShortcut ?? undefined,
+      section: "面板",
+      action: () => {
+        params.sidebarCollapsed ? params.onExpandSidebar() : params.onCollapseSidebar();
+      },
+    },
+    {
+      id: "open-settings",
+      label: "打开设置",
+      section: "导航",
+      action: () => {
+        params.onOpenSettings();
+      },
+    },
+  ];
 }

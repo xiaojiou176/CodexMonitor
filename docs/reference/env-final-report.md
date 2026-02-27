@@ -71,6 +71,27 @@ Date: 2026-02-26
 - Evidence artifact:
   - `.runtime-cache/coverage/vitest-gate/1772182249989-7800-1kohkd`
 
+## Coverage Wave-10 Update (2026-02-27)
+
+- Added another parallel batch of high-ROI frontend tests and parity extraction:
+  - `src/utils/threadItems.test.ts`
+  - `src/features/app/components/Sidebar.test.tsx`
+  - `src/features/git/components/GitDiffPanel.test.tsx`
+  - `src/features/files/components/FileTreePanel.test.tsx`
+  - `src/features/workspaces/hooks/useWorkspaces.test.tsx`
+  - `src/features/settings/components/SettingsView.test.tsx`
+  - `src/features/settings/components/SettingsView.features-layout-shortcuts.test.tsx`
+  - `src/features/settings/components/SettingsView.codex-overrides.test.tsx`
+  - `src/features/app/utils/appUiHelpers.ts`
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`
+  - `src/App.tsx`
+- Strict coverage gate evidence (`npm run test:coverage:gate:strict`):
+  - statements/lines: `70.61%`
+  - functions: `75.80%`
+  - branches: `78.27%`
+- Evidence artifact:
+  - `.runtime-cache/coverage/vitest-gate/1772182758070-56324-hsfwvw`
+
 ## Env Variant Files
 
 - `.env` (5 keys)

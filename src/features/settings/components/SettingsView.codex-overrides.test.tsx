@@ -804,4 +804,159 @@ describe("SettingsView Codex overrides", () => {
       );
     });
   });
+
+  it("shows sign-out action error and keeps token when Orbit sign-out fails", async () => {
+    cleanup();
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    const orbitServiceClient: NonNullable<
+      ComponentProps<typeof SettingsView>["orbitServiceClient"]
+    > = {
+      orbitConnectTest: vi.fn().mockResolvedValue({
+        ok: true,
+        latencyMs: 12,
+        message: "Connected to Orbit relay.",
+      }),
+      orbitSignInStart: vi.fn(),
+      orbitSignInPoll: vi.fn(),
+      orbitSignOut: vi.fn().mockRejectedValue(new Error("sign-out failed")),
+      orbitRunnerStart: vi.fn().mockResolvedValue({
+        state: "running",
+        pid: 123,
+        startedAtMs: Date.now(),
+        lastError: null,
+        orbitUrl: "wss://orbit.example/ws",
+      }),
+      orbitRunnerStop: vi.fn().mockResolvedValue({
+        state: "stopped",
+        pid: null,
+        startedAtMs: null,
+        lastError: null,
+        orbitUrl: "wss://orbit.example/ws",
+      }),
+      orbitRunnerStatus: vi.fn().mockResolvedValue({
+        state: "stopped",
+        pid: null,
+        startedAtMs: null,
+        lastError: null,
+        orbitUrl: "wss://orbit.example/ws",
+      }),
+    };
+
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={{
+          ...baseSettings,
+          backendMode: "remote",
+          remoteBackendProvider: "orbit",
+          remoteBackendToken: "token-keep",
+        }}
+        openAppIconById={{}}
+        onUpdateAppSettings={onUpdateAppSettings}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="server"
+        orbitServiceClient={orbitServiceClient}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "登出" }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("退出登录失败：sign-out failed")).not.toBeNull();
+      expect(onUpdateAppSettings).not.toHaveBeenCalled();
+    });
+  });
+
+  it("clears workspace CODEX_HOME override", async () => {
+    cleanup();
+    const onUpdateWorkspaceSettings = vi.fn().mockResolvedValue(undefined);
+    const workspace: WorkspaceInfo = {
+      id: "w2",
+      name: "Workspace Home",
+      path: "/tmp/workspace-home",
+      connected: false,
+      codex_bin: null,
+      kind: "main",
+      parentId: null,
+      worktree: null,
+      settings: {
+        sidebarCollapsed: false,
+        codexHome: "/tmp/.codex-home",
+      },
+    };
+
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[
+          { id: null, name: "Ungrouped", workspaces: [workspace] },
+        ]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onRunCodexUpdate={vi.fn().mockResolvedValue(createUpdateResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={onUpdateWorkspaceSettings}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="codex"
+      />,
+    );
+
+    const input = screen.getByLabelText("Workspace Home 的 CODEX_HOME 覆盖");
+    const field = input.closest(".settings-override-field");
+    expect(field).not.toBeNull();
+    if (!field) {
+      throw new Error("Expected CODEX_HOME override field");
+    }
+    fireEvent.click((field as HTMLElement).querySelector("button.ghost") as Element);
+
+    await waitFor(() => {
+      expect(onUpdateWorkspaceSettings).toHaveBeenCalledWith("w2", {
+        codexHome: null,
+      });
+    });
+  });
 });

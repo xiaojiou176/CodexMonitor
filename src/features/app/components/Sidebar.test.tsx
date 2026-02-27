@@ -332,6 +332,31 @@ describe("Sidebar", () => {
     });
   });
 
+  it("supports ArrowUp focus entry for thread sort menu", async () => {
+    render(<Sidebar {...baseProps} />);
+
+    const toggleButton = screen.getByRole("button", { name: "排序对话" });
+    toggleButton.focus();
+    fireEvent.keyDown(toggleButton, { key: "ArrowUp" });
+
+    const secondOption = screen.getByRole("menuitemradio", { name: "最新创建" });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(secondOption);
+    });
+  });
+
+  it("closes thread sort menu when clicking outside", async () => {
+    render(<Sidebar {...baseProps} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "排序对话" }));
+    expect(screen.getByRole("menu")).not.toBeNull();
+
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+  });
+
   it("refreshes all workspace threads from the header button", () => {
     const onRefreshAllThreads = vi.fn();
     render(
@@ -367,6 +392,45 @@ describe("Sidebar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "刷新全部工作区对话" }));
     expect(onRefreshAllThreads).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables refresh action when all workspaces are disconnected", () => {
+    const onRefreshAllThreads = vi.fn();
+    render(
+      <Sidebar
+        {...baseProps}
+        onRefreshAllThreads={onRefreshAllThreads}
+        workspaces={[
+          {
+            id: "ws-1",
+            name: "Workspace",
+            path: "/tmp/workspace",
+            connected: false,
+            settings: { sidebarCollapsed: false },
+          },
+        ]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [
+              {
+                id: "ws-1",
+                name: "Workspace",
+                path: "/tmp/workspace",
+                connected: false,
+                settings: { sidebarCollapsed: false },
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    const refreshButton = screen.getByRole("button", { name: "刷新全部工作区对话" });
+    expect((refreshButton as HTMLButtonElement).disabled).toBeTruthy();
+    fireEvent.click(refreshButton);
+    expect(onRefreshAllThreads).not.toHaveBeenCalled();
   });
 
   it("uses one shared ticker interval for pinned and workspace thread lists", () => {
@@ -684,6 +748,79 @@ describe("Sidebar", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "新建对话" })).toBeNull();
     });
+  });
+
+  it("closes workspace add menu when clicking outside", async () => {
+    const workspace = {
+      id: "ws-1",
+      name: "Workspace",
+      path: "/tmp/workspace",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+
+    render(
+      <Sidebar
+        {...baseProps}
+        activeWorkspaceId="ws-1"
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspace],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "添加对话选项" }));
+    expect(screen.getByRole("button", { name: "新建对话" })).not.toBeNull();
+
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "新建对话" })).toBeNull();
+    });
+  });
+
+  it("keeps account switch action disabled while switching and allows cancel", () => {
+    const onSwitchAccount = vi.fn();
+    const onCancelSwitchAccount = vi.fn();
+    const workspace = {
+      id: "ws-1",
+      name: "Workspace",
+      path: "/tmp/workspace",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+
+    render(
+      <Sidebar
+        {...baseProps}
+        onSwitchAccount={onSwitchAccount}
+        onCancelSwitchAccount={onCancelSwitchAccount}
+        accountSwitching
+        accountInfo={{ type: "chatgpt", email: "dev@example.com" }}
+        activeWorkspaceId="ws-1"
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspace],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "账户" }));
+    const switchButton = screen.getByRole("button", { name: "切换账户" });
+    expect((switchButton as HTMLButtonElement).disabled).toBeTruthy();
+    fireEvent.click(switchButton);
+    expect(onSwitchAccount).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "取消切换账户" }));
+    expect(onCancelSwitchAccount).toHaveBeenCalledTimes(1);
   });
 
   it("renders busy workspace drop overlay state", () => {

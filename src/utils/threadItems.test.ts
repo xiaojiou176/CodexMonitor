@@ -782,4 +782,144 @@ describe("threadItems", () => {
     }
   });
 
+  it("appends skill token when existing mention only shares a prefix", () => {
+    const item = buildConversationItemFromThreadItem({
+      type: "userMessage",
+      id: "msg-skill-6",
+      content: [
+        { type: "text", text: "Please run $deep_debugger now" },
+        { type: "skill", name: "deep_debug" },
+      ],
+    });
+
+    expect(item).not.toBeNull();
+    if (item && item.kind === "message") {
+      expect(item.role).toBe("user");
+      expect(item.text).toBe("Please run $deep_debugger now $deep_debug");
+    }
+  });
+
+  it("does not duplicate skill mention when casing differs", () => {
+    const item = buildConversationItemFromThreadItem({
+      type: "userMessage",
+      id: "msg-skill-7",
+      content: [
+        { type: "text", text: "Please run $Deep_Debug now" },
+        { type: "skill", name: "deep_debug" },
+      ],
+    });
+
+    expect(item).not.toBeNull();
+    if (item && item.kind === "message") {
+      expect(item.role).toBe("user");
+      expect(item.text).toBe("Please run $Deep_Debug now");
+    }
+  });
+
+  it("normalizes commandExecution started status to inProgress", () => {
+    const item = buildConversationItem({
+      type: "commandExecution",
+      id: "cmd-status-1",
+      status: "started",
+      command: ["rg", "needle", "src"],
+    });
+
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.status).toBe("inProgress");
+    }
+  });
+
+  it("normalizes fileChange skipped status to declined", () => {
+    const item = buildConversationItem({
+      type: "fileChange",
+      id: "file-status-1",
+      status: "skipped",
+      changes: [],
+    });
+
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.status).toBe("declined");
+    }
+  });
+
+  it("keeps mcpToolCall rejected status raw when no mcp mapping applies", () => {
+    const item = buildConversationItem({
+      type: "mcpToolCall",
+      id: "mcp-status-1",
+      server: "server-a",
+      tool: "doThing",
+      status: "rejected",
+    });
+
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.status).toBe("rejected");
+    }
+  });
+
+  it("uses rg --files fallback label when no path operand exists", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "cmd-path-1",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command: rg --files",
+        detail: "",
+        status: "completed",
+        output: "",
+      },
+    ];
+
+    const prepared = prepareThreadItems(items);
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0].kind).toBe("explore");
+    if (prepared[0].kind === "explore") {
+      expect(prepared[0].entries).toHaveLength(1);
+      expect(prepared[0].entries[0].kind).toBe("list");
+      expect(prepared[0].entries[0].label).toBe("rg --files");
+    }
+  });
+
+  it("keeps raw tool item when chained command contains unsupported segment", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "cmd-path-2",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command: cat src/foo.ts && git status",
+        detail: "",
+        status: "completed",
+        output: "",
+      },
+    ];
+
+    const prepared = prepareThreadItems(items);
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0].kind).toBe("tool");
+  });
+
+  it("truncates old diff output in prepareThreadItems while keeping recent full output", () => {
+    const longDiff = "d".repeat(21050);
+    const items: ConversationItem[] = Array.from({ length: 41 }, (_, index) => ({
+      id: `tool-diff-${index}`,
+      kind: "tool",
+      toolType: "commandExecution",
+      title: "Tool",
+      detail: "",
+      output: "",
+      changes: [{ path: `file-${index}.txt`, diff: longDiff }],
+    }));
+
+    const prepared = prepareThreadItems(items);
+    expect(prepared[0].kind).toBe("tool");
+    expect(prepared[1].kind).toBe("tool");
+    if (prepared[0].kind === "tool" && prepared[1].kind === "tool") {
+      expect(prepared[0].changes?.[0]?.diff).not.toBe(longDiff);
+      expect(prepared[0].changes?.[0]?.diff?.endsWith("...")).toBe(true);
+      expect(prepared[1].changes?.[0]?.diff).toBe(longDiff);
+    }
+  });
+
 });
