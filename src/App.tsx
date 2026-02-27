@@ -150,7 +150,8 @@ import {
   useThreadSelectionHandlersOrchestration,
 } from "./features/app/orchestration/useThreadOrchestration";
 import {
-  applyDiffStatsToFiles,
+  buildAppCssVars,
+  buildGitStatusForPanel,
   clampMessageFontSize,
   countDiffLineStats,
   deriveTabletTab,
@@ -625,23 +626,7 @@ function MainApp() {
   }, [activeDiffs, diffSource, selectedDiffPath]);
 
   const gitStatusForPanel = useMemo(() => {
-    const stagedFiles = applyDiffStatsToFiles(gitStatus.stagedFiles, lazyDiffStatsByPath);
-    const unstagedFiles = applyDiffStatsToFiles(gitStatus.unstagedFiles, lazyDiffStatsByPath);
-    const files = applyDiffStatsToFiles(gitStatus.files, lazyDiffStatsByPath);
-    const totalAdditions =
-      stagedFiles.reduce((sum, file) => sum + file.additions, 0) +
-      unstagedFiles.reduce((sum, file) => sum + file.additions, 0);
-    const totalDeletions =
-      stagedFiles.reduce((sum, file) => sum + file.deletions, 0) +
-      unstagedFiles.reduce((sum, file) => sum + file.deletions, 0);
-    return {
-      ...gitStatus,
-      files,
-      stagedFiles,
-      unstagedFiles,
-      totalAdditions,
-      totalDeletions,
-    };
+    return buildGitStatusForPanel(gitStatus, lazyDiffStatsByPath);
   }, [gitStatus, lazyDiffStatsByPath]);
 
   useEffect(() => {
@@ -3215,17 +3200,21 @@ function MainApp() {
 
   const cmdPalette = useCommandPalette(commandItems);
   const appCssVars = useMemo(
-    () => ({
-      "--sidebar-width": `${isCompact ? sidebarWidth : sidebarCollapsed ? 0 : sidebarWidth}px`,
-      "--right-panel-width": `${isCompact ? rightPanelWidth : rightPanelCollapsed ? 0 : rightPanelWidth}px`,
-      "--plan-panel-height": `${planPanelHeight}px`,
-      "--terminal-panel-height": `${terminalPanelHeight}px`,
-      "--debug-panel-height": `${debugPanelHeight}px`,
-      "--ui-font-family": appSettings.uiFontFamily,
-      "--code-font-family": appSettings.codeFontFamily,
-      "--code-font-size": `${appSettings.codeFontSize}px`,
-      "--message-font-size": `${messageFontSize}px`,
-    }),
+    () =>
+      buildAppCssVars({
+        isCompact,
+        sidebarWidth,
+        sidebarCollapsed,
+        rightPanelWidth,
+        rightPanelCollapsed,
+        planPanelHeight,
+        terminalPanelHeight,
+        debugPanelHeight,
+        uiFontFamily: appSettings.uiFontFamily,
+        codeFontFamily: appSettings.codeFontFamily,
+        codeFontSize: appSettings.codeFontSize,
+        messageFontSize,
+      }),
     [
       appSettings.codeFontFamily,
       appSettings.codeFontSize,

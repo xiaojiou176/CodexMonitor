@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { GitFileStatus } from "../../../types";
 import {
+  applyDiffStatsToFiles,
+  buildAppCssVars,
+  buildGitStatusForPanel,
   deriveTabletTab,
   resolveCompactThreadConnectionState,
   shouldLoadGitHubPanelData,
@@ -36,6 +40,61 @@ function legacyCompactThreadConnectionState(params: {
     : params.backendMode === "remote"
       ? params.remoteThreadConnectionState
       : "live";
+}
+
+function legacyBuildGitStatusForPanel(params: {
+  branchName: string;
+  files: GitFileStatus[];
+  stagedFiles: GitFileStatus[];
+  unstagedFiles: GitFileStatus[];
+  totalAdditions: number;
+  totalDeletions: number;
+  error: string | null;
+}, statsByPath: Record<string, { additions: number; deletions: number }>) {
+  const stagedFiles = applyDiffStatsToFiles(params.stagedFiles, statsByPath);
+  const unstagedFiles = applyDiffStatsToFiles(params.unstagedFiles, statsByPath);
+  const files = applyDiffStatsToFiles(params.files, statsByPath);
+  const totalAdditions =
+    stagedFiles.reduce((sum, file) => sum + file.additions, 0) +
+    unstagedFiles.reduce((sum, file) => sum + file.additions, 0);
+  const totalDeletions =
+    stagedFiles.reduce((sum, file) => sum + file.deletions, 0) +
+    unstagedFiles.reduce((sum, file) => sum + file.deletions, 0);
+  return {
+    ...params,
+    files,
+    stagedFiles,
+    unstagedFiles,
+    totalAdditions,
+    totalDeletions,
+  };
+}
+
+function legacyBuildAppCssVars(params: {
+  isCompact: boolean;
+  sidebarWidth: number;
+  sidebarCollapsed: boolean;
+  rightPanelWidth: number;
+  rightPanelCollapsed: boolean;
+  planPanelHeight: number;
+  terminalPanelHeight: number;
+  debugPanelHeight: number;
+  uiFontFamily: string;
+  codeFontFamily: string;
+  codeFontSize: number;
+  messageFontSize: number;
+}) {
+  return {
+    "--sidebar-width": `${params.isCompact ? params.sidebarWidth : params.sidebarCollapsed ? 0 : params.sidebarWidth}px`,
+    "--right-panel-width": `${params.isCompact ? params.rightPanelWidth : params.rightPanelCollapsed ? 0 : params.rightPanelWidth}px`,
+    "--plan-panel-height": `${params.planPanelHeight}px`,
+    "--terminal-panel-height": `${params.terminalPanelHeight}px`,
+    "--debug-panel-height": `${params.debugPanelHeight}px`,
+    "--ui-font-family": params.uiFontFamily,
+    "--code-font-family": params.codeFontFamily,
+    "--code-font-size": `${params.codeFontSize}px`,
+    "--message-font-size": `${params.messageFontSize}px`,
+  };
 }
 
 describe("appUiHelpers contract", () => {
@@ -82,5 +141,54 @@ describe("appUiHelpers contract", () => {
         }
       }
     }
+  });
+
+  it("keeps git panel status aggregation semantics", () => {
+    const gitStatus = {
+      branchName: "main",
+      files: [
+        { path: "src/a.ts", status: "M", additions: 1, deletions: 2 },
+        { path: "src/b.ts", status: "M", additions: 3, deletions: 4 },
+      ],
+      stagedFiles: [{ path: "src/a.ts", status: "M", additions: 1, deletions: 2 }],
+      unstagedFiles: [{ path: "src/b.ts", status: "M", additions: 3, deletions: 4 }],
+      totalAdditions: 0,
+      totalDeletions: 0,
+      error: null,
+    };
+    const statsByPath = {
+      "src/a.ts": { additions: 8, deletions: 5 },
+      "src/b.ts": { additions: 2, deletions: 1 },
+    };
+
+    expect(buildGitStatusForPanel(gitStatus, statsByPath)).toEqual(
+      legacyBuildGitStatusForPanel(gitStatus, statsByPath),
+    );
+  });
+
+  it("keeps app CSS variable derivation semantics", () => {
+    const compactValues = {
+      isCompact: true,
+      sidebarWidth: 320,
+      sidebarCollapsed: true,
+      rightPanelWidth: 360,
+      rightPanelCollapsed: true,
+      planPanelHeight: 250,
+      terminalPanelHeight: 280,
+      debugPanelHeight: 290,
+      uiFontFamily: "Inter",
+      codeFontFamily: "Fira Code",
+      codeFontSize: 13,
+      messageFontSize: 14,
+    };
+    const desktopValues = {
+      ...compactValues,
+      isCompact: false,
+      sidebarCollapsed: false,
+      rightPanelCollapsed: false,
+    };
+
+    expect(buildAppCssVars(compactValues)).toEqual(legacyBuildAppCssVars(compactValues));
+    expect(buildAppCssVars(desktopValues)).toEqual(legacyBuildAppCssVars(desktopValues));
   });
 });

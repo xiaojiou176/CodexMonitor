@@ -55,6 +55,8 @@ CodexMonitor reads configuration from these layers:
 - Generator script: `scripts/generate-testing-governance-dashboard.mjs`
 - Input artifacts: `.runtime-cache/test_output/*/latest.json`
 - Output dashboard: `docs/reference/testing-governance-dashboard.md`
+- 4-week no-false-green tracker template: `docs/reference/4-week-no-false-green-observability.md`
+- 4-week tracker script: `scripts/check-4w-no-false-green.mjs`
 - Missing artifact data is handled as degraded output and listed under the dashboard "Missing Data" section.
 - Freshness classification is computed at generation time from artifact timestamps:
   - `fresh <= 6h`
@@ -64,3 +66,5 @@ CodexMonitor reads configuration from these layers:
 - `Generated at` is dashboard build time only; gate execution time must be read from each report `Last Update` value.
 - Dashboard regeneration command: `node scripts/generate-testing-governance-dashboard.mjs`
 - Evidence inputs are read from `.runtime-cache/test_output/*/latest.json` and reflected in `docs/reference/testing-governance-dashboard.md`.
+- 4-week tracker update command: `npm run obs:4w:no-false-green:update`
+- 4-week tracker check command: `npm run check:4w:no-false-green`

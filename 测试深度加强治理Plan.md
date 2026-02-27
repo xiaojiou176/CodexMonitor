@@ -1242,6 +1242,46 @@ Context：
   - Functions `6.25pp`
   - Branches `2.46pp`
 
+### 13.10 Coverage 冲刺 Wave-7（2026-02-28）
+
+本波次目标：继续并发压缩 0% hook 并推进 `App.tsx` 周边可测性拆分，同时落地 4 周时间型验收自动化。
+
+1. 本波次新增测试文件
+- `src/features/notifications/hooks/useAgentSystemNotifications.test.tsx`
+- `src/features/app/hooks/useWorkspaceDialogs.test.tsx`
+- `src/features/messages/hooks/useFileLinkOpener.test.tsx`
+- `src/features/notifications/hooks/useAgentSoundNotifications.test.ts`
+- `src/features/app/hooks/useWorkspaceCycling.test.ts`
+- `src/features/app/utils/appUiHelpers.contract.test.ts`（增强）
+
+2. 本波次重构/治理文件
+- `src/features/app/utils/appUiHelpers.ts`（新增 `buildGitStatusForPanel`、`buildAppCssVars`）
+- `src/App.tsx`（替换对应内联计算为 helper 调用，行为不变）
+- `docs/reference/4-week-no-false-green-observability.md`（新增）
+- `scripts/check-4w-no-false-green.mjs`（新增）
+- `docs/reference/configuration.md`、`package.json`（新增观测脚本入口）
+
+3. 单文件覆盖样本（Wave-7 结果）
+- `useAgentSystemNotifications.ts`: Statements `100%`, Branches `94.36%`
+- `useWorkspaceDialogs.ts`: Statements `97.53%`, Branches `79.66%`
+- `useWorkspaceCycling.ts`: Statements `92.30%`, Branches `76.92%`
+- `useAgentSoundNotifications.ts`: Statements `86.95%`, Branches `64.28%`
+- `Image/File` 打开链路（`useFileLinkOpener.ts`）已建立专测与错误路径验证
+
+4. 全量 strict gate 结果
+- `npm run test:coverage:gate:strict`
+- 全量测试：`173 files / 1603 tests` 全通过。
+- 覆盖率提升到：
+  - Statements `67.84%`
+  - Lines `67.84%`
+  - Functions `74.28%`
+  - Branches `77.64%`
+
+5. 时间型验收（4周）落地状态
+- 已具备自动更新命令：`npm run obs:4w:no-false-green:update`
+- 已具备检查命令：`npm run check:4w:no-false-green`（严格：`:strict`）
+- 当前观测状态：`W1=fail/unknown/unknown`，`W2-W4=pending`（等待自然时间窗口）
+
 ## 14. Lazy-Load Evidence（Refactor Batch）
 
 - Runtime evidence references:

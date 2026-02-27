@@ -508,3 +508,35 @@ ASCII Trend:
 - 触发原因: Wave-6 同时包含测试增强与 `App.tsx` 可测性拆分（无行为变更重构），触发兼容可选审计记录。
 - 回退条件: 若拆分后出现行为回归或门禁不稳定，回退 `src/App.tsx` 与 `src/features/app/utils/appUiHelpers.ts` 到拆分前版本，保留独立新增测试逐项二分恢复。
 - 结果差异: 组件行为保持不变；通过契约测试把关键派生逻辑从 `App.tsx` 中可验证化，提升“真绿可证明”证据强度。
+
+## 2026-02-28 Coverage Wave-7 Audit
+
+- Scope: 0% hook 并发补测 + `App.tsx` 周边 helper 可测性拆分 + 4周观测自动化。
+- Changed files:
+  - `src/features/notifications/hooks/useAgentSystemNotifications.test.tsx`
+  - `src/features/app/hooks/useWorkspaceDialogs.test.tsx`
+  - `src/features/messages/hooks/useFileLinkOpener.test.tsx`
+  - `src/features/notifications/hooks/useAgentSoundNotifications.test.ts`
+  - `src/features/app/hooks/useWorkspaceCycling.test.ts`
+  - `src/features/app/utils/appUiHelpers.ts`
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`
+  - `src/App.tsx`
+  - `docs/reference/4-week-no-false-green-observability.md`
+  - `scripts/check-4w-no-false-green.mjs`
+  - `docs/reference/configuration.md`
+  - `package.json`
+  - `测试深度加强治理Plan.md`
+- Gate evidence:
+  - `npm run test:coverage:gate:strict` executed with all tests passing.
+  - Global coverage moved to `67.84/77.64/74.28/67.84` (S/B/F/L), still below strict 80.
+  - 4-week tracker commands executed:
+    - `npm run obs:4w:no-false-green:update`
+    - `npm run check:4w:no-false-green`
+- Env governance impact:
+  - No environment schema/runtime key behavior changed.
+
+### Compatibility Opt-In Record
+
+- 触发原因: Wave-7 涉及 App helper 提取与新增导出函数，且为提升可测性与4周验收观测能力的治理增强。
+- 回退条件: 如拆分后行为或门禁稳定性异常，回退 `src/App.tsx` 与 `src/features/app/utils/appUiHelpers.ts`，保留测试文件用于二分定位。
+- 结果差异: 不改变运行时业务行为；增加可验证 helper 契约测试与 4 周无假绿观测自动化证据链。

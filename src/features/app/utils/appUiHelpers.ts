@@ -120,3 +120,58 @@ export function applyDiffStatsToFiles(
     };
   });
 }
+
+export function buildGitStatusForPanel<
+  T extends {
+    files: GitFileStatus[];
+    stagedFiles: GitFileStatus[];
+    unstagedFiles: GitFileStatus[];
+    totalAdditions: number;
+    totalDeletions: number;
+  },
+>(gitStatus: T, statsByPath: Record<string, DiffLineStats>): T {
+  const stagedFiles = applyDiffStatsToFiles(gitStatus.stagedFiles, statsByPath);
+  const unstagedFiles = applyDiffStatsToFiles(gitStatus.unstagedFiles, statsByPath);
+  const files = applyDiffStatsToFiles(gitStatus.files, statsByPath);
+  const totalAdditions =
+    stagedFiles.reduce((sum, file) => sum + file.additions, 0) +
+    unstagedFiles.reduce((sum, file) => sum + file.additions, 0);
+  const totalDeletions =
+    stagedFiles.reduce((sum, file) => sum + file.deletions, 0) +
+    unstagedFiles.reduce((sum, file) => sum + file.deletions, 0);
+  return {
+    ...gitStatus,
+    files,
+    stagedFiles,
+    unstagedFiles,
+    totalAdditions,
+    totalDeletions,
+  };
+}
+
+export function buildAppCssVars(params: {
+  isCompact: boolean;
+  sidebarWidth: number;
+  sidebarCollapsed: boolean;
+  rightPanelWidth: number;
+  rightPanelCollapsed: boolean;
+  planPanelHeight: number;
+  terminalPanelHeight: number;
+  debugPanelHeight: number;
+  uiFontFamily: string;
+  codeFontFamily: string;
+  codeFontSize: number;
+  messageFontSize: number;
+}): Record<string, string> {
+  return {
+    "--sidebar-width": `${params.isCompact ? params.sidebarWidth : params.sidebarCollapsed ? 0 : params.sidebarWidth}px`,
+    "--right-panel-width": `${params.isCompact ? params.rightPanelWidth : params.rightPanelCollapsed ? 0 : params.rightPanelWidth}px`,
+    "--plan-panel-height": `${params.planPanelHeight}px`,
+    "--terminal-panel-height": `${params.terminalPanelHeight}px`,
+    "--debug-panel-height": `${params.debugPanelHeight}px`,
+    "--ui-font-family": params.uiFontFamily,
+    "--code-font-family": params.codeFontFamily,
+    "--code-font-size": `${params.codeFontSize}px`,
+    "--message-font-size": `${params.messageFontSize}px`,
+  };
+}
