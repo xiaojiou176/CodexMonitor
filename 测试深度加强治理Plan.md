@@ -103,6 +103,27 @@
   - `branches: 1.47pp`
 - 阶段判断：已完成多轮“外围高 ROI 扫荡”，下一轮必须进入 `App.tsx` 主体流程拆分 + App 级集成测试双线并发，才能继续保持同等增速。
 
+### Wave-13 最新进展（2026-02-27）
+
+- 本波并发 6 路，完成 App 主逻辑再拆分与 0% 区域清零：
+  - `src/features/app/utils/appUiHelpers.ts`（新增多段派生函数）
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`（新增 parity 契约）
+  - `src/App.tsx`（继续替换为 helper 调用，行为等价）
+  - `src/features/dictation/hooks/useHoldToDictate.test.tsx`（新增）
+  - `src/features/mobile/components/MobileServerSetupWizard.test.tsx`（新增）
+  - `src/features/terminal/hooks/useTerminalController.test.tsx`（新增）
+  - `src/features/app/components/LaunchScriptEntryButton.test.tsx`（新增）
+  - `src/features/layout/hooks/layoutNodes/buildGitNodes.test.tsx`（增强）
+- strict 覆盖门禁提升到：
+  - `statements/lines: 73.04%`
+  - `functions: 76.93%`
+  - `branches: 78.56%`
+- 距离 80 终态剩余差距：
+  - `lines/statements: 6.96pp`
+  - `functions: 3.07pp`
+  - `branches: 1.44pp`
+- 结论：本波是当前阶段增幅最大的一波之一，但 `App.tsx` 仍有约 3352 未覆盖行，已确认下一波继续以 App 主体拆分 + App 相关集成测试为核心。
+
 ---
 
 ## 2. 当前已做到什么（优势盘点）

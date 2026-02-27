@@ -128,6 +128,24 @@ Date: 2026-02-26
 - Evidence artifact:
   - `.runtime-cache/coverage/vitest-gate/1772184442085-47607-wpc2ly`
 
+## Coverage Wave-13 Update (2026-02-27)
+
+- Added parallel batch focusing on App extraction and remaining 0%-coverage units:
+  - `src/features/app/utils/appUiHelpers.ts`
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`
+  - `src/App.tsx`
+  - `src/features/dictation/hooks/useHoldToDictate.test.tsx`
+  - `src/features/mobile/components/MobileServerSetupWizard.test.tsx`
+  - `src/features/terminal/hooks/useTerminalController.test.tsx`
+  - `src/features/app/components/LaunchScriptEntryButton.test.tsx`
+  - `src/features/layout/hooks/layoutNodes/buildGitNodes.test.tsx`
+- Strict coverage gate evidence (`npm run test:coverage:gate:strict`):
+  - statements/lines: `73.04%`
+  - functions: `76.93%`
+  - branches: `78.56%`
+- Evidence artifact:
+  - `.runtime-cache/coverage/vitest-gate/1772184822171-96023-9pifrf`
+
 ## Env Variant Files
 
 - `.env` (5 keys)

@@ -31,6 +31,25 @@ export type CommandPaletteItem = {
   action: () => void;
 };
 
+export type LatestAgentRunEntry = {
+  threadId: string;
+  message: string;
+  timestamp: number;
+  projectName: string;
+  groupName?: string | null;
+  workspaceId: string;
+  isProcessing: boolean;
+};
+
+export type RecentThreadInstance = {
+  id: string;
+  workspaceId: string;
+  threadId: string;
+  modelId: string | null;
+  modelLabel: string;
+  sequence: number;
+};
+
 export function deriveTabletTab(activeTab: AppTab): "codex" | "git" | "log" {
   return activeTab === "projects" || activeTab === "home" ? "codex" : activeTab;
 }
@@ -353,4 +372,69 @@ export function buildCommandPaletteItems(params: {
       },
     },
   ];
+}
+
+export function buildLatestAgentRuns(params: {
+  workspaces: WorkspaceInfo[];
+  threadsByWorkspace: Record<string, Array<{ id: string }>>;
+  lastAgentMessageByThread: Record<string, { text: string; timestamp: number }>;
+  threadStatusById: Record<string, { isProcessing?: boolean }>;
+  getWorkspaceGroupName: (workspaceId: string) => string | null | undefined;
+  limit?: number;
+}): LatestAgentRunEntry[] {
+  const entries: LatestAgentRunEntry[] = [];
+  params.workspaces.forEach((workspace) => {
+    const threads = params.threadsByWorkspace[workspace.id] ?? [];
+    threads.forEach((thread) => {
+      const entry = params.lastAgentMessageByThread[thread.id];
+      if (!entry) {
+        return;
+      }
+      entries.push({
+        threadId: thread.id,
+        message: entry.text,
+        timestamp: entry.timestamp,
+        projectName: workspace.name,
+        groupName: params.getWorkspaceGroupName(workspace.id),
+        workspaceId: workspace.id,
+        isProcessing: params.threadStatusById[thread.id]?.isProcessing ?? false,
+      });
+    });
+  });
+  return entries.sort((a, b) => b.timestamp - a.timestamp).slice(0, params.limit ?? 3);
+}
+
+export function buildRecentThreadsSnapshot(params: {
+  activeWorkspaceId: string | null;
+  threadsByWorkspace: Record<string, Array<{ id: string; updatedAt: number; name?: string | null }>>;
+  recentThreadLimit: number;
+}): {
+  recentThreadInstances: RecentThreadInstance[];
+  recentThreadsUpdatedAt: number | null;
+} {
+  if (!params.activeWorkspaceId) {
+    return { recentThreadInstances: [], recentThreadsUpdatedAt: null };
+  }
+  const threads = params.threadsByWorkspace[params.activeWorkspaceId] ?? [];
+  if (threads.length === 0) {
+    return { recentThreadInstances: [], recentThreadsUpdatedAt: null };
+  }
+  const sorted = [...threads].sort((a, b) => b.updatedAt - a.updatedAt);
+  const slice = sorted.slice(0, params.recentThreadLimit);
+  const updatedAt = slice.reduce(
+    (max, thread) => (thread.updatedAt > max ? thread.updatedAt : max),
+    0,
+  );
+  const instances = slice.map((thread, index) => ({
+    id: `recent-${thread.id}`,
+    workspaceId: params.activeWorkspaceId as string,
+    threadId: thread.id,
+    modelId: null,
+    modelLabel: thread.name?.trim() || "未命名对话",
+    sequence: index + 1,
+  }));
+  return {
+    recentThreadInstances: instances,
+    recentThreadsUpdatedAt: updatedAt > 0 ? updatedAt : null,
+  };
 }

@@ -5,6 +5,8 @@ import {
   buildAppCssVars,
   buildCommandPaletteItems,
   buildCompactThreadConnectionIndicatorMeta,
+  buildLatestAgentRuns,
+  buildRecentThreadsSnapshot,
   deriveFileStatusLabel,
   buildGitStatusForPanel,
   deriveIsGitPanelVisible,
@@ -17,6 +19,7 @@ import {
   type CompactThreadConnectionState,
   type DiffSource,
   type GitPanelMode,
+  type RecentThreadInstance,
 } from "./appUiHelpers";
 
 function legacyTabletTab(activeTab: AppTab): "codex" | "git" | "log" {
@@ -257,6 +260,79 @@ function legacyBuildCommandPaletteItems(params: {
       },
     },
   ];
+}
+
+function legacyBuildLatestAgentRuns(params: {
+  workspaces: WorkspaceInfo[];
+  threadsByWorkspace: Record<string, Array<{ id: string }>>;
+  lastAgentMessageByThread: Record<string, { text: string; timestamp: number }>;
+  threadStatusById: Record<string, { isProcessing?: boolean }>;
+  getWorkspaceGroupName: (workspaceId: string) => string | null | undefined;
+  limit?: number;
+}) {
+  const entries: Array<{
+    threadId: string;
+    message: string;
+    timestamp: number;
+    projectName: string;
+    groupName?: string | null;
+    workspaceId: string;
+    isProcessing: boolean;
+  }> = [];
+  params.workspaces.forEach((workspace) => {
+    const threads = params.threadsByWorkspace[workspace.id] ?? [];
+    threads.forEach((thread) => {
+      const entry = params.lastAgentMessageByThread[thread.id];
+      if (!entry) {
+        return;
+      }
+      entries.push({
+        threadId: thread.id,
+        message: entry.text,
+        timestamp: entry.timestamp,
+        projectName: workspace.name,
+        groupName: params.getWorkspaceGroupName(workspace.id),
+        workspaceId: workspace.id,
+        isProcessing: params.threadStatusById[thread.id]?.isProcessing ?? false,
+      });
+    });
+  });
+  return entries.sort((a, b) => b.timestamp - a.timestamp).slice(0, params.limit ?? 3);
+}
+
+function legacyBuildRecentThreadsSnapshot(params: {
+  activeWorkspaceId: string | null;
+  threadsByWorkspace: Record<string, Array<{ id: string; updatedAt: number; name?: string | null }>>;
+  recentThreadLimit: number;
+}): {
+  recentThreadInstances: RecentThreadInstance[];
+  recentThreadsUpdatedAt: number | null;
+} {
+  if (!params.activeWorkspaceId) {
+    return { recentThreadInstances: [], recentThreadsUpdatedAt: null };
+  }
+  const threads = params.threadsByWorkspace[params.activeWorkspaceId] ?? [];
+  if (threads.length === 0) {
+    return { recentThreadInstances: [], recentThreadsUpdatedAt: null };
+  }
+  const sorted = [...threads].sort((a, b) => b.updatedAt - a.updatedAt);
+  const slice = sorted.slice(0, params.recentThreadLimit);
+  const updatedAt = slice.reduce(
+    (max, thread) => (thread.updatedAt > max ? thread.updatedAt : max),
+    0,
+  );
+  const instances = slice.map((thread, index) => ({
+    id: `recent-${thread.id}`,
+    workspaceId: params.activeWorkspaceId as string,
+    threadId: thread.id,
+    modelId: null,
+    modelLabel: thread.name?.trim() || "未命名对话",
+    sequence: index + 1,
+  }));
+  return {
+    recentThreadInstances: instances,
+    recentThreadsUpdatedAt: updatedAt > 0 ? updatedAt : null,
+  };
 }
 
 function summarizeCommandItems(
@@ -591,5 +667,56 @@ describe("appUiHelpers contract", () => {
 
     runScenario(true);
     runScenario(false);
+  });
+
+  it("keeps latest agent runs derivation semantics", () => {
+    const workspaces = [
+      { id: "w1", name: "Workspace A" },
+      { id: "w2", name: "Workspace B" },
+    ] as WorkspaceInfo[];
+    const params = {
+      workspaces,
+      threadsByWorkspace: {
+        w1: [{ id: "t1" }, { id: "t2" }, { id: "t3" }],
+        w2: [{ id: "t4" }],
+      },
+      lastAgentMessageByThread: {
+        t1: { text: "A-1", timestamp: 100 },
+        t2: { text: "A-2", timestamp: 500 },
+        t4: { text: "B-1", timestamp: 300 },
+      },
+      threadStatusById: {
+        t1: { isProcessing: true },
+        t2: { isProcessing: false },
+        t4: {},
+      },
+      getWorkspaceGroupName: (workspaceId: string) => (workspaceId === "w1" ? "Group-1" : null),
+      limit: 2,
+    };
+
+    expect(buildLatestAgentRuns(params)).toEqual(legacyBuildLatestAgentRuns(params));
+  });
+
+  it("keeps recent threads snapshot derivation semantics", () => {
+    const params = {
+      activeWorkspaceId: "w1",
+      threadsByWorkspace: {
+        w1: [
+          { id: "t1", updatedAt: 30, name: " Alpha " },
+          { id: "t2", updatedAt: 50, name: "" },
+          { id: "t3", updatedAt: 10 },
+        ],
+      },
+      recentThreadLimit: 2,
+    };
+    const emptyWorkspaceParams = {
+      ...params,
+      activeWorkspaceId: null,
+    };
+
+    expect(buildRecentThreadsSnapshot(params)).toEqual(legacyBuildRecentThreadsSnapshot(params));
+    expect(buildRecentThreadsSnapshot(emptyWorkspaceParams)).toEqual(
+      legacyBuildRecentThreadsSnapshot(emptyWorkspaceParams),
+    );
   });
 });

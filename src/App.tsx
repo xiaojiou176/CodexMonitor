@@ -150,6 +150,8 @@ import {
   useThreadSelectionHandlersOrchestration,
 } from "./features/app/orchestration/useThreadOrchestration";
 import {
+  buildLatestAgentRuns,
+  buildRecentThreadsSnapshot,
   buildAppCssVars,
   buildCommandPaletteItems,
   buildCompactThreadConnectionIndicatorMeta,
@@ -1452,34 +1454,14 @@ function MainApp() {
   });
 
   const latestAgentRuns = useMemo(() => {
-    const entries: Array<{
-      threadId: string;
-      message: string;
-      timestamp: number;
-      projectName: string;
-      groupName?: string | null;
-      workspaceId: string;
-      isProcessing: boolean;
-    }> = [];
-    workspaces.forEach((workspace) => {
-      const threads = threadsByWorkspace[workspace.id] ?? [];
-      threads.forEach((thread) => {
-        const entry = lastAgentMessageByThread[thread.id];
-        if (!entry) {
-          return;
-        }
-        entries.push({
-          threadId: thread.id,
-          message: entry.text,
-          timestamp: entry.timestamp,
-          projectName: workspace.name,
-          groupName: getWorkspaceGroupName(workspace.id),
-          workspaceId: workspace.id,
-          isProcessing: threadStatusById[thread.id]?.isProcessing ?? false
-        });
-      });
+    return buildLatestAgentRuns({
+      workspaces,
+      threadsByWorkspace,
+      lastAgentMessageByThread,
+      threadStatusById,
+      getWorkspaceGroupName,
+      limit: 3,
     });
-    return entries.sort((a, b) => b.timestamp - a.timestamp).slice(0, 3);
   }, [
     lastAgentMessageByThread,
     getWorkspaceGroupName,
@@ -1799,31 +1781,11 @@ function MainApp() {
   });
   const RECENT_THREAD_LIMIT = 8;
   const { recentThreadInstances, recentThreadsUpdatedAt } = useMemo(() => {
-    if (!activeWorkspaceId) {
-      return { recentThreadInstances: [], recentThreadsUpdatedAt: null };
-    }
-    const threads = threadsByWorkspace[activeWorkspaceId] ?? [];
-    if (threads.length === 0) {
-      return { recentThreadInstances: [], recentThreadsUpdatedAt: null };
-    }
-    const sorted = [...threads].sort((a, b) => b.updatedAt - a.updatedAt);
-    const slice = sorted.slice(0, RECENT_THREAD_LIMIT);
-    const updatedAt = slice.reduce(
-      (max, thread) => (thread.updatedAt > max ? thread.updatedAt : max),
-      0,
-    );
-    const instances = slice.map((thread, index) => ({
-      id: `recent-${thread.id}`,
-      workspaceId: activeWorkspaceId,
-      threadId: thread.id,
-      modelId: null,
-      modelLabel: thread.name?.trim() || "未命名对话",
-      sequence: index + 1,
-    }));
-    return {
-      recentThreadInstances: instances,
-      recentThreadsUpdatedAt: updatedAt > 0 ? updatedAt : null,
-    };
+    return buildRecentThreadsSnapshot({
+      activeWorkspaceId,
+      threadsByWorkspace,
+      recentThreadLimit: RECENT_THREAD_LIMIT,
+    });
   }, [activeWorkspaceId, threadsByWorkspace]);
   const {
     content: agentMdContent,
