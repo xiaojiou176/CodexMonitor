@@ -62,7 +62,8 @@ describe("PinnedThreadList", () => {
       "reviewing",
     );
     expect(screen.getByLabelText("已置顶")).not.toBeNull();
-    expect(row.getAttribute("role")).not.toBe("button");
+    expect(row.getAttribute("role")).toBe("button");
+    expect(row.getAttribute("tabindex")).toBe("0");
     expect(
       screen.getByRole("button", { name: "更多操作" }).getAttribute("tabindex"),
     ).not.toBe("-1");

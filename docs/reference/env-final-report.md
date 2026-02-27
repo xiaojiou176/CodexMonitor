@@ -2,6 +2,12 @@
 
 Date: 2026-02-26
 
+## Smoke Stability Follow-up Update (2026-02-27)
+
+- Stabilized smoke E2E to avoid state-coupled flaky checks while preserving deterministic entry-point coverage across Chromium/WebKit.
+- Updated pinned-thread row tests to match keyboard-accessible row semantics introduced by sidebar accessibility hardening.
+- Evidence code paths: `e2e/smoke.spec.ts`, `src/features/app/components/PinnedThreadList.test.tsx`, `CHANGELOG.md`.
+
 ## UI A11y + Functional Gate Hardening Update (2026-02-27)
 
 - Thread list primary row interaction is now keyboard-accessible (`Enter`/`Space`) with explicit focusability and role semantics.

@@ -11,6 +11,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Stabilized smoke E2E surfaces by removing brittle state-coupled assertions and keeping smoke focused on deterministic entry-point availability across Chromium/WebKit.
+- Aligned pinned thread row tests with updated keyboard-accessible row semantics (`role="button"` + `tabIndex=0`) after accessibility hardening.
 - Increased non-threads frontend coverage with new branch-focused tests for workspace URL prompt UI, GitHub PR comments/diffs hooks, workspace group domain edge cases, and request-user-input rendering/answer construction paths.
 - Evidence code paths: `src/features/workspaces/components/WorkspaceFromUrlPrompt.test.tsx`, `src/features/git/hooks/useGitHubPullRequestComments.test.tsx`, `src/features/git/hooks/useGitHubPullRequestDiffs.test.tsx`, `src/features/workspaces/domain/workspaceGroups.test.ts`, `src/features/app/components/RequestUserInputMessage.test.tsx`.
 - Added reducer edge/no-op branch tests for `threads` to improve branch-path coverage around turn metadata normalization, parent rank cleanup, and status idempotency.
