@@ -17,6 +17,9 @@ const thresholdBreak = thresholdEnvRaw && thresholdEnvRaw.trim() !== ""
   ? Number(thresholdEnvRaw)
   : 80;
 const mutateEnvRaw = process.env.MUTATION_MUTATE;
+const mutationBaseSha = process.env.MUTATION_BASE_SHA?.trim() || "";
+const mutationHeadSha = process.env.MUTATION_HEAD_SHA?.trim() || "";
+const skipAssertionGuard = process.env.MUTATION_SKIP_ASSERTION_GUARD === "true";
 
 if (!Number.isFinite(thresholdBreak) || thresholdBreak < 0 || thresholdBreak > 100) {
   console.error(
@@ -70,6 +73,30 @@ function resolveDefaultMutateFiles() {
   return files;
 }
 
+function resolveChangedMutateFiles(baseSha, headSha) {
+  if (!baseSha || !headSha) {
+    return [];
+  }
+
+  const diffResult = spawnSync(
+    "git",
+    ["diff", "--name-only", baseSha, headSha],
+    { cwd: rootDir, encoding: "utf8" },
+  );
+  if (diffResult.status !== 0) {
+    throw new Error(
+      `mutation target diff failed for range ${baseSha}..${headSha}: ${diffResult.stderr?.trim() || "unknown error"}`,
+    );
+  }
+
+  return diffResult.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => line.endsWith(".ts") || line.endsWith(".tsx"))
+    .filter(isMutationTarget);
+}
+
 function npmCommand() {
   return process.platform === "win32" ? "npm.cmd" : "npm";
 }
@@ -101,15 +128,34 @@ function runCommand(name, args) {
 async function main() {
   try {
     await mkdir(reportDir, { recursive: true });
-    const mutate = mutateEnvRaw && mutateEnvRaw.trim() !== ""
+    const mutateFromEnv = mutateEnvRaw && mutateEnvRaw.trim() !== ""
       ? mutateEnvRaw
         .split(",")
         .map((value) => value.trim())
         .filter(Boolean)
-      : resolveDefaultMutateFiles();
+      : null;
+    const mutateFromDiff = !mutateFromEnv && mutationBaseSha && mutationHeadSha
+      ? resolveChangedMutateFiles(mutationBaseSha, mutationHeadSha)
+      : null;
+    const mutate = mutateFromEnv ?? (
+      mutateFromDiff && mutateFromDiff.length > 0
+        ? mutateFromDiff
+        : resolveDefaultMutateFiles()
+    );
 
-    console.log("[mutation-gate] Phase 1/2: assertion guard (anti-placebo)");
-    await runCommand("assertion-guard", ["run", "test:assertions:guard"]);
+    if (mutateFromDiff && mutateFromDiff.length === 0) {
+      console.log("[mutation-gate] No mutation targets changed in diff scope.");
+      console.log(`[mutation-gate] range=${mutationBaseSha}..${mutationHeadSha}`);
+      console.log("✅ Mutation gate skipped (no critical mutation targets in this change set)");
+      return;
+    }
+
+    if (skipAssertionGuard) {
+      console.log("[mutation-gate] Phase 1/2: assertion guard skipped (MUTATION_SKIP_ASSERTION_GUARD=true)");
+    } else {
+      console.log("[mutation-gate] Phase 1/2: assertion guard (anti-placebo)");
+      await runCommand("assertion-guard", ["run", "test:assertions:guard"]);
+    }
 
     const config = buildMutationConfig({ mutate, thresholdBreak });
     const configBody = `export default ${JSON.stringify(config, null, 2)};\n`;
@@ -117,6 +163,13 @@ async function main() {
 
     console.log("[mutation-gate] Phase 2/2: mutation testing (critical modules only)");
     console.log(`[mutation-gate] threshold.break=${thresholdBreak}`);
+    if (mutateFromEnv) {
+      console.log("[mutation-gate] scope=env(MUTATION_MUTATE)");
+    } else if (mutateFromDiff) {
+      console.log(`[mutation-gate] scope=git-diff(${mutationBaseSha}..${mutationHeadSha})`);
+    } else {
+      console.log("[mutation-gate] scope=default(critical modules)");
+    }
     console.log(`[mutation-gate] mutate=${mutate.join(", ")}`);
     console.log(`[mutation-gate] tempConfig=${tempConfigPath}`);
 

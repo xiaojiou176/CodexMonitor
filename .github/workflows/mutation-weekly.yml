@@ -48,27 +48,27 @@ jobs:
 
   mutation-js:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
       contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - name: Detect Stryker config
+      - name: Detect JS mutation gate
         id: detect_js
         run: |
           set -euo pipefail
-          if [ -f "stryker.conf.js" ] || \
-             [ -f "stryker.conf.cjs" ] || \
-             [ -f "stryker.conf.mjs" ] || \
-             [ -f "stryker.conf.json" ] || \
-             [ -f "stryker.conf.ts" ]; then
+          if [ -f "scripts/mutation-gate.mjs" ] && \
+             [ -f "scripts/mutation-stryker.config.mjs" ] && \
+             [ -f "package.json" ] && \
+             rg -q '"test:mutation:gate"\s*:' package.json; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "should_run=false" >> "$GITHUB_OUTPUT"
-      - name: Skip Stryker (no config)
+      - name: Skip JS mutation gate (not configured)
         if: steps.detect_js.outputs.should_run != 'true'
-        run: echo "No Stryker config found; skipping JS mutation tests."
+        run: echo "No JS mutation gate found; skipping JS mutation tests."
       - name: Setup Node
         if: steps.detect_js.outputs.should_run == 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -78,9 +78,11 @@ jobs:
       - name: Install dependencies
         if: steps.detect_js.outputs.should_run == 'true'
         run: npm ci
-      - name: Run Stryker
+      - name: Run JS mutation gate (full critical scope)
         if: steps.detect_js.outputs.should_run == 'true'
-        run: npx stryker run
+        env:
+          MUTATION_SKIP_ASSERTION_GUARD: "true"
+        run: npm run test:mutation:gate
 
   mutation-rust:
     runs-on: ubuntu-latest
