@@ -429,6 +429,42 @@ describe("threadItems", () => {
     expect(prepared[0].kind).toBe("tool");
   });
 
+  it("keeps raw command item when command text is empty after Command prefix", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "cmd-empty-1",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command:   ",
+        detail: "",
+        status: "completed",
+        output: "",
+      },
+    ];
+
+    const prepared = prepareThreadItems(items);
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0].kind).toBe("tool");
+  });
+
+  it("keeps raw command item when rg has no positional query", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "cmd-empty-2",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command: rg -n --hidden",
+        detail: "",
+        status: "completed",
+        output: "",
+      },
+    ];
+
+    const prepared = prepareThreadItems(items);
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0].kind).toBe("tool");
+  });
+
   it("builds file change items with summary details", () => {
     const item = buildConversationItem({
       type: "fileChange",
@@ -919,6 +955,79 @@ describe("threadItems", () => {
       expect(prepared[0].changes?.[0]?.diff).not.toBe(longDiff);
       expect(prepared[0].changes?.[0]?.diff?.endsWith("...")).toBe(true);
       expect(prepared[1].changes?.[0]?.diff).toBe(longDiff);
+    }
+  });
+
+  it("does not truncate old tool output at exact 20000-char boundary", () => {
+    const exact = "o".repeat(20000);
+    const items: ConversationItem[] = Array.from({ length: 41 }, (_, index) => ({
+      id: `tool-boundary-${index}`,
+      kind: "tool",
+      toolType: "webSearch",
+      title: "Tool",
+      detail: "",
+      output: exact,
+    }));
+
+    const prepared = prepareThreadItems(items);
+    expect(prepared[0].kind).toBe("tool");
+    if (prepared[0].kind === "tool") {
+      expect(prepared[0].output).toBe(exact);
+      expect(prepared[0].output?.endsWith("...")).toBe(false);
+    }
+  });
+
+  it("truncates old tool output at 20001 chars to 20000 with ellipsis", () => {
+    const over = "p".repeat(20001);
+    const items: ConversationItem[] = Array.from({ length: 41 }, (_, index) => ({
+      id: `tool-boundary-over-${index}`,
+      kind: "tool",
+      toolType: "webSearch",
+      title: "Tool",
+      detail: "",
+      output: over,
+    }));
+
+    const prepared = prepareThreadItems(items);
+    expect(prepared[0].kind).toBe("tool");
+    if (prepared[0].kind === "tool") {
+      expect(prepared[0].output).not.toBe(over);
+      expect(prepared[0].output?.length).toBe(20000);
+      expect(prepared[0].output?.endsWith("...")).toBe(true);
+    }
+  });
+
+  it("does not append duplicate skill token when mention contains punctuation boundary", () => {
+    const item = buildConversationItemFromThreadItem({
+      type: "userMessage",
+      id: "msg-skill-8",
+      content: [
+        { type: "text", text: "请执行 $深度调试模式，完成后汇报。" },
+        { type: "skill", name: "深度调试模式" },
+      ],
+    });
+
+    expect(item).not.toBeNull();
+    if (item && item.kind === "message") {
+      expect(item.role).toBe("user");
+      expect(item.text).toBe("请执行 $深度调试模式，完成后汇报。");
+    }
+  });
+
+  it("does not append duplicate skill token when mention uses multi-space separated words", () => {
+    const item = buildConversationItemFromThreadItem({
+      type: "userMessage",
+      id: "msg-skill-9",
+      content: [
+        { type: "text", text: "Please run $deep    debug   mode right away" },
+        { type: "skill", name: "deep debug mode" },
+      ],
+    });
+
+    expect(item).not.toBeNull();
+    if (item && item.kind === "message") {
+      expect(item.role).toBe("user");
+      expect(item.text).toBe("Please run $deep    debug   mode right away");
     }
   });
 

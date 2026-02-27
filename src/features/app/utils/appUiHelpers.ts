@@ -67,6 +67,22 @@ export function deriveShowCompactCodexThreadActions(params: {
   );
 }
 
+export function deriveShowComposer(params: {
+  isCompact: boolean;
+  centerMode: "chat" | "diff";
+  isTablet: boolean;
+  tabletTab: "codex" | "git" | "log";
+  activeTab: AppTab;
+  showWorkspaceHome: boolean;
+}): boolean {
+  return (
+    (params.isCompact
+      ? (params.isTablet ? params.tabletTab : params.activeTab) === "codex"
+      : params.centerMode === "chat" || params.centerMode === "diff") &&
+    !params.showWorkspaceHome
+  );
+}
+
 export function shouldLoadGitHubPanelData(params: {
   isGitPanelVisible: boolean;
   gitPanelMode: GitPanelMode;
@@ -114,6 +130,19 @@ export function buildCompactThreadConnectionIndicatorMeta(
     title: "Disconnected from backend",
     label: "Disconnected",
   };
+}
+
+export function deriveFileStatusLabel(params: {
+  hasError: boolean;
+  changedFileCount: number;
+}): string {
+  if (params.hasError) {
+    return "Git 状态不可用";
+  }
+  if (params.changedFileCount > 0) {
+    return `${params.changedFileCount} 个文件已更改`;
+  }
+  return "工作树无更改";
 }
 
 export function clampMessageFontSize(value: number): number {

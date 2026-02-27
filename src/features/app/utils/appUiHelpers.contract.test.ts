@@ -5,8 +5,10 @@ import {
   buildAppCssVars,
   buildCommandPaletteItems,
   buildCompactThreadConnectionIndicatorMeta,
+  deriveFileStatusLabel,
   buildGitStatusForPanel,
   deriveIsGitPanelVisible,
+  deriveShowComposer,
   deriveShowCompactCodexThreadActions,
   deriveTabletTab,
   resolveCompactThreadConnectionState,
@@ -95,6 +97,30 @@ function legacyCompactThreadConnectionIndicatorMeta(state: CompactThreadConnecti
           : "Disconnected from backend",
     label: state === "live" ? "Live" : state === "polling" ? "Polling" : "Disconnected",
   };
+}
+
+function legacyShowComposer(params: {
+  isCompact: boolean;
+  centerMode: "chat" | "diff";
+  isTablet: boolean;
+  tabletTab: "codex" | "git" | "log";
+  activeTab: AppTab;
+  showWorkspaceHome: boolean;
+}): boolean {
+  return (
+    (!params.isCompact
+      ? params.centerMode === "chat" || params.centerMode === "diff"
+      : (params.isTablet ? params.tabletTab : params.activeTab) === "codex") &&
+    !params.showWorkspaceHome
+  );
+}
+
+function legacyFileStatusLabel(params: { hasError: boolean; changedFileCount: number }): string {
+  return params.hasError
+    ? "Git 状态不可用"
+    : params.changedFileCount > 0
+      ? `${params.changedFileCount} 个文件已更改`
+      : "工作树无更改";
 }
 
 function legacyBuildGitStatusForPanel(params: {
@@ -324,6 +350,47 @@ describe("appUiHelpers contract", () => {
             }
           }
         }
+      }
+    }
+  });
+
+  it("keeps composer visibility derivation semantics", () => {
+    const bools = [true, false];
+    const centerModes: Array<"chat" | "diff"> = ["chat", "diff"];
+    const tabs: AppTab[] = ["home", "projects", "codex", "git", "log"];
+    const tabletTabs: Array<"codex" | "git" | "log"> = ["codex", "git", "log"];
+
+    for (const isCompact of bools) {
+      for (const centerMode of centerModes) {
+        for (const isTablet of bools) {
+          for (const tabletTab of tabletTabs) {
+            for (const activeTab of tabs) {
+              for (const showWorkspaceHome of bools) {
+                const params = {
+                  isCompact,
+                  centerMode,
+                  isTablet,
+                  tabletTab,
+                  activeTab,
+                  showWorkspaceHome,
+                };
+                expect(deriveShowComposer(params)).toBe(legacyShowComposer(params));
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("keeps file status label semantics", () => {
+    const bools = [true, false];
+    const changedFileCounts = [0, 1, 3, 99];
+
+    for (const hasError of bools) {
+      for (const changedFileCount of changedFileCounts) {
+        const params = { hasError, changedFileCount };
+        expect(deriveFileStatusLabel(params)).toBe(legacyFileStatusLabel(params));
       }
     }
   });

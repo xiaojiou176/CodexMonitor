@@ -153,10 +153,12 @@ import {
   buildAppCssVars,
   buildCommandPaletteItems,
   buildCompactThreadConnectionIndicatorMeta,
+  deriveFileStatusLabel,
   buildGitStatusForPanel,
   clampMessageFontSize,
   countDiffLineStats,
   deriveIsGitPanelVisible,
+  deriveShowComposer,
   deriveShowCompactCodexThreadActions,
   deriveTabletTab,
   type DiffLineStats,
@@ -812,12 +814,10 @@ function MainApp() {
     clearGitRootCandidates,
     refreshGitStatus,
   });
-  const fileStatus =
-    gitStatusForPanel.error
-      ? "Git 状态不可用"
-      : gitStatusForPanel.files.length > 0
-        ? `${gitStatusForPanel.files.length} 个文件已更改`
-        : "工作树无更改";
+  const fileStatus = deriveFileStatusLabel({
+    hasError: Boolean(gitStatusForPanel.error),
+    changedFileCount: gitStatusForPanel.files.length,
+  });
 
   usePersistComposerSettings({
     appSettingsLoading,
@@ -1507,9 +1507,14 @@ function MainApp() {
   );
   const showHome = !activeWorkspace;
   const showWorkspaceHome = Boolean(activeWorkspace && !activeThreadId && !isNewAgentDraftMode);
-  const showComposer = (!isCompact
-    ? centerMode === "chat" || centerMode === "diff"
-    : (isTablet ? tabletTab : activeTab) === "codex") && !showWorkspaceHome;
+  const showComposer = deriveShowComposer({
+    isCompact,
+    centerMode,
+    isTablet,
+    tabletTab,
+    activeTab,
+    showWorkspaceHome,
+  });
   const { files, isLoading: isFilesLoading, setFileAutocompleteActive } =
     useWorkspaceFileListing({
       activeWorkspace,

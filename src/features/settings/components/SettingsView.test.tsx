@@ -429,6 +429,37 @@ describe("SettingsView Display", () => {
     });
   });
 
+  it("skips font updates when normalized value is unchanged", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({
+      onUpdateAppSettings,
+      appSettings: {
+        uiFontFamily: 'Avenir, "Helvetica Neue", sans-serif',
+        codeFontFamily: "JetBrains Mono, monospace",
+      },
+    });
+
+    fireEvent.change(screen.getByLabelText("界面字体"), {
+      target: { value: 'Avenir, "Helvetica Neue", sans-serif' },
+    });
+    fireEvent.blur(screen.getByLabelText("界面字体"));
+
+    fireEvent.change(screen.getByLabelText("代码字体"), {
+      target: { value: "JetBrains Mono, monospace" },
+    });
+    fireEvent.keyDown(screen.getByLabelText("代码字体"), { key: "Enter" });
+
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("界面字体") as HTMLInputElement).value,
+      ).toBe('Avenir, "Helvetica Neue", sans-serif');
+      expect((screen.getByLabelText("代码字体") as HTMLInputElement).value).toBe(
+        "JetBrains Mono, monospace",
+      );
+    });
+    expect(onUpdateAppSettings).not.toHaveBeenCalled();
+  });
+
   it("resets font families to defaults", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderDisplaySection({ onUpdateAppSettings });
@@ -653,5 +684,17 @@ describe("SettingsView Environments", () => {
           .disabled,
       ).toBe(true);
     });
+  });
+
+  it("keeps save disabled when environment script has no changes", async () => {
+    const onUpdateWorkspaceSettings = vi.fn().mockResolvedValue(undefined);
+    renderEnvironmentsSection({ onUpdateWorkspaceSettings });
+
+    expect(
+      (screen.getByRole("button", { name: "保存" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(onUpdateWorkspaceSettings).not.toHaveBeenCalled();
   });
 });

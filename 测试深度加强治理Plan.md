@@ -81,6 +81,28 @@
   - `branches: 1.64pp`
 - 结论：增速稳定，但若要冲到 80，必须进入 `App.tsx` 主体结构化拆分与主流程集成测试并行攻坚阶段（仅靠局部补测已接近收益递减）。
 
+### Wave-12 最新进展（2026-02-27）
+
+- 本波并发 5 路，继续压 0%/低覆盖并补 App 第三轮可测性拆分：
+  - `src/features/app/utils/appUiHelpers.ts`
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`
+  - `src/App.tsx`
+  - `src/utils/threadItems.test.ts`
+  - `src/features/settings/components/SettingsView.test.tsx`
+  - `src/features/settings/components/SettingsView.features-layout-shortcuts.test.tsx`
+  - `src/features/settings/components/SettingsView.codex-overrides.test.tsx`
+  - `src/features/app/hooks/useRemoteThreadLiveConnection.wave9b.test.tsx`
+  - `src/features/terminal/components/TerminalDock.test.tsx`（新增）
+- strict 覆盖门禁继续提升到：
+  - `statements/lines: 71.94%`
+  - `functions: 76.48%`
+  - `branches: 78.53%`
+- 距离 80 终态剩余差距：
+  - `lines/statements: 8.06pp`
+  - `functions: 3.52pp`
+  - `branches: 1.47pp`
+- 阶段判断：已完成多轮“外围高 ROI 扫荡”，下一轮必须进入 `App.tsx` 主体流程拆分 + App 级集成测试双线并发，才能继续保持同等增速。
+
 ---
 
 ## 2. 当前已做到什么（优势盘点）

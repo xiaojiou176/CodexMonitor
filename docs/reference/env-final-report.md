@@ -109,6 +109,25 @@ Date: 2026-02-26
 - Evidence artifact:
   - `.runtime-cache/coverage/vitest-gate/1772183272258-96724-9v9x2s`
 
+## Coverage Wave-12 Update (2026-02-27)
+
+- Added another parallel batch for App-adjacent parity and low-coverage hotspots:
+  - `src/features/app/utils/appUiHelpers.ts`
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`
+  - `src/App.tsx`
+  - `src/utils/threadItems.test.ts`
+  - `src/features/settings/components/SettingsView.test.tsx`
+  - `src/features/settings/components/SettingsView.features-layout-shortcuts.test.tsx`
+  - `src/features/settings/components/SettingsView.codex-overrides.test.tsx`
+  - `src/features/app/hooks/useRemoteThreadLiveConnection.wave9b.test.tsx`
+  - `src/features/terminal/components/TerminalDock.test.tsx`
+- Strict coverage gate evidence (`npm run test:coverage:gate:strict`):
+  - statements/lines: `71.94%`
+  - functions: `76.48%`
+  - branches: `78.53%`
+- Evidence artifact:
+  - `.runtime-cache/coverage/vitest-gate/1772184442085-47607-wpc2ly`
+
 ## Env Variant Files
 
 - `.env` (5 keys)

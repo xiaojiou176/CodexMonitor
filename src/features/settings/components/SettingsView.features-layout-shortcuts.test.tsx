@@ -229,6 +229,25 @@ describe("SettingsView Features", () => {
     });
   });
 
+  it("falls back to generic open config error for non-Error failures", async () => {
+    vi.spyOn(tauriService, "getCodexConfigPath").mockRejectedValue("boom");
+    renderFeaturesSection();
+
+    const configRow = screen
+      .getByText("配置文件")
+      .closest(".settings-toggle-row") as HTMLElement | null;
+    expect(configRow).not.toBeNull();
+    if (!configRow) {
+      throw new Error("Expected config row");
+    }
+
+    fireEvent.click(within(configRow).getByRole("button"));
+
+    await waitFor(() => {
+      expect(screen.getByText("无法打开配置文件。")).not.toBeNull();
+    });
+  });
+
   it("updates personality selection", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderFeaturesSection({ onUpdateAppSettings });
@@ -520,6 +539,58 @@ describe("SettingsView Features", () => {
         expect.objectContaining({
           commitMessagePrompt: "请基于 {diff} 生成简洁且可审核的提交说明。",
         }),
+      );
+    });
+  });
+
+  it("disables commit prompt actions while save is pending", async () => {
+    let resolveSave: (() => void) | null = null;
+    const onUpdateAppSettings = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    renderFeaturesSection({ onUpdateAppSettings });
+
+    fireEvent.click(screen.getByRole("button", { name: "Git" }));
+    await waitFor(() => {
+      expect(
+        screen.getByText("Commit Message 生成提示词", {
+          selector: ".settings-field-label",
+        }),
+      ).not.toBeNull();
+    });
+
+    const field = screen
+      .getByText("Commit Message 生成提示词", { selector: ".settings-field-label" })
+      .closest(".settings-field");
+    expect(field).not.toBeNull();
+    if (!field) {
+      throw new Error("Expected commit message prompt field");
+    }
+
+    const textarea = within(field).getByRole("textbox") as HTMLTextAreaElement;
+    fireEvent.change(textarea, {
+      target: { value: "pending save prompt" },
+    });
+    fireEvent.click(within(field).getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(
+        within(field).getByRole("button", { name: "保存中..." }),
+      ).not.toBeNull();
+      expect((within(field).getByRole("button", { name: "重置" }) as HTMLButtonElement).disabled).toBe(
+        true,
+      );
+      expect(textarea.disabled).toBe(true);
+    });
+
+    resolveSave?.();
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ commitMessagePrompt: "pending save prompt" }),
       );
     });
   });
