@@ -41,6 +41,12 @@ Date: 2026-02-26
 - Preflight/pre-push governance now includes Rust `--lib --bins` verification in orchestrated local checks.
 - Evidence code paths: `.github/workflows/ci.yml`, `.github/workflows/real-integration.yml`, `.github/workflows/release.yml`, `scripts/coverage-gate.mjs`, `scripts/coverage-gate.test.mjs`, `scripts/preflight-orchestrated.mjs`, `scripts/check-env-count.mjs`.
 
+## UI Quality Workflow Update (2026-02-27)
+
+- Added dedicated Chromatic workflow for Storybook visual regression gate in GitHub Actions.
+- Storybook baseline config now supports repository-safe build and stable publish path for Chromatic.
+- Evidence code paths: `.github/workflows/chromatic.yml`, `.storybook/main.js`, `.storybook/preview.js`, `src/features/design-system/components/modal/ModalShell.stories.tsx`.
+
 ## Env Variant Files
 
 - `.env` (5 keys)
