@@ -62,7 +62,17 @@ npm run test:assertions:guard
 - Type Gate: `npm run typecheck`
 - Doc-Drift Gate: 行为/配置/接口变更需同步文档
 - Pre-commit Phase 2（并行）含：`check:critical-path-logging`、`check:secrets:staged`、`check:keys:source-policy`、`check:real-llm-alias-usage`、`env:doctor:staged`、`env:rationalize:check`、`check:lazy-load:evidence-gate`、`check:compat:option-log`
-- Pre-push 新规则（仓库级强制）：`npm run preflight:orchestrated` 的 Phase 2 同时执行 `npm run check:rust` 与 `npm run test:rust:lib-bins`
+- Pre-push 新规则（仓库级强制）：`npm run preflight:orchestrated` 的 Phase 2 同时执行 `npm run test` 与 `npm run check:rust`
+
+## 分层治理口径（前端执行视角）
+
+1. `pre-commit`：快速防线，优先拦截 staged 风险。
+2. `pre-push`：中强防线，执行基线门禁 + `test`/`check:rust` 并行任务。
+3. `CI`：最终裁决，门禁强度最高。
+- `a11y` gate：`npx playwright test e2e/a11y.spec.ts --project=chromium`（`.github/workflows/ci.yml`）。
+- `interaction-sweep` gate：`npx playwright test e2e/interaction-sweep.spec.ts --project=chromium`（`.github/workflows/ci.yml`）。
+- strict main 真链路 gate：`.github/workflows/real-integration.yml`（main 双链路强制）。
+- 视觉 gate：`.github/workflows/ci.yml` 的 `visual-regression`（`chromatic.yml` 仅手动补跑）。
 
 ## 变更注意事项
 

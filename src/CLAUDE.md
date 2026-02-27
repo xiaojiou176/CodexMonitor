@@ -54,7 +54,17 @@ npm run test:coverage:gate
 ## Hook Gate 对齐
 
 - pre-commit Phase 2（并行）包含 `check:critical-path-logging` 在内的安全与合规 gate，遵循 `scripts/precommit-orchestrated.mjs`。
-- pre-push（`npm run preflight:orchestrated`）Phase 2 强制执行 Rust `check + test`：`npm run check:rust` + `npm run test:rust:lib-bins`。
+- pre-push（`npm run preflight:orchestrated`）Phase 2 执行中强并行任务：`npm run test` + `npm run check:rust`。
+
+## 门禁分层（pre-commit < pre-push < CI）
+
+1. pre-commit：快速防线，偏 staged 风险拦截。
+2. pre-push：中强防线，执行基线门禁 + `test`/`check:rust` 并行任务。
+3. CI：最严格最终裁决，负责高成本门禁与证据归档。
+- a11y：`npx playwright test e2e/a11y.spec.ts --project=chromium`（`ci.yml`）。
+- interaction-sweep：`npx playwright test e2e/interaction-sweep.spec.ts --project=chromium`（`ci.yml`）。
+- strict main 真链路：`real-integration.yml`（main 双链路强制，不可 silent skip-green）。
+- 视觉回归：`ci.yml` 的 `visual-regression`（`chromatic.yml` 为手动补跑）。
 
 ## 变更注意事项
 

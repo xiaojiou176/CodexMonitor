@@ -506,8 +506,8 @@ Context：
 3. `D3 浏览器矩阵最低标准`：`A Chromium + WebKit`
    - 规则：关键旅程至少在 Chromium 与 WebKit 两套引擎通过。
 
-4. `D4 Rust 本地门禁强度`：`A pre-push 强制 cargo test`
-   - 规则：本地 pre-push 必跑 Rust 行为测试，禁止仅靠 CI 兜底。
+4. `D4 Rust 本地门禁强度`：`B 仅 CI 强制，本地维持 check`
+   - 规则：本地 pre-push 以 `check:rust` 为主，Rust 行为测试上收 CI 严格执行。
 
 5. `D5 外部工具引入策略`：`A 积极引入`
    - 规则：按 Phase 逐步引入外部能力（Chromatic/a11y/报表），以“可验证收益”为准入标准。
@@ -519,15 +519,17 @@ Context：
 
 ---
 
-## 9.2 决策变更记录（预留）
+## 9.2 决策变更记录
 
-当前为空。首次变更时按以下模板追加：
-
-1. 变更日期：
-2. 变更项（D1-D5）：
-3. 原决策 -> 新决策：
+1. 变更日期：2026-02-27
+2. 变更项（D4 Rust 本地门禁强度）
+3. 原决策 -> 新决策：`A pre-push 强制 cargo test` -> `B 仅 CI 强制，本地维持 check`
 4. 变更原因：
+ - Owner 新指令要求“轻微弱化 pre-push，把重任务上收 CI”，并保持分层递进（pre-commit < pre-push < CI）。
+ - 在当前仓库中，Rust 行为测试放在 CI 的跨平台矩阵执行更稳定、更可审计。
 5. 影响评估：
+ - 本地 push 延迟下降，开发反馈更快。
+ - 远端 CI 风险拦截更集中，依赖 `required-gate` + `build/test-tauri` 严格兜底。
 6. 回滚条件：
 
 ---
@@ -1045,7 +1047,7 @@ Context：
 - ✅ 完成：coverage 语义修正（global + critical 双层）  
 - ✅ 完成：移除 mutation 跳过 assertion guard  
 - ✅ 完成：env-count-check 修复为读取 `variables[]`  
-- ✅ 完成：pre-push 强制 Rust `cargo test --lib --bins`  
+- ✅ 完成：pre-push 中强化（Phase 2：`test` + `check:rust`）并将更重验证上收 CI  
 - ✅ 完成：critical logging guard 默认 fail（CI 阻断）  
 - ✅ 完成：README/AGENTS/模块文档口径同步
 
@@ -1103,27 +1105,50 @@ Context：
 本规则作为 D1 严格模式的执行细则，要求 CI 与编排脚本同时满足：
 
 1. `.github/workflows/real-integration.yml`
-- 对 `main`、`workflow_dispatch`、`schedule` 触发执行严格门禁。
+- 在 `main` 分支执行 strict gate（含 push/manual/schedule 的 main 运行）。
 - 严格门禁必须校验：
-  - `runAny=true`
-  - `status=passed`
-  - `checks[]` 中至少 1 条 `status=ok`
+  - `preflight` 状态为 `passed`
+  - `run_external=true`
+  - `run_llm=true`
+  - `external-e2e` 结果为 `success`
+  - `real-llm` 结果为 `success`
 - 若不满足任一条件，工作流必须失败，不允许“跳过但绿”。
 
-2. `scripts/preflight-orchestrated.mjs`
-- 增加 `PREFLIGHT_REQUIRE_LIVE` 严格校验开关（CI 默认开启）。
-- 当开关开启时，必须读取 `.runtime-cache/test_output/live-preflight/latest.json` 并执行同等判定：
-  - `runAny=true`
-  - `status=passed`
-  - `ok` 检查数 >= 1
-- 判定失败时必须直接中断 preflight。
+2. `.github/workflows/ci.yml`
+- 新增 `required-gate` 聚合门禁，按 `changes` 输出判定哪些条件任务必须成功。
+- 在 `main` 分支强制 `visual-regression` 成功，避免视觉回归 silent skip。
 
 3. 审计证据要求
 - 必须保留并可追溯：
   - `live-preflight/latest.json`
-  - GitHub Step Summary 中的 strict gate 结果
+  - GitHub Step Summary/Job 日志中的 strict gate 结果
   - 失败时的 missing/failed prerequisites 列表
 - 无上述证据视为“未完成真链路验证”。
+
+### 13.2B 文档规则同构：分层治理定义（pre-commit < pre-push < CI）
+
+本节作为 README/AGENTS/src 文档对齐锚点，统一对外口径：
+
+1. pre-commit（快速防线）
+- 目标：在最短耗时内拦截 staged 风险。
+- 执行入口：`npm run precommit:orchestrated`。
+- 重点任务：doc-drift、secrets/key-source、critical logging、assertion guard、lint。
+
+2. pre-push（中强防线）
+- 目标：在本地 push 前执行“比 pre-commit 重、比 CI 轻”的并行重任务。
+- 执行入口：`npm run preflight:orchestrated`。
+- Phase 1 基线集：`preflight:doc-drift (branch)`、`env:rationalize:check`、`env:doctor:dev`、`preflight:quick`、`test:assertions:guard`、`guard:reuse-search`、`lint:strict`。
+- Phase 2 中强集：`npm run test`、`npm run check:rust`。
+
+3. CI（最严格最终裁决）
+- 目标：远端统一裁决 + 工件证据沉淀，防止本地环境差异。
+- 主工作流重任务集（`.github/workflows/ci.yml`）：coverage gate、mutation gate、跨浏览器 smoke、a11y、interaction-sweep、artifact 上传。
+- strict main 门禁地位：
+  - real-integration：`.github/workflows/real-integration.yml`，`main` 上双链路成功才通过。
+  - visual-regression：`.github/workflows/ci.yml`，主视觉门禁并纳入 `required-gate`。
+  - Chromatic standalone：`.github/workflows/chromatic.yml`，手动补跑与诊断。
+  - a11y：`npx playwright test e2e/a11y.spec.ts --project=chromium`（CI job 级质量门）。
+  - interaction-sweep：`npx playwright test e2e/interaction-sweep.spec.ts --project=chromium`（CI job 级质量门）。
 
 ### 13.3 当前验收口径
 

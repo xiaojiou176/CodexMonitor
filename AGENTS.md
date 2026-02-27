@@ -429,6 +429,25 @@ At the end of a task:
 8. If you changed Rust backend code, run `npm run check:rust` and `npm run test:rust:lib-bins`.
 9. Keep Husky hooks enabled (`pre-commit` and `pre-push`) so these checks run before pushing.
 
+## 门禁分层同构（pre-commit < pre-push < CI）
+
+为避免规则口径漂移，仓库采用分层治理并且严格递进：
+
+1. pre-commit（快速防线）
+- 入口：`npm run precommit:orchestrated`
+- 职责：staged doc-drift、安全/合规与断言/lint 的快速拦截。
+
+2. pre-push（中强防线）
+- 入口：`npm run preflight:orchestrated`
+- Phase 1 基线集：`preflight:doc-drift (branch)`、`env:rationalize:check`、`env:doctor:dev`、`preflight:quick`、`test:assertions:guard`、`guard:reuse-search`、`lint:strict`。
+- Phase 2 中强并行集：`npm run test`、`npm run check:rust`。
+
+3. CI（最终裁决）
+- 主工作流：`.github/workflows/ci.yml`，执行最重门禁并产出审计证据（含 a11y 与 interaction sweep）。
+- strict main 真链路门禁：`.github/workflows/real-integration.yml` 在 `main` 分支强制双链路成功（external + llm），不可 silent skip-green。
+- 主视觉门禁：`.github/workflows/ci.yml` 的 `visual-regression`（由 `required-gate` 在 `main` 强制）。
+- `chromatic.yml`：手动补跑与诊断专用（`workflow_dispatch`）。
+
 ## 测试与质量铁律（2026-02）
 
 This section is mandatory for all future AI code changes in this repository.

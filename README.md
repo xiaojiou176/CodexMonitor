@@ -317,6 +317,24 @@ npm run chromatic
 
 `chromatic` runs with `--storybook-build-dir storybook-static`, so it always publishes the output produced by `npm run build-storybook`.
 
+## Governance Layers (`pre-commit < pre-push < CI`)
+
+Quality gates are intentionally layered by strictness to avoid policy drift:
+
+1. `pre-commit` (fast frontline, local)
+   - Entry: `npm run precommit:orchestrated`
+   - Focus: staged doc-drift + staged security/compliance + assertion/lint fail-fast.
+2. `pre-push` (medium-strength frontline, local)
+   - Entry: `npm run preflight:orchestrated`
+   - Phase 1 baseline set: `preflight:doc-drift (branch)` + `env:rationalize:check` + `env:doctor:dev` + `preflight:quick` + `test:assertions:guard` + `guard:reuse-search` + `lint:strict`.
+   - Phase 2 medium parallel set: `npm run test` + `npm run check:rust`.
+3. `CI` (strict final arbitration, remote)
+   - Workflow jobs enforce the heaviest checks and evidence upload, including coverage/mutation/E2E/a11y/interaction sweeps and release-facing integration checks.
+   - Strict-main integration gate: `.github/workflows/real-integration.yml` enforces dual-chain success on `main` (`preflight` + `external-e2e` + `real-llm`) with no silent skip-green.
+   - Main visual gate: `.github/workflows/ci.yml` job `visual-regression` runs Chromatic and is enforced by `required-gate` on `main`.
+   - `.github/workflows/chromatic.yml` is standalone/manual (`workflow_dispatch`) for manual re-runs and diagnostics.
+   - Accessibility and interaction gates: `.github/workflows/ci.yml` runs `npx playwright test e2e/a11y.spec.ts --project=chromium` and `npx playwright test e2e/interaction-sweep.spec.ts --project=chromium`.
+
 Coverage gate policy (`scripts/coverage-gate.mjs`):
 
 - Global minimum thresholds are fixed at `>=80` for `statements`, `lines`, `functions`, and `branches`.
@@ -344,8 +362,8 @@ Git hooks are enforced with Husky:
   - `npm run check:commit-message:secrets -- "$1"`
   - `npx --no-install commitlint --edit "$1"`
 - `pre-push`: runs `npm run preflight:orchestrated`
-  - Phase 1 (short first): `preflight:doc-drift (branch)` + `env:rationalize:check` + `env:doctor:dev` + `preflight:quick` (`typecheck` only).
-  - Phase 2 (parallel long jobs): `test:coverage:gate` (strict 80/95), `check:rust`, `test:rust:lib-bins`, `test:smoke:ui`, and `test:live:preflight`.
+  - Phase 1 (baseline): `preflight:doc-drift (branch)` + `env:rationalize:check` + `env:doctor:dev` + `preflight:quick` (`typecheck`) + `test:assertions:guard` + `guard:reuse-search` + `lint:strict`.
+  - Phase 2 (parallel medium jobs): `test` + `check:rust`.
   - Heartbeat cadence is controlled by `PREFLIGHT_HEARTBEAT_LEVEL` (`quiet`/`normal`/`debug`), default `normal` cadence (60s interval, 60s minimum elapsed before emission).
   - Parallel failure output preserves task names, so gate failures are directly attributable to the failing job.
 
@@ -484,7 +502,7 @@ npm run test:real
 
 - Runs external Playwright check, then runs real LLM smoke test.
 - Workflow policy: `.github/workflows/real-integration.yml` runs on `main` push plus manual/weekly schedules.
-- On `main`, strict mode is enabled: if preflight finds no runnable real checks (`run_any=false`) or preflight status is not `passed`, the workflow fails (no silent skip-green).
+- On `main`, strict mode is enabled: external chain and LLM chain must both be runnable and both succeed, otherwise workflow fails (no silent skip-green).
 - The strict gate writes a step summary section listing missing/failed prerequisites (for example missing `REAL_EXTERNAL_URL`, `REAL_LLM_BASE_URL`, or `GEMINI_API_KEY`) and diagnostics.
 - On non-`main` triggers, the workflow keeps conditional execution for external E2E and real LLM jobs.
 - Long-running workflow steps emit 20s heartbeat logs to avoid no-output timeout ambiguity.
