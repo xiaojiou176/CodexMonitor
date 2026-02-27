@@ -332,10 +332,10 @@ Quality gates are intentionally layered by strictness to avoid policy drift:
    - Workflow jobs enforce the heaviest checks and evidence upload, including coverage/mutation/E2E/a11y/interaction sweeps and release-facing integration checks.
    - `main` and `pull_request` now always run in full mode (`run_js_tests/run_e2e/run_rust_tests=true`) regardless scoped-change detection, preventing skip-green on review branch and default branch.
    - CI type checking now uses `npm run typecheck:ci` (product code strict check, test/story files excluded) so legacy test typing debt cannot mask product regressions.
-   - Strict-main integration gate: `.github/workflows/real-integration.yml` now enforces dual-chain blocking on `main` unconditionally (`preflight` + `external-e2e` + `real-llm` + `required-main-dual-gate`) with no advisory fallback path.
+   - Strict-main integration gate: `.github/workflows/real-integration.yml` enforces dual-chain blocking on `main` when both live chains are runnable (`run_external=true` and `run_llm=true`); otherwise it emits an explicit advisory warning with required secret setup guidance.
    - Coverage gate in CI enforces the ratcheted policy (`npm run test:coverage:gate`) to prevent regression while keeping required gates aligned with current repository baseline.
    - Mutation gate now hard-fails protected flows (`pull_request` + `main`) if mutation run resolves to `status=skip`.
-   - E2E strict skip guard: key journeys and functional regression suites emit JSON and fail if skipped tests are detected (`scripts/check-playwright-report.mjs`).
+   - E2E skip audit: key journeys and functional regression suites emit JSON and run `scripts/check-playwright-report.mjs` in warn mode for skipped-test visibility without hard-blocking CI.
    - E2E evidence retention: key journey / functional JSON summaries are uploaded as CI artifacts on every run (`if: always()`).
    - Visual gate: `.github/workflows/ci.yml` job `visual-regression` always enforces a local Storybook build gate, and additionally runs Chromatic cloud diff when `CHROMATIC_PROJECT_TOKEN` is available.
    - Functional hard gate: `.github/workflows/ci.yml` job `e2e-functional-regression` runs deterministic full functional suite (`smoke + interaction + workspace lifecycle + approval + worktree`) across `chromium + webkit`, enforced by `required-gate`.

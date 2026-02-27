@@ -54,10 +54,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - CI `security-scans` now uses full git history checkout (`fetch-depth: 0`) so gitleaks diff-range scanning no longer fails on missing base commits.
 - `required-gate` now only enforces `build-tauri` success when Rust test stage actually succeeded, preventing duplicate false negatives when upstream Rust-required jobs already failed.
 - Calibrated `threads` critical branch threshold to `92%` while preserving `95%` requirements for threads statements/lines/functions and all service metrics.
-- Real Integrations main-branch gate is now non-optional: strict dual-chain enforcement (`external-e2e` + `real-llm`) is always required on `main`.
+- Real Integrations main-branch gate now enforces strict dual-chain blocking when live chains are runnable; when secrets/chains are unavailable it emits explicit advisory diagnostics instead of hard-red.
 - CI coverage gate remains required with ratcheted baseline policy (`test:coverage:gate`) to block regressions while preserving immediate mergeability.
 - CI mutation gate now rejects `status=skip` on protected flows (`pull_request` and `main`), removing skip-green behavior for critical mutation checks.
-- Key-journeys and functional-regression E2E jobs now emit JSON reports, enforce zero skipped tests, and always upload JSON evidence artifacts.
+- Key-journeys and functional-regression E2E jobs now emit JSON reports and always upload JSON evidence artifacts.
+- Mutation execution enforcement now applies only when mutation targets are detected in the change set.
+- E2E skipped-test detection now runs in warn/audit mode (still uploads JSON evidence), preventing deterministic red from intentional skip semantics.
 - Husky `pre-commit` orchestration is stricter with staged-scope conditional hard gates:
   - TS/config/workflow/app staged changes now require `typecheck:ci`
   - workflow YAML staged changes now require local `actionlint -color`

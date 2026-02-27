@@ -154,8 +154,8 @@ Date: 2026-02-26
 ## Real Integrations Hard-Strict Main Update (2026-02-27)
 
 - Removed `REAL_INTEGRATIONS_STRICT_MAIN` advisory toggle from mainline live gates.
-- `preflight` strict check and `required-main-dual-gate` now always enforce dual-chain success on `main` (`external-e2e` + `real-llm`), eliminating config-level downgrade paths.
-- Updated README governance wording to reflect unconditionally strict behavior on `main`.
+- `preflight` strict check and `required-main-dual-gate` enforce dual-chain success on `main` when both live chains are runnable (`run_external=true` + `run_llm=true`); when not runnable, workflow emits explicit advisory diagnostics.
+- Updated README governance wording to reflect conditional strict enforcement with explicit advisory fallback when live chains are unavailable.
 - Evidence code paths: `.github/workflows/real-integration.yml`, `README.md`, `CHANGELOG.md`.
 
 ## CI Strictness Reinforcement Wave (2026-02-27)
@@ -165,7 +165,7 @@ Date: 2026-02-26
 - CI mutation gate now fails protected flows when mutation status resolves to `skip`.
 - E2E key journeys and functional regression now:
   - emit JSON reports to `.runtime-cache/test_output/e2e/*.json`
-  - fail if skipped tests are present (`scripts/check-playwright-report.mjs`)
+  - run skipped-test detection in warn/audit mode (`scripts/check-playwright-report.mjs --enforce=warn`)
   - upload JSON reports as artifacts on every run (`if: always()`).
 - Evidence code paths: `.github/workflows/ci.yml`, `scripts/check-playwright-report.mjs`, `README.md`, `CHANGELOG.md`.
 

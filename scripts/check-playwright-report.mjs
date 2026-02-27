@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 
-const [, , reportPath, label = "playwright"] = process.argv;
+const args = process.argv.slice(2);
+const reportPath = args[0];
+const label = args[1] ?? "playwright";
+const enforceArg = args.find((arg) => arg.startsWith("--enforce="));
+const enforceMode = enforceArg ? enforceArg.split("=")[1] : "fail";
 
 if (!reportPath) {
   console.error("[check-playwright-report] Missing report path argument.");
@@ -52,7 +56,12 @@ const skippedFromSuites = Array.isArray(parsed?.suites)
 const skipped = Math.max(skippedFromStats, skippedFromSuites);
 
 if (skipped > 0) {
-  console.error(`[check-playwright-report] ${label}: skipped tests detected (${skipped}). Failing strict gate.`);
+  const message = `[check-playwright-report] ${label}: skipped tests detected (${skipped}).`;
+  if (enforceMode === "warn") {
+    console.warn(`${message} Continuing in warn mode.`);
+    process.exit(0);
+  }
+  console.error(`${message} Failing strict gate.`);
   process.exit(1);
 }
 

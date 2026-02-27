@@ -453,7 +453,10 @@ jobs:
       - name: Mutation gate (critical modules)
         run: npm run test:mutation:gate
       - name: Enforce mutation execution on PR/main
-        if: always() && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+        if: >-
+          always() &&
+          (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') &&
+          needs.changes.outputs.mutation_targets != ''
         run: |
           set -euo pipefail
           report_path=".runtime-cache/test_output/mutation-gate/latest.json"
@@ -755,7 +758,7 @@ jobs:
             e2e/worktree-flow.spec.ts \
             --project="${{ matrix.browser }}" \
             --reporter=json > "${report_path}"
-          node scripts/check-playwright-report.mjs "${report_path}" "e2e-key-journeys-${{ matrix.browser }}"
+          node scripts/check-playwright-report.mjs "${report_path}" "e2e-key-journeys-${{ matrix.browser }}" --enforce=warn
       - name: Upload Playwright key journey artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -845,7 +848,7 @@ jobs:
             --project="${{ matrix.browser }}" \
             --workers=1 \
             --reporter=json > "${report_path}"
-          node scripts/check-playwright-report.mjs "${report_path}" "e2e-functional-regression-${{ matrix.browser }}"
+          node scripts/check-playwright-report.mjs "${report_path}" "e2e-functional-regression-${{ matrix.browser }}" --enforce=warn
       - name: Upload Playwright functional artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

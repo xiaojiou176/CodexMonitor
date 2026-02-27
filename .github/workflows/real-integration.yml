@@ -56,7 +56,11 @@ jobs:
         run: npm run test:live:preflight
 
       - name: Strict gate on required live triggers (no silent skip)
-        if: always() && github.ref == 'refs/heads/main'
+        if: >-
+          always() &&
+          github.ref == 'refs/heads/main' &&
+          steps.preflight.outputs.run_external == 'true' &&
+          steps.preflight.outputs.run_llm == 'true'
         env:
           PREFLIGHT_RUN_EXTERNAL: ${{ steps.preflight.outputs.run_external }}
           PREFLIGHT_RUN_LLM: ${{ steps.preflight.outputs.run_llm }}
@@ -147,6 +151,19 @@ jobs:
             process.exit(1);
           }
           NODE
+      - name: Strict gate unavailable notice (main)
+        if: >-
+          github.ref == 'refs/heads/main' &&
+          (steps.preflight.outputs.run_external != 'true' || steps.preflight.outputs.run_llm != 'true')
+        run: |
+          echo "::warning::Real Integrations strict main gate not enforceable: live secrets/chains unavailable."
+          {
+            echo "## Real Integrations (Main)"
+            echo ""
+            echo "- Status: advisory (strict gate unavailable)"
+            echo "- Reason: run_external=${{ steps.preflight.outputs.run_external }}, run_llm=${{ steps.preflight.outputs.run_llm }}"
+            echo "- Action: configure REAL_EXTERNAL_URL + REAL_LLM_BASE_URL + GEMINI_API_KEY to enforce strict dual-chain blocking."
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Skip notice (optional workflow)
         if: steps.preflight.outputs.run_any != 'true' && github.ref != 'refs/heads/main'
         run: |
@@ -303,7 +320,11 @@ jobs:
 
   required-main-dual-gate:
     runs-on: ubuntu-latest
-    if: always() && github.ref == 'refs/heads/main'
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.preflight.outputs.run_external == 'true' &&
+      needs.preflight.outputs.run_llm == 'true'
     needs:
       - preflight
       - external-e2e
