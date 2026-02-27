@@ -817,3 +817,23 @@ ASCII Trend:
 - 触发原因: `mutation-js` 的 push 场景上下文传递缺失导致门禁时长和结果可信度下降，需做协议级修复。
 - 回退条件: 若未来统一改为全量 mutation 专用夜间流水线并移出主干门禁，可回退 diff-context 透传方案。
 - 结果差异: 保留 mutation 严格性，同时显著降低“无关改动触发超长全量变异”的误伤，提升门禁可持续性。
+
+## 2026-02-27 CI Mutation Checkout History Fix Audit
+
+- Scope: 修复 `mutation-js` 在 diff 模式下读取 `BASE_SHA..HEAD_SHA` 时出现 `fatal: bad object` 的失败。
+- Changed files:
+  - `.github/workflows/ci.yml`
+  - `docs/reference/env-final-report.md`
+- Gate evidence:
+  - Job `mutation-js` 日志错误:
+    - `mutation target diff failed ... fatal: bad object <BASE_SHA>`
+  - 同日志确认 checkout 默认 `fetch-depth: 1`，仅拉取 head 提交，不含 base 历史对象。
+  - 修复为 mutation job 的 checkout 显式 `fetch-depth: 0`，保证 diff 所需提交对象可用。
+- Env governance impact:
+  - 无环境变量改动。
+
+### Compatibility Opt-In Record
+
+- 触发原因: diff-context 已接通后，git 历史深度不足成为新的硬阻塞，必须补齐。
+- 回退条件: 若未来改为按 API 直接获取 changed files 且不依赖本地 git diff，可评估回退 fetch-depth。
+- 结果差异: 消除 `bad object` 假失败，让 mutation gate 对应的是“测试结果”而非“仓库抓取深度”。
