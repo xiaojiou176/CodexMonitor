@@ -11,6 +11,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Sidebar thread status visuals now distinguish `waiting` from `processing`, and shift `reviewing` to a separate blue-green tone so status dot + badge are easier to scan.
+- Evidence code path: `src/styles/sidebar.css`.
 - Fixed remaining CI gates for `mutation-js` and `security-scans` with minimal scoped updates.
 - Mutation gate now uses repo-local Stryker dependencies (pinned `@stryker-mutator/core@9.5.1`, `@stryker-mutator/vitest-runner@9.5.1`) via local binary execution in `scripts/mutation-gate.mjs`, avoiding transient `npm exec --package` environments and preserving mutation thresholds.
 - `npm audit (high+)` in CI now runs production/runtime dependency scope with `npm audit --omit=dev --audit-level=high`, while keeping high-severity blocking.
