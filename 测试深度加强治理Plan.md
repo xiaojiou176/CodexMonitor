@@ -1132,11 +1132,48 @@ Context：
   - `src/types.ts`、`layoutNodes/types.ts` 等低可执行价值文件
   - 多个 0% 的 orchestration/hook 入口文件
 - Wave-4 将并发推进：
-  - `useThreadOrchestration.ts`
-  - `useTerminalSession.ts`
-  - `DebugPanel.tsx`
-  - `buildPrimaryNodes.tsx`
-  - `DesktopLayout.tsx`
+- `useThreadOrchestration.ts`
+- `useTerminalSession.ts`
+- `DebugPanel.tsx`
+- `buildPrimaryNodes.tsx`
+- `DesktopLayout.tsx`
+
+### 13.7 Coverage 冲刺 Wave-4（2026-02-27）
+
+本波次目标：并发推进 5 个高未覆盖入口（含 4 个 0% 文件），继续抬升 strict 全局覆盖。
+
+1. 本波次新增测试文件
+- `src/features/app/orchestration/useThreadOrchestration.test.tsx`
+- `src/features/terminal/hooks/useTerminalSession.test.tsx`
+- `src/features/debug/components/DebugPanel.test.tsx`
+- `src/features/layout/hooks/layoutNodes/buildPrimaryNodes.test.tsx`
+- `src/features/app/components/AppModals.test.tsx`
+
+2. 单文件覆盖样本（Wave-4 结果）
+- `useThreadOrchestration.ts`: Statements `97.07%`, Branches `79.62%`
+- `useTerminalSession.ts`: Statements `83.49%`, Branches `79.54%`
+- `DebugPanel.tsx`: Statements `87.83%`, Branches `84.16%`
+- `buildPrimaryNodes.tsx`: Statements `99.35%`, Branches `81.25%`
+- `AppModals.tsx`: Statements/Branches/Functions/Lines `100%`
+
+3. 全量 strict gate 结果
+- `npm run test:coverage:gate:strict`
+- 全量测试：`160 files / 1503 tests` 全通过。
+- 覆盖率提升到：
+  - Statements `63.30%`
+  - Lines `63.30%`
+  - Functions `71.87%`
+  - Branches `77.12%`
+
+4. 当前瓶颈（仍阻塞 strict 80）
+- 超大未覆盖文件：
+  - `src/App.tsx`（3432 行，0%）
+  - `src/types.ts`（761 行，0%）
+  - `src/features/layout/hooks/layoutNodes/types.ts`（507 行，0%）
+- 低覆盖高体量但可测文件：
+  - `PromptPanel.tsx`（2.82%）
+  - `useTerminalSession.ts`（已拉升但仍有残余）
+  - `SettingsView.tsx`（70.23%）
 
 ## 14. Lazy-Load Evidence（Refactor Batch）
 
