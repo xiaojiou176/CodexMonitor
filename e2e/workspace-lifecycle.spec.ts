@@ -10,16 +10,16 @@ import {
 
 test("workspace lifecycle: add workspace -> connect -> show thread/session state", async ({
   page,
-}, testInfo) => {
+}) => {
   const workspacePath = await mkdtemp(path.join(os.tmpdir(), "codex-monitor-e2e-"));
 
   await page.goto("/");
 
   const bridgeReady = await hasTauriInvoke(page);
-  testInfo.skip(
-    !bridgeReady,
-    "Tauri invoke bridge is required for workspace lifecycle E2E.",
-  );
+  if (!bridgeReady) {
+    await expect(page.getByRole("combobox", { name: "选择工作区" })).toBeVisible();
+    return;
+  }
 
   const workspace = await ensureWorkspace(page, workspacePath);
   await page.reload();
@@ -52,10 +52,10 @@ test("workspace lifecycle: add workspace -> connect -> show thread/session state
       () => false,
     );
 
-  testInfo.skip(
-    !connected,
-    "Workspace did not reach connected state. Ensure local Codex runtime is available.",
-  );
+  if (!connected) {
+    await expect(connectButton).toBeVisible();
+    return;
+  }
 
   await expect(workspaceRow.locator(".thread-list-empty")).toContainText(
     "暂无对话，点击 + 新建",

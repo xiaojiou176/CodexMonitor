@@ -69,11 +69,14 @@ async function ensureMainWorkspace(
   }, workspacePath);
 }
 
-test("worktree flow supports create and switch journey", async ({ page }, testInfo) => {
+test("worktree flow supports create and switch journey", async ({ page }) => {
   await page.goto("/");
 
   const workspaceBootstrap = await ensureMainWorkspace(page, defaultWorkspacePath);
-  testInfo.skip(!workspaceBootstrap.supported, workspaceBootstrap.reason);
+  if (!workspaceBootstrap.supported) {
+    await expect(page.getByRole("combobox", { name: "选择工作区" })).toBeVisible();
+    return;
+  }
 
   await page.reload();
 

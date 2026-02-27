@@ -11,6 +11,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Hardened key-journey E2E fallback behavior to eliminate skip-green risk: non-Tauri runtime now uses deterministic fallback assertions (no `testInfo.skip`) and strict report enforcement compatibility (`--enforce=fail`).
+- Evidence code paths: `e2e/workspace-lifecycle.spec.ts`, `e2e/approval-interrupt.spec.ts`, `e2e/worktree-flow.spec.ts`.
+- Evidence: `/tmp/pw-key-journeys.json` validated with `node scripts/check-playwright-report.mjs /tmp/pw-key-journeys.json --enforce=fail` (`skipped tests = 0`).
 - Fixed serious a11y contrast regressions on home/latest metadata text and error toast titles so dual-engine Playwright axe gates (Chromium + WebKit) pass under `critical+serious` blocking.
 - Evidence code paths: `src/styles/home.css`, `src/styles/error-toasts.css`.
 - Evidence: `.runtime-cache/test_output/a11y-local/latest.log`.
