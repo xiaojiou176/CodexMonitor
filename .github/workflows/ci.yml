@@ -68,7 +68,7 @@ jobs:
 
               # Conservative fallback: JS changes also trigger smoke E2E.
               if [ "$run_js_tests" = "true" ] || printf '%s\n' "$CHANGED_FILES" | rg -q \
-                '^(e2e/|playwright(\..+)?\.config\..+|src/features/|src/services/)'; then
+                '^(e2e/|playwright(\..+)?\.config\..+|src/features/|src/services/|src-tauri/)'; then
                 run_e2e=true
               fi
 
@@ -751,6 +751,7 @@ jobs:
 
   security-scans:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     needs: [changes]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -765,15 +766,78 @@ jobs:
         run: npm ci
       - name: npm audit (high+)
         run: npm audit --omit=dev --audit-level=high
-      - name: Cargo audit
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+      - name: Cache cargo audit directories
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: src-tauri
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-audit-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-audit-
+      - name: Install cargo-audit (if missing)
+        run: |
+          set -euo pipefail
+          if cargo audit --version >/dev/null 2>&1; then
+            echo "cargo-audit already available, reusing cached binary."
+          else
+            cargo install cargo-audit --locked
+          fi
+      - name: Cargo audit
+        run: cargo audit --manifest-path src-tauri/Cargo.toml
       - name: Secret scan (gitleaks)
         uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  visual-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs:
+      - changes
+      - node-deps-preheat
+      - lint-frontend
+      - typecheck
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+    env:
+      CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies (cache-aware)
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.node_modules_cache.outputs.cache-hit }}" = "true" ] && [ -f node_modules/.package-lock.json ]; then
+            echo "node_modules cache hit, skipping npm ci."
+          else
+            echo "node_modules cache miss/incomplete, running npm ci."
+            npm ci
+          fi
+      - name: Enforce Chromatic token policy
+        run: |
+          set -euo pipefail
+          if [ -n "${CHROMATIC_PROJECT_TOKEN:-}" ]; then
+            echo "CHROMATIC_PROJECT_TOKEN present."
+            exit 0
+          fi
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            echo "CHROMATIC_PROJECT_TOKEN missing on main; failing visual gate."
+            exit 1
+          fi
+          echo "::notice::CHROMATIC_PROJECT_TOKEN missing on pull_request; skipping visual regression run."
+      - name: Run Chromatic
+        if: env.CHROMATIC_PROJECT_TOKEN != ''
+        run: npm run chromatic
 
   test-tauri:
     name: Rust tests (${{ matrix.platform.name }})
@@ -914,6 +978,7 @@ jobs:
       - e2e-interaction-sweep
       - e2e-key-journeys
       - security-scans
+      - visual-regression
       - test-tauri
     if: |
       always() &&
@@ -982,3 +1047,114 @@ jobs:
         run: npm run doctor:win
       - name: Tauri debug build
         run: ${{ matrix.platform.build_command }}
+
+  required-gate:
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - changes
+      - workflow-hygiene
+      - commitlint
+      - pre-commit
+      - lint-frontend
+      - lint-backend
+      - typecheck
+      - docs-drift
+      - env-governance
+      - env-var-audit
+      - test-js
+      - coverage-js
+      - mutation-js
+      - e2e-smoke
+      - e2e-a11y
+      - e2e-interaction-sweep
+      - e2e-key-journeys
+      - security-scans
+      - visual-regression
+      - test-tauri
+      - build-tauri
+    env:
+      RUN_JS_TESTS: ${{ needs.changes.outputs.run_js_tests }}
+      RUN_E2E: ${{ needs.changes.outputs.run_e2e }}
+      RUN_RUST_TESTS: ${{ needs.changes.outputs.run_rust_tests }}
+      WORKFLOW_HYGIENE_RESULT: ${{ needs.workflow-hygiene.result }}
+      COMMITLINT_RESULT: ${{ needs.commitlint.result }}
+      PRE_COMMIT_RESULT: ${{ needs.pre-commit.result }}
+      LINT_FRONTEND_RESULT: ${{ needs.lint-frontend.result }}
+      LINT_BACKEND_RESULT: ${{ needs.lint-backend.result }}
+      TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+      DOCS_DRIFT_RESULT: ${{ needs.docs-drift.result }}
+      ENV_GOVERNANCE_RESULT: ${{ needs.env-governance.result }}
+      ENV_VAR_AUDIT_RESULT: ${{ needs.env-var-audit.result }}
+      TEST_JS_RESULT: ${{ needs.test-js.result }}
+      COVERAGE_JS_RESULT: ${{ needs.coverage-js.result }}
+      MUTATION_JS_RESULT: ${{ needs.mutation-js.result }}
+      E2E_SMOKE_RESULT: ${{ needs.e2e-smoke.result }}
+      E2E_A11Y_RESULT: ${{ needs.e2e-a11y.result }}
+      E2E_INTERACTION_RESULT: ${{ needs.e2e-interaction-sweep.result }}
+      E2E_KEY_JOURNEYS_RESULT: ${{ needs.e2e-key-journeys.result }}
+      SECURITY_SCANS_RESULT: ${{ needs.security-scans.result }}
+      VISUAL_REGRESSION_RESULT: ${{ needs.visual-regression.result }}
+      TEST_TAURI_RESULT: ${{ needs.test-tauri.result }}
+      BUILD_TAURI_RESULT: ${{ needs.build-tauri.result }}
+    steps:
+      - name: Enforce required gate (strict on main)
+        run: |
+          set -euo pipefail
+
+          strict_main=false
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            strict_main=true
+          fi
+
+          failures=0
+
+          assert_success_when_expected() {
+            local job_name="$1"
+            local expected="$2"
+            local actual="$3"
+            if [ "$expected" != "true" ]; then
+              return 0
+            fi
+            if [ "$actual" != "success" ]; then
+              echo "::error::${job_name} expected success but got ${actual}."
+              failures=$((failures + 1))
+            fi
+          }
+
+          # Always-required jobs.
+          assert_success_when_expected "workflow-hygiene" true "${WORKFLOW_HYGIENE_RESULT}"
+          assert_success_when_expected "commitlint" true "${COMMITLINT_RESULT}"
+          assert_success_when_expected "pre-commit" true "${PRE_COMMIT_RESULT}"
+          assert_success_when_expected "lint-frontend" true "${LINT_FRONTEND_RESULT}"
+          assert_success_when_expected "typecheck" true "${TYPECHECK_RESULT}"
+          assert_success_when_expected "docs-drift" true "${DOCS_DRIFT_RESULT}"
+          assert_success_when_expected "env-governance" true "${ENV_GOVERNANCE_RESULT}"
+          assert_success_when_expected "env-var-audit" true "${ENV_VAR_AUDIT_RESULT}"
+          assert_success_when_expected "security-scans" true "${SECURITY_SCANS_RESULT}"
+
+          # Main branch must prove visual gate executed.
+          if [ "$strict_main" = "true" ]; then
+            assert_success_when_expected "visual-regression" true "${VISUAL_REGRESSION_RESULT}"
+          fi
+
+          # Conditionally-required jobs must never be silently skipped when enabled.
+          assert_success_when_expected "test-js" "${RUN_JS_TESTS}" "${TEST_JS_RESULT}"
+          assert_success_when_expected "coverage-js" "${RUN_JS_TESTS}" "${COVERAGE_JS_RESULT}"
+          assert_success_when_expected "mutation-js" "${RUN_JS_TESTS}" "${MUTATION_JS_RESULT}"
+
+          assert_success_when_expected "e2e-smoke" "${RUN_E2E}" "${E2E_SMOKE_RESULT}"
+          assert_success_when_expected "e2e-a11y" "${RUN_E2E}" "${E2E_A11Y_RESULT}"
+          assert_success_when_expected "e2e-interaction-sweep" "${RUN_E2E}" "${E2E_INTERACTION_RESULT}"
+          assert_success_when_expected "e2e-key-journeys" "${RUN_E2E}" "${E2E_KEY_JOURNEYS_RESULT}"
+
+          assert_success_when_expected "lint-backend" "${RUN_RUST_TESTS}" "${LINT_BACKEND_RESULT}"
+          assert_success_when_expected "test-tauri" "${RUN_RUST_TESTS}" "${TEST_TAURI_RESULT}"
+          assert_success_when_expected "build-tauri" "${RUN_RUST_TESTS}" "${BUILD_TAURI_RESULT}"
+
+          if [ "$failures" -gt 0 ]; then
+            echo "required-gate detected ${failures} blocking issue(s)."
+            exit 1
+          fi
+
+          echo "required-gate passed."

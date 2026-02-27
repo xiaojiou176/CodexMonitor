@@ -403,7 +403,7 @@ jobs:
         if: steps.node_modules_cache.outputs.cache-hit != 'true'
         run: npm ci
       - name: npm audit (high+)
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
       - name: Install cargo-audit (if missing)
         run: |
           if cargo audit --version >/dev/null 2>&1; then

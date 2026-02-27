@@ -56,7 +56,10 @@ jobs:
         run: npm run test:live:preflight
 
       - name: Strict gate on required live triggers (no silent skip)
-        if: always() && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
+        if: always() && github.ref == 'refs/heads/main'
+        env:
+          PREFLIGHT_RUN_EXTERNAL: ${{ steps.preflight.outputs.run_external }}
+          PREFLIGHT_RUN_LLM: ${{ steps.preflight.outputs.run_llm }}
         run: |
           set -euo pipefail
           node <<'NODE'
@@ -85,6 +88,8 @@ jobs:
 
           const status = String(report?.status ?? "unknown");
           const runAny = report?.runAny === true;
+          const runExternal = String(process.env.PREFLIGHT_RUN_EXTERNAL ?? "false") === "true";
+          const runLlm = String(process.env.PREFLIGHT_RUN_LLM ?? "false") === "true";
           const checks = Array.isArray(report?.checks) ? report.checks : [];
           const successfulLiveChecks = checks.filter((item) => String(item?.status ?? "") === "ok");
           const missingOrFailed = checks.filter((item) => {
@@ -99,6 +104,8 @@ jobs:
             `- Event: ${process.env.GITHUB_EVENT_NAME ?? "unknown"}`,
             `- Preflight status: ${status}`,
             `- run_any: ${runAny ? "true" : "false"}`,
+            `- run_external: ${runExternal ? "true" : "false"}`,
+            `- run_llm: ${runLlm ? "true" : "false"}`,
             `- Successful live checks: ${successfulLiveChecks.length}`,
           ];
 
@@ -123,8 +130,16 @@ jobs:
             console.error("[real-integration] strict gate failed: no runnable live checks for required trigger");
             process.exit(1);
           }
-          if (successfulLiveChecks.length < 1) {
-            console.error("[real-integration] strict gate failed: no successful live checks recorded");
+          if (!runExternal) {
+            console.error("[real-integration] strict gate failed: external chain is not runnable on main");
+            process.exit(1);
+          }
+          if (!runLlm) {
+            console.error("[real-integration] strict gate failed: llm chain is not runnable on main");
+            process.exit(1);
+          }
+          if (successfulLiveChecks.length < 2) {
+            console.error("[real-integration] strict gate failed: expected at least two successful live checks on main");
             process.exit(1);
           }
           if (status !== "passed") {
@@ -286,3 +301,50 @@ jobs:
           name: real-llm-report
           path: .runtime-cache/test_output/real-llm/latest.json
           if-no-files-found: ignore
+
+  required-main-dual-gate:
+    runs-on: ubuntu-latest
+    if: always() && github.ref == 'refs/heads/main'
+    needs:
+      - preflight
+      - external-e2e
+      - real-llm
+    env:
+      PREFLIGHT_RUN_EXTERNAL: ${{ needs.preflight.outputs.run_external }}
+      PREFLIGHT_RUN_LLM: ${{ needs.preflight.outputs.run_llm }}
+      PREFLIGHT_STATUS: ${{ needs.preflight.outputs.status }}
+      EXTERNAL_E2E_RESULT: ${{ needs.external-e2e.result }}
+      REAL_LLM_RESULT: ${{ needs.real-llm.result }}
+    steps:
+      - name: Enforce main dual-chain gate
+        run: |
+          set -euo pipefail
+          failures=0
+
+          if [ "${PREFLIGHT_RUN_EXTERNAL}" != "true" ]; then
+            echo "::error::preflight indicates external chain is not runnable on main."
+            failures=$((failures + 1))
+          fi
+          if [ "${PREFLIGHT_RUN_LLM}" != "true" ]; then
+            echo "::error::preflight indicates llm chain is not runnable on main."
+            failures=$((failures + 1))
+          fi
+          if [ "${PREFLIGHT_STATUS}" != "passed" ]; then
+            echo "::error::preflight status must be passed on main, got ${PREFLIGHT_STATUS}."
+            failures=$((failures + 1))
+          fi
+          if [ "${EXTERNAL_E2E_RESULT}" != "success" ]; then
+            echo "::error::external-e2e must pass on main, got ${EXTERNAL_E2E_RESULT}."
+            failures=$((failures + 1))
+          fi
+          if [ "${REAL_LLM_RESULT}" != "success" ]; then
+            echo "::error::real-llm must pass on main, got ${REAL_LLM_RESULT}."
+            failures=$((failures + 1))
+          fi
+
+          if [ "$failures" -gt 0 ]; then
+            echo "required-main-dual-gate failed with ${failures} blocking issue(s)."
+            exit 1
+          fi
+
+          echo "required-main-dual-gate passed."

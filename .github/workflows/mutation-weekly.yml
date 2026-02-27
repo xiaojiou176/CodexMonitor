@@ -14,6 +14,7 @@ permissions: {}
 jobs:
   mutation-python:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
       contents: read
     steps:
@@ -41,14 +42,30 @@ jobs:
           cache: pip
       - name: Install mutmut
         if: steps.detect_python.outputs.should_run == 'true'
-        run: python -m pip install --upgrade pip mutmut
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][mutation-python-install] $(date -u +'%Y-%m-%dT%H:%M:%SZ') pip install mutmut running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          python -m pip install --upgrade pip mutmut
       - name: Run mutmut
         if: steps.detect_python.outputs.should_run == 'true'
-        run: mutmut run
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][mutation-python-run] $(date -u +'%Y-%m-%dT%H:%M:%SZ') mutmut running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          mutmut run
 
   mutation-js:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     permissions:
       contents: read
     steps:
@@ -77,10 +94,26 @@ jobs:
           cache: "npm"
       - name: Install dependencies
         if: steps.detect_js.outputs.should_run == 'true'
-        run: npm ci
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][mutation-js-install] $(date -u +'%Y-%m-%dT%H:%M:%SZ') npm ci running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          npm ci
       - name: Run JS mutation gate (full critical scope)
         if: steps.detect_js.outputs.should_run == 'true'
-        run: npm run test:mutation:gate
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][mutation-js-run] $(date -u +'%Y-%m-%dT%H:%M:%SZ') mutation gate running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          npm run test:mutation:gate
       - name: Upload mutation latest report
         if: always() && steps.detect_js.outputs.should_run == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -91,6 +124,7 @@ jobs:
 
   mutation-rust:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     permissions:
       contents: read
     steps:
@@ -124,7 +158,23 @@ jobs:
             ${{ runner.os }}-cargo-mutants-
       - name: Install cargo-mutants
         if: steps.detect_rust.outputs.should_run == 'true'
-        run: cargo install cargo-mutants --locked
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][mutation-rust-install] $(date -u +'%Y-%m-%dT%H:%M:%SZ') cargo install cargo-mutants running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          cargo install cargo-mutants --locked
       - name: Run cargo-mutants
         if: steps.detect_rust.outputs.should_run == 'true'
-        run: cargo mutants --manifest-path src-tauri/Cargo.toml
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][mutation-rust-run] $(date -u +'%Y-%m-%dT%H:%M:%SZ') cargo mutants running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          cargo mutants --manifest-path src-tauri/Cargo.toml

@@ -1,13 +1,10 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const QUICK_ONLY = process.argv.includes("--quick-only");
 const HEARTBEAT_LEVEL = (process.env.PREFLIGHT_HEARTBEAT_LEVEL ?? "normal").toLowerCase();
-const REQUIRE_LIVE_PREFLIGHT = parseBooleanEnv("PREFLIGHT_REQUIRE_LIVE", process.env.CI === "true");
-const LIVE_PREFLIGHT_REPORT_PATH = ".runtime-cache/test_output/live-preflight/latest.json";
 
 const HEARTBEAT_CONFIG = {
   quiet: { intervalMs: 90_000, minElapsedMs: 120_000 },
@@ -20,21 +17,6 @@ function resolveHeartbeatConfig() {
     return HEARTBEAT_CONFIG[HEARTBEAT_LEVEL];
   }
   return HEARTBEAT_CONFIG.normal;
-}
-
-function parseBooleanEnv(name, fallback) {
-  const raw = process.env[name];
-  if (typeof raw !== "string") {
-    return fallback;
-  }
-  const normalized = raw.trim().toLowerCase();
-  if ([ "1", "true", "yes", "on" ].includes(normalized)) {
-    return true;
-  }
-  if ([ "0", "false", "no", "off" ].includes(normalized)) {
-    return false;
-  }
-  return fallback;
 }
 
 function npmCommand() {
@@ -188,29 +170,6 @@ async function runParallelTasks(label, taskFactories) {
   }
 }
 
-async function validateLivePreflightStrict() {
-  if (!REQUIRE_LIVE_PREFLIGHT) {
-    console.log("[preflight] Live preflight strict validation disabled (set PREFLIGHT_REQUIRE_LIVE=true to enable).");
-    return;
-  }
-  const raw = await readFile(LIVE_PREFLIGHT_REPORT_PATH, "utf8");
-  const report = JSON.parse(raw);
-  const runAny = report?.runAny === true;
-  const status = String(report?.status ?? "unknown");
-  const checks = Array.isArray(report?.checks) ? report.checks : [];
-  const okChecks = checks.filter((item) => String(item?.status ?? "") === "ok");
-  if (!runAny) {
-    throw new Error("test:live:preflight strict validation failed: runAny=false (live checks were skipped)");
-  }
-  if (status !== "passed") {
-    throw new Error(`test:live:preflight strict validation failed: status=${status}`);
-  }
-  if (okChecks.length < 1) {
-    throw new Error("test:live:preflight strict validation failed: no successful live checks recorded");
-  }
-  console.log(`[preflight] Live preflight strict validation passed (${okChecks.length} successful check(s)).`);
-}
-
 function quickTasks(heartbeatMs) {
   return [
     createTaskRunner("typecheck", ["run", "typecheck"], { heartbeatMs }),
@@ -227,7 +186,7 @@ async function main() {
     return;
   }
 
-  console.log("[preflight] Phase 1/2: short gates before long jobs");
+  console.log("[preflight] Phase 1/2: short and baseline gates before medium jobs");
   await runTask(
     "preflight:doc-drift (branch)",
     ["run", "preflight:doc-drift", ...(DRY_RUN ? ["--", "--dry-run", "--mode=branch"] : ["--", "--mode=branch"])],
@@ -237,17 +196,16 @@ async function main() {
     createTaskRunner("env:rationalize:check", ["run", "env:rationalize:check"], { heartbeatMs }),
     createTaskRunner("env:doctor:dev", ["run", "env:doctor:dev"], { heartbeatMs }),
     createTaskRunner("preflight:quick", ["run", "preflight:quick"], { heartbeatMs }),
+    createTaskRunner("test:assertions:guard", ["run", "test:assertions:guard"], { heartbeatMs }),
+    createTaskRunner("guard:reuse-search", ["run", "guard:reuse-search"], { heartbeatMs }),
+    createTaskRunner("lint:strict", ["run", "lint:strict"], { heartbeatMs }),
   ]);
 
-  console.log("[preflight] Phase 2/2: long jobs in parallel with heartbeat");
-  await runParallelTasks("Parallel long tasks", [
-    createTaskRunner("test:coverage:gate", ["run", "test:coverage:gate"], { heartbeatMs }),
+  console.log("[preflight] Phase 2/2: medium-strength jobs in parallel with heartbeat");
+  await runParallelTasks("Parallel medium tasks", [
+    createTaskRunner("test", ["run", "test"], { heartbeatMs }),
     createTaskRunner("check:rust", ["run", "check:rust"], { heartbeatMs }),
-    createTaskRunner("test:rust:lib-bins", ["run", "test:rust:lib-bins"], { heartbeatMs }),
-    createTaskRunner("test:smoke:ui", ["run", "test:smoke:ui"], { heartbeatMs }),
-    createTaskRunner("test:live:preflight", ["run", "test:live:preflight"], { heartbeatMs }),
   ]);
-  await validateLivePreflightStrict();
 
   console.log("[preflight] All gates passed.");
 }

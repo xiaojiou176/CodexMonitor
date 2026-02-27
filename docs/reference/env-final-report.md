@@ -54,6 +54,15 @@ Date: 2026-02-26
 - Local preflight orchestration supports `PREFLIGHT_REQUIRE_LIVE=true` to mirror CI strictness and fail fast on skipped live checks.
 - Evidence code paths: `.github/workflows/real-integration.yml`, `scripts/preflight-orchestrated.mjs`, `docs/reference/testing-governance-dashboard.md`, `测试深度加强治理Plan.md`.
 
+## Layered Gate Rebalance Update (2026-02-27)
+
+- Governance layering was rebalanced to `pre-commit < pre-push < CI` with explicit workload split:
+  - `pre-push` now runs baseline gates plus medium jobs (`npm run test`, `npm run check:rust`), reducing local push latency.
+  - Heavy validation is centralized in CI (`coverage/mutation/e2e/a11y/interaction/visual-regression/rust matrix`) and enforced by `required-gate`.
+- Main visual blocking gate is now `CI > visual-regression`; standalone `chromatic.yml` is manual (`workflow_dispatch`) for re-runs/diagnostics.
+- `real-integration` strictness is now main-ref enforced with dual-chain requirements (`external-e2e` + `real-llm` must both pass when runnable).
+- Evidence code paths: `.github/workflows/ci.yml`, `.github/workflows/chromatic.yml`, `.github/workflows/real-integration.yml`, `.github/workflows/mutation-weekly.yml`, `scripts/preflight-orchestrated.mjs`, `README.md`, `AGENTS.md`, `src/AGENTS.md`, `src/CLAUDE.md`, `测试深度加强治理Plan.md`.
+
 ## Coverage Wave-9 Update (2026-02-27)
 
 - Added high-ROI frontend governance tests for App-adjacent flows and settings workflow branches:
