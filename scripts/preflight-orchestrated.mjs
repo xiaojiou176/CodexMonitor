@@ -207,7 +207,6 @@ async function main() {
 
   console.log("[preflight] Phase 2/2: medium-strength jobs in parallel with heartbeat");
   await runParallelTasks("Parallel medium tasks", [
-    createTaskRunner("test", ["run", "test"], { heartbeatMs }),
     createTaskRunner("check:rust", ["run", "check:rust"], { heartbeatMs }),
   ]);
 

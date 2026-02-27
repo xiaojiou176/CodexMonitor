@@ -88,6 +88,7 @@ Date: 2026-02-26
 
 - Local `pre-push` no longer blocks on repository-wide `typecheck` debt through `preflight:quick`.
 - `preflight:quick` is now an explicit reserved fast-lane (currently no-op), while strict type and functional quality remains enforced in remote CI gates.
+- Phase 2 of local `pre-push` now keeps only `check:rust` to avoid local full-test blockage; full functional strictness remains remote in CI required gates.
 - This keeps local push latency controlled and shifts heavy/legacy-debt-sensitive validation to auditable CI where failures are centrally visible.
 - Evidence code paths: `scripts/preflight-orchestrated.mjs`, `README.md`, `docs/reference/env-final-report.md`.
 
