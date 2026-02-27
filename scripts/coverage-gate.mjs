@@ -13,39 +13,39 @@ const baselinePath = path.join(reportDir, "baseline.json");
 const repoBaselinePath = path.join(rootDir, "config", "coverage-gate-baseline.json");
 const globalCoverageIncludePattern = "src/**/*.{ts,tsx}";
 const globalMinimumThresholds = {
-  statements: 80,
-  lines: 80,
-  functions: 80,
-  branches: 80,
+  statements: 85,
+  lines: 85,
+  functions: 85,
+  branches: 85,
 };
 const supportedGateModes = new Set(["default", "strict"]);
 const targetThresholdEnvConfig = {
   statements: {
     env: "COVERAGE_TARGET_STATEMENTS",
     legacyEnv: "COVERAGE_MIN_STATEMENTS",
-    defaultValue: 80,
+    defaultValue: 85,
   },
   lines: {
     env: "COVERAGE_TARGET_LINES",
     legacyEnv: "COVERAGE_MIN_LINES",
-    defaultValue: 80,
+    defaultValue: 85,
   },
   functions: {
     env: "COVERAGE_TARGET_FUNCTIONS",
     legacyEnv: "COVERAGE_MIN_FUNCTIONS",
-    defaultValue: 80,
+    defaultValue: 85,
   },
   branches: {
     env: "COVERAGE_TARGET_BRANCHES",
     legacyEnv: "COVERAGE_MIN_BRANCHES",
-    defaultValue: 80,
+    defaultValue: 85,
   },
 };
 const criticalScopeConfig = [
   {
     name: "threads",
     prefix: "src/features/threads/",
-    thresholds: { statements: 95, lines: 95, functions: 95, branches: 92 },
+    thresholds: { statements: 95, lines: 95, functions: 95, branches: 95 },
   },
   {
     name: "services",
@@ -433,7 +433,7 @@ export async function main() {
           {
             env: config.env,
             legacyEnv: config.legacyEnv,
-            source: "strict-fixed-80",
+            source: "strict-fixed-85",
           },
         ]),
       );

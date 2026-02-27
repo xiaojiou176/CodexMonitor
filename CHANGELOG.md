@@ -50,6 +50,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Evidence code paths: `src/features/threads/utils/codexArgsProfiles.ts`, `src/features/threads/utils/codexArgsProfiles.test.ts`.
 - Calibrated the `threads` critical branch-coverage gate to match the enforceable local baseline while keeping `statements/lines/functions` critical thresholds unchanged.
 - Raised `threads` critical branch-coverage threshold from `91%` to `92%` to tighten enforcement while matching the current measurable baseline.
+- Raised global coverage targets to `85%` (statements/lines/functions/branches) and tightened `threads` critical branch threshold to `95%` to enforce stricter no-false-green quality gates.
 - Evidence: `.runtime-cache/test_output/coverage-gate/latest.json`.
 - Evidence code path: `scripts/coverage-gate.mjs`.
 - Hardened CI portability by adding ripgrep-independent fallbacks in env/assertion/mutation guards and fixing workflow hygiene/toolchain wiring in `ci.yml`.
