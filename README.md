@@ -285,32 +285,68 @@ npm run typecheck
 npm run test:coverage:gate
 npm run test:coverage:gate:strict
 npm run check:rust
+npm run test:rust:lib-bins
 ```
+
+## Storybook and Chromatic
+
+Run Storybook locally:
+
+```bash
+npm run storybook
+```
+
+Build static Storybook output (used by Chromatic):
+
+```bash
+npm run build-storybook
+```
+
+`build-storybook` is hardened for this repository layout:
+
+- builds from a temporary safe path to avoid `[]` path parsing issues
+- excludes heavy directories from the temporary build workspace (`src-tauri/gen`, `target`, `node_modules`, `.runtime-cache`, `.git`, existing `storybook-static`)
+- reuses root `node_modules` via symlink (no duplicate dependency copy)
+- syncs final output back to root `storybook-static`
+
+Publish to Chromatic:
+
+```bash
+npm run chromatic
+```
+
+`chromatic` runs with `--storybook-build-dir storybook-static`, so it always publishes the output produced by `npm run build-storybook`.
 
 Coverage gate policy (`scripts/coverage-gate.mjs`):
 
-- Global thresholds are hard-gated at `>=80` for `statements`, `lines`, `functions`, and `branches`.
-- Critical modules are hard-gated at `>=95` for all four metrics:
-  - `src/features/threads/`
-  - `src/services/`
+- Global minimum thresholds are fixed at `>=80` for `statements`, `lines`, `functions`, and `branches`.
+- Default mode (`npm run test:coverage:gate`) is ratcheted sustainability mode:
+  - Without explicit env targets, required threshold follows baseline (`baseline.json`) to prevent regression and only ratchets upward.
+  - With explicit `COVERAGE_TARGET_*` (or legacy `COVERAGE_MIN_*`), required becomes `max(explicit_target, baseline)` per metric.
+- Strict mode (`npm run test:coverage:gate:strict`) ignores baseline input and enforces fixed global `80/80/80/80`.
+- Critical scope thresholds are hard-gated as implemented:
+  - `src/features/threads/`: `statements>=95`, `lines>=95`, `functions>=95`, `branches>=92`
+  - `src/services/`: `statements>=95`, `lines>=95`, `functions>=95`, `branches>=95`
 - Gate is fail-fast:
   - If tests fail, the gate exits immediately.
   - If a threshold env override is set below the enforced baseline, the gate exits with config error.
+- Report output includes the gate mode (`default` or `strict`) so CI logs clearly show which policy ran.
 - Failure output includes metric/module + exact shortfall (`required - actual`).
 
 Git hooks are enforced with Husky:
 
 - `pre-commit`: runs `npm run precommit:orchestrated`
   - Phase 1: `preflight:doc-drift` checks staged files and requires staged docs updates for doc-sensitive changes (`README.md`, `AGENTS.md`, `CLAUDE.md`, `src/{AGENTS,CLAUDE}.md`, `src-tauri/{AGENTS,CLAUDE}.md`, `CHANGELOG.md`, or `docs/*`).
-  - Phase 2: security + env governance gates: `check:secrets:staged`, `check:keys:source-policy`, `check:real-llm-alias-usage`, and `env:doctor:staged`.
-  - Runtime env drift is blocked by `env:rationalize:check` (runtime-prefixed keys must be declared in schema or allowlist).
+  - Phase 2 (parallel security + compliance gates): `check:secrets:staged`, `check:keys:source-policy`, `check:real-llm-alias-usage`, `check:critical-path-logging`, `env:doctor:staged`, `env:rationalize:check`, `check:lazy-load:evidence-gate`, and `check:compat:option-log`.
+  - Critical-path logging gate checks newly staged critical-path additions (`catch` blocks / third-party API calls) for structured log context (`traceId`/`requestId` + `error`/`code`/`status`) and defaults to fail mode unless `CRITICAL_LOG_GUARD_MODE=warn`.
   - Phase 3: runs `test:assertions:guard`, `guard:reuse-search`, and `lint:strict` in parallel.
 - `commit-msg`: runs secret scan and conventional-commit lint:
   - `npm run check:commit-message:secrets -- "$1"`
   - `npx --no-install commitlint --edit "$1"`
 - `pre-push`: runs `npm run preflight:orchestrated`
   - Phase 1 (short first): `preflight:doc-drift (branch)` + `env:rationalize:check` + `env:doctor:dev` + `preflight:quick` (`typecheck` only).
-  - Phase 2 (parallel long jobs): `test:coverage:gate` (strict 80/95), `check:rust`, `test:smoke:ui`, and `test:live:preflight`, each with heartbeat logs every ~20s.
+  - Phase 2 (parallel long jobs): `test:coverage:gate` (strict 80/95), `check:rust`, `test:rust:lib-bins`, `test:smoke:ui`, and `test:live:preflight`.
+  - Heartbeat cadence is controlled by `PREFLIGHT_HEARTBEAT_LEVEL` (`quiet`/`normal`/`debug`), default `normal` cadence (60s interval, 60s minimum elapsed before emission).
   - Parallel failure output preserves task names, so gate failures are directly attributable to the failing job.
 
 ### Pre-commit Governance Usage
@@ -387,7 +423,7 @@ One-shot full-repo quality gate (TS/React + tests + Rust):
 npm run test:repo
 ```
 
-Optional live preflight for real integrations (non-default, non-gating):
+Optional live preflight for real integrations (non-default for local runs):
 
 ```bash
 npm run test:live:preflight
@@ -447,7 +483,10 @@ npm run test:real
 ```
 
 - Runs external Playwright check, then runs real LLM smoke test.
-- Optional workflow: `.github/workflows/real-integration.yml` (manual/weekly) runs `test:live:preflight` first, then conditionally runs external E2E and/or real LLM checks.
+- Workflow policy: `.github/workflows/real-integration.yml` runs on `main` push plus manual/weekly schedules.
+- On `main`, strict mode is enabled: if preflight finds no runnable real checks (`run_any=false`) or preflight status is not `passed`, the workflow fails (no silent skip-green).
+- The strict gate writes a step summary section listing missing/failed prerequisites (for example missing `REAL_EXTERNAL_URL`, `REAL_LLM_BASE_URL`, or `GEMINI_API_KEY`) and diagnostics.
+- On non-`main` triggers, the workflow keeps conditional execution for external E2E and real LLM jobs.
 - Long-running workflow steps emit 20s heartbeat logs to avoid no-output timeout ambiguity.
 
 ## Documentation

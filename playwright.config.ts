@@ -28,6 +28,12 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
       },
     },
+    {
+      name: "webkit",
+      use: {
+        ...devices["Desktop Safari"],
+      },
+    },
   ],
   webServer: process.env.PLAYWRIGHT_BASE_URL || hasRealExternalTarget
     ? undefined

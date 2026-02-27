@@ -49,3 +49,16 @@ CodexMonitor reads configuration from these layers:
 - Config file reads/writes are centralized through:
   - `src-tauri/src/shared/files_core.rs`
   - `src-tauri/src/shared/config_toml_core.rs`
+
+## Testing Governance Dashboard
+
+- Generator script: `scripts/generate-testing-governance-dashboard.mjs`
+- Input artifacts: `.runtime-cache/test_output/*/latest.json`
+- Output dashboard: `docs/reference/testing-governance-dashboard.md`
+- Missing artifact data is handled as degraded output and listed under the dashboard "Missing Data" section.
+- Freshness classification is computed at generation time from artifact timestamps:
+  - `fresh <= 6h`
+  - `aging <= 24h`
+  - `stale > 24h`
+- Timestamp source precedence is `payload.timestamp` -> `payload.timestampPst` -> file `mtime` fallback.
+- `Generated at` is dashboard build time only; gate execution time must be read from each report `Last Update` value.
