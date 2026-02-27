@@ -774,3 +774,24 @@ ASCII Trend:
 - 触发原因: Wave-15 继续覆盖冲刺并推进 `App.tsx` 可测性拆分（无行为变更重构），属于兼容可选治理增强。
 - 回退条件: 若本波次新增测试或 helper 拆分导致行为波动，按文件粒度回退 `src/App.tsx` 与 `src/features/app/utils/appUiHelpers.ts`，保留测试增量做二分恢复。
 - 结果差异: 覆盖率进一步抬升并扩大“真绿可证明”证据；运行时行为不变。
+
+## 2026-02-27 CI Mutation Timeout Hardening Audit
+
+- Scope: 远端 CI `mutation-js` 在 45 分钟被平台超时取消，导致 `required-gate` 失败；对门禁时限做保守增强以避免“非代码失败”的假红。
+- Changed files:
+  - `.github/workflows/ci.yml`
+  - `docs/reference/env-final-report.md`
+- Gate evidence:
+  - GitHub Actions run `22487544492` 中 `mutation-js` 日志显示:
+    - `13:11:20` 启动 `npm run test:mutation:gate`
+    - `13:56:22` 被平台取消 (`The operation was canceled`)
+    - 结论 `cancelled`，联动 `required-gate` 失败
+  - 修复将 `mutation-js.timeout-minutes` 从 `45` 提升到 `90`，保持测试内容与阈值不变，仅消除时间配额导致的非业务失败。
+- Env governance impact:
+  - 无新增/变更环境变量。
+
+### Compatibility Opt-In Record
+
+- 触发原因: 在严格门禁保持不降级前提下，必须修复“超时取消导致假红”的流程性阻塞。
+- 回退条件: 若后续观测到 mutation 运行稳定显著低于 45 分钟，可回调 timeout 并保留相同测试覆盖与阈值。
+- 结果差异: 提升 CI 结果可信度（从“可能被超时打断”到“能完成真判断”），不降低任何质量标准。
