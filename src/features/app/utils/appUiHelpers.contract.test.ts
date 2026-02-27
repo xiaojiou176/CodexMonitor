@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { GitFileStatus, WorkspaceInfo } from "../../../types";
 import {
   applyDiffStatsToFiles,
+  buildAppClassName,
+  buildContinueConfigForModeChange,
+  buildContinueConfigForPromptChange,
+  buildQueueArtifactsByThread,
+  buildThreadWorkspaceById,
   buildAppCssVars,
   buildCommandPaletteItems,
   buildCompactThreadConnectionIndicatorMeta,
@@ -12,10 +17,14 @@ import {
   deriveIsGitPanelVisible,
   deriveShowComposer,
   deriveShowCompactCodexThreadActions,
+  deriveShowMobilePollingFetchStatus,
   deriveTabletTab,
+  resolveActiveContinueConfig,
+  resolvePreferredThreadId,
   resolveCompactThreadConnectionState,
   shouldLoadGitHubPanelData,
   type AppTab,
+  type ContinueThreadConfig,
   type CompactThreadConnectionState,
   type DiffSource,
   type GitPanelMode,
@@ -115,6 +124,20 @@ function legacyShowComposer(params: {
       ? params.centerMode === "chat" || params.centerMode === "diff"
       : (params.isTablet ? params.tabletTab : params.activeTab) === "codex") &&
     !params.showWorkspaceHome
+  );
+}
+
+function legacyShowMobilePollingFetchStatus(params: {
+  showCompactCodexThreadActions: boolean;
+  isWorkspaceConnected: boolean;
+  backendMode: "local" | "remote";
+  remoteThreadConnectionState: "live" | "polling" | "disconnected";
+}): boolean {
+  return (
+    params.showCompactCodexThreadActions &&
+    params.isWorkspaceConnected &&
+    params.backendMode === "remote" &&
+    params.remoteThreadConnectionState === "polling"
   );
 }
 
@@ -335,6 +358,109 @@ function legacyBuildRecentThreadsSnapshot(params: {
   };
 }
 
+function legacyResolvePreferredThreadId(params: {
+  workspaceId: string;
+  activeWorkspaceId: string | null;
+  activeThreadId: string | null;
+  threadsByWorkspace: Record<string, Array<{ id: string }>>;
+}): string | null {
+  if (params.activeWorkspaceId === params.workspaceId && params.activeThreadId) {
+    return params.activeThreadId;
+  }
+  return params.threadsByWorkspace[params.workspaceId]?.[0]?.id ?? null;
+}
+
+function legacyThreadWorkspaceById(params: {
+  workspaces: Array<{ id: string }>;
+  threadsByWorkspace: Record<string, Array<{ id: string }>>;
+}): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const workspace of params.workspaces) {
+    const threads = params.threadsByWorkspace[workspace.id] ?? [];
+    for (const thread of threads) {
+      result[thread.id] = workspace.id;
+    }
+  }
+  return result;
+}
+
+function legacyQueueArtifactsByThread(entries: Array<{
+  threadId: string;
+  queueLength: number;
+  inFlight: boolean;
+}>): Record<string, { queueLength: number; inFlight: boolean }> {
+  const byThread: Record<string, { queueLength: number; inFlight: boolean }> = {};
+  entries.forEach((entry) => {
+    byThread[entry.threadId] = {
+      queueLength: entry.queueLength,
+      inFlight: entry.inFlight,
+    };
+  });
+  return byThread;
+}
+
+function legacyActiveContinueConfig(params: {
+  activeThreadId: string | null;
+  continueConfigByThread: Record<string, ContinueThreadConfig>;
+  defaultPrompt: string;
+}): ContinueThreadConfig {
+  return params.activeThreadId
+    ? params.continueConfigByThread[params.activeThreadId] ?? {
+        enabled: false,
+        prompt: params.defaultPrompt,
+      }
+    : {
+        enabled: false,
+        prompt: params.defaultPrompt,
+      };
+}
+
+function legacyContinueConfigForModeChange(params: {
+  prev: Record<string, ContinueThreadConfig>;
+  activeThreadId: string;
+  enabled: boolean;
+  defaultPrompt: string;
+}): Record<string, ContinueThreadConfig> {
+  return {
+    ...params.prev,
+    [params.activeThreadId]: {
+      enabled: params.enabled,
+      prompt: params.prev[params.activeThreadId]?.prompt ?? params.defaultPrompt,
+    },
+  };
+}
+
+function legacyContinueConfigForPromptChange(params: {
+  prev: Record<string, ContinueThreadConfig>;
+  activeThreadId: string;
+  prompt: string;
+}): Record<string, ContinueThreadConfig> {
+  return {
+    ...params.prev,
+    [params.activeThreadId]: {
+      enabled: params.prev[params.activeThreadId]?.enabled ?? false,
+      prompt: params.prompt,
+    },
+  };
+}
+
+function legacyAppClassName(params: {
+  isCompact: boolean;
+  isPhone: boolean;
+  isTablet: boolean;
+  shouldReduceTransparency: boolean;
+  sidebarCollapsed: boolean;
+  rightPanelCollapsed: boolean;
+}): string {
+  return `app ${params.isCompact ? "layout-compact" : "layout-desktop"}${
+    params.isPhone ? " layout-phone" : ""
+  }${params.isTablet ? " layout-tablet" : ""}${
+    params.shouldReduceTransparency ? " reduced-transparency" : ""
+  }${!params.isCompact && params.sidebarCollapsed ? " sidebar-collapsed" : ""}${
+    !params.isCompact && params.rightPanelCollapsed ? " right-panel-collapsed" : ""
+  }`;
+}
+
 function summarizeCommandItems(
   items: Array<{ id: string; label: string; section: string; shortcut?: string; action: () => void }>,
 ) {
@@ -357,8 +483,8 @@ describe("appUiHelpers contract", () => {
 
   it("keeps GitHub panel lazy-load condition semantics", () => {
     const bools = [true, false];
-    const panelModes: GitPanelMode[] = ["issues", "prs", "local"];
-    const diffSources: DiffSource[] = ["local", "pr"];
+    const panelModes: GitPanelMode[] = ["issues", "prs", "local", "diff", "log"];
+    const diffSources: DiffSource[] = ["local", "pr", "commit"];
 
     for (const isGitPanelVisible of bools) {
       for (const gitPanelMode of panelModes) {
@@ -453,6 +579,34 @@ describe("appUiHelpers contract", () => {
                 expect(deriveShowComposer(params)).toBe(legacyShowComposer(params));
               }
             }
+          }
+        }
+      }
+    }
+  });
+
+  it("keeps mobile polling fetch status derivation semantics", () => {
+    const bools = [true, false];
+    const backendModes: Array<"local" | "remote"> = ["local", "remote"];
+    const remoteStates: Array<"live" | "polling" | "disconnected"> = [
+      "live",
+      "polling",
+      "disconnected",
+    ];
+
+    for (const showCompactCodexThreadActions of bools) {
+      for (const isWorkspaceConnected of bools) {
+        for (const backendMode of backendModes) {
+          for (const remoteThreadConnectionState of remoteStates) {
+            const params = {
+              showCompactCodexThreadActions,
+              isWorkspaceConnected,
+              backendMode,
+              remoteThreadConnectionState,
+            };
+            expect(deriveShowMobilePollingFetchStatus(params)).toBe(
+              legacyShowMobilePollingFetchStatus(params),
+            );
           }
         }
       }
@@ -718,5 +872,156 @@ describe("appUiHelpers contract", () => {
     expect(buildRecentThreadsSnapshot(emptyWorkspaceParams)).toEqual(
       legacyBuildRecentThreadsSnapshot(emptyWorkspaceParams),
     );
+  });
+
+  it("keeps preferred thread restore derivation semantics", () => {
+    const scenarios = [
+      {
+        workspaceId: "w1",
+        activeWorkspaceId: "w1",
+        activeThreadId: "t-active",
+        threadsByWorkspace: { w1: [{ id: "t1" }, { id: "t2" }] },
+      },
+      {
+        workspaceId: "w1",
+        activeWorkspaceId: "w2",
+        activeThreadId: "t-active",
+        threadsByWorkspace: { w1: [{ id: "t1" }, { id: "t2" }] },
+      },
+      {
+        workspaceId: "w1",
+        activeWorkspaceId: "w1",
+        activeThreadId: null,
+        threadsByWorkspace: { w1: [{ id: "t1" }] },
+      },
+      {
+        workspaceId: "w1",
+        activeWorkspaceId: null,
+        activeThreadId: null,
+        threadsByWorkspace: { w1: [] },
+      },
+    ];
+
+    for (const params of scenarios) {
+      expect(resolvePreferredThreadId(params)).toBe(legacyResolvePreferredThreadId(params));
+    }
+  });
+
+  it("keeps thread-to-workspace mapping semantics", () => {
+    const params = {
+      workspaces: [{ id: "w1" }, { id: "w2" }],
+      threadsByWorkspace: {
+        w1: [{ id: "t1" }, { id: "t2" }],
+        w2: [{ id: "t3" }],
+      },
+    };
+
+    expect(buildThreadWorkspaceById(params)).toEqual(legacyThreadWorkspaceById(params));
+  });
+
+  it("keeps queue artifact mapping semantics (last entry wins)", () => {
+    const entries = [
+      { threadId: "t1", queueLength: 1, inFlight: true },
+      { threadId: "t2", queueLength: 0, inFlight: false },
+      { threadId: "t1", queueLength: 3, inFlight: false },
+    ];
+
+    expect(buildQueueArtifactsByThread(entries)).toEqual(legacyQueueArtifactsByThread(entries));
+  });
+
+  it("keeps active continue config derivation semantics", () => {
+    const continueConfigByThread = {
+      t1: { enabled: true, prompt: "continue" },
+    };
+    const scenarios = [
+      {
+        activeThreadId: "t1",
+        continueConfigByThread,
+        defaultPrompt: "default",
+      },
+      {
+        activeThreadId: "missing",
+        continueConfigByThread,
+        defaultPrompt: "default",
+      },
+      {
+        activeThreadId: null,
+        continueConfigByThread,
+        defaultPrompt: "default",
+      },
+    ] as const;
+    for (const params of scenarios) {
+      expect(resolveActiveContinueConfig(params)).toEqual(legacyActiveContinueConfig(params));
+    }
+  });
+
+  it("keeps continue-mode toggle state update semantics", () => {
+    const base = {
+      existing: { enabled: true, prompt: "keep" },
+    };
+    const scenarios = [
+      {
+        prev: base,
+        activeThreadId: "existing",
+        enabled: false,
+        defaultPrompt: "default",
+      },
+      {
+        prev: {},
+        activeThreadId: "new-thread",
+        enabled: true,
+        defaultPrompt: "default",
+      },
+    ] as const;
+    for (const params of scenarios) {
+      expect(buildContinueConfigForModeChange(params)).toEqual(
+        legacyContinueConfigForModeChange(params),
+      );
+    }
+  });
+
+  it("keeps continue prompt-change state update semantics", () => {
+    const scenarios = [
+      {
+        prev: { t1: { enabled: true, prompt: "old" } },
+        activeThreadId: "t1",
+        prompt: "new",
+      },
+      {
+        prev: {},
+        activeThreadId: "t2",
+        prompt: "fresh",
+      },
+    ] as const;
+    for (const params of scenarios) {
+      expect(buildContinueConfigForPromptChange(params)).toEqual(
+        legacyContinueConfigForPromptChange(params),
+      );
+    }
+  });
+
+  it("keeps app className composition semantics", () => {
+    const bools = [true, false];
+    for (const isCompact of bools) {
+      for (const isPhone of bools) {
+        for (const isTablet of bools) {
+          for (const shouldReduceTransparency of bools) {
+            for (const sidebarCollapsed of bools) {
+              for (const rightPanelCollapsed of bools) {
+                const params = {
+                  isCompact,
+                  isPhone,
+                  isTablet,
+                  shouldReduceTransparency,
+                  sidebarCollapsed,
+                  rightPanelCollapsed,
+                };
+                expect(buildAppClassName(params)).toBe(legacyAppClassName(params));
+              }
+            }
+          }
+        }
+      }
+    }
   });
 });

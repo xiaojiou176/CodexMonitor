@@ -150,6 +150,11 @@ import {
   useThreadSelectionHandlersOrchestration,
 } from "./features/app/orchestration/useThreadOrchestration";
 import {
+  buildAppClassName,
+  buildContinueConfigForModeChange,
+  buildContinueConfigForPromptChange,
+  buildQueueArtifactsByThread,
+  buildThreadWorkspaceById,
   buildLatestAgentRuns,
   buildRecentThreadsSnapshot,
   buildAppCssVars,
@@ -162,10 +167,14 @@ import {
   deriveIsGitPanelVisible,
   deriveShowComposer,
   deriveShowCompactCodexThreadActions,
+  deriveShowMobilePollingFetchStatus,
   deriveTabletTab,
   type DiffLineStats,
+  type ContinueThreadConfig,
   loadMessageFontSize,
   MESSAGE_FONT_SIZE_STORAGE_NAME,
+  resolveActiveContinueConfig,
+  resolvePreferredThreadId,
   resolveCompactThreadConnectionState,
   shouldLoadGitHubPanelData,
 } from "./features/app/utils/appUiHelpers";
@@ -189,11 +198,6 @@ const GitHubPanelData = lazy(() =>
 );
 
 const CONTINUE_PROMPT_DEFAULT = "请继续完成我和你讨论的Plan！";
-
-type ContinueThreadConfig = {
-  enabled: boolean;
-  prompt: string;
-};
 
 type MainHeaderCopyConfig = {
   includeUserInput: boolean;
@@ -1024,16 +1028,14 @@ function MainApp() {
     isSubAgentThreadRef.current = isSubAgentThread;
   }, [isSubAgentThread]);
 
-  const threadWorkspaceById = useMemo(() => {
-    const result: Record<string, string> = {};
-    for (const workspace of workspaces) {
-      const threads = threadsByWorkspace[workspace.id] ?? [];
-      for (const thread of threads) {
-        result[thread.id] = workspace.id;
-      }
-    }
-    return result;
-  }, [threadsByWorkspace, workspaces]);
+  const threadWorkspaceById = useMemo(
+    () =>
+      buildThreadWorkspaceById({
+        workspaces,
+        threadsByWorkspace,
+      }),
+    [threadsByWorkspace, workspaces],
+  );
 
   const { handleSetThreadListSortKey, handleRefreshAllWorkspaceThreads } =
     useThreadListActions({
@@ -1619,19 +1621,15 @@ function MainApp() {
     () => (activeThreadId ? queueHealthEntries.filter((entry) => entry.threadId === activeThreadId) : []),
     [activeThreadId, queueHealthEntries],
   );
-  const queueArtifactsByThread = useMemo(() => {
-    const byThread: Record<string, { queueLength: number; inFlight: boolean }> = {};
-    queueHealthEntries.forEach((entry) => {
-      byThread[entry.threadId] = {
-        queueLength: entry.queueLength,
-        inFlight: entry.inFlight,
-      };
-    });
-    return byThread;
-  }, [queueHealthEntries]);
-  const activeContinueConfig = activeThreadId
-    ? continueConfigByThread[activeThreadId] ?? { enabled: false, prompt: CONTINUE_PROMPT_DEFAULT }
-    : { enabled: false, prompt: CONTINUE_PROMPT_DEFAULT };
+  const queueArtifactsByThread = useMemo(
+    () => buildQueueArtifactsByThread(queueHealthEntries),
+    [queueHealthEntries],
+  );
+  const activeContinueConfig = resolveActiveContinueConfig({
+    activeThreadId,
+    continueConfigByThread,
+    defaultPrompt: CONTINUE_PROMPT_DEFAULT,
+  });
   const activeContinueEnabled = activeContinueConfig.enabled;
   const activeContinuePrompt = activeContinueConfig.prompt;
 
@@ -1640,13 +1638,14 @@ function MainApp() {
       if (!activeThreadId) {
         return;
       }
-      setContinueConfigByThread((prev) => ({
-        ...prev,
-        [activeThreadId]: {
+      setContinueConfigByThread((prev) =>
+        buildContinueConfigForModeChange({
+          prev,
+          activeThreadId,
           enabled: next,
-          prompt: prev[activeThreadId]?.prompt ?? CONTINUE_PROMPT_DEFAULT,
-        },
-      }));
+          defaultPrompt: CONTINUE_PROMPT_DEFAULT,
+        }),
+      );
       if (next) {
         continuePendingImmediateByThreadRef.current[activeThreadId] = true;
         continueLastHandledByThreadRef.current[activeThreadId] = 0;
@@ -1663,13 +1662,13 @@ function MainApp() {
       if (!activeThreadId) {
         return;
       }
-      setContinueConfigByThread((prev) => ({
-        ...prev,
-        [activeThreadId]: {
-          enabled: prev[activeThreadId]?.enabled ?? false,
+      setContinueConfigByThread((prev) =>
+        buildContinueConfigForPromptChange({
+          prev,
+          activeThreadId,
           prompt: next,
-        },
-      }));
+        }),
+      );
     },
     [activeThreadId],
   );
@@ -1997,10 +1996,12 @@ function MainApp() {
       activeWorkspaceId: string | null;
       activeThreadId: string | null;
     }) => {
-      if (restoreActiveWorkspaceId === workspaceId && restoreActiveThreadId) {
-        return restoreActiveThreadId;
-      }
-      return threadsByWorkspace[workspaceId]?.[0]?.id ?? null;
+      return resolvePreferredThreadId({
+        workspaceId,
+        activeWorkspaceId: restoreActiveWorkspaceId,
+        activeThreadId: restoreActiveThreadId,
+        threadsByWorkspace,
+      });
     },
     [threadsByWorkspace],
   );
@@ -2490,13 +2491,14 @@ function MainApp() {
   useMenuAcceleratorController({ appSettings, onDebug: addDebugEntry });
   const dropOverlayActive = isWorkspaceDropActive;
   const dropOverlayText = "将项目拖放到此处";
-  const appClassName = `app ${isCompact ? "layout-compact" : "layout-desktop"}${
-    isPhone ? " layout-phone" : ""
-  }${isTablet ? " layout-tablet" : ""}${
-    shouldReduceTransparency ? " reduced-transparency" : ""
-  }${!isCompact && sidebarCollapsed ? " sidebar-collapsed" : ""}${
-    !isCompact && rightPanelCollapsed ? " right-panel-collapsed" : ""
-  }`;
+  const appClassName = buildAppClassName({
+    isCompact,
+    isPhone,
+    isTablet,
+    shouldReduceTransparency,
+    sidebarCollapsed,
+    rightPanelCollapsed,
+  });
   const showCompactCodexThreadActions = deriveShowCompactCodexThreadActions({
     hasActiveWorkspace: Boolean(activeWorkspace),
     isCompact,
@@ -2506,10 +2508,12 @@ function MainApp() {
     tabletTab,
   });
   const showMobilePollingFetchStatus =
-    showCompactCodexThreadActions &&
-    Boolean(activeWorkspace?.connected) &&
-    appSettings.backendMode === "remote" &&
-    remoteThreadConnectionState === "polling";
+    deriveShowMobilePollingFetchStatus({
+      showCompactCodexThreadActions,
+      isWorkspaceConnected: Boolean(activeWorkspace?.connected),
+      backendMode: appSettings.backendMode,
+      remoteThreadConnectionState,
+    });
   const {
     sidebarNode,
     messagesNode,

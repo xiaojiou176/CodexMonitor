@@ -655,3 +655,33 @@ ASCII Trend:
 - 触发原因: Wave-8 为持续覆盖率冲刺，新增多个 hook/component 测试文件，触发治理审计记录要求。
 - 回退条件: 若新增测试出现稳定性波动，按文件粒度回退并保留其余波次增量，重新跑 strict gate。
 - 结果差异: 覆盖率持续提升并扩大“真绿可证明”证据范围；运行时业务逻辑无变化。
+
+## 2026-02-28 Coverage Wave-15 Audit
+
+- Scope: App 可测性拆分 + Settings/Messages/Home/Sidebar/workspaces/threadItems/composer 多路并发补测。
+- Changed files:
+  - `src/App.tsx`
+  - `src/features/app/utils/appUiHelpers.ts`
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`
+  - `src/features/app/components/Sidebar.test.tsx`
+  - `src/features/home/components/Home.test.tsx`
+  - `src/features/messages/components/Messages.rendering-links.test.tsx`
+  - `src/features/settings/components/SettingsView.test.tsx`
+  - `src/features/settings/components/SettingsView.codex-overrides.test.tsx`
+  - `src/features/settings/components/SettingsView.features-layout-shortcuts.test.tsx`
+  - `src/features/workspaces/hooks/useWorkspaces.test.tsx`
+  - `src/utils/threadItems.test.ts`
+  - `src/features/composer/components/ComposerMetaBar.test.tsx`
+  - `测试深度加强治理Plan.md`
+- Gate evidence:
+  - `npm run test -- <changed-tests...>` executed with all changed tests passing.
+  - `npm run test:coverage:gate:strict` executed with all tests passing.
+  - Global coverage moved to `74.03/79.23/78.54/74.03` (S/B/F/L), still below strict 80.
+- Env governance impact:
+  - No environment schema/runtime key behavior changed.
+
+### Compatibility Opt-In Record
+
+- 触发原因: Wave-15 继续覆盖冲刺并推进 `App.tsx` 可测性拆分（无行为变更重构），属于兼容可选治理增强。
+- 回退条件: 若本波次新增测试或 helper 拆分导致行为波动，按文件粒度回退 `src/App.tsx` 与 `src/features/app/utils/appUiHelpers.ts`，保留测试增量做二分恢复。
+- 结果差异: 覆盖率进一步抬升并扩大“真绿可证明”证据；运行时行为不变。

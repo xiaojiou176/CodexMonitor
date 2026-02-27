@@ -973,4 +973,64 @@ describe("Sidebar", () => {
     fireEvent.click(screen.getByRole("button", { name: "展开子代理" }));
     expect(screen.getByText("Child")).not.toBeNull();
   });
+
+  it("shows API key account label and login action when workspace is active", () => {
+    const onSwitchAccount = vi.fn();
+    const workspace = {
+      id: "ws-1",
+      name: "Workspace",
+      path: "/tmp/workspace",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+
+    render(
+      <Sidebar
+        {...baseProps}
+        onSwitchAccount={onSwitchAccount}
+        accountInfo={{ type: "apikey", email: "" }}
+        activeWorkspaceId="ws-1"
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspace],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "账户" }));
+    expect(screen.getByText("API 密钥")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+    expect(onSwitchAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides account switcher without active workspace and toggles debug action visibility", () => {
+    const onOpenDebug = vi.fn();
+    const { rerender } = render(
+      <Sidebar
+        {...baseProps}
+        onOpenDebug={onOpenDebug}
+        activeWorkspaceId={null}
+        showDebugButton={false}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "账户" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "打开调试日志" })).toBeNull();
+
+    rerender(
+      <Sidebar
+        {...baseProps}
+        onOpenDebug={onOpenDebug}
+        activeWorkspaceId={null}
+        showDebugButton
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "打开调试日志" }));
+    expect(onOpenDebug).toHaveBeenCalledTimes(1);
+  });
 });

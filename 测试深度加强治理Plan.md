@@ -1430,3 +1430,56 @@ Context：
   - `src/features/threads/hooks/threadReducerHelpers.ts`
   - `src-tauri/src/bin/codex_monitor_daemon.rs`
   - `src-tauri/src/bin/codex_monitor_daemon/meta.rs`
+
+### 13.12 Coverage 冲刺 Wave-15（2026-02-28）
+
+本波次目标：并发补齐 `SettingsView / Messages / Home / Sidebar / threadItems / useWorkspaces` 分支缺口，并继续推进 `App.tsx` 可测性拆分（行为不变）。
+
+1. 本波次改动文件
+- `src/App.tsx`
+- `src/features/app/utils/appUiHelpers.ts`
+- `src/features/app/utils/appUiHelpers.contract.test.ts`
+- `src/features/app/components/Sidebar.test.tsx`
+- `src/features/home/components/Home.test.tsx`
+- `src/features/messages/components/Messages.rendering-links.test.tsx`
+- `src/features/settings/components/SettingsView.test.tsx`
+- `src/features/settings/components/SettingsView.codex-overrides.test.tsx`
+- `src/features/settings/components/SettingsView.features-layout-shortcuts.test.tsx`
+- `src/features/workspaces/hooks/useWorkspaces.test.tsx`
+- `src/utils/threadItems.test.ts`
+- `src/features/composer/components/ComposerMetaBar.test.tsx`
+
+2. 本波次并发策略（SubAgent）
+- A: `App.tsx` 可测性拆分 + `appUiHelpers` 契约测试扩充
+- B: `SettingsView` 三测文件分支补齐
+- C: `Messages/MessageRows/Markdown` 渲染分支补测
+- D: `useWorkspaces` + `threadItems` 异常/边界补测
+- E: `Home` + `Sidebar` + `ComposerMetaBar` 交互分支补测
+
+3. 关键覆盖证据（定向）
+- `appUiHelpers.ts`（定向采样）：
+  - Statements `85.63%`
+  - Functions `90.00%`
+  - Branches `92.91%`
+- `SettingsView.tsx`（定向采样）：
+  - Lines/Statements `83.41%`
+  - Branches `83.08%`
+- `Messages.tsx/MessageRows.tsx/Markdown.tsx` 分支样本均有提升（详见 SubAgent 交付日志）
+
+4. 全量 strict gate 结果（Wave-15）
+- 运行：`npm run test:coverage:gate:strict`
+- 全量测试：`193 files / 1826 tests` 全通过。
+- 覆盖率提升到：
+  - Statements `74.03%`
+  - Lines `74.03%`
+  - Functions `78.54%`
+  - Branches `79.23%`
+
+5. 与 strict 80 终态差距（当前）
+- Statements/Lines：还差 `5.97pp`
+- Functions：还差 `1.46pp`
+- Branches：还差 `0.77pp`
+
+6. 当前最大结构性阻塞
+- `src/App.tsx` 仍为最大缺口文件（体量过大，覆盖收益最高）
+- `src/types.ts` 与 `src/features/layout/hooks/layoutNodes/types.ts` 为 type-heavy 超大文件，在 strict 口径下持续记为 0% 严重拉低全局

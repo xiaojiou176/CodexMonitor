@@ -541,6 +541,40 @@ describe("threadItems", () => {
     }
   });
 
+  it("keeps remote-only items and appends local-only items when merging", () => {
+    const remoteOnly: ConversationItem = {
+      id: "remote-only-1",
+      kind: "message",
+      role: "assistant",
+      text: "remote",
+    };
+    const localOnly: ConversationItem = {
+      id: "local-only-1",
+      kind: "message",
+      role: "assistant",
+      text: "local",
+    };
+
+    const merged = mergeThreadItems([remoteOnly], [localOnly]);
+
+    expect(merged).toHaveLength(2);
+    expect(merged[0]).toEqual(remoteOnly);
+    expect(merged[1]).toEqual(localOnly);
+  });
+
+  it("returns remote items directly when local list is empty", () => {
+    const remoteOnly: ConversationItem = {
+      id: "remote-only-2",
+      kind: "message",
+      role: "assistant",
+      text: "remote-only",
+    };
+
+    const merged = mergeThreadItems([remoteOnly], []);
+
+    expect(merged).toEqual([remoteOnly]);
+  });
+
   it("preserves streamed plan output when completion item has empty output", () => {
     const existing: ConversationItem = {
       id: "plan-1",

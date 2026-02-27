@@ -6,11 +6,14 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppSettings, WorkspaceInfo } from "../../../types";
 import { DEFAULT_COMMIT_MESSAGE_PROMPT } from "../../../utils/commitMessagePrompt";
+import * as tauriService from "../../../services/tauri";
+import { open } from "@tauri-apps/plugin-dialog";
 import { SettingsView } from "./SettingsView";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -24,6 +27,7 @@ afterEach(async () => {
       queueMicrotask(resolve);
     });
   });
+  vi.restoreAllMocks();
   cleanup();
 });
 
@@ -351,6 +355,110 @@ describe("SettingsView Codex overrides", () => {
     await waitFor(() => {
       expect(screen.getByText("Codex 更新失败")).not.toBeNull();
       expect(screen.getByText("当前版本不支持在线更新 Codex。")).not.toBeNull();
+    });
+  });
+
+  it("shows codex update error details when update request fails", async () => {
+    const onRunCodexUpdate = vi.fn().mockRejectedValue(new Error("update failed"));
+    cleanup();
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onRunCodexUpdate={onRunCodexUpdate}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="codex"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "更新" }));
+
+    await waitFor(() => {
+      expect(onRunCodexUpdate).toHaveBeenCalled();
+      expect(screen.getByText("Codex 更新失败")).not.toBeNull();
+      expect(screen.getByText("update failed")).not.toBeNull();
+    });
+  });
+
+  it("disables codex update button while update is in progress", async () => {
+    let resolveUpdate: (() => void) | null = null;
+    const onRunCodexUpdate = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUpdate = resolve;
+        }),
+    );
+
+    cleanup();
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onRunCodexUpdate={onRunCodexUpdate}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="codex"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "更新" }));
+
+    await waitFor(() => {
+      const button = screen.getByRole("button", { name: "更新中..." }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+    });
+
+    resolveUpdate?.();
+    await waitFor(() => {
+      expect(onRunCodexUpdate).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("button", { name: "更新" })).not.toBeNull();
     });
   });
 
@@ -1061,6 +1169,207 @@ describe("SettingsView Codex overrides", () => {
       expect(onUpdateWorkspaceSettings).toHaveBeenCalledWith("w2", {
         codexHome: null,
       });
+    });
+  });
+
+  it("shows doctor failure details when running doctor throws", async () => {
+    cleanup();
+    const onRunDoctor = vi.fn().mockRejectedValue(new Error("doctor failed"));
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={onRunDoctor}
+        onRunCodexUpdate={vi.fn().mockResolvedValue(createUpdateResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="codex"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "运行诊断" }));
+
+    await waitFor(() => {
+      expect(onRunDoctor).toHaveBeenCalledWith(null, null);
+      expect(screen.getByText("检测到 Codex 问题")).not.toBeNull();
+      expect(screen.getByText("doctor failed")).not.toBeNull();
+    });
+  });
+
+  it("ignores browse selection when file picker returns multiple paths", async () => {
+    cleanup();
+    vi.mocked(open).mockResolvedValue(["/tmp/codex-a", "/tmp/codex-b"]);
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onRunCodexUpdate={vi.fn().mockResolvedValue(createUpdateResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="codex"
+      />,
+    );
+
+    const input = screen.getByLabelText("默认 Codex 路径") as HTMLInputElement;
+    expect(input.value).toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: "浏览" }));
+
+    await waitFor(() => {
+      expect(open).toHaveBeenCalled();
+    });
+    expect(input.value).toBe("");
+  });
+
+  it("refreshes and saves global AGENTS.md and config.toml editors", async () => {
+    cleanup();
+    const readGlobalAgentsMd = vi
+      .spyOn(tauriService, "readGlobalAgentsMd")
+      .mockResolvedValue({
+        exists: true,
+        content: "agents init",
+        truncated: false,
+      });
+    const readGlobalCodexConfigToml = vi
+      .spyOn(tauriService, "readGlobalCodexConfigToml")
+      .mockResolvedValue({
+        exists: true,
+        content: "config init",
+        truncated: false,
+      });
+    const writeGlobalAgentsMd = vi
+      .spyOn(tauriService, "writeGlobalAgentsMd")
+      .mockResolvedValue(undefined);
+    const writeGlobalCodexConfigToml = vi
+      .spyOn(tauriService, "writeGlobalCodexConfigToml")
+      .mockResolvedValue(undefined);
+
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onRunCodexUpdate={vi.fn().mockResolvedValue(createUpdateResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="codex"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("agents init")).not.toBeNull();
+      expect(screen.getByDisplayValue("config init")).not.toBeNull();
+    });
+
+    const agentsCard = screen.getByText("全局 AGENTS.md").closest(".settings-agents");
+    const configCard = screen.getByText("全局 config.toml").closest(".settings-agents");
+    expect(agentsCard).not.toBeNull();
+    expect(configCard).not.toBeNull();
+    if (!agentsCard || !configCard) {
+      throw new Error("Expected global editor cards");
+    }
+
+    fireEvent.click(within(agentsCard).getByRole("button", { name: "Refresh 全局 AGENTS.md" }));
+    fireEvent.click(within(configCard).getByRole("button", { name: "Refresh 全局 config.toml" }));
+
+    await waitFor(() => {
+      expect(readGlobalAgentsMd).toHaveBeenCalledTimes(2);
+      expect(readGlobalCodexConfigToml).toHaveBeenCalledTimes(2);
+    });
+
+    fireEvent.change(within(agentsCard).getByRole("textbox"), {
+      target: { value: "agents updated" },
+    });
+    fireEvent.change(within(configCard).getByRole("textbox"), {
+      target: { value: "config updated" },
+    });
+
+    await waitFor(() => {
+      expect(
+        (within(agentsCard).getByRole("button", {
+          name: "保存 全局 AGENTS.md",
+        }) as HTMLButtonElement).disabled,
+      ).toBe(false);
+      expect(
+        (within(configCard).getByRole("button", {
+          name: "保存 全局 config.toml",
+        }) as HTMLButtonElement).disabled,
+      ).toBe(false);
+    });
+
+    fireEvent.click(within(agentsCard).getByRole("button", { name: "保存 全局 AGENTS.md" }));
+    fireEvent.click(within(configCard).getByRole("button", { name: "保存 全局 config.toml" }));
+
+    await waitFor(() => {
+      expect(writeGlobalAgentsMd).toHaveBeenCalledWith("agents updated");
+      expect(writeGlobalCodexConfigToml).toHaveBeenCalledWith("config updated");
     });
   });
 });

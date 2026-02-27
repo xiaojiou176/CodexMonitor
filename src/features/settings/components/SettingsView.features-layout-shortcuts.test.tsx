@@ -892,6 +892,63 @@ describe("SettingsView Server tailscale errors", () => {
       expect(screen.getByText("preview failed")).not.toBeNull();
     });
   });
+
+  it("shows tcp daemon fallback error text for unknown failures", async () => {
+    vi.spyOn(tauriService, "tailscaleStatus").mockResolvedValue({
+      installed: true,
+      running: true,
+      version: "1.0.0",
+      tailnetName: "dev-tailnet",
+      machineName: "dev-mac",
+      tailscaleIps: ["100.64.0.1"],
+      suggestedRemoteHost: null,
+      message: "ok",
+    });
+    vi.spyOn(tauriService, "tailscaleDaemonCommandPreview").mockResolvedValue({
+      command: "tailscale up",
+      tokenConfigured: true,
+    });
+    vi.spyOn(tauriService, "tailscaleDaemonStatus").mockRejectedValue({
+      reason: "unknown",
+    });
+
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={{ ...baseSettings, remoteBackendProvider: "tcp" }}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="server"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("无法更新移动端守护进程状态。")).not.toBeNull();
+    });
+  });
 });
 
 describe("SettingsView Shortcuts", () => {

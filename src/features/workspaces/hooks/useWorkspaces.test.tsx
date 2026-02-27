@@ -225,6 +225,35 @@ describe("useWorkspaces.renameWorktree", () => {
       "feature/new",
     );
   });
+
+  it("rethrows upstream rename failures", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    const renameWorktreeUpstreamMock = vi.mocked(renameWorktreeUpstream);
+    listWorkspacesMock.mockResolvedValue([worktree]);
+    renameWorktreeUpstreamMock.mockRejectedValueOnce(new Error("upstream failed"));
+
+    const { result } = renderHook(() => useWorkspaces());
+
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    await act(async () => {
+      await expect(
+        result.current.renameWorktreeUpstream(
+          "wt-1",
+          "feature/old",
+          "feature/new",
+        ),
+      ).rejects.toThrow("upstream failed");
+    });
+
+    expect(renameWorktreeUpstreamMock).toHaveBeenCalledWith(
+      "wt-1",
+      "feature/old",
+      "feature/new",
+    );
+  });
 });
 
 describe("useWorkspaces.updateWorkspaceSettings", () => {
@@ -427,6 +456,64 @@ describe("useWorkspaces.updateWorkspaceSettings", () => {
     ).toBeFalsy();
   });
 
+  it("rolls back latest optimistic update to previous optimistic value when latest request fails", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    const updateWorkspaceSettingsMock = vi.mocked(updateWorkspaceSettings);
+    listWorkspacesMock.mockResolvedValue([workspaceOne]);
+
+    let resolveFirst: (workspace: WorkspaceInfo) => void = () => {};
+    let rejectSecond: (error: Error) => void = () => {};
+    const first = new Promise<WorkspaceInfo>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const second = new Promise<WorkspaceInfo>((_, reject) => {
+      rejectSecond = reject;
+    });
+    updateWorkspaceSettingsMock
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second);
+
+    const { result } = renderHook(() => useWorkspaces());
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    let firstCall: Promise<WorkspaceInfo>;
+    let secondCall: Promise<WorkspaceInfo>;
+    act(() => {
+      firstCall = result.current.updateWorkspaceSettings(workspaceOne.id, {
+        sidebarCollapsed: true,
+      });
+      secondCall = result.current.updateWorkspaceSettings(workspaceOne.id, {
+        sidebarCollapsed: false,
+        groupId: "group-new",
+      });
+    });
+
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    rejectSecond(new Error("latest failed"));
+    resolveFirst({
+      ...workspaceOne,
+      settings: { ...workspaceOne.settings, sidebarCollapsed: true, groupId: null },
+    });
+
+    await act(async () => {
+      await Promise.allSettled([firstCall, secondCall]);
+    });
+
+    expect(
+      result.current.workspaces.find((entry) => entry.id === workspaceOne.id)
+        ?.settings.sidebarCollapsed,
+    ).toBeTruthy();
+    expect(
+      result.current.workspaces.find((entry) => entry.id === workspaceOne.id)
+        ?.settings.groupId,
+    ).toBeNull();
+  });
+
   it("throws when updating a workspace that does not exist", async () => {
     const listWorkspacesMock = vi.mocked(listWorkspaces);
     listWorkspacesMock.mockResolvedValue([workspaceOne]);
@@ -567,6 +654,31 @@ describe("useWorkspaces.loading", () => {
       workspaceOne.id,
     );
   });
+
+  it("deduplicates by message and emits again when the error message changes", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    listWorkspacesMock
+      .mockRejectedValueOnce(new Error("bridge unavailable"))
+      .mockRejectedValueOnce(new Error("permission denied"))
+      .mockRejectedValueOnce(new Error("permission denied"));
+
+    const { result } = renderHook(() => useWorkspaces());
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+    await act(async () => {
+      await result.current.refreshWorkspaces();
+    });
+    await act(async () => {
+      await result.current.refreshWorkspaces();
+    });
+
+    expect(pushErrorToastMock).toHaveBeenCalledTimes(2);
+    expect(pushErrorToastMock).toHaveBeenNthCalledWith(2, {
+      title: "加载工作区失败",
+      message: "permission denied",
+    });
+  });
 });
 
 describe("useWorkspaces.grouping and sorting", () => {
@@ -692,6 +804,69 @@ describe("useWorkspaces.grouping and sorting", () => {
       "ws-orphan-group",
     );
     expect(result.current.getWorkspaceGroupName("ws-orphan-group")).toBeNull();
+  });
+
+  it("returns null group name for worktree when parent is missing", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    const orphanWorktree: WorkspaceInfo = {
+      ...worktree,
+      id: "wt-orphan-parent",
+      parentId: "missing-parent",
+    };
+    listWorkspacesMock.mockResolvedValue([orphanWorktree]);
+
+    const { result } = renderHook(() =>
+      useWorkspaces({
+        appSettings: createAppSettings([
+          { id: "group-1", name: "Alpha", sortOrder: 0, copiesFolder: null },
+        ]),
+      }),
+    );
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    expect(result.current.getWorkspaceGroupName("wt-orphan-parent")).toBeNull();
+  });
+
+  it("sorts null sortOrder workspaces after numeric sortOrder and by name within fallback", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    const numbered: WorkspaceInfo = {
+      ...workspaceOne,
+      id: "ws-numbered",
+      name: "numbered",
+      settings: { sidebarCollapsed: false, groupId: "group-1", sortOrder: 0 },
+    };
+    const nullSortA: WorkspaceInfo = {
+      ...workspaceTwo,
+      id: "ws-null-a",
+      name: "alpha-null",
+      settings: { sidebarCollapsed: false, groupId: "group-1", sortOrder: null },
+    };
+    const nullSortZ: WorkspaceInfo = {
+      ...workspaceTwo,
+      id: "ws-null-z",
+      name: "zeta-null",
+      settings: { sidebarCollapsed: false, groupId: "group-1", sortOrder: null },
+    };
+    listWorkspacesMock.mockResolvedValue([nullSortZ, nullSortA, numbered]);
+
+    const { result } = renderHook(() =>
+      useWorkspaces({
+        appSettings: createAppSettings([
+          { id: "group-1", name: "Group One", sortOrder: 0, copiesFolder: null },
+        ]),
+      }),
+    );
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    expect(result.current.groupedWorkspaces[0].workspaces.map((entry) => entry.id)).toEqual([
+      "ws-numbered",
+      "ws-null-a",
+      "ws-null-z",
+    ]);
   });
 });
 

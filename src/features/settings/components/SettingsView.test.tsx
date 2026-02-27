@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppSettings, WorkspaceInfo } from "../../../types";
 import { DEFAULT_COMMIT_MESSAGE_PROMPT } from "../../../utils/commitMessagePrompt";
 import { SettingsView } from "./SettingsView";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   ask: vi.fn(),
@@ -270,6 +271,71 @@ const renderEnvironmentsSection = (
 
   render(<SettingsView {...props} />);
   return { onUpdateWorkspaceSettings };
+};
+
+const renderProjectsSection = (
+  options: {
+    workspaceGroups?: ComponentProps<typeof SettingsView>["workspaceGroups"];
+    groupedWorkspaces?: ComponentProps<typeof SettingsView>["groupedWorkspaces"];
+    appSettings?: Partial<AppSettings>;
+    onCreateWorkspaceGroup?: ComponentProps<typeof SettingsView>["onCreateWorkspaceGroup"];
+    onRenameWorkspaceGroup?: ComponentProps<typeof SettingsView>["onRenameWorkspaceGroup"];
+    onDeleteWorkspaceGroup?: ComponentProps<typeof SettingsView>["onDeleteWorkspaceGroup"];
+    onUpdateAppSettings?: ComponentProps<typeof SettingsView>["onUpdateAppSettings"];
+  } = {},
+) => {
+  cleanup();
+  const onCreateWorkspaceGroup =
+    options.onCreateWorkspaceGroup ?? vi.fn().mockResolvedValue(null);
+  const onRenameWorkspaceGroup =
+    options.onRenameWorkspaceGroup ?? vi.fn().mockResolvedValue(null);
+  const onDeleteWorkspaceGroup =
+    options.onDeleteWorkspaceGroup ?? vi.fn().mockResolvedValue(null);
+  const onUpdateAppSettings =
+    options.onUpdateAppSettings ?? vi.fn().mockResolvedValue(undefined);
+
+  const props: ComponentProps<typeof SettingsView> = {
+    reduceTransparency: false,
+    onToggleTransparency: vi.fn(),
+    appSettings: {
+      ...baseSettings,
+      workspaceGroups: options.workspaceGroups ?? [],
+      ...options.appSettings,
+    },
+    openAppIconById: {},
+    onUpdateAppSettings,
+    workspaceGroups: options.workspaceGroups ?? [],
+    groupedWorkspaces: options.groupedWorkspaces ?? [],
+    ungroupedLabel: "Ungrouped",
+    onClose: vi.fn(),
+    onMoveWorkspace: vi.fn(),
+    onDeleteWorkspace: vi.fn(),
+    onCreateWorkspaceGroup,
+    onRenameWorkspaceGroup,
+    onMoveWorkspaceGroup: vi.fn().mockResolvedValue(null),
+    onDeleteWorkspaceGroup,
+    onAssignWorkspaceGroup: vi.fn().mockResolvedValue(null),
+    onRunDoctor: vi.fn().mockResolvedValue(createDoctorResult()),
+    onUpdateWorkspaceCodexBin: vi.fn().mockResolvedValue(undefined),
+    onUpdateWorkspaceSettings: vi.fn().mockResolvedValue(undefined),
+    scaleShortcutTitle: "Scale shortcut",
+    scaleShortcutText: "Use Command +/-",
+    onTestNotificationSound: vi.fn(),
+    onTestSystemNotification: vi.fn(),
+    dictationModelStatus: null,
+    onDownloadDictationModel: vi.fn(),
+    onCancelDictationDownload: vi.fn(),
+    onRemoveDictationModel: vi.fn(),
+    initialSection: "projects",
+  };
+
+  render(<SettingsView {...props} />);
+  return {
+    onCreateWorkspaceGroup,
+    onRenameWorkspaceGroup,
+    onDeleteWorkspaceGroup,
+    onUpdateAppSettings,
+  };
 };
 
 describe("SettingsView Display", () => {
@@ -567,6 +633,274 @@ describe("SettingsView Display", () => {
       expect(content.scrollTop).toBe(0);
     });
   });
+
+  it("supports ArrowLeft, Home, and End navigation in section tabs", async () => {
+    const props: ComponentProps<typeof SettingsView> = {
+      reduceTransparency: false,
+      onToggleTransparency: vi.fn(),
+      appSettings: baseSettings,
+      openAppIconById: {},
+      onUpdateAppSettings: vi.fn().mockResolvedValue(undefined),
+      workspaceGroups: [],
+      groupedWorkspaces: [],
+      ungroupedLabel: "Ungrouped",
+      onClose: vi.fn(),
+      onMoveWorkspace: vi.fn(),
+      onDeleteWorkspace: vi.fn(),
+      onCreateWorkspaceGroup: vi.fn().mockResolvedValue(null),
+      onRenameWorkspaceGroup: vi.fn().mockResolvedValue(null),
+      onMoveWorkspaceGroup: vi.fn().mockResolvedValue(null),
+      onDeleteWorkspaceGroup: vi.fn().mockResolvedValue(null),
+      onAssignWorkspaceGroup: vi.fn().mockResolvedValue(null),
+      onRunDoctor: vi.fn().mockResolvedValue(createDoctorResult()),
+      onUpdateWorkspaceCodexBin: vi.fn().mockResolvedValue(undefined),
+      onUpdateWorkspaceSettings: vi.fn().mockResolvedValue(undefined),
+      scaleShortcutTitle: "Scale shortcut",
+      scaleShortcutText: "Use Command +/-",
+      onTestNotificationSound: vi.fn(),
+      onTestSystemNotification: vi.fn(),
+      dictationModelStatus: null,
+      onDownloadDictationModel: vi.fn(),
+      onCancelDictationDownload: vi.fn(),
+      onRemoveDictationModel: vi.fn(),
+      initialSection: "server",
+    };
+
+    render(<SettingsView {...props} />);
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: "服务" }), {
+      key: "ArrowLeft",
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "模型代理" }).getAttribute("aria-selected")).toBe(
+        "true",
+      );
+    });
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: "模型代理" }), {
+      key: "Home",
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "服务" }).getAttribute("aria-selected")).toBe("true");
+    });
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: "服务" }), {
+      key: "End",
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "模型代理" }).getAttribute("aria-selected")).toBe(
+        "true",
+      );
+    });
+  });
+});
+
+describe("SettingsView Projects", () => {
+  it("creates a workspace group and clears the draft", async () => {
+    const onCreateWorkspaceGroup = vi.fn().mockResolvedValue({
+      id: "g-new",
+      name: "Frontend",
+      color: null,
+      sortOrder: 0,
+      copiesFolder: null,
+    });
+    renderProjectsSection({ onCreateWorkspaceGroup });
+
+    const input = screen.getByPlaceholderText("新分组名称");
+    fireEvent.change(input, { target: { value: "Frontend" } });
+    fireEvent.click(screen.getByRole("button", { name: "添加分组" }));
+
+    await waitFor(() => {
+      expect(onCreateWorkspaceGroup).toHaveBeenCalledWith("Frontend");
+      expect((input as HTMLInputElement).value).toBe("");
+    });
+  });
+
+  it("shows group error when creating a workspace group fails", async () => {
+    const onCreateWorkspaceGroup = vi.fn().mockRejectedValue(new Error("create failed"));
+    renderProjectsSection({ onCreateWorkspaceGroup });
+
+    fireEvent.change(screen.getByPlaceholderText("新分组名称"), {
+      target: { value: "Backend" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "添加分组" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("create failed")).not.toBeNull();
+    });
+  });
+
+  it("resets rename draft when blank and does not call rename API", async () => {
+    const group = {
+      id: "g-1",
+      name: "Core Team",
+      color: null,
+      sortOrder: 0,
+      copiesFolder: null,
+    };
+    const onRenameWorkspaceGroup = vi.fn().mockResolvedValue(true);
+    renderProjectsSection({
+      workspaceGroups: [group],
+      appSettings: { workspaceGroups: [group] },
+      onRenameWorkspaceGroup,
+    });
+
+    const input = screen.getByDisplayValue("Core Team");
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.blur(input);
+
+    await waitFor(() => {
+      expect((input as HTMLInputElement).value).toBe("Core Team");
+    });
+    expect(onRenameWorkspaceGroup).not.toHaveBeenCalled();
+  });
+
+  it("shows error and restores group name when rename fails", async () => {
+    const group = {
+      id: "g-1",
+      name: "Core Team",
+      color: null,
+      sortOrder: 0,
+      copiesFolder: null,
+    };
+    const onRenameWorkspaceGroup = vi.fn().mockRejectedValue(new Error("rename failed"));
+    renderProjectsSection({
+      workspaceGroups: [group],
+      appSettings: { workspaceGroups: [group] },
+      onRenameWorkspaceGroup,
+    });
+
+    const input = screen.getByDisplayValue("Core Team");
+    fireEvent.change(input, { target: { value: "Renamed Team" } });
+    fireEvent.blur(input);
+
+    await waitFor(() => {
+      expect(screen.getByText("rename failed")).not.toBeNull();
+      expect((input as HTMLInputElement).value).toBe("Core Team");
+    });
+  });
+
+  it("selects and clears group copies folder", async () => {
+    const group = {
+      id: "g-1",
+      name: "Core Team",
+      color: null,
+      sortOrder: 0,
+      copiesFolder: "/tmp/copies-old",
+    };
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(open).mockResolvedValue("/tmp/copies-next");
+    renderProjectsSection({
+      workspaceGroups: [group],
+      appSettings: { workspaceGroups: [group] },
+      onUpdateAppSettings,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "选择…" }));
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceGroups: [
+            expect.objectContaining({ id: "g-1", copiesFolder: "/tmp/copies-next" }),
+          ],
+        }),
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "清除" }));
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceGroups: [
+            expect.objectContaining({ id: "g-1", copiesFolder: null }),
+          ],
+        }),
+      );
+    });
+  });
+
+  it("skips copies folder update when picker returns multiple selections", async () => {
+    const group = {
+      id: "g-1",
+      name: "Core Team",
+      color: null,
+      sortOrder: 0,
+      copiesFolder: null,
+    };
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(open).mockResolvedValue(["/tmp/a", "/tmp/b"]);
+    renderProjectsSection({
+      workspaceGroups: [group],
+      appSettings: { workspaceGroups: [group] },
+      onUpdateAppSettings,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "选择…" }));
+
+    await waitFor(() => {
+      expect(open).toHaveBeenCalled();
+    });
+    expect(onUpdateAppSettings).not.toHaveBeenCalled();
+  });
+
+  it("does not delete group when confirmation is cancelled", async () => {
+    const group = {
+      id: "g-1",
+      name: "Core Team",
+      color: null,
+      sortOrder: 0,
+      copiesFolder: null,
+    };
+    const onDeleteWorkspaceGroup = vi.fn().mockResolvedValue(true);
+    vi.mocked(ask).mockResolvedValue(false);
+    renderProjectsSection({
+      workspaceGroups: [group],
+      appSettings: { workspaceGroups: [group] },
+      groupedWorkspaces: [
+        {
+          id: "g-1",
+          name: "Core Team",
+          workspaces: [workspace({ id: "w1", name: "Project One" })],
+        },
+      ],
+      onDeleteWorkspaceGroup,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "删除分组" }));
+
+    await waitFor(() => {
+      expect(ask).toHaveBeenCalled();
+    });
+    expect(onDeleteWorkspaceGroup).not.toHaveBeenCalled();
+  });
+
+  it("shows group error when delete is confirmed but API fails", async () => {
+    const group = {
+      id: "g-1",
+      name: "Core Team",
+      color: null,
+      sortOrder: 0,
+      copiesFolder: null,
+    };
+    const onDeleteWorkspaceGroup = vi
+      .fn()
+      .mockRejectedValue(new Error("delete failed"));
+    vi.mocked(ask).mockResolvedValue(true);
+    renderProjectsSection({
+      workspaceGroups: [group],
+      appSettings: { workspaceGroups: [group] },
+      onDeleteWorkspaceGroup,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "删除分组" }));
+
+    await waitFor(() => {
+      expect(onDeleteWorkspaceGroup).toHaveBeenCalledWith("g-1");
+      expect(screen.getByText("delete failed")).not.toBeNull();
+    });
+  });
 });
 
 describe("SettingsView Environments", () => {
@@ -696,5 +1030,81 @@ describe("SettingsView Environments", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     expect(onUpdateWorkspaceSettings).not.toHaveBeenCalled();
+  });
+
+  it("switches project script draft when changing environment workspace", async () => {
+    const onUpdateWorkspaceSettings = vi.fn().mockResolvedValue(undefined);
+    renderEnvironmentsSection({
+      onUpdateWorkspaceSettings,
+      groupedWorkspaces: [
+        {
+          id: null,
+          name: "Ungrouped",
+          workspaces: [
+            workspace({
+              id: "w1",
+              name: "Project One",
+              settings: {
+                sidebarCollapsed: false,
+                worktreeSetupScript: "echo one",
+              },
+            }),
+            workspace({
+              id: "w2",
+              name: "Project Two",
+              settings: {
+                sidebarCollapsed: false,
+                worktreeSetupScript: "echo two",
+              },
+            }),
+          ],
+        },
+      ],
+    });
+
+    const textarea = screen.getByPlaceholderText("pnpm install") as HTMLTextAreaElement;
+    expect(textarea.value).toBe("echo one");
+    fireEvent.change(textarea, { target: { value: "echo dirty" } });
+
+    fireEvent.change(screen.getByLabelText("项目"), {
+      target: { value: "w2" },
+    });
+
+    await waitFor(() => {
+      expect((screen.getByPlaceholderText("pnpm install") as HTMLTextAreaElement).value).toBe(
+        "echo two",
+      );
+      expect((screen.getByRole("button", { name: "保存" }) as HTMLButtonElement).disabled).toBe(
+        true,
+      );
+    });
+  });
+
+  it("renders empty state when no main workspaces are available", async () => {
+    renderEnvironmentsSection({
+      groupedWorkspaces: [
+        {
+          id: null,
+          name: "Ungrouped",
+          workspaces: [
+            workspace({
+              id: "wt1",
+              name: "Worktree Only",
+              kind: "worktree",
+              settings: {
+                sidebarCollapsed: false,
+                worktreeSetupScript: "echo ignored",
+              },
+            }),
+          ],
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("暂无项目。")).not.toBeNull();
+    });
+    expect(screen.queryByLabelText("项目")).toBeNull();
+    expect(screen.queryByRole("button", { name: "保存" })).toBeNull();
   });
 });

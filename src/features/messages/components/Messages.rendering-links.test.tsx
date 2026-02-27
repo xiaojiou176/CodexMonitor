@@ -14,6 +14,7 @@ const useFileLinkOpenerMock = vi.fn(
 const openFileLinkMock = vi.fn();
 const showFileLinkMenuMock = vi.fn();
 const readWorkspaceFileMock = vi.hoisted(() => vi.fn());
+const openUrlMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../services/tauri", async () => {
   const actual = await vi.importActual<typeof import("../../../services/tauri")>(
@@ -34,6 +35,10 @@ vi.mock("../hooks/useFileLinkOpener", () => ({
   ) => useFileLinkOpenerMock(workspacePath, openTargets, selectedOpenAppId),
 }));
 
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: (url: string) => openUrlMock(url),
+}));
+
 describe("Messages", () => {
   beforeAll(() => {
     if (!HTMLElement.prototype.scrollIntoView) {
@@ -51,6 +56,7 @@ describe("Messages", () => {
     openFileLinkMock.mockReset();
     showFileLinkMenuMock.mockReset();
     readWorkspaceFileMock.mockReset();
+    openUrlMock.mockReset();
     readWorkspaceFileMock.mockResolvedValue({
       content: "line-1\nline-2\nline-3\nline-4",
       truncated: false,
@@ -493,6 +499,195 @@ describe("Messages", () => {
     expect(container.textContent ?? "").toContain("after");
   });
 
+  it("renders assistant meta when text is blank and formats context window tokens", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-assistant-meta-only",
+        kind: "message",
+        role: "assistant",
+        text: "   ",
+        model: " gemini-3.1-pro-preview ",
+        contextWindow: 1530,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.textContent ?? "").toContain("模型: gemini-3.1-pro-preview");
+    expect(container.textContent ?? "").toContain("上下文窗口: 1.5K");
+    expect(container.querySelector(".markdown")).toBeNull();
+  });
+
+  it("shows preview loading and failure boundary text", async () => {
+    let rejectRead: ((reason?: unknown) => void) | undefined;
+    readWorkspaceFileMock.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          rejectRead = reject;
+        }),
+    );
+    const items: ConversationItem[] = [
+      {
+        id: "msg-file-link-preview-failure",
+        kind: "message",
+        role: "assistant",
+        text: "Check `src/features/messages/components/Markdown.tsx:5`",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-preview-loading"
+        workspacePath="/tmp/repo"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const fileLink = container.querySelector(".message-file-link");
+    expect(fileLink).not.toBeNull();
+    fireEvent.mouseEnter(fileLink as Element);
+
+    await waitFor(() => {
+      expect(screen.getByText("正在读取文件...")).not.toBeNull();
+    });
+
+    rejectRead?.(new Error("disk offline"));
+    await waitFor(() => {
+      expect(screen.getByText("预览失败：disk offline")).not.toBeNull();
+    });
+  });
+
+  it("shows truncated badge in file preview when backend marks payload truncated", async () => {
+    readWorkspaceFileMock.mockResolvedValue({
+      content: ["line-1", "line-2", "line-3"].join("\n"),
+      truncated: true,
+    });
+    const items: ConversationItem[] = [
+      {
+        id: "msg-file-link-preview-truncated",
+        kind: "message",
+        role: "assistant",
+        text: "Check `src/features/messages/components/Markdown.tsx:2`",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-preview-truncated"
+        workspacePath="/tmp/repo"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const fileLink = container.querySelector(".message-file-link");
+    expect(fileLink).not.toBeNull();
+    fireEvent.mouseEnter(fileLink as Element);
+
+    await waitFor(() => {
+      expect(screen.getByText("已截断")).not.toBeNull();
+    });
+  });
+
+  it("renders url-only fenced blocks as link groups and opens links", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-linkblock",
+        kind: "message",
+        role: "assistant",
+        text: [
+          "```text",
+          "https://example.com/docs",
+          "https://example.com/changelog",
+          "```",
+        ].join("\n"),
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".markdown-linkblock")).not.toBeNull();
+    fireEvent.click(screen.getByText("https://example.com/docs"));
+    fireEvent.click(screen.getByText("https://example.com/changelog"));
+
+    expect(openUrlMock).toHaveBeenNthCalledWith(1, "https://example.com/docs");
+    expect(openUrlMock).toHaveBeenNthCalledWith(2, "https://example.com/changelog");
+  });
+
+  it("keeps one-line fences as plain code and uses modifier for multi-line copy", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText },
+    });
+
+    const items: ConversationItem[] = [
+      {
+        id: "msg-single-line-fence",
+        kind: "message",
+        role: "assistant",
+        text: ["```ts", "const one = 1;", "```"].join("\n"),
+      },
+      {
+        id: "msg-multi-line-fence",
+        kind: "message",
+        role: "assistant",
+        text: ["```ts", "const one = 1;", "const two = 2;", "```"].join("\n"),
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+        codeBlockCopyUseModifier
+      />,
+    );
+
+    expect(container.querySelectorAll(".markdown-codeblock-single").length).toBeGreaterThan(0);
+
+    const copyButton = screen.getByRole("button", { name: "复制代码块" });
+    fireEvent.click(copyButton);
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("const one = 1;\nconst two = 2;");
+    });
+
+    fireEvent.click(copyButton, { altKey: true });
+    await waitFor(() => {
+      expect(writeText).toHaveBeenLastCalledWith(
+        "```ts\nconst one = 1;\nconst two = 2;\n```",
+      );
+    });
+  });
+
   it("keeps long-running command output collapsed by default and supports re-collapse", () => {
     const items: ConversationItem[] = [
       {
@@ -567,6 +762,260 @@ describe("Messages", () => {
 
     fireEvent.click(toggleButton);
     expect(container.querySelector(".tool-inline-terminal")).toBeNull();
+  });
+
+  it("toggles long user message collapse state between preview and full markdown", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-user-collapse-toggle",
+        kind: "message",
+        role: "user",
+        text: Array.from({ length: 16 }, (_, index) => `line-${index + 1}`).join("\n"),
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-collapse-user"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const collapsedToggle = screen.getByRole("button", { name: "展开全文" });
+    expect(collapsedToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector(".message-user-collapsed")).not.toBeNull();
+    expect(container.querySelector(".markdown")).toBeNull();
+
+    fireEvent.click(collapsedToggle);
+    const collapseButton = screen.getByRole("button", { name: "收起" });
+    expect(collapseButton.getAttribute("aria-expanded")).toBe("true");
+    expect(container.querySelector(".markdown")).not.toBeNull();
+
+    fireEvent.click(collapseButton);
+    expect(screen.getByRole("button", { name: "展开全文" })).not.toBeNull();
+    expect(container.querySelector(".message-user-collapsed")).not.toBeNull();
+  });
+
+  it("auto-collapses older long assistant messages and allows expand/collapse", () => {
+    const shortUser: ConversationItem = {
+      id: "msg-user-anchor",
+      kind: "message",
+      role: "user",
+      text: "anchor",
+    };
+    const longAssistantText = Array.from(
+      { length: 18 },
+      (_, index) => `assistant-line-${index + 1}`,
+    ).join("\n");
+    const assistantItems: ConversationItem[] = Array.from({ length: 6 }, (_, index) => ({
+      id: `msg-assistant-${index + 1}`,
+      kind: "message",
+      role: "assistant",
+      text: longAssistantText,
+    }));
+
+    render(
+      <Messages
+        items={[shortUser, ...assistantItems]}
+        threadId="thread-collapse-assistant"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const expandButtons = screen.getAllByRole("button", { name: "展开全文" });
+    expect(expandButtons.length).toBe(1);
+
+    fireEvent.click(expandButtons[0]);
+    const collapseButtons = screen.getAllByRole("button", { name: "收起" });
+    expect(collapseButtons.length).toBeGreaterThan(0);
+  });
+
+  it("renders file-change detail markdown fallback when no changed files are provided", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "tool-filechange-fallback-detail",
+        kind: "tool",
+        toolType: "fileChange",
+        title: "Edit files",
+        detail: "fallback detail body",
+        status: "completed",
+        changes: [],
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-tool-fallback"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "切换工具详情" }));
+    expect(container.textContent ?? "").toContain("fallback detail body");
+  });
+
+  it("renders a blank preview line when backend returns empty file content", async () => {
+    readWorkspaceFileMock.mockResolvedValue({
+      content: "",
+      truncated: false,
+    });
+
+    const items: ConversationItem[] = [
+      {
+        id: "msg-file-link-preview-empty",
+        kind: "message",
+        role: "assistant",
+        text: "Check `src/features/messages/components/Markdown.tsx:10`",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-preview-empty"
+        workspaceId="ws-preview-empty"
+        workspacePath="/tmp/repo"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const fileLink = container.querySelector(".message-file-link");
+    expect(fileLink).not.toBeNull();
+    fireEvent.mouseEnter(fileLink as Element);
+
+    await waitFor(() => {
+      const previewLines = container.ownerDocument.querySelectorAll(
+        ".message-file-link-preview-line",
+      );
+      expect(previewLines.length).toBe(1);
+      expect(
+        container.ownerDocument.querySelector(".message-file-link-preview-line-text")
+          ?.textContent,
+      ).toBe(" ");
+    });
+  });
+
+  it("keeps hash anchors native, renders unsupported links as text, and opens external urls", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-link-fallback-branches",
+        kind: "message",
+        role: "assistant",
+        text: [
+          "[hash](#section)",
+          "[unsupported](ftp://intranet.local/resource)",
+          "[external](https://example.com/help)",
+        ].join(" "),
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-link-fallback"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector('a[href="#section"]')).not.toBeNull();
+    expect(container.querySelector('a[href="ftp://intranet.local/resource"]')).toBeNull();
+    expect(container.textContent ?? "").toContain("unsupported");
+
+    fireEvent.click(screen.getByText("external"));
+    expect(openUrlMock).toHaveBeenCalledWith("https://example.com/help");
+  });
+
+  it("uses execCommand fallback when clipboard API is unavailable for code block copy", () => {
+    const originalClipboard = navigator.clipboard;
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: undefined,
+    });
+    const originalExecCommand = (document as Document & { execCommand?: typeof document.execCommand })
+      .execCommand;
+    const execCommandMock = vi.fn(() => true);
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: execCommandMock,
+    });
+
+    const items: ConversationItem[] = [
+      {
+        id: "msg-copy-fallback-exec-command",
+        kind: "message",
+        role: "assistant",
+        text: ["```ts", "const fallback = true;", "const done = false;", "```"].join("\n"),
+      },
+    ];
+
+    render(
+      <Messages
+        items={items}
+        threadId="thread-copy-fallback"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "复制代码块" }));
+    expect(execCommandMock).toHaveBeenCalledWith("copy");
+
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: originalExecCommand,
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: originalClipboard,
+    });
+  });
+
+  it("renders empty-state and loading-state placeholders for no-item threads", () => {
+    const { rerender, container } = render(
+      <Messages
+        items={[]}
+        threadId={null}
+        workspaceId="ws-1"
+        isThinking={false}
+        isLoadingMessages={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.textContent ?? "").toContain("发送消息开始新对话。");
+
+    rerender(
+      <Messages
+        items={[]}
+        threadId="thread-empty-loading"
+        workspaceId="ws-1"
+        isThinking={false}
+        isLoadingMessages
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("正在加载对话记录…")).not.toBeNull();
   });
 
   it("does not re-render messages while typing when message props stay stable", () => {

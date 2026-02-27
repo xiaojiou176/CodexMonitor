@@ -12,9 +12,9 @@ export type DiffLineStats = {
 
 export type AppTab = "home" | "projects" | "codex" | "git" | "log";
 
-export type GitPanelMode = "issues" | "prs" | "local";
+export type GitPanelMode = "issues" | "prs" | "local" | "diff" | "log";
 
-export type DiffSource = "local" | "pr";
+export type DiffSource = "local" | "pr" | "commit";
 
 export type CompactThreadConnectionState = "live" | "polling" | "disconnected";
 export type CompactThreadConnectionIndicatorMeta = {
@@ -50,6 +50,22 @@ export type RecentThreadInstance = {
   sequence: number;
 };
 
+export type ContinueThreadConfig = {
+  enabled: boolean;
+  prompt: string;
+};
+
+export type QueueHealthArtifact = {
+  queueLength: number;
+  inFlight: boolean;
+};
+
+export type QueueHealthEntry = {
+  threadId: string;
+  queueLength: number;
+  inFlight: boolean;
+};
+
 export function deriveTabletTab(activeTab: AppTab): "codex" | "git" | "log" {
   return activeTab === "projects" || activeTab === "home" ? "codex" : activeTab;
 }
@@ -83,6 +99,20 @@ export function deriveShowCompactCodexThreadActions(params: {
     params.isCompact &&
     ((params.isPhone && params.activeTab === "codex") ||
       (params.isTablet && params.tabletTab === "codex"))
+  );
+}
+
+export function deriveShowMobilePollingFetchStatus(params: {
+  showCompactCodexThreadActions: boolean;
+  isWorkspaceConnected: boolean;
+  backendMode: "local" | "remote";
+  remoteThreadConnectionState: CompactThreadConnectionState;
+}): boolean {
+  return (
+    params.showCompactCodexThreadActions &&
+    params.isWorkspaceConnected &&
+    params.backendMode === "remote" &&
+    params.remoteThreadConnectionState === "polling"
   );
 }
 
@@ -149,6 +179,110 @@ export function buildCompactThreadConnectionIndicatorMeta(
     title: "Disconnected from backend",
     label: "Disconnected",
   };
+}
+
+export function resolvePreferredThreadId(params: {
+  workspaceId: string;
+  activeWorkspaceId: string | null;
+  activeThreadId: string | null;
+  threadsByWorkspace: Record<string, Array<{ id: string }>>;
+}): string | null {
+  if (params.activeWorkspaceId === params.workspaceId && params.activeThreadId) {
+    return params.activeThreadId;
+  }
+  return params.threadsByWorkspace[params.workspaceId]?.[0]?.id ?? null;
+}
+
+export function buildThreadWorkspaceById(params: {
+  workspaces: Array<{ id: string }>;
+  threadsByWorkspace: Record<string, Array<{ id: string }>>;
+}): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const workspace of params.workspaces) {
+    const threads = params.threadsByWorkspace[workspace.id] ?? [];
+    for (const thread of threads) {
+      result[thread.id] = workspace.id;
+    }
+  }
+  return result;
+}
+
+export function buildQueueArtifactsByThread(
+  entries: QueueHealthEntry[],
+): Record<string, QueueHealthArtifact> {
+  const byThread: Record<string, QueueHealthArtifact> = {};
+  entries.forEach((entry) => {
+    byThread[entry.threadId] = {
+      queueLength: entry.queueLength,
+      inFlight: entry.inFlight,
+    };
+  });
+  return byThread;
+}
+
+export function resolveActiveContinueConfig(params: {
+  activeThreadId: string | null;
+  continueConfigByThread: Record<string, ContinueThreadConfig>;
+  defaultPrompt: string;
+}): ContinueThreadConfig {
+  if (params.activeThreadId) {
+    return (
+      params.continueConfigByThread[params.activeThreadId] ?? {
+        enabled: false,
+        prompt: params.defaultPrompt,
+      }
+    );
+  }
+  return {
+    enabled: false,
+    prompt: params.defaultPrompt,
+  };
+}
+
+export function buildContinueConfigForModeChange(params: {
+  prev: Record<string, ContinueThreadConfig>;
+  activeThreadId: string;
+  enabled: boolean;
+  defaultPrompt: string;
+}): Record<string, ContinueThreadConfig> {
+  return {
+    ...params.prev,
+    [params.activeThreadId]: {
+      enabled: params.enabled,
+      prompt: params.prev[params.activeThreadId]?.prompt ?? params.defaultPrompt,
+    },
+  };
+}
+
+export function buildContinueConfigForPromptChange(params: {
+  prev: Record<string, ContinueThreadConfig>;
+  activeThreadId: string;
+  prompt: string;
+}): Record<string, ContinueThreadConfig> {
+  return {
+    ...params.prev,
+    [params.activeThreadId]: {
+      enabled: params.prev[params.activeThreadId]?.enabled ?? false,
+      prompt: params.prompt,
+    },
+  };
+}
+
+export function buildAppClassName(params: {
+  isCompact: boolean;
+  isPhone: boolean;
+  isTablet: boolean;
+  shouldReduceTransparency: boolean;
+  sidebarCollapsed: boolean;
+  rightPanelCollapsed: boolean;
+}): string {
+  return `app ${params.isCompact ? "layout-compact" : "layout-desktop"}${
+    params.isPhone ? " layout-phone" : ""
+  }${params.isTablet ? " layout-tablet" : ""}${
+    params.shouldReduceTransparency ? " reduced-transparency" : ""
+  }${!params.isCompact && params.sidebarCollapsed ? " sidebar-collapsed" : ""}${
+    !params.isCompact && params.rightPanelCollapsed ? " right-panel-collapsed" : ""
+  }`;
 }
 
 export function deriveFileStatusLabel(params: {
