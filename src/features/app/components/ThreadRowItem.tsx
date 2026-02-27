@@ -120,6 +120,21 @@ function ThreadRowItemComponent({
     [canPin, onShowThreadMenu, threadId, workspaceId],
   );
 
+  const handleRowKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.target !== event.currentTarget) {
+        return;
+      }
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      event.preventDefault();
+      onEmitSelection?.(workspaceId, threadId, false, false, false);
+      onSelectThread(workspaceId, threadId);
+    },
+    [onEmitSelection, onSelectThread, threadId, workspaceId],
+  );
+
   const handleMenuClick = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation();
@@ -182,7 +197,11 @@ function ThreadRowItemComponent({
         isDropTargetAfter ? " thread-row-drop-target-after" : ""
       }`}
       style={indentStyle}
+      role="button"
+      tabIndex={0}
+      aria-label={`选择对话 ${threadName}`}
       onClick={handleRowClick}
+      onKeyDown={handleRowKeyDown}
       onContextMenu={handleContextMenu}
       draggable={draggable}
       onDragStart={handleDragStart}

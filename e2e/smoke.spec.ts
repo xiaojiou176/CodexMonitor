@@ -1,5 +1,16 @@
 import { expect, test } from "@playwright/test";
 
+async function activateByPointer(page: import("@playwright/test").Page, locator: import("@playwright/test").Locator) {
+  await expect(locator).toBeVisible();
+  await expect(locator).toBeEnabled();
+  await locator.scrollIntoViewIfNeeded();
+  const box = await locator.boundingBox();
+  if (!box) {
+    throw new Error("Target element has no bounding box for pointer activation.");
+  }
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
+
 test("home smoke renders core entry points", async ({ page }) => {
   await page.goto("/");
 
@@ -64,19 +75,17 @@ test("home smoke supports a minimal interaction journey", async ({ page }) => {
 
   const tokenButton = page.getByRole("button", { name: "令牌" });
   const timeButton = page.getByRole("button", { name: "时长" });
-  await timeButton.evaluate((element) => (element as HTMLButtonElement).click());
+  await activateByPointer(page, timeButton);
   await expect(timeButton).toHaveAttribute("aria-pressed", "true");
   await expect(tokenButton).toHaveAttribute("aria-pressed", "false");
-  await tokenButton.evaluate((element) => (element as HTMLButtonElement).click());
+  await activateByPointer(page, tokenButton);
   await expect(tokenButton).toHaveAttribute("aria-pressed", "true");
   await expect(timeButton).toHaveAttribute("aria-pressed", "false");
 
   const sortButton = page.getByRole("button", { name: "排序对话" });
-  await sortButton.evaluate((element) => (element as HTMLButtonElement).click());
+  await activateByPointer(page, sortButton);
   await expect(page.getByRole("menuitemradio", { name: "最近更新" })).toBeVisible();
-  await page
-    .getByRole("menuitemradio", { name: "最新创建" })
-    .evaluate((element) => (element as HTMLElement).click());
+  await activateByPointer(page, page.getByRole("menuitemradio", { name: "最新创建" }));
   await expect(page.getByRole("menuitemradio", { name: "最新创建" })).toHaveCount(0);
 });
 
@@ -120,23 +129,17 @@ test("session smoke covers create flow and creation-mode switch", async ({ page 
   await page.goto("/");
 
   const addSessionButton = page.getByRole("button", { name: "添加对话选项" }).first();
-  await addSessionButton.evaluate((element) => (element as HTMLButtonElement).click());
+  await activateByPointer(page, addSessionButton);
   await expect(page.getByRole("button", { name: "新建对话" })).toBeVisible();
-  await page
-    .getByRole("button", { name: "新建对话" })
-    .evaluate((element) => (element as HTMLButtonElement).click());
+  await activateByPointer(page, page.getByRole("button", { name: "新建对话" }));
 
   const draftRow = page.locator(".thread-row-draft").first();
   await expect(draftRow).toBeVisible();
   await expect(draftRow).toContainText("新建对话");
 
-  await addSessionButton.evaluate((element) => (element as HTMLButtonElement).click());
-  await page
-    .getByRole("button", { name: "新建工作树对话" })
-    .evaluate((element) => (element as HTMLButtonElement).click());
+  await activateByPointer(page, addSessionButton);
+  await activateByPointer(page, page.getByRole("button", { name: "新建工作树对话" }));
   const worktreeDialog = page.getByRole("dialog", { name: "新建工作树对话" });
   await expect(worktreeDialog).toBeVisible();
-  await worktreeDialog
-    .getByRole("button", { name: "取消" })
-    .evaluate((element) => (element as HTMLButtonElement).click());
+  await activateByPointer(page, worktreeDialog.getByRole("button", { name: "取消" }));
 });

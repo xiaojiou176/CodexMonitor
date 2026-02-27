@@ -427,6 +427,7 @@ jobs:
       MUTATION_BASE_SHA: ${{ needs.changes.outputs.mutation_base_sha }}
       MUTATION_HEAD_SHA: ${{ needs.changes.outputs.mutation_head_sha }}
       MUTATION_MUTATE: ${{ needs.changes.outputs.mutation_targets }}
+      MUTATION_REQUIRE_EXECUTION: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -455,8 +456,7 @@ jobs:
       - name: Enforce mutation execution on PR/main
         if: >-
           always() &&
-          (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') &&
-          needs.changes.outputs.mutation_targets != ''
+          (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
         run: |
           set -euo pipefail
           report_path=".runtime-cache/test_output/mutation-gate/latest.json"
@@ -468,8 +468,8 @@ jobs:
           const fs = require("fs");
           const reportPath = process.env.REPORT_PATH;
           const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
-          if (report.status === "skip") {
-            console.error(`Mutation gate reported skip on protected flow (${reportPath}).`);
+          if (report.status !== "pass") {
+            console.error(`Mutation gate must pass on protected flow (${reportPath}), got status=${report.status}.`);
             process.exit(1);
           }
           NODE
@@ -554,7 +554,7 @@ jobs:
           if-no-files-found: ignore
 
   e2e-a11y:
-    name: e2e-a11y
+    name: e2e-a11y (${{ matrix.browser }})
     runs-on: ubuntu-latest
     timeout-minutes: 35
     needs:
@@ -563,6 +563,10 @@ jobs:
       - lint-frontend
       - typecheck
     if: needs.changes.outputs.run_e2e == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -591,7 +595,7 @@ jobs:
           key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-ms-playwright-
-      - name: Install Playwright browser (chromium)
+      - name: Install Playwright browser (${{ matrix.browser }})
         run: |
           set -euo pipefail
           while true; do
@@ -600,8 +604,8 @@ jobs:
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npx playwright install --with-deps chromium
-      - name: E2E a11y sweep
+          npx playwright install --with-deps "${{ matrix.browser }}"
+      - name: E2E a11y sweep (${{ matrix.browser }})
         run: |
           set -euo pipefail
           while true; do
@@ -610,19 +614,19 @@ jobs:
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npx playwright test e2e/a11y.spec.ts --project=chromium
+          npx playwright test e2e/a11y.spec.ts --project="${{ matrix.browser }}"
       - name: Upload Playwright a11y artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-a11y-artifacts
+          name: playwright-a11y-artifacts-${{ matrix.browser }}
           path: |
             playwright-report
             test-results
           if-no-files-found: ignore
 
   e2e-interaction-sweep:
-    name: e2e-interaction-sweep
+    name: e2e-interaction-sweep (${{ matrix.browser }})
     runs-on: ubuntu-latest
     timeout-minutes: 35
     needs:
@@ -631,6 +635,10 @@ jobs:
       - lint-frontend
       - typecheck
     if: needs.changes.outputs.run_e2e == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -659,7 +667,7 @@ jobs:
           key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-ms-playwright-
-      - name: Install Playwright browser (chromium)
+      - name: Install Playwright browser (${{ matrix.browser }})
         run: |
           set -euo pipefail
           while true; do
@@ -668,8 +676,8 @@ jobs:
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npx playwright install --with-deps chromium
-      - name: E2E interaction sweep
+          npx playwright install --with-deps "${{ matrix.browser }}"
+      - name: E2E interaction sweep (${{ matrix.browser }})
         run: |
           set -euo pipefail
           while true; do
@@ -678,12 +686,12 @@ jobs:
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npx playwright test e2e/interaction-sweep.spec.ts --project=chromium
+          npx playwright test e2e/interaction-sweep.spec.ts --project="${{ matrix.browser }}"
       - name: Upload Playwright interaction artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-interaction-artifacts
+          name: playwright-interaction-artifacts-${{ matrix.browser }}
           path: |
             playwright-report
             test-results
@@ -758,7 +766,7 @@ jobs:
             e2e/worktree-flow.spec.ts \
             --project="${{ matrix.browser }}" \
             --reporter=json > "${report_path}"
-          node scripts/check-playwright-report.mjs "${report_path}" "e2e-key-journeys-${{ matrix.browser }}" --enforce=warn
+          node scripts/check-playwright-report.mjs "${report_path}" "e2e-key-journeys-${{ matrix.browser }}" --enforce=fail
       - name: Upload Playwright key journey artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -848,7 +856,7 @@ jobs:
             --project="${{ matrix.browser }}" \
             --workers=1 \
             --reporter=json > "${report_path}"
-          node scripts/check-playwright-report.mjs "${report_path}" "e2e-functional-regression-${{ matrix.browser }}" --enforce=warn
+          node scripts/check-playwright-report.mjs "${report_path}" "e2e-functional-regression-${{ matrix.browser }}" --enforce=fail
       - name: Upload Playwright functional artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -945,12 +953,15 @@ jobs:
           fi
       - name: Build Storybook (local visual structure gate)
         run: npm run build-storybook
+      - name: Enforce Chromatic token presence
+        run: |
+          set -euo pipefail
+          if [ -z "${CHROMATIC_PROJECT_TOKEN}" ]; then
+            echo "::error::CHROMATIC_PROJECT_TOKEN is required for visual regression gate."
+            exit 1
+          fi
       - name: Run Chromatic (cloud visual diff)
-        if: env.CHROMATIC_PROJECT_TOKEN != ''
         run: npm run chromatic
-      - name: Chromatic unavailable notice
-        if: env.CHROMATIC_PROJECT_TOKEN == ''
-        run: echo "::notice::CHROMATIC_PROJECT_TOKEN missing; local Storybook build gate enforced."
 
   test-tauri:
     name: Rust tests (${{ matrix.platform.name }})

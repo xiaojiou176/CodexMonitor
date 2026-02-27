@@ -613,7 +613,6 @@ export function Home({
                       title={tooltip}
                       role="listitem"
                       aria-label={tooltip}
-                      tabIndex={0}
                     >
                       <span
                         className="home-usage-bar-fill"

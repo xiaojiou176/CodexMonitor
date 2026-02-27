@@ -48,7 +48,7 @@ export async function ensureInteractive(locator: Locator): Promise<void> {
 
 export async function activateByStableClick(locator: Locator): Promise<void> {
   await ensureInteractive(locator);
-  await locator.dispatchEvent("click");
+  await locator.click();
 }
 
 export async function activateByStableKey(
@@ -58,7 +58,5 @@ export async function activateByStableKey(
   await ensureInteractive(locator);
   await locator.focus();
   await expect(locator).toBeFocused();
-  const resolvedKey = key === "Space" ? " " : key;
-  await locator.dispatchEvent("keydown", { key: resolvedKey });
-  await locator.dispatchEvent("keyup", { key: resolvedKey });
+  await locator.press(key);
 }

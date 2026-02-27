@@ -334,7 +334,7 @@ Quality gates are intentionally layered by strictness to avoid policy drift:
    - CI type checking now uses `npm run typecheck:ci` (product code strict check, test/story files excluded) so legacy test typing debt cannot mask product regressions.
    - Strict-main integration gate: `.github/workflows/real-integration.yml` enforces dual-chain blocking on `main` when both live chains are runnable (`run_external=true` and `run_llm=true`); otherwise it emits an explicit advisory warning with required secret setup guidance.
    - Coverage gate in CI enforces the ratcheted policy (`npm run test:coverage:gate`) to prevent regression while keeping required gates aligned with current repository baseline.
-   - Mutation gate now hard-fails protected flows (`pull_request` + `main`) if mutation run resolves to `status=skip`.
+   - Mutation gate now enforces real execution on protected flows (`pull_request` + `main`): diff-empty changes fall back to default critical scope and final status must be `pass` (skip/dry-run are rejected).
    - E2E skip audit: key journeys and functional regression suites emit JSON and run `scripts/check-playwright-report.mjs` in warn mode for skipped-test visibility without hard-blocking CI.
    - E2E evidence retention: key journey / functional JSON summaries are uploaded as CI artifacts on every run (`if: always()`).
    - Visual gate: `.github/workflows/ci.yml` job `visual-regression` always enforces a local Storybook build gate, and additionally runs Chromatic cloud diff when `CHROMATIC_PROJECT_TOKEN` is available.

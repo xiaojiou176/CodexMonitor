@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+} from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TerminalTab } from "../hooks/useTerminalTabs";
 import { TerminalDock } from "./TerminalDock";
@@ -10,6 +13,7 @@ function renderDock(options?: {
   activeTerminalId?: string | null;
   isOpen?: boolean;
   onResizeStart?: (event: ReactMouseEvent) => void;
+  onResizeKeyDown?: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
 }) {
   const onSelectTerminal = vi.fn();
   const onNewTerminal = vi.fn();
@@ -29,6 +33,10 @@ function renderDock(options?: {
       onNewTerminal={onNewTerminal}
       onCloseTerminal={onCloseTerminal}
       onResizeStart={options?.onResizeStart}
+      onResizeKeyDown={options?.onResizeKeyDown}
+      panelHeight={220}
+      panelResizeMin={140}
+      panelResizeMax={480}
       terminalNode={
         <div>
           <p>暂无终端会话</p>
@@ -100,9 +108,18 @@ describe("TerminalDock", () => {
 
   it("renders optional separator and forwards resize start", () => {
     const onResizeStart = vi.fn();
-    renderDock({ onResizeStart });
+    const onResizeKeyDown = vi.fn();
+    renderDock({ onResizeStart, onResizeKeyDown });
 
-    fireEvent.mouseDown(screen.getByRole("separator"));
+    const separator = screen.getByRole("separator");
+    expect(separator.getAttribute("tabindex")).toBe("0");
+    expect(separator.getAttribute("aria-valuenow")).toBe("220");
+    expect(separator.getAttribute("aria-valuemin")).toBe("140");
+    expect(separator.getAttribute("aria-valuemax")).toBe("480");
+
+    fireEvent.mouseDown(separator);
+    fireEvent.keyDown(separator, { key: "ArrowUp" });
     expect(onResizeStart).toHaveBeenCalledTimes(1);
+    expect(onResizeKeyDown).toHaveBeenCalledTimes(1);
   });
 });

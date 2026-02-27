@@ -2,6 +2,18 @@
 
 Date: 2026-02-26
 
+## UI A11y + Functional Gate Hardening Update (2026-02-27)
+
+- Thread list primary row interaction is now keyboard-accessible (`Enter`/`Space`) with explicit focusability and role semantics.
+- Terminal dock separator now supports keyboard resize semantics (`tabIndex`, `aria-valuenow/min/max`, `onKeyDown`) and visible focus ring.
+- A11y gate escalated from `critical-only` to blocking `critical + serious`.
+- Playwright interaction helpers now use user-level actions (`locator.click()` / `locator.press()`), removing synthetic `dispatchEvent` paths.
+- CI skip-detection for key journeys and functional regression now enforces `--enforce=fail`.
+- CI `e2e-a11y` and `e2e-interaction-sweep` upgraded to cross-engine matrix (`chromium + webkit`).
+- CI visual regression now requires `CHROMATIC_PROJECT_TOKEN` (missing token hard-fails gate instead of notice-only downgrade).
+- Home usage chart bars no longer inject non-semantic focus noise (`tabIndex` removed from non-interactive list items).
+- Evidence code paths: `src/features/app/components/ThreadRowItem.tsx`, `src/features/terminal/components/TerminalDock.tsx`, `src/features/layout/hooks/useResizablePanels.ts`, `e2e/a11y.spec.ts`, `e2e/helpers/interactions.ts`, `.github/workflows/ci.yml`, `docs/reference/env-final-report.md`.
+
 ## CI Windows Rust Install Retry Update (2026-02-27)
 
 - Hardened `CI > Rust tests (Windows)` dependency bootstrap against transient Chocolatey network/install failures.

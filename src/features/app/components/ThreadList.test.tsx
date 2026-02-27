@@ -88,12 +88,26 @@ describe("ThreadList", () => {
 
   it("keeps menu trigger in tab order and opens menu from keyboard", () => {
     const onShowThreadMenu = vi.fn();
-    render(<ThreadList {...baseProps} onShowThreadMenu={onShowThreadMenu} />);
+    const onSelectThread = vi.fn();
+    render(
+      <ThreadList
+        {...baseProps}
+        onShowThreadMenu={onShowThreadMenu}
+        onSelectThread={onSelectThread}
+      />,
+    );
 
     const row = screen.getByText("Alpha").closest(".thread-row");
     const trigger = screen.getByRole("button", { name: "更多操作" });
     expect(trigger.getAttribute("tabindex")).not.toBe("-1");
-    expect(row?.getAttribute("role")).not.toBe("button");
+    expect(row?.getAttribute("role")).toBe("button");
+    expect(row?.getAttribute("tabindex")).toBe("0");
+
+    if (!row) {
+      throw new Error("Missing row");
+    }
+    fireEvent.keyDown(row, { key: "Enter" });
+    expect(onSelectThread).toHaveBeenCalledWith("ws-1", "thread-1");
 
     fireEvent.keyDown(trigger, { key: "Enter" });
 

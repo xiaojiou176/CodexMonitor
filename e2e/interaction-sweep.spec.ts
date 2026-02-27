@@ -63,7 +63,7 @@ test("interaction sweep: key controls are visible, enabled, and focusable", asyn
   }
 });
 
-test("interaction sweep: usage toggles support click activation and keyboard dispatch", async ({ page }) => {
+test("interaction sweep: usage toggles support click activation and keyboard input", async ({ page }) => {
   await installUiStabilityMocks(page);
   await page.goto("/");
 
@@ -86,7 +86,7 @@ test("interaction sweep: usage toggles support click activation and keyboard dis
   await expect(timeButton).toBeEnabled();
 });
 
-test("interaction sweep: sort trigger supports click activation and keyboard dispatch", async ({ page }) => {
+test("interaction sweep: sort trigger supports click activation and keyboard input", async ({ page }) => {
   await installUiStabilityMocks(page);
   await page.goto("/");
 

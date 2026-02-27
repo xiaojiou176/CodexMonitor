@@ -37,6 +37,11 @@
   opacity: 0.9;
 }
 
+.terminal-panel-resizer:focus-visible {
+  outline: 2px solid var(--border-accent-soft);
+  outline-offset: -1px;
+}
+
 .terminal-header {
   display: flex;
   align-items: center;

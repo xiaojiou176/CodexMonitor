@@ -1,4 +1,4 @@
-import type { DragEvent, MouseEvent, ReactNode, RefObject } from "react";
+import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 import type { ReviewPromptState, ReviewPromptStep } from "../../../threads/hooks/useReviewPrompt";
 import type { WorkspaceLaunchScriptsState } from "../../../app/hooks/useWorkspaceLaunchScripts";
 import type {
@@ -478,6 +478,10 @@ export type LayoutNodesOptions = {
   onCopyDebug: () => void;
   onResizeDebug: (event: MouseEvent<Element>) => void;
   onResizeTerminal: (event: MouseEvent<Element>) => void;
+  onResizeTerminalKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+  terminalPanelHeight: number;
+  terminalPanelResizeMin: number;
+  terminalPanelResizeMax: number;
   onBackFromDiff: () => void;
   onShowSelectedDiff: () => void;
   onGoProjects: () => void;

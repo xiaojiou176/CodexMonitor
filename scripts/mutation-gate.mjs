@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { spawn, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import os from "node:os";
 import { buildMutationConfig } from "./mutation-stryker.config.mjs";
 
 const rootDir = process.cwd();
@@ -22,6 +23,23 @@ const thresholdBreak = thresholdEnvRaw && thresholdEnvRaw.trim() !== ""
 const mutateEnvRaw = process.env.MUTATION_MUTATE;
 const mutationBaseSha = process.env.MUTATION_BASE_SHA?.trim() || "";
 const mutationHeadSha = process.env.MUTATION_HEAD_SHA?.trim() || "";
+const requireExecution = process.env.MUTATION_REQUIRE_EXECUTION === "true";
+
+function hasGlobTokens(pattern) {
+  return /[*?[\]{}()!+@]/.test(pattern);
+}
+
+function hasGlobSensitivePathChars(value) {
+  return /[[\]]/.test(value);
+}
+
+function expandMutationPattern(pattern) {
+  const normalized = pattern.replaceAll("\\", "/").replace(/^\.\/+/, "");
+  if (hasGlobTokens(normalized)) {
+    return [normalized];
+  }
+  return [normalized, `**/${normalized}`];
+}
 
 function isMutationTarget(filePath) {
   if (!filePath.startsWith("src/features/threads/") && !filePath.startsWith("src/services/")) {
@@ -128,6 +146,11 @@ function assertMutationReportHasExecutedMutants({ expectedMutateCount }) {
   }
 }
 
+function getMutationReportStats(reportPath) {
+  const report = JSON.parse(readFileSync(reportPath, "utf8"));
+  return countMutantsInReport(report);
+}
+
 function localBinPath(binName) {
   const executable = process.platform === "win32" ? `${binName}.cmd` : binName;
   return path.join(rootDir, "node_modules", ".bin", executable);
@@ -203,6 +226,10 @@ async function main() {
     await runCommand("assertion-guard", ["run", "test:assertions:guard"]);
 
     if (mutateFromDiff && mutateFromDiff.length === 0) {
+      if (requireExecution) {
+        mutate = resolveDefaultMutateFiles();
+        mutateSource = "default-required";
+      } else {
       console.log("[mutation-gate] No mutation targets changed in diff scope.");
       console.log(`[mutation-gate] range=${mutationBaseSha}..${mutationHeadSha}`);
       console.log("✅ Mutation gate skipped (no critical mutation targets in this change set)");
@@ -213,9 +240,12 @@ async function main() {
         reason: "no-critical-targets-in-diff",
       });
       return;
+      }
     }
 
-    const config = buildMutationConfig({ mutate, thresholdBreak });
+    const expandedMutate = [...new Set(mutate.flatMap(expandMutationPattern))];
+
+    const config = buildMutationConfig({ mutate: expandedMutate, thresholdBreak });
     const configBody = `export default ${JSON.stringify(config, null, 2)};\n`;
     await writeFile(tempConfigPath, configBody, "utf-8");
 
@@ -229,6 +259,7 @@ async function main() {
       console.log("[mutation-gate] scope=default(critical modules)");
     }
     console.log(`[mutation-gate] mutate=${mutate.join(", ")}`);
+    console.log(`[mutation-gate] strykerMutate=${expandedMutate.join(", ")}`);
     console.log(`[mutation-gate] tempConfig=${tempConfigPath}`);
 
     if (DRY_RUN) {
@@ -236,18 +267,18 @@ async function main() {
       await writeLatestStatus("dry-run", {
         mutateSource,
         mutate,
+        strykerMutate: expandedMutate,
         mutateCount: mutate.length,
         configPath: tempConfigPath,
       });
       return;
     }
 
-    const strykerBin = localBinPath("stryker");
-    await new Promise((resolve, reject) => {
-      const child = spawn(strykerBin, ["run", tempConfigPath], {
+    const runStryker = (configPath, cwd) => new Promise((resolve, reject) => {
+      const child = spawn(localBinPath("stryker"), ["run", configPath], {
         stdio: "inherit",
         env: process.env,
-        cwd: rootDir,
+        cwd,
       });
       child.on("error", reject);
       child.on("close", (code) => {
@@ -259,6 +290,53 @@ async function main() {
       });
     });
 
+    await runStryker(tempConfigPath, rootDir);
+
+    const firstPassStats = getMutationReportStats(strykerReportPath);
+    const shouldFallbackToSafePath = (
+      mutate.length > 0 &&
+      (firstPassStats.fileCount === 0 || firstPassStats.mutantCount === 0) &&
+      hasGlobSensitivePathChars(rootDir)
+    );
+
+    if (shouldFallbackToSafePath) {
+      console.log("[mutation-gate] Detected zero-mutant result under glob-sensitive cwd; retrying in safe temp workspace.");
+      const safeWorkspaceRoot = await mkdtemp(path.join(os.tmpdir(), "codexmonitor-mutation-"));
+      const safeRepoDir = path.join(safeWorkspaceRoot, "repo");
+      const safeConfigPath = path.join(safeRepoDir, `.stryker-${runId}.config.mjs`);
+      const safeReportPath = path.join(safeRepoDir, ".runtime-cache", "test_output", "mutation-gate", "stryker-report.json");
+      const rsyncResult = spawnSync(
+        "rsync",
+        [
+          "-a",
+          "--delete",
+          "--exclude=.git",
+          "--exclude=node_modules",
+          "--exclude=.runtime-cache",
+          "--exclude=target",
+          "--exclude=src-tauri/target",
+          `${rootDir}/`,
+          `${safeRepoDir}/`,
+        ],
+        { cwd: rootDir, encoding: "utf8" },
+      );
+      if (rsyncResult.status !== 0) {
+        throw new Error(`safe-workspace rsync failed: ${rsyncResult.stderr?.trim() || "unknown error"}`);
+      }
+
+      try {
+        await symlink(path.join(rootDir, "node_modules"), path.join(safeRepoDir, "node_modules"));
+        await writeFile(safeConfigPath, configBody, "utf-8");
+        await runStryker(safeConfigPath, safeRepoDir);
+
+        const safeReportRaw = readFileSync(safeReportPath, "utf8");
+        await mkdir(reportDir, { recursive: true });
+        await writeFile(strykerReportPath, safeReportRaw, "utf-8");
+      } finally {
+        await rm(safeWorkspaceRoot, { recursive: true, force: true });
+      }
+    }
+
     // Guardrail against false-green mutation runs (e.g., no files matched / NaN score).
     assertMutationReportHasExecutedMutants({ expectedMutateCount: mutate.length });
 
@@ -266,6 +344,7 @@ async function main() {
     await writeLatestStatus("pass", {
       mutateSource,
       mutate,
+      strykerMutate: expandedMutate,
       mutateCount: mutate.length,
       configPath: tempConfigPath,
     });
@@ -282,6 +361,7 @@ async function main() {
     await writeLatestStatus("fail", {
       mutateSource,
       mutate,
+      requireExecution,
       mutateCount: mutate.length,
       error: error instanceof Error ? error.message : String(error),
     });

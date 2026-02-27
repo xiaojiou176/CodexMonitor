@@ -4,7 +4,7 @@ import type { Locator } from "@playwright/test";
 import { formatViolations, runA11yAudit } from "./helpers/a11y";
 import { installUiStabilityMocks } from "./helpers/interactions";
 
-const BLOCKING_IMPACTS = new Set(["critical"]);
+const BLOCKING_IMPACTS = new Set(["critical", "serious"]);
 const REPORTABLE_IMPACTS = new Set(["critical", "serious"]);
 
 function toBlockingViolations(violations: Awaited<ReturnType<typeof runA11yAudit>>["violations"]) {
@@ -22,7 +22,7 @@ async function attachA11yReport(
 ) {
   const reportBody = [
     `surface=${surface}`,
-    `blocking_policy=critical-only`,
+    `blocking_policy=critical-and-serious`,
     `violations=${violations.length}`,
     formatViolations(violations),
   ].join("\n");
@@ -47,7 +47,7 @@ async function assertVisiblePrecondition(
   await expect(locator, message).toBeVisible();
 }
 
-test("a11y: home page blocks on critical axe violations only", async ({ page }, testInfo) => {
+test("a11y: home page blocks on critical and serious axe violations", async ({ page }, testInfo) => {
   await installUiStabilityMocks(page);
   await page.goto("/");
 
@@ -67,11 +67,11 @@ test("a11y: home page blocks on critical axe violations only", async ({ page }, 
   await expect(report.passesCount).toBeGreaterThan(0);
   expect(
     blockingViolations,
-    `A11y gate failed on home page (blocking=critical):\n${formatViolations(blockingViolations)}`,
+    `A11y gate failed on home page (blocking=critical+serious):\n${formatViolations(blockingViolations)}`,
   ).toEqual([]);
 });
 
-test("a11y: sidebar interaction surface blocks on critical axe violations only", async ({ page }, testInfo) => {
+test("a11y: sidebar interaction surface blocks on critical and serious axe violations", async ({ page }, testInfo) => {
   await installUiStabilityMocks(page);
   await page.goto("/");
 
@@ -95,6 +95,6 @@ test("a11y: sidebar interaction surface blocks on critical axe violations only",
   await expect(report.passesCount).toBeGreaterThan(0);
   expect(
     blockingViolations,
-    `A11y gate failed on sidebar surface (blocking=critical):\n${formatViolations(blockingViolations)}`,
+    `A11y gate failed on sidebar surface (blocking=critical+serious):\n${formatViolations(blockingViolations)}`,
   ).toEqual([]);
 });

@@ -10,6 +10,10 @@ type TerminalDockProps = {
   onNewTerminal: () => void;
   onCloseTerminal: (terminalId: string) => void;
   onResizeStart?: (event: ReactMouseEvent) => void;
+  onResizeKeyDown?: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
+  panelHeight?: number;
+  panelResizeMin?: number;
+  panelResizeMax?: number;
   terminalNode: ReactNode;
 };
 
@@ -21,6 +25,10 @@ export function TerminalDock({
   onNewTerminal,
   onCloseTerminal,
   onResizeStart,
+  onResizeKeyDown,
+  panelHeight,
+  panelResizeMin,
+  panelResizeMax,
   terminalNode,
 }: TerminalDockProps) {
   const tabButtonRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -100,7 +108,12 @@ export function TerminalDock({
           role="separator"
           aria-orientation="horizontal"
           aria-label="调整终端面板大小"
+          tabIndex={0}
+          aria-valuenow={panelHeight}
+          aria-valuemin={panelResizeMin}
+          aria-valuemax={panelResizeMax}
           onMouseDown={onResizeStart}
+          onKeyDown={onResizeKeyDown}
         />
       )}
       <div className="terminal-header">

@@ -54,6 +54,10 @@ function createOptions(overrides: Record<string, unknown> = {}) {
     onNewTerminal: vi.fn(),
     onCloseTerminal: vi.fn(),
     onResizeTerminal: vi.fn(),
+    onResizeTerminalKeyDown: vi.fn(),
+    terminalPanelHeight: 220,
+    terminalPanelResizeMin: 140,
+    terminalPanelResizeMax: 480,
     terminalState: {
       containerRef: { current: null },
       status: "ready",

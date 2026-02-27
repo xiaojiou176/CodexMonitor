@@ -432,6 +432,19 @@ export function useResizablePanels() {
     [handleResizeKeyDown, planPanelHeight],
   );
 
+  const onTerminalPanelResizeKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      handleResizeKeyDown(
+        event,
+        "terminal-panel",
+        terminalPanelHeight,
+        ["ArrowDown"],
+        ["ArrowUp"],
+      );
+    },
+    [handleResizeKeyDown, terminalPanelHeight],
+  );
+
   return {
     sidebarWidth,
     rightPanelWidth,
@@ -446,11 +459,14 @@ export function useResizablePanels() {
     onSidebarResizeKeyDown,
     onRightPanelResizeKeyDown,
     onPlanPanelResizeKeyDown,
+    onTerminalPanelResizeKeyDown,
     sidebarResizeMin: MIN_SIDEBAR_WIDTH,
     sidebarResizeMax: MAX_SIDEBAR_WIDTH,
     rightPanelResizeMin: MIN_RIGHT_PANEL_WIDTH,
     rightPanelResizeMax: MAX_RIGHT_PANEL_WIDTH,
     planPanelResizeMin: MIN_PLAN_PANEL_HEIGHT,
     planPanelResizeMax: MAX_PLAN_PANEL_HEIGHT,
+    terminalPanelResizeMin: MIN_TERMINAL_PANEL_HEIGHT,
+    terminalPanelResizeMax: MAX_TERMINAL_PANEL_HEIGHT,
   };
 }

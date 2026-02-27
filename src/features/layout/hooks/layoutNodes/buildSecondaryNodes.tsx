@@ -31,6 +31,10 @@ export function buildSecondaryNodes(options: LayoutNodesOptions): SecondaryLayou
       onNewTerminal={options.onNewTerminal}
       onCloseTerminal={options.onCloseTerminal}
       onResizeStart={options.onResizeTerminal}
+      onResizeKeyDown={options.onResizeTerminalKeyDown}
+      panelHeight={options.terminalPanelHeight}
+      panelResizeMin={options.terminalPanelResizeMin}
+      panelResizeMax={options.terminalPanelResizeMax}
       terminalNode={
         options.terminalState ? (
           <TerminalPanel
