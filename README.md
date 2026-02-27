@@ -365,7 +365,7 @@ Git hooks are enforced with Husky:
   - `npm run check:commit-message:secrets -- "$1"`
   - `npx --no-install commitlint --edit "$1"`
 - `pre-push`: runs `npm run preflight:orchestrated`
-  - Phase 1 (baseline): `preflight:doc-drift (branch)` + `env:rationalize:check` + `env:doctor:dev` + `preflight:quick` (`typecheck`) + `test:assertions:guard` + `guard:reuse-search` + `lint:strict`.
+  - Phase 1 (baseline): `preflight:doc-drift (branch)` + `env:rationalize:check` + `env:doctor:dev` + `preflight:quick` (reserved quick lane, currently no-op) + `test:assertions:guard` + `guard:reuse-search` + `lint:strict`.
   - Phase 2 (parallel medium jobs): `test` + `check:rust`.
   - Heartbeat cadence is controlled by `PREFLIGHT_HEARTBEAT_LEVEL` (`quiet`/`normal`/`debug`), default `normal` cadence (60s interval, 60s minimum elapsed before emission).
   - Parallel failure output preserves task names, so gate failures are directly attributable to the failing job.

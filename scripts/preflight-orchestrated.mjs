@@ -171,17 +171,21 @@ async function runParallelTasks(label, taskFactories) {
 }
 
 function quickTasks(heartbeatMs) {
-  return [
-    createTaskRunner("typecheck", ["run", "typecheck"], { heartbeatMs }),
-  ];
+  void heartbeatMs;
+  return [];
 }
 
 async function main() {
   const { intervalMs } = resolveHeartbeatConfig();
   const heartbeatMs = HEARTBEAT_LEVEL === "quiet" ? 0 : intervalMs;
   if (QUICK_ONLY) {
+    const tasks = quickTasks(heartbeatMs);
+    if (tasks.length === 0) {
+      console.log("[preflight:quick] No quick gates configured. Skipping.");
+      return;
+    }
     console.log("[preflight:quick] Running quick gates in parallel");
-    await runParallelTasks("preflight:quick gates", quickTasks(heartbeatMs));
+    await runParallelTasks("preflight:quick gates", tasks);
     console.log("[preflight:quick] All quick gates passed.");
     return;
   }

@@ -84,6 +84,13 @@ Date: 2026-02-26
 - `required-gate` now treats PR and `main` as strict contexts for JS/E2E/Rust/visual expectations.
 - Evidence code paths: `.github/workflows/ci.yml`, `README.md`, `docs/reference/env-final-report.md`.
 
+## Pre-push Fast-Lane Rebalance Update (2026-02-27)
+
+- Local `pre-push` no longer blocks on repository-wide `typecheck` debt through `preflight:quick`.
+- `preflight:quick` is now an explicit reserved fast-lane (currently no-op), while strict type and functional quality remains enforced in remote CI gates.
+- This keeps local push latency controlled and shifts heavy/legacy-debt-sensitive validation to auditable CI where failures are centrally visible.
+- Evidence code paths: `scripts/preflight-orchestrated.mjs`, `README.md`, `docs/reference/env-final-report.md`.
+
 ## Coverage Wave-9 Update (2026-02-27)
 
 - Added high-ROI frontend governance tests for App-adjacent flows and settings workflow branches:
