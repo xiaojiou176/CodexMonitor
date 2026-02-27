@@ -828,7 +828,7 @@ ASCII Trend:
   - Job `mutation-js` 日志错误:
     - `mutation target diff failed ... fatal: bad object <BASE_SHA>`
   - 同日志确认 checkout 默认 `fetch-depth: 1`，仅拉取 head 提交，不含 base 历史对象。
-  - 修复为 mutation job 的 checkout 显式 `fetch-depth: 0`，保证 diff 所需提交对象可用。
+  - 最终修复为 `mutation-js` job 的 checkout 显式 `fetch-depth: 0`，保证 diff 所需提交对象可用。
 - Env governance impact:
   - 无环境变量改动。
 
