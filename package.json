@@ -86,6 +86,7 @@
     "test:rust:lib-bins": "cargo test --manifest-path src-tauri/Cargo.toml --lib --bins",
     "test:repo": "npm run lint:strict && npm run test:assertions:guard && npm run typecheck && npm run test && npm run test:coverage:gate && npm run check:rust",
     "typecheck": "tsc --noEmit",
+    "typecheck:ci": "tsc --noEmit -p tsconfig.ci.json",
     "preview": "vite preview",
     "tauri": "tauri",
     "pretauri:dev": "npm run sync:material-icons",

@@ -1030,7 +1030,7 @@ Context：
 
 “完美”不是把风险说成不存在，而是把风险变成可测、可证、可阻断、可持续治理。
 
-从当前仓库基础看，我们离“真绿可证明”已经不远。  
+从当前仓库基础看，我们离“真绿可证明”已经不远。
 下一步关键不在于再加多少工具，而在于先封住 P0 假绿口，再把真实性验证做成默认路径。
 
 这份 Plan 既是技术路线，也是执行契约。拍板后即可进入并发实施。
@@ -1043,61 +1043,61 @@ Context：
 
 ### 13.1 已完成波次
 
-1. Wave 1（P0 假绿封口）  
-- ✅ 完成：coverage 语义修正（global + critical 双层）  
-- ✅ 完成：移除 mutation 跳过 assertion guard  
-- ✅ 完成：env-count-check 修复为读取 `variables[]`  
-- ✅ 完成：pre-push 中强化（Phase 2：`test` + `check:rust`）并将更重验证上收 CI  
-- ✅ 完成：critical logging guard 默认 fail（CI 阻断）  
+1. Wave 1（P0 假绿封口）
+- ✅ 完成：coverage 语义修正（global + critical 双层）
+- ✅ 完成：移除 mutation 跳过 assertion guard
+- ✅ 完成：env-count-check 修复为读取 `variables[]`
+- ✅ 完成：pre-push 中强化（Phase 2：`test` + `check:rust`）并将更重验证上收 CI
+- ✅ 完成：critical logging guard 默认 fail（CI 阻断）
 - ✅ 完成：README/AGENTS/模块文档口径同步
 
 ### 13.1A Coverage 终态策略（default + strict 并存）
 
 已落地最终策略（`2026-02-27`）：
 
-1. `default`（`npm run test:coverage:gate`）  
-- 目标：可持续治理，不允许基线回退。  
-- 规则：默认以 baseline 作为 required（防回退）；仅当显式设置 `COVERAGE_TARGET_*`/`COVERAGE_MIN_*` 时，按 `required = max(explicit_target, baseline)` 提升门槛。baseline 仅上升不下降。  
+1. `default`（`npm run test:coverage:gate`）
+- 目标：可持续治理，不允许基线回退。
+- 规则：默认以 baseline 作为 required（防回退）；仅当显式设置 `COVERAGE_TARGET_*`/`COVERAGE_MIN_*` 时，按 `required = max(explicit_target, baseline)` 提升门槛。baseline 仅上升不下降。
 - 用途：日常门禁与持续演进。
 
-2. `strict`（`npm run test:coverage:gate:strict`）  
-- 目标：提供固定强校准口径。  
-- 规则：全局四指标按固定 `>=80` 判断，不读取 baseline。  
+2. `strict`（`npm run test:coverage:gate:strict`）
+- 目标：提供固定强校准口径。
+- 规则：全局四指标按固定 `>=80` 判断，不读取 baseline。
 - 用途：统一“绝对 80 线”核验与回归对比。
 
-3. 报告可区分模式  
+3. 报告可区分模式
 - gate 输出与 `latest.json` 均包含 `gateMode`，明确标识 `default` 或 `strict`，避免口径混淆。
 
-2. Wave 2（关键真链路）  
-- ✅ 完成：新增 3 条关键旅程 E2E（workspace/approval/worktree）  
-- ✅ 完成：浏览器矩阵接入 Chromium + WebKit  
-- ✅ 完成：CI/release E2E 工件上传统一  
+2. Wave 2（关键真链路）
+- ✅ 完成：新增 3 条关键旅程 E2E（workspace/approval/worktree）
+- ✅ 完成：浏览器矩阵接入 Chromium + WebKit
+- ✅ 完成：CI/release E2E 工件上传统一
 - ✅ 完成：real-integration 在 main 严格门禁（无 silent skip 即绿）
 
-3. Wave 3（UI 完整性）  
-- ✅ 完成：新增 a11y gate（critical 阻断，serious 报告）  
-- ✅ 完成：新增 interaction sweep（visible/enabled/focusable + click/Enter/Space）  
-- ✅ 完成：CI/release 接入 a11y 与 interaction-sweep 质量门  
-- ✅ 完成：Chromatic workflow 接入（`.github/workflows/chromatic.yml`）  
+3. Wave 3（UI 完整性）
+- ✅ 完成：新增 a11y gate（critical 阻断，serious 报告）
+- ✅ 完成：新增 interaction sweep（visible/enabled/focusable + click/Enter/Space）
+- ✅ 完成：CI/release 接入 a11y 与 interaction-sweep 质量门
+- ✅ 完成：Chromatic workflow 接入（`.github/workflows/chromatic.yml`）
 - ✅ 完成：Storybook/Chromatic 基础配置与示例 Story 落地
 
-4. Wave 4（可持续化）  
-- ✅ 完成：治理看板生成脚本与单页看板文档  
-- ✅ 完成：`App.tsx` 第一阶段拆分（提取 UI helper）  
-- ✅ 完成：`useThreadsReducer.ts` 第一阶段拆分（提取 reducer helper）  
+4. Wave 4（可持续化）
+- ✅ 完成：治理看板生成脚本与单页看板文档
+- ✅ 完成：`App.tsx` 第一阶段拆分（提取 UI helper）
+- ✅ 完成：`useThreadsReducer.ts` 第一阶段拆分（提取 reducer helper）
 - ✅ 完成：`codex_monitor_daemon.rs` 第一阶段拆分（提取 meta 模块）
 
 ### 13.2 仍需持续治理的“债务型”事项
 
 以下不是“任务未执行”，而是执行后暴露出的真实质量债务，需要持续迭代：
 
-1. 全仓 global coverage 未达 80（当前约 51.68）  
-- 说明：这是语义修正后真实暴露，不是脚本故障。  
+1. 全仓 global coverage 未达 80（当前约 51.68）
+- 说明：这是语义修正后真实暴露，不是脚本故障。
 
-2. mutation latest 报告产物存在缺口（看板显示 missing）  
-- 说明：需要在日常/CI 跑批里稳定产出 latest.json。  
+2. mutation latest 报告产物存在缺口（看板显示 missing）
+- 说明：需要在日常/CI 跑批里稳定产出 latest.json。
 
-3. Storybook 在仓库路径含 `[]` 时，直接 `npx storybook build --config-dir .storybook` 仍有上游识别缺陷  
+3. Storybook 在仓库路径含 `[]` 时，直接 `npx storybook build --config-dir .storybook` 仍有上游识别缺陷
 - 说明：已通过脚本绕行（绝对 config-dir + 临时无特殊字符路径）接入，不阻塞 Chromatic 流程。
 
 ### 13.2A 最小真链路“不可 silent skip 即绿”落地规则（2026-02-27）
@@ -1152,9 +1152,9 @@ Context：
 
 ### 13.3 当前验收口径
 
-1. 结构性任务：已完成  
-2. 门禁接线：已完成  
-3. 可执行验证：lint/typecheck/check:rust/workflow-yaml/新增 E2E 均已通过  
+1. 结构性任务：已完成
+2. 门禁接线：已完成
+3. 可执行验证：lint/typecheck/check:rust/workflow-yaml/新增 E2E 均已通过
 4. 债务项：已被明确暴露并纳入后续治理待办
 
 ### 13.4 Coverage 冲刺 Wave-1（2026-02-27）

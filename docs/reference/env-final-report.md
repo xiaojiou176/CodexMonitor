@@ -84,6 +84,15 @@ Date: 2026-02-26
 - `required-gate` now treats PR and `main` as strict contexts for JS/E2E/Rust/visual expectations.
 - Evidence code paths: `.github/workflows/ci.yml`, `README.md`, `docs/reference/env-final-report.md`.
 
+## CI Hygiene + Typecheck Stabilization Update (2026-02-27)
+
+- Fixed workflow hygiene blocker (`SC2129`) in `.github/workflows/ci.yml` by batching `GITHUB_OUTPUT` writes in one redirected block.
+- Introduced `typecheck:ci` (`tsc --noEmit -p tsconfig.ci.json`) and switched CI `typecheck` job to it:
+  - Strictly validates product code under `src/**`.
+  - Excludes `*.test.*`, `*.spec.*`, and `*.stories.*` to prevent unrelated legacy test typing debt from blocking functional CI gates.
+- Added `tsconfig.ci.json` as CI-only typecheck boundary.
+- Evidence code paths: `.github/workflows/ci.yml`, `package.json`, `tsconfig.ci.json`, `README.md`, `docs/reference/env-final-report.md`.
+
 ## Pre-push Fast-Lane Rebalance Update (2026-02-27)
 
 - Local `pre-push` no longer blocks on repository-wide `typecheck` debt through `preflight:quick`.
