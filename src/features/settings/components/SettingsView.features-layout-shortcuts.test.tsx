@@ -421,6 +421,83 @@ describe("SettingsView Features", () => {
       ).not.toBeNull();
     });
   });
+
+  it("saves edited commit message prompt", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderFeaturesSection({ onUpdateAppSettings });
+
+    fireEvent.click(screen.getByRole("button", { name: "Git" }));
+    await waitFor(() => {
+      expect(
+        screen.getByText("Commit Message 生成提示词", {
+          selector: ".settings-field-label",
+        }),
+      ).not.toBeNull();
+    });
+
+    const field = screen
+      .getByText("Commit Message 生成提示词", { selector: ".settings-field-label" })
+      .closest(".settings-field");
+    expect(field).not.toBeNull();
+    if (!field) {
+      throw new Error("Expected commit message prompt field");
+    }
+
+    const textarea = within(field).getByRole("textbox");
+    const saveButton = within(field).getByRole("button", { name: "保存" });
+    expect((saveButton as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(textarea, {
+      target: { value: "请基于 {diff} 生成简洁且可审核的提交说明。" },
+    });
+    expect((saveButton as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          commitMessagePrompt: "请基于 {diff} 生成简洁且可审核的提交说明。",
+        }),
+      );
+    });
+  });
+
+  it("resets commit message prompt to default", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderFeaturesSection({
+      onUpdateAppSettings,
+      appSettings: { commitMessagePrompt: "custom prompt" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Git" }));
+    await waitFor(() => {
+      expect(
+        screen.getByText("Commit Message 生成提示词", {
+          selector: ".settings-field-label",
+        }),
+      ).not.toBeNull();
+    });
+
+    const field = screen
+      .getByText("Commit Message 生成提示词", { selector: ".settings-field-label" })
+      .closest(".settings-field");
+    expect(field).not.toBeNull();
+    if (!field) {
+      throw new Error("Expected commit message prompt field");
+    }
+
+    const textarea = within(field).getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "temporary prompt" } });
+    fireEvent.click(within(field).getByRole("button", { name: "重置" }));
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          commitMessagePrompt: DEFAULT_COMMIT_MESSAGE_PROMPT,
+        }),
+      );
+    });
+  });
 });
 
 describe("SettingsView mobile layout", () => {

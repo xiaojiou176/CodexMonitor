@@ -54,6 +54,23 @@ Date: 2026-02-26
 - Local preflight orchestration supports `PREFLIGHT_REQUIRE_LIVE=true` to mirror CI strictness and fail fast on skipped live checks.
 - Evidence code paths: `.github/workflows/real-integration.yml`, `scripts/preflight-orchestrated.mjs`, `docs/reference/testing-governance-dashboard.md`, `测试深度加强治理Plan.md`.
 
+## Coverage Wave-9 Update (2026-02-27)
+
+- Added high-ROI frontend governance tests for App-adjacent flows and settings workflow branches:
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`
+  - `src/features/app/hooks/useGitHubPanelController.test.tsx`
+  - `src/features/app/hooks/usePlanReadyActions.test.tsx`
+  - `src/features/app/hooks/useRemoteThreadLiveConnection.wave9b.test.tsx`
+  - `src/features/composer/components/ReviewInlinePrompt.test.tsx`
+  - `src/features/workspaces/components/WorkspaceHome.test.tsx`
+  - `src/features/settings/components/SettingsView.features-layout-shortcuts.test.tsx`
+- Strict coverage gate evidence (`npm run test:coverage:gate:strict`):
+  - statements/lines: `70.08%`
+  - functions: `75.31%`
+  - branches: `77.86%`
+- Evidence artifact:
+  - `.runtime-cache/coverage/vitest-gate/1772182249989-7800-1kohkd`
+
 ## Env Variant Files
 
 - `.env` (5 keys)

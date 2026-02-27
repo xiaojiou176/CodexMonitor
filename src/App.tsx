@@ -151,6 +151,7 @@ import {
 } from "./features/app/orchestration/useThreadOrchestration";
 import {
   buildAppCssVars,
+  buildCompactThreadConnectionIndicatorMeta,
   buildGitStatusForPanel,
   clampMessageFontSize,
   countDiffLineStats,
@@ -3086,28 +3087,15 @@ function MainApp() {
     backendMode: appSettings.backendMode,
     remoteThreadConnectionState,
   });
+  const compactThreadConnectionIndicatorMeta = buildCompactThreadConnectionIndicatorMeta(
+    compactThreadConnectionState,
+  );
   const codexTopbarActionsNode = showCompactThreadConnectionIndicator ? (
     <span
-      className={`compact-workspace-live-indicator ${
-        compactThreadConnectionState === "live"
-          ? "is-live"
-          : compactThreadConnectionState === "polling"
-            ? "is-polling"
-            : "is-disconnected"
-      }`}
-      title={
-        compactThreadConnectionState === "live"
-          ? "Receiving live thread events"
-          : compactThreadConnectionState === "polling"
-            ? "Connected, syncing thread state by polling"
-            : "Disconnected from backend"
-      }
+      className={`compact-workspace-live-indicator ${compactThreadConnectionIndicatorMeta.stateClassName}`}
+      title={compactThreadConnectionIndicatorMeta.title}
     >
-      {compactThreadConnectionState === "live"
-        ? "Live"
-        : compactThreadConnectionState === "polling"
-          ? "Polling"
-          : "Disconnected"}
+      {compactThreadConnectionIndicatorMeta.label}
     </span>
   ) : null;
 

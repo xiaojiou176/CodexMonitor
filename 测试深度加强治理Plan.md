@@ -24,6 +24,23 @@
 
 “这不是一个裸奔仓库，但还不是‘可证明真绿’仓库。”
 
+### Wave-9 最新进展（2026-02-27）
+
+- 本波完成 `App` 周边可测性拆分契约验证与高缺口 hook/component 补测：
+  - `src/features/app/utils/appUiHelpers.ts`
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`
+  - `src/features/app/hooks/useGitHubPanelController.test.tsx`
+  - `src/features/app/hooks/usePlanReadyActions.test.tsx`
+  - `src/features/app/hooks/useRemoteThreadLiveConnection.wave9b.test.tsx`
+  - `src/features/composer/components/ReviewInlinePrompt.test.tsx`
+  - `src/features/workspaces/components/WorkspaceHome.test.tsx`
+  - `src/features/settings/components/SettingsView.features-layout-shortcuts.test.tsx`
+- 全量 strict 覆盖门禁结果已提升到：
+  - `statements/lines: 70.08%`
+  - `functions: 75.31%`
+  - `branches: 77.86%`
+- 判定：已稳定通过全量测试与 strict gate 执行链路，但距离 `80/80/80/80` 终态仍有约 `9.92pp / 4.69pp / 2.14pp` 差距，下一阶段需继续并发冲刺 `App.tsx` 与 `threadItems.ts` 高 ROI 缺口。
+
 ---
 
 ## 2. 当前已做到什么（优势盘点）

@@ -3,11 +3,13 @@ import type { GitFileStatus } from "../../../types";
 import {
   applyDiffStatsToFiles,
   buildAppCssVars,
+  buildCompactThreadConnectionIndicatorMeta,
   buildGitStatusForPanel,
   deriveTabletTab,
   resolveCompactThreadConnectionState,
   shouldLoadGitHubPanelData,
   type AppTab,
+  type CompactThreadConnectionState,
   type DiffSource,
   type GitPanelMode,
 } from "./appUiHelpers";
@@ -40,6 +42,24 @@ function legacyCompactThreadConnectionState(params: {
     : params.backendMode === "remote"
       ? params.remoteThreadConnectionState
       : "live";
+}
+
+function legacyCompactThreadConnectionIndicatorMeta(state: CompactThreadConnectionState): {
+  stateClassName: "is-live" | "is-polling" | "is-disconnected";
+  title: string;
+  label: "Live" | "Polling" | "Disconnected";
+} {
+  return {
+    stateClassName:
+      state === "live" ? "is-live" : state === "polling" ? "is-polling" : "is-disconnected",
+    title:
+      state === "live"
+        ? "Receiving live thread events"
+        : state === "polling"
+          ? "Connected, syncing thread state by polling"
+          : "Disconnected from backend",
+    label: state === "live" ? "Live" : state === "polling" ? "Polling" : "Disconnected",
+  };
 }
 
 function legacyBuildGitStatusForPanel(params: {
@@ -140,6 +160,15 @@ describe("appUiHelpers contract", () => {
           );
         }
       }
+    }
+  });
+
+  it("keeps compact thread connection indicator copy/style semantics", () => {
+    const states: CompactThreadConnectionState[] = ["live", "polling", "disconnected"];
+    for (const state of states) {
+      expect(buildCompactThreadConnectionIndicatorMeta(state)).toEqual(
+        legacyCompactThreadConnectionIndicatorMeta(state),
+      );
     }
   });
 

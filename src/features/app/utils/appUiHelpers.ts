@@ -17,6 +17,11 @@ export type GitPanelMode = "issues" | "prs" | "local";
 export type DiffSource = "local" | "pr";
 
 export type CompactThreadConnectionState = "live" | "polling" | "disconnected";
+export type CompactThreadConnectionIndicatorMeta = {
+  stateClassName: "is-live" | "is-polling" | "is-disconnected";
+  title: string;
+  label: "Live" | "Polling" | "Disconnected";
+};
 
 export function deriveTabletTab(activeTab: AppTab): "codex" | "git" | "log" {
   return activeTab === "projects" || activeTab === "home" ? "codex" : activeTab;
@@ -45,6 +50,30 @@ export function resolveCompactThreadConnectionState(params: {
     return "disconnected";
   }
   return params.backendMode === "remote" ? params.remoteThreadConnectionState : "live";
+}
+
+export function buildCompactThreadConnectionIndicatorMeta(
+  state: CompactThreadConnectionState,
+): CompactThreadConnectionIndicatorMeta {
+  if (state === "live") {
+    return {
+      stateClassName: "is-live",
+      title: "Receiving live thread events",
+      label: "Live",
+    };
+  }
+  if (state === "polling") {
+    return {
+      stateClassName: "is-polling",
+      title: "Connected, syncing thread state by polling",
+      label: "Polling",
+    };
+  }
+  return {
+    stateClassName: "is-disconnected",
+    title: "Disconnected from backend",
+    label: "Disconnected",
+  };
 }
 
 export function clampMessageFontSize(value: number): number {
