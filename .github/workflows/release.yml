@@ -16,6 +16,7 @@ permissions: {}
 jobs:
   pre_commit_gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -38,8 +39,9 @@ jobs:
       - name: Run pre-commit hooks (server gate)
         run: pre-commit run --all-files --show-diff-on-failure
 
-  quality_gate:
+  quality_lint_assert:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -54,32 +56,212 @@ jobs:
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
       - name: Install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
         run: npm ci
       - name: Lint (strict)
         run: npm run lint:strict
       - name: Assertion guard
         run: npm run test:assertions:guard
+
+  quality_reuse_guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+      - name: Install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
+        run: npm ci
       - name: Reuse guard
         run: npm run guard:reuse-search
+
+  quality_docs_guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+      - name: Install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
+        run: npm ci
       - name: Docs sync guard
         run: npm run docs:check:app-server-events
+
+  quality_typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+      - name: Install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
+        run: npm ci
       - name: Typecheck
         run: npm run typecheck
+
+  quality_js_test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+      - name: Install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
+        run: npm ci
       - name: Unit and integration tests
         run: npm run test
+
+  quality_coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+      - name: Install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
+        run: npm ci
       - name: Coverage gate
         run: npm run test:coverage:gate
+
+  quality_e2e_smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+      - name: Install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-ms-playwright-
       - name: Install Playwright browser
         run: npm run test:e2e:install
       - name: E2E smoke
         run: npm run test:e2e:smoke
+
+  quality_rust_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
       - name: Rust tests
         run: cargo test
         working-directory: src-tauri
 
   security_gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -94,12 +276,37 @@ jobs:
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
+      - name: Cache cargo directories
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-audit-${{ env.RUST_VERSION }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-audit-${{ env.RUST_VERSION }}-
+            ${{ runner.os }}-cargo-audit-
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
       - name: Install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
         run: npm ci
       - name: npm audit (high+)
         run: npm audit --audit-level=high
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+      - name: Install cargo-audit (if missing)
+        run: |
+          if cargo audit --version >/dev/null 2>&1; then
+            echo "cargo-audit already available, reusing cached binary."
+          else
+            cargo install cargo-audit --locked
+          fi
       - name: cargo audit
         run: cargo audit --manifest-path src-tauri/Cargo.toml
       - name: Secret scan (gitleaks)
@@ -109,8 +316,19 @@ jobs:
 
   build_macos:
     runs-on: macos-latest
+    timeout-minutes: 120
     environment: release
-    needs: [pre_commit_gate, quality_gate, security_gate]
+    needs:
+      - pre_commit_gate
+      - security_gate
+      - quality_lint_assert
+      - quality_reuse_guard
+      - quality_docs_guard
+      - quality_typecheck
+      - quality_js_test
+      - quality_coverage
+      - quality_e2e_smoke
+      - quality_rust_tests
     permissions:
       contents: read
     env:
@@ -135,6 +353,14 @@ jobs:
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
 
       - name: Rust cache
         uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
@@ -145,6 +371,7 @@ jobs:
         run: brew install cmake
 
       - name: Install dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
         run: npm ci
 
       - name: Import signing certificate
@@ -266,8 +493,19 @@ jobs:
   build_linux:
     name: linux bundles (${{ matrix.arch }})
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 90
     environment: release
-    needs: [pre_commit_gate, quality_gate, security_gate]
+    needs:
+      - pre_commit_gate
+      - security_gate
+      - quality_lint_assert
+      - quality_reuse_guard
+      - quality_docs_guard
+      - quality_typecheck
+      - quality_js_test
+      - quality_coverage
+      - quality_e2e_smoke
+      - quality_rust_tests
     permissions:
       contents: read
     env:
@@ -299,6 +537,14 @@ jobs:
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
 
       - name: Rust cache
         uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
@@ -306,6 +552,7 @@ jobs:
           workspaces: "./src-tauri -> target"
 
       - name: install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
         run: npm ci
 
       - name: Write Tauri signing key
@@ -345,8 +592,19 @@ jobs:
 
   build_windows:
     runs-on: windows-latest
+    timeout-minutes: 90
     environment: release
-    needs: [pre_commit_gate, quality_gate, security_gate]
+    needs:
+      - pre_commit_gate
+      - security_gate
+      - quality_lint_assert
+      - quality_reuse_guard
+      - quality_docs_guard
+      - quality_typecheck
+      - quality_js_test
+      - quality_coverage
+      - quality_e2e_smoke
+      - quality_rust_tests
     permissions:
       contents: read
     env:
@@ -365,6 +623,14 @@ jobs:
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
 
       - name: Rust cache
         uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
@@ -380,6 +646,7 @@ jobs:
           echo "C:\\Program Files\\LLVM\\bin" >> $env:GITHUB_PATH
 
       - name: install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
         run: npm ci
 
       - name: Write Tauri signing key
@@ -416,6 +683,7 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: release
     needs:
       - build_macos

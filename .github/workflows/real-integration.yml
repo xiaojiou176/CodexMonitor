@@ -9,8 +9,14 @@ permissions:
   contents: read
 
 jobs:
-  real-integrations:
+  preflight:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    outputs:
+      run_any: ${{ steps.preflight.outputs.run_any }}
+      run_external: ${{ steps.preflight.outputs.run_external }}
+      run_llm: ${{ steps.preflight.outputs.run_llm }}
+      reason: ${{ steps.preflight.outputs.reason }}
     env:
       REAL_EXTERNAL_URL: ${{ secrets.REAL_EXTERNAL_URL }}
       REAL_LLM_BASE_URL: ${{ secrets.REAL_LLM_BASE_URL }}
@@ -21,7 +27,16 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
       - name: Install dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           while true; do
@@ -48,8 +63,65 @@ jobs:
             echo "Reason: ${{ steps.preflight.outputs.reason }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Upload live preflight report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: live-preflight-report
+          path: .runtime-cache/test_output/live-preflight/latest.json
+          if-no-files-found: ignore
+
+  external-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: preflight
+    env:
+      REAL_EXTERNAL_URL: ${{ secrets.REAL_EXTERNAL_URL }}
+    steps:
+      - name: External E2E skip notice
+        if: needs.preflight.outputs.run_external != 'true'
+        run: |
+          echo "::notice::REAL_EXTERNAL_URL missing, external E2E not executed."
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        if: needs.preflight.outputs.run_external == 'true'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: needs.preflight.outputs.run_external == 'true'
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        if: needs.preflight.outputs.run_external == 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+      - name: Install dependencies
+        if: needs.preflight.outputs.run_external == 'true' && steps.node_modules_cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][install] $(date -u +'%Y-%m-%dT%H:%M:%SZ') npm ci running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          npm ci
+
+      - name: Cache Playwright browsers
+        if: needs.preflight.outputs.run_external == 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-ms-playwright-
+
       - name: Install Playwright browser
-        if: steps.preflight.outputs.run_external == 'true'
+        if: needs.preflight.outputs.run_external == 'true'
         run: |
           set -euo pipefail
           while true; do
@@ -61,7 +133,7 @@ jobs:
           npm run test:e2e:install
 
       - name: Run external E2E
-        if: steps.preflight.outputs.run_external == 'true'
+        if: needs.preflight.outputs.run_external == 'true'
         run: |
           set -euo pipefail
           while true; do
@@ -72,13 +144,49 @@ jobs:
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
           npm run test:e2e:external
 
-      - name: External E2E skip notice
-        if: steps.preflight.outputs.run_external != 'true'
+  real-llm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: preflight
+    env:
+      REAL_LLM_BASE_URL: ${{ secrets.REAL_LLM_BASE_URL }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: Real LLM skip notice
+        if: needs.preflight.outputs.run_llm != 'true'
         run: |
-          echo "::notice::REAL_EXTERNAL_URL missing, external E2E not executed."
+          echo "::notice::REAL_LLM_BASE_URL/GEMINI_API_KEY missing, LLM smoke not executed."
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        if: needs.preflight.outputs.run_llm == 'true'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: needs.preflight.outputs.run_llm == 'true'
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        if: needs.preflight.outputs.run_llm == 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+      - name: Install dependencies
+        if: needs.preflight.outputs.run_llm == 'true' && steps.node_modules_cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][install] $(date -u +'%Y-%m-%dT%H:%M:%SZ') npm ci running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          npm ci
 
       - name: Run real LLM smoke
-        if: steps.preflight.outputs.run_llm == 'true'
+        if: needs.preflight.outputs.run_llm == 'true'
         run: |
           set -euo pipefail
           while true; do
@@ -90,21 +198,9 @@ jobs:
           npm run test:real:llm
 
       - name: Upload real LLM report
-        if: steps.preflight.outputs.run_llm == 'true'
+        if: needs.preflight.outputs.run_llm == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: real-llm-report
           path: .runtime-cache/test_output/real-llm/latest.json
           if-no-files-found: ignore
-      - name: Upload live preflight report
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: live-preflight-report
-          path: .runtime-cache/test_output/live-preflight/latest.json
-          if-no-files-found: ignore
-
-      - name: Real LLM skip notice
-        if: steps.preflight.outputs.run_llm != 'true'
-        run: |
-          echo "::notice::REAL_LLM_BASE_URL/GEMINI_API_KEY missing, LLM smoke not executed."
