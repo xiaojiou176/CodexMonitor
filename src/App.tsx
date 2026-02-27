@@ -153,9 +153,12 @@ import {
   applyDiffStatsToFiles,
   clampMessageFontSize,
   countDiffLineStats,
+  deriveTabletTab,
   type DiffLineStats,
   loadMessageFontSize,
   MESSAGE_FONT_SIZE_STORAGE_NAME,
+  resolveCompactThreadConnectionState,
+  shouldLoadGitHubPanelData,
 } from "./features/app/utils/appUiHelpers";
 
 const AboutView = lazy(() =>
@@ -260,8 +263,7 @@ function MainApp() {
     "home" | "projects" | "codex" | "git" | "log"
   >("codex");
   const [mobileThreadRefreshLoading, setMobileThreadRefreshLoading] = useState(false);
-  const tabletTab =
-    activeTab === "projects" || activeTab === "home" ? "codex" : activeTab;
+  const tabletTab = deriveTabletTab(activeTab);
   const {
     workspaces,
     workspaceGroups,
@@ -583,11 +585,12 @@ function MainApp() {
     prDiffsError: gitPullRequestDiffsError,
   });
 
-  const shouldLoadGitHubPanelData =
-    isGitPanelVisible &&
-    (gitPanelMode === "issues" ||
-      gitPanelMode === "prs" ||
-      (shouldLoadDiffs && diffSource === "pr"));
+  const shouldLoadGitHubPanelDataValue = shouldLoadGitHubPanelData({
+    isGitPanelVisible,
+    gitPanelMode,
+    shouldLoadDiffs,
+    diffSource,
+  });
   const [lazyDiffStatsByPath, setLazyDiffStatsByPath] = useState<
     Record<string, DiffLineStats>
   >({});
@@ -3093,12 +3096,11 @@ function MainApp() {
   const mainMessagesNode = showWorkspaceHome ? workspaceHomeNode : messagesNode;
   const showCompactThreadConnectionIndicator =
     showCompactCodexThreadActions && Boolean(activeThreadId) && activeItems.length > 0;
-  const compactThreadConnectionState: "live" | "polling" | "disconnected" =
-    !activeWorkspace?.connected
-      ? "disconnected"
-      : appSettings.backendMode === "remote"
-        ? remoteThreadConnectionState
-        : "live";
+  const compactThreadConnectionState = resolveCompactThreadConnectionState({
+    isWorkspaceConnected: Boolean(activeWorkspace?.connected),
+    backendMode: appSettings.backendMode,
+    remoteThreadConnectionState,
+  });
   const codexTopbarActionsNode = showCompactThreadConnectionIndicator ? (
     <span
       className={`compact-workspace-live-indicator ${
@@ -3259,7 +3261,7 @@ function MainApp() {
       <div className="drag-strip" id="titlebar" data-tauri-drag-region />
       <TitlebarExpandControls {...sidebarToggleProps} />
       <CommandPalette commands={cmdPalette.commands} open={cmdPalette.open} onClose={cmdPalette.close} />
-      {shouldLoadGitHubPanelData ? (
+      {shouldLoadGitHubPanelDataValue ? (
         <Suspense fallback={null}>
           <GitHubPanelData
             activeWorkspace={activeWorkspace}

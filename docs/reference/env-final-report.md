@@ -486,3 +486,25 @@ ASCII Trend:
 - 触发原因: Wave-5 继续执行兼容可选治理增强（覆盖率并发冲刺），触发门禁审计记录要求。
 - 回退条件: 若新增测试导致 CI 波动或 flaky 升高，按测试文件粒度回退并保留已验证稳定增量。
 - 结果差异: 覆盖率和“真绿可证明”证据再提升；业务运行时行为无变化。
+
+## 2026-02-28 Coverage Wave-6 Audit
+
+- Scope: 0%/低覆盖组件补测 + `App.tsx` 可测性拆分与契约测试。
+- Changed files:
+  - `src/features/workspaces/components/WorkspaceHomeHistory.test.tsx`
+  - `src/features/git/components/ImageDiffCard.test.tsx`
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`
+  - `src/features/app/utils/appUiHelpers.ts`
+  - `src/App.tsx`
+  - `测试深度加强治理Plan.md`
+- Gate evidence:
+  - `npm run test:coverage:gate:strict` executed with all tests passing.
+  - Global coverage moved to `66.25/77.54/73.75/66.25` (S/B/F/L), still below strict 80.
+- Env governance impact:
+  - No environment schema/runtime key behavior changed.
+
+### Compatibility Opt-In Record
+
+- 触发原因: Wave-6 同时包含测试增强与 `App.tsx` 可测性拆分（无行为变更重构），触发兼容可选审计记录。
+- 回退条件: 若拆分后出现行为回归或门禁不稳定，回退 `src/App.tsx` 与 `src/features/app/utils/appUiHelpers.ts` 到拆分前版本，保留独立新增测试逐项二分恢复。
+- 结果差异: 组件行为保持不变；通过契约测试把关键派生逻辑从 `App.tsx` 中可验证化，提升“真绿可证明”证据强度。

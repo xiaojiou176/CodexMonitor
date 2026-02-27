@@ -10,6 +10,43 @@ export type DiffLineStats = {
   deletions: number;
 };
 
+export type AppTab = "home" | "projects" | "codex" | "git" | "log";
+
+export type GitPanelMode = "issues" | "prs" | "local";
+
+export type DiffSource = "local" | "pr";
+
+export type CompactThreadConnectionState = "live" | "polling" | "disconnected";
+
+export function deriveTabletTab(activeTab: AppTab): "codex" | "git" | "log" {
+  return activeTab === "projects" || activeTab === "home" ? "codex" : activeTab;
+}
+
+export function shouldLoadGitHubPanelData(params: {
+  isGitPanelVisible: boolean;
+  gitPanelMode: GitPanelMode;
+  shouldLoadDiffs: boolean;
+  diffSource: DiffSource;
+}): boolean {
+  return (
+    params.isGitPanelVisible &&
+    (params.gitPanelMode === "issues" ||
+      params.gitPanelMode === "prs" ||
+      (params.shouldLoadDiffs && params.diffSource === "pr"))
+  );
+}
+
+export function resolveCompactThreadConnectionState(params: {
+  isWorkspaceConnected: boolean;
+  backendMode: "local" | "remote";
+  remoteThreadConnectionState: "live" | "polling" | "disconnected";
+}): CompactThreadConnectionState {
+  if (!params.isWorkspaceConnected) {
+    return "disconnected";
+  }
+  return params.backendMode === "remote" ? params.remoteThreadConnectionState : "live";
+}
+
 export function clampMessageFontSize(value: number): number {
   if (!Number.isFinite(value)) {
     return MESSAGE_FONT_SIZE_DEFAULT;

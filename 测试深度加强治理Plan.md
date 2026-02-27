@@ -1209,6 +1209,39 @@ Context：
   - Branches `2.59pp`
 - 主要结构性阻塞仍在 `src/App.tsx`（3432 行 0%）与大批 type-only/orchestration 文件。
 
+### 13.9 Coverage 冲刺 Wave-6（2026-02-28）
+
+本波次目标：继续并发补测 0% 大文件，并完成 `App.tsx` 可测性拆分（不改行为）+ 契约测试。
+
+1. 本波次新增测试文件
+- `src/features/workspaces/components/WorkspaceHomeHistory.test.tsx`
+- `src/features/git/components/ImageDiffCard.test.tsx`
+- `src/features/app/utils/appUiHelpers.contract.test.ts`
+
+2. 本波次重构文件（仅可测性拆分）
+- `src/features/app/utils/appUiHelpers.ts`
+- `src/App.tsx`
+
+3. 单文件覆盖样本（Wave-6 结果）
+- `WorkspaceHomeHistory.tsx`: Statements `100%`, Branches `97.67%`
+- `ImageDiffCard.tsx`: Statements `88.83%`, Branches `82.75%`
+- `appUiHelpers` 契约测试：覆盖 `tabletTab`、`GitHub panel lazy-load`、`compact connection state` 三组语义等价断言
+
+4. 全量 strict gate 结果
+- `npm run test:coverage:gate:strict`
+- 全量测试：`168 files / 1568 tests` 全通过。
+- 覆盖率提升到：
+  - Statements `66.25%`
+  - Lines `66.25%`
+  - Functions `73.75%`
+  - Branches `77.54%`
+
+5. 当前差距
+- 距离 strict 80 仍差：
+  - Statements/Lines `13.75pp`
+  - Functions `6.25pp`
+  - Branches `2.46pp`
+
 ## 14. Lazy-Load Evidence（Refactor Batch）
 
 - Runtime evidence references:
