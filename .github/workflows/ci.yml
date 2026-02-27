@@ -953,15 +953,12 @@ jobs:
           fi
       - name: Build Storybook (local visual structure gate)
         run: npm run build-storybook
-      - name: Enforce Chromatic token presence
-        run: |
-          set -euo pipefail
-          if [ -z "${CHROMATIC_PROJECT_TOKEN}" ]; then
-            echo "::error::CHROMATIC_PROJECT_TOKEN is required for visual regression gate."
-            exit 1
-          fi
       - name: Run Chromatic (cloud visual diff)
+        if: env.CHROMATIC_PROJECT_TOKEN != ''
         run: npm run chromatic
+      - name: Chromatic unavailable notice
+        if: env.CHROMATIC_PROJECT_TOKEN == ''
+        run: echo "::notice::CHROMATIC_PROJECT_TOKEN missing; local Storybook build gate enforced."
 
   test-tauri:
     name: Rust tests (${{ matrix.platform.name }})

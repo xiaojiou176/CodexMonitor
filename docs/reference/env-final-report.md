@@ -10,7 +10,7 @@ Date: 2026-02-26
 - Playwright interaction helpers now use user-level actions (`locator.click()` / `locator.press()`), removing synthetic `dispatchEvent` paths.
 - CI skip-detection for key journeys and functional regression now enforces `--enforce=fail`.
 - CI `e2e-a11y` and `e2e-interaction-sweep` upgraded to cross-engine matrix (`chromium + webkit`).
-- CI visual regression now requires `CHROMATIC_PROJECT_TOKEN` (missing token hard-fails gate instead of notice-only downgrade).
+- CI visual regression keeps strict local Storybook build gate and runs Chromatic cloud diff when `CHROMATIC_PROJECT_TOKEN` is present (token-missing case is explicit notice, avoiding fork-secret false red).
 - Home usage chart bars no longer inject non-semantic focus noise (`tabIndex` removed from non-interactive list items).
 - Evidence code paths: `src/features/app/components/ThreadRowItem.tsx`, `src/features/terminal/components/TerminalDock.tsx`, `src/features/layout/hooks/useResizablePanels.ts`, `e2e/a11y.spec.ts`, `e2e/helpers/interactions.ts`, `.github/workflows/ci.yml`, `docs/reference/env-final-report.md`.
 
