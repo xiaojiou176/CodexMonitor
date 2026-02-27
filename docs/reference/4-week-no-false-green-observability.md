@@ -17,7 +17,7 @@
 <!-- WAVE_7F_4W_OBS_TABLE_START -->
 | Week | Window (UTC) | Coverage Gate | Mutation Gate | Assertion Guard | False Green Incidents | Updated At (UTC) | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| W1 | 2026-02-27..2026-03-05 | fail | unknown | unknown | 0 | 2026-02-27T08:25:26.528Z | docs/reference/testing-governance-dashboard.md |
+| W1 | 2026-02-27..2026-03-05 | fail | unknown | unknown | 0 | 2026-02-27T08:32:12.496Z | docs/reference/testing-governance-dashboard.md |
 | W2 | 2026-03-06..2026-03-12 | pending | pending | pending | 0 | - | docs/reference/testing-governance-dashboard.md |
 | W3 | 2026-03-13..2026-03-19 | pending | pending | pending | 0 | - | docs/reference/testing-governance-dashboard.md |
 | W4 | 2026-03-20..2026-03-26 | pending | pending | pending | 0 | - | docs/reference/testing-governance-dashboard.md |

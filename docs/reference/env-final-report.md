@@ -540,3 +540,26 @@ ASCII Trend:
 - 触发原因: Wave-7 涉及 App helper 提取与新增导出函数，且为提升可测性与4周验收观测能力的治理增强。
 - 回退条件: 如拆分后行为或门禁稳定性异常，回退 `src/App.tsx` 与 `src/features/app/utils/appUiHelpers.ts`，保留测试文件用于二分定位。
 - 结果差异: 不改变运行时业务行为；增加可验证 helper 契约测试与 4 周无假绿观测自动化证据链。
+
+## 2026-02-28 Coverage Wave-8 Audit
+
+- Scope: app/git 高缺口 hook 并发补测 + GitHub 面板数据组件补测。
+- Changed files:
+  - `src/features/app/hooks/useWorkspaceController.test.tsx`
+  - `src/features/git/hooks/useGitLog.test.tsx`
+  - `src/features/git/hooks/useGitDiffs.test.tsx`
+  - `src/features/git/hooks/useGitBranches.test.tsx`
+  - `src/features/git/components/GitHubPanelData.test.tsx`
+  - `docs/reference/4-week-no-false-green-observability.md`
+  - `测试深度加强治理Plan.md`
+- Gate evidence:
+  - `npm run test:coverage:gate:strict` executed with all tests passing.
+  - Global coverage moved to `68.87/77.65/74.49/68.87` (S/B/F/L), still below strict 80.
+- Env governance impact:
+  - No environment schema/runtime key behavior changed.
+
+### Compatibility Opt-In Record
+
+- 触发原因: Wave-8 为持续覆盖率冲刺，新增多个 hook/component 测试文件，触发治理审计记录要求。
+- 回退条件: 若新增测试出现稳定性波动，按文件粒度回退并保留其余波次增量，重新跑 strict gate。
+- 结果差异: 覆盖率持续提升并扩大“真绿可证明”证据范围；运行时业务逻辑无变化。

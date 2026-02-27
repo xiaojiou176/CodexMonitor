@@ -1282,6 +1282,42 @@ Context：
 - 已具备检查命令：`npm run check:4w:no-false-green`（严格：`:strict`）
 - 当前观测状态：`W1=fail/unknown/unknown`，`W2-W4=pending`（等待自然时间窗口）
 
+### 13.11 Coverage 冲刺 Wave-8（2026-02-28）
+
+本波次目标：继续并发压缩 0% 高缺口 hook 与 git 数据面板逻辑。
+
+1. 本波次新增测试文件
+- `src/features/app/hooks/useWorkspaceController.test.tsx`
+- `src/features/git/hooks/useGitLog.test.tsx`
+- `src/features/git/hooks/useGitDiffs.test.tsx`
+- `src/features/git/hooks/useGitBranches.test.tsx`
+- `src/features/git/components/GitHubPanelData.test.tsx`
+
+2. 单文件覆盖样本（Wave-8）
+- `useWorkspaceController.ts`: Statements `100%`, Branches `76.47%`
+- `useGitLog.ts`: 新增专测并覆盖加载/刷新/错误/依赖变化主分支
+- `useGitDiffs.ts`: Statements `97.27%`, Branches `86.66%`
+- `useGitBranches.ts`: 新增专测并覆盖加载/排序/过滤/错误主分支
+- `GitHubPanelData.tsx`: 定向覆盖 `100%`（S/B/F/L）
+
+3. 全量 strict gate 结果
+- `npm run test:coverage:gate:strict`
+- 全量测试：`178 files / 1624 tests` 全通过。
+- 覆盖率提升到：
+  - Statements `68.87%`
+  - Lines `68.87%`
+  - Functions `74.49%`
+  - Branches `77.65%`
+
+4. 当前差距
+- 距离 strict 80 仍差：
+  - Statements/Lines `11.13pp`
+  - Functions `5.51pp`
+  - Branches `2.35pp`
+- 结构性阻塞仍集中在：
+  - `src/App.tsx` 超大体量
+  - `src/types.ts`、`layoutNodes/types.ts` 等 type-heavy 文件
+
 ## 14. Lazy-Load Evidence（Refactor Batch）
 
 - Runtime evidence references:
