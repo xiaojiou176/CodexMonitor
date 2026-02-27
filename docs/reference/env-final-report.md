@@ -2,6 +2,13 @@
 
 Date: 2026-02-26
 
+## CI Runtime Optimization Update (2026-02-27)
+
+- Added cache-aware `node_modules` restore/install flow to workflow jobs that previously did cold `npm ci` every run (`pre-commit`, `lint-frontend`, `typecheck`, `docs-drift`, `env-governance`, `security-scans`).
+- Rebalanced E2E depth by running `e2e-functional-regression` on `main` only, while PRs still enforce strict core E2E gates (`smoke`, `a11y`, `interaction`, `key-journeys`).
+- Updated `required-gate` to enforce functional regression only in strict-main context via `expected_e2e_functional`.
+- Evidence code paths: `.github/workflows/ci.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
+
 ## Smoke Stability Follow-up Update (2026-02-27)
 
 - Stabilized smoke E2E to avoid state-coupled flaky checks while preserving deterministic entry-point coverage across Chromium/WebKit.

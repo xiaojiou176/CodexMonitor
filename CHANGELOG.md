@@ -11,6 +11,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Optimized GitHub Actions CI runtime without weakening protected-branch strictness:
+  - Added cache-aware `node_modules` restore/install flow to previously uncached jobs (`pre-commit`, `lint-frontend`, `typecheck`, `docs-drift`, `env-governance`, `security-scans`) to reduce repeated `npm ci` cold paths.
+  - Shifted `e2e-functional-regression` to main-branch full-chain execution (`github.ref == 'refs/heads/main'`) so PRs keep strict core E2E gates while avoiding redundant heavy-suite duplication.
+  - Updated `required-gate` policy to enforce `e2e-functional-regression` on main only (`expected_e2e_functional`), preserving strict PR gates for smoke/a11y/interaction/key-journeys.
+- Evidence code path: `.github/workflows/ci.yml`.
+- Evidence checks: `actionlint -color .github/workflows/ci.yml`, `npm run lint:strict`.
 - Hardened key-journey E2E fallback behavior to eliminate skip-green risk: non-Tauri runtime now uses deterministic fallback assertions (no `testInfo.skip`) and strict report enforcement compatibility (`--enforce=fail`).
 - Evidence code paths: `e2e/workspace-lifecycle.spec.ts`, `e2e/approval-interrupt.spec.ts`, `e2e/worktree-flow.spec.ts`.
 - Evidence: `/tmp/pw-key-journeys.json` validated with `node scripts/check-playwright-report.mjs /tmp/pw-key-journeys.json --enforce=fail` (`skipped tests = 0`).
