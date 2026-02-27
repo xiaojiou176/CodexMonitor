@@ -20,6 +20,18 @@ Generated automatically. Do not hand-edit.
 - `Freshness` thresholds: `fresh <= 6h`, `aging <= 24h`, `stale > 24h`.
 - If freshness is `stale` or `unknown`, treat pass/fail as potentially outdated and re-run the relevant gate.
 
+## Auditable Evidence Contract (Real Chain)
+
+The following conditions are required to claim "minimal real chain verified":
+
+1. `live-preflight` report exists at `.runtime-cache/test_output/live-preflight/latest.json`.
+2. `status` is `passed`.
+3. `runAny` is `true`.
+4. At least one entry in `checks[]` has `status = ok` (real probe succeeded).
+5. If any check has `status = missing` or `status = failed`, CI summary must surface it explicitly.
+
+If any condition above is not satisfied, the result must be treated as **failed**, not skipped-green.
+
 ## Required Gates
 
 | Gate | Status | Last Update | Freshness | Age | Summary | Source |

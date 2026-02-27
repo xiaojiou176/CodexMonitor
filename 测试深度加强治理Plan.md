@@ -998,6 +998,33 @@ Context：
 3. Storybook 在仓库路径含 `[]` 时，直接 `npx storybook build --config-dir .storybook` 仍有上游识别缺陷  
 - 说明：已通过脚本绕行（绝对 config-dir + 临时无特殊字符路径）接入，不阻塞 Chromatic 流程。
 
+### 13.2A 最小真链路“不可 silent skip 即绿”落地规则（2026-02-27）
+
+本规则作为 D1 严格模式的执行细则，要求 CI 与编排脚本同时满足：
+
+1. `.github/workflows/real-integration.yml`
+- 对 `main`、`workflow_dispatch`、`schedule` 触发执行严格门禁。
+- 严格门禁必须校验：
+  - `runAny=true`
+  - `status=passed`
+  - `checks[]` 中至少 1 条 `status=ok`
+- 若不满足任一条件，工作流必须失败，不允许“跳过但绿”。
+
+2. `scripts/preflight-orchestrated.mjs`
+- 增加 `PREFLIGHT_REQUIRE_LIVE` 严格校验开关（CI 默认开启）。
+- 当开关开启时，必须读取 `.runtime-cache/test_output/live-preflight/latest.json` 并执行同等判定：
+  - `runAny=true`
+  - `status=passed`
+  - `ok` 检查数 >= 1
+- 判定失败时必须直接中断 preflight。
+
+3. 审计证据要求
+- 必须保留并可追溯：
+  - `live-preflight/latest.json`
+  - GitHub Step Summary 中的 strict gate 结果
+  - 失败时的 missing/failed prerequisites 列表
+- 无上述证据视为“未完成真链路验证”。
+
 ### 13.3 当前验收口径
 
 1. 结构性任务：已完成  

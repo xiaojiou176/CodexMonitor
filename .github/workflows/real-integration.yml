@@ -19,6 +19,7 @@ jobs:
       run_any: ${{ steps.preflight.outputs.run_any }}
       run_external: ${{ steps.preflight.outputs.run_external }}
       run_llm: ${{ steps.preflight.outputs.run_llm }}
+      status: ${{ steps.preflight.outputs.status }}
       reason: ${{ steps.preflight.outputs.reason }}
     env:
       REAL_EXTERNAL_URL: ${{ secrets.REAL_EXTERNAL_URL }}
@@ -54,8 +55,8 @@ jobs:
         id: preflight
         run: npm run test:live:preflight
 
-      - name: Strict gate on main (no silent skip)
-        if: always() && github.ref == 'refs/heads/main'
+      - name: Strict gate on required live triggers (no silent skip)
+        if: always() && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
         run: |
           set -euo pipefail
           node <<'NODE'
@@ -85,6 +86,7 @@ jobs:
           const status = String(report?.status ?? "unknown");
           const runAny = report?.runAny === true;
           const checks = Array.isArray(report?.checks) ? report.checks : [];
+          const successfulLiveChecks = checks.filter((item) => String(item?.status ?? "") === "ok");
           const missingOrFailed = checks.filter((item) => {
             const checkStatus = String(item?.status ?? "");
             return checkStatus === "missing" || checkStatus === "failed";
@@ -94,8 +96,10 @@ jobs:
             "## Real Integrations (Strict Main Gate)",
             "",
             `- Branch: ${process.env.GITHUB_REF ?? "unknown"}`,
+            `- Event: ${process.env.GITHUB_EVENT_NAME ?? "unknown"}`,
             `- Preflight status: ${status}`,
             `- run_any: ${runAny ? "true" : "false"}`,
+            `- Successful live checks: ${successfulLiveChecks.length}`,
           ];
 
           if (missingOrFailed.length > 0) {
@@ -116,7 +120,11 @@ jobs:
           appendSummary(summaryLines);
 
           if (!runAny) {
-            console.error("[real-integration] strict gate failed: no runnable live checks for main branch");
+            console.error("[real-integration] strict gate failed: no runnable live checks for required trigger");
+            process.exit(1);
+          }
+          if (successfulLiveChecks.length < 1) {
+            console.error("[real-integration] strict gate failed: no successful live checks recorded");
             process.exit(1);
           }
           if (status !== "passed") {

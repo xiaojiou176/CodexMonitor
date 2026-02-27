@@ -47,6 +47,13 @@ Date: 2026-02-26
 - Storybook baseline config now supports repository-safe build and stable publish path for Chromatic.
 - Evidence code paths: `.github/workflows/chromatic.yml`, `.storybook/main.js`, `.storybook/preview.js`, `src/features/design-system/components/modal/ModalShell.stories.tsx`.
 
+## Real-Chain Strictness Update (2026-02-27)
+
+- `real-integration` now enforces strict validation not only on `main`, but also on scheduled and manual runs.
+- Strict validation requires at least one successful live check; `runAny=false` or zero successful checks is now a hard failure.
+- Local preflight orchestration supports `PREFLIGHT_REQUIRE_LIVE=true` to mirror CI strictness and fail fast on skipped live checks.
+- Evidence code paths: `.github/workflows/real-integration.yml`, `scripts/preflight-orchestrated.mjs`, `docs/reference/testing-governance-dashboard.md`, `测试深度加强治理Plan.md`.
+
 ## Env Variant Files
 
 - `.env` (5 keys)
