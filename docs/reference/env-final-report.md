@@ -464,3 +464,25 @@ ASCII Trend:
 - 触发原因: Wave-4 持续执行并发测试增强，属于兼容可选治理路径，需保留审计字段。
 - 回退条件: 若新增测试在 CI 环境引发不稳定，按测试文件粒度回退并重新跑 strict gate 验证。
 - 结果差异: 覆盖率与可证据化程度进一步提升；业务运行时行为无变更。
+
+## 2026-02-27 Coverage Wave-5 Audit
+
+- Scope: prompts/layout/workspaces/composer/util 五路并发补测。
+- Changed test files:
+  - `src/features/prompts/components/PromptPanel.test.tsx`
+  - `src/utils/customPrompts.test.ts`
+  - `src/features/layout/components/DesktopLayout.test.tsx`
+  - `src/features/workspaces/components/WorkspaceHomeRunControls.test.tsx`
+  - `src/features/app/hooks/useComposerController.test.tsx`
+  - `测试深度加强治理Plan.md`
+- Gate evidence:
+  - `npm run test:coverage:gate:strict` executed with all tests passing.
+  - Global coverage moved to `65.58/77.41/73.53/65.58` (S/B/F/L), still below strict 80.
+- Env governance impact:
+  - No environment schema/runtime key behavior changed.
+
+### Compatibility Opt-In Record
+
+- 触发原因: Wave-5 继续执行兼容可选治理增强（覆盖率并发冲刺），触发门禁审计记录要求。
+- 回退条件: 若新增测试导致 CI 波动或 flaky 升高，按测试文件粒度回退并保留已验证稳定增量。
+- 结果差异: 覆盖率和“真绿可证明”证据再提升；业务运行时行为无变化。

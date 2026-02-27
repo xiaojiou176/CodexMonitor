@@ -1175,6 +1175,40 @@ Context：
   - `useTerminalSession.ts`（已拉升但仍有残余）
   - `SettingsView.tsx`（70.23%）
 
+### 13.8 Coverage 冲刺 Wave-5（2026-02-27）
+
+本波次目标：继续并发清理低覆盖大文件与核心 util，优先提升全局 statements/lines。
+
+1. 本波次新增测试文件
+- `src/features/prompts/components/PromptPanel.test.tsx`
+- `src/utils/customPrompts.test.ts`
+- `src/features/layout/components/DesktopLayout.test.tsx`
+- `src/features/workspaces/components/WorkspaceHomeRunControls.test.tsx`
+- `src/features/app/hooks/useComposerController.test.tsx`
+
+2. 单文件覆盖样本（Wave-5 结果）
+- `PromptPanel.tsx`: Statements `95.75%`, Branches `80.16%`
+- `customPrompts.ts`: Statements `91.61%`, Branches `87.90%`
+- `DesktopLayout.tsx`: Statements/Branches/Functions/Lines `100%`
+- `WorkspaceHomeRunControls.tsx`: Statements `96.29%`, Branches `86.04%`
+- `useComposerController.ts`: Statements `100%`, Branches `95%`
+
+3. 全量 strict gate 结果
+- `npm run test:coverage:gate:strict`
+- 全量测试：`165 files / 1554 tests` 全通过。
+- 覆盖率提升到：
+  - Statements `65.58%`
+  - Lines `65.58%`
+  - Functions `73.53%`
+  - Branches `77.41%`
+
+4. 当前差距
+- 距离 strict 80 还差：
+  - Statements/Lines `14.42pp`
+  - Functions `6.47pp`
+  - Branches `2.59pp`
+- 主要结构性阻塞仍在 `src/App.tsx`（3432 行 0%）与大批 type-only/orchestration 文件。
+
 ## 14. Lazy-Load Evidence（Refactor Batch）
 
 - Runtime evidence references:
