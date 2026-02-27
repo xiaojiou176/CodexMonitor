@@ -801,13 +801,18 @@ mod tests {
 
     #[test]
     fn build_turn_input_items_appends_skill_mentions_and_deduplicates() {
+        let absolute_skill_path = if cfg!(windows) {
+            r"C:\Users\me\.codex\skills\deep.md"
+        } else {
+            "/Users/me/.codex/skills/deep.md"
+        };
         let input = build_turn_input_items(
             "run".to_string(),
             None,
             None,
             Some(vec![
-                json!({ "name": "deep_debug", "path": "/Users/me/.codex/skills/deep.md" }),
-                json!({ "name": "deep_debug", "path": "/Users/me/.codex/skills/deep.md" }),
+                json!({ "name": "deep_debug", "path": absolute_skill_path }),
+                json!({ "name": "deep_debug", "path": absolute_skill_path }),
             ]),
         )
         .expect("build input");
@@ -818,7 +823,7 @@ mod tests {
                 json!({
                     "type": "skill",
                     "name": "deep_debug",
-                    "path": "/Users/me/.codex/skills/deep.md"
+                    "path": absolute_skill_path
                 }),
             ]
         );
@@ -840,12 +845,17 @@ mod tests {
 
     #[test]
     fn build_turn_input_items_rejects_empty_skill_mention_name() {
+        let absolute_skill_path = if cfg!(windows) {
+            r"C:\Users\me\.codex\skills\deep.md"
+        } else {
+            "/Users/me/.codex/skills/deep.md"
+        };
         let error = build_turn_input_items(
             "run".to_string(),
             None,
             None,
             Some(vec![
-                json!({ "name": " ", "path": "/Users/me/.codex/skills/deep.md" }),
+                json!({ "name": " ", "path": absolute_skill_path }),
             ]),
         )
         .expect_err("empty skill names should be rejected");

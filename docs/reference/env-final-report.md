@@ -16,6 +16,13 @@ Date: 2026-02-26
 - This is especially important when heavy jobs (for example mutation runs) stretch unexpectedly and block fresh verification for critical fixes.
 - Evidence code paths: `.github/workflows/ci.yml`, `docs/reference/env-final-report.md`.
 
+## Rust Windows Test Parity Update (2026-02-27)
+
+- Fixed cross-platform test fixture behavior in `shared::codex_core` skill-mention input tests.
+- Test fixtures now use OS-appropriate absolute paths (`C:\\...` on Windows, `/...` on Unix) so path validation assertions are deterministic across the Rust matrix.
+- This removes a Windows-only false red in `Rust tests (Windows)` while preserving strict path validation logic.
+- Evidence code paths: `src-tauri/src/shared/codex_core.rs`, `docs/reference/env-final-report.md`.
+
 ## Final Counts (Single Source of Truth)
 
 - canonical_count: **12**
