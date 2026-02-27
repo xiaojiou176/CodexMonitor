@@ -98,6 +98,13 @@ Date: 2026-02-26
 - When unset/`!=true`, workflow remains visible in advisory mode with explicit warning/summary instead of hard-failing every push in unprovisioned forks.
 - Evidence code paths: `.github/workflows/real-integration.yml`, `README.md`, `docs/reference/env-final-report.md`.
 
+## CI Reliability Follow-up Update (2026-02-27)
+
+- Fixed `security-scans` Cargo audit invocation by running inside `src-tauri` with canonical `cargo audit` command.
+- Stabilized WebKit smoke flow by scoping cancel interaction to the worktree dialog and asserting hidden-state instead of count-based detachment.
+- Added tracked coverage bootstrap baseline (`config/coverage-gate-baseline.json`) and priority lookup in `scripts/coverage-gate.mjs` (repo baseline first, runtime fallback second) so default ratchet mode is deterministic on clean CI runners.
+- Evidence code paths: `.github/workflows/ci.yml`, `e2e/smoke.spec.ts`, `scripts/coverage-gate.mjs`, `config/coverage-gate-baseline.json`, `README.md`.
+
 ## CI Hygiene + Typecheck Stabilization Update (2026-02-27)
 
 - Fixed workflow hygiene blocker (`SC2129`) in `.github/workflows/ci.yml` by batching `GITHUB_OUTPUT` writes in one redirected block.

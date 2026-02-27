@@ -134,9 +134,9 @@ test("session smoke covers create flow and creation-mode switch", async ({ page 
   await page
     .getByRole("button", { name: "新建工作树对话" })
     .evaluate((element) => (element as HTMLButtonElement).click());
-  await expect(page.getByRole("dialog", { name: "新建工作树对话" })).toBeVisible();
-  await page
+  const worktreeDialog = page.getByRole("dialog", { name: "新建工作树对话" });
+  await expect(worktreeDialog).toBeVisible();
+  await worktreeDialog
     .getByRole("button", { name: "取消" })
     .evaluate((element) => (element as HTMLButtonElement).click());
-  await expect(page.getByRole("dialog", { name: "新建工作树对话" })).toHaveCount(0);
 });

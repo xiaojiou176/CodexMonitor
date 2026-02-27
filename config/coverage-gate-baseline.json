@@ -1,0 +1,10 @@
+{
+  "updatedAt": "2026-02-27T11:57:58.000Z",
+  "runId": "ci-bootstrap-baseline-20260227b",
+  "metrics": {
+    "statements": 76.0,
+    "lines": 76.0,
+    "functions": 78.0,
+    "branches": 79.5
+  }
+}

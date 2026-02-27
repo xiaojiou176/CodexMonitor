@@ -10,6 +10,7 @@ const rootDir = process.cwd();
 const coverageRootDir = path.join(rootDir, ".runtime-cache", "coverage", "vitest-gate");
 const reportDir = path.join(rootDir, ".runtime-cache", "test_output", "coverage-gate");
 const baselinePath = path.join(reportDir, "baseline.json");
+const repoBaselinePath = path.join(rootDir, "config", "coverage-gate-baseline.json");
 const globalCoverageIncludePattern = "src/**/*.{ts,tsx}";
 const globalMinimumThresholds = {
   statements: 80,
@@ -470,9 +471,20 @@ export async function main() {
     functions: readPct(total, "functions"),
     branches: readPct(total, "branches"),
   };
-  const baselineThresholds = gateMode === "strict"
-    ? null
-    : await readBaselineThresholds(baselinePath);
+  const baselineResolution = gateMode === "strict"
+    ? { thresholds: null, resolvedPath: baselinePath }
+    : (() => {
+      return readBaselineThresholds(repoBaselinePath).then((repoBaseline) => {
+        if (repoBaseline) {
+          return { thresholds: repoBaseline, resolvedPath: repoBaselinePath };
+        }
+        return readBaselineThresholds(baselinePath).then((runtimeBaseline) => ({
+          thresholds: runtimeBaseline,
+          resolvedPath: runtimeBaseline ? baselinePath : repoBaselinePath,
+        }));
+      });
+    })();
+  const { thresholds: baselineThresholds, resolvedPath: resolvedBaselinePath } = await baselineResolution;
   const requiredThresholds = gateMode === "strict"
     ? { ...globalMinimumThresholds }
     : resolveRequiredThresholds(targetThresholds, baselineThresholds, targetSources);
@@ -528,7 +540,7 @@ export async function main() {
     failures,
     summaryPath,
     coverageDir,
-    baselinePath,
+    baselinePath: resolvedBaselinePath,
   };
 
   const latestPath = path.join(reportDir, "latest.json");
@@ -541,7 +553,7 @@ export async function main() {
     latestPath,
     runId,
     coverageDir,
-    baselinePath,
+    baselinePath: resolvedBaselinePath,
     baselineThresholds,
   });
 

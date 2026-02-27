@@ -343,8 +343,9 @@ Coverage gate policy (`scripts/coverage-gate.mjs`):
 
 - Global minimum thresholds are fixed at `>=80` for `statements`, `lines`, `functions`, and `branches`.
 - Default mode (`npm run test:coverage:gate`) is ratcheted sustainability mode:
-  - Without explicit env targets, required threshold follows baseline (`baseline.json`) to prevent regression and only ratchets upward.
+  - Without explicit env targets, required threshold follows repository baseline (`config/coverage-gate-baseline.json`) to prevent regression and only ratchets upward.
   - With explicit `COVERAGE_TARGET_*` (or legacy `COVERAGE_MIN_*`), required becomes `max(explicit_target, baseline)` per metric.
+  - Runtime fallback baseline (`.runtime-cache/test_output/coverage-gate/baseline.json`) is used only when repository baseline is unavailable.
 - Strict mode (`npm run test:coverage:gate:strict`) ignores baseline input and enforces fixed global `80/80/80/80`.
 - Critical scope thresholds are hard-gated as implemented:
   - `src/features/threads/`: `statements>=95`, `lines>=95`, `functions>=95`, `branches>=92`

@@ -883,7 +883,8 @@ jobs:
             cargo install cargo-audit --locked
           fi
       - name: Cargo audit
-        run: cargo audit --manifest-path src-tauri/Cargo.toml
+        run: cargo audit
+        working-directory: src-tauri
       - name: Secret scan (gitleaks)
         uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
         env:
