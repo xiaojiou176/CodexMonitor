@@ -3639,4 +3639,203 @@ describe("threadReducer", () => {
     expect(next.threadStatusById["thread-1"]?.waitReason).toBe("approval");
     expect(next.threadStatusById["thread-1"]?.lastMcpProgressMessage).toBe("working");
   });
+
+  it("keeps assistant model list unchanged when setThreadTurnMeta turn does not match trailing assistant", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "text",
+            turnId: "turn-other",
+            model: "old-model",
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadTurnMeta",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      model: "new-model",
+    });
+
+    expect(next.itemsByThread["thread-1"]).toBe(base.itemsByThread["thread-1"]);
+    expect(next.turnMetaByThread["thread-1"]?.turnId).toBe("turn-1");
+  });
+
+  it("keeps assistant context list unchanged when setThreadTurnContextWindow turn does not match trailing assistant", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "text",
+            turnId: "turn-other",
+            contextWindow: 1024,
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadTurnContextWindow",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      contextWindow: 4096,
+    });
+
+    expect(next.itemsByThread["thread-1"]).toBe(base.itemsByThread["thread-1"]);
+    expect(next.turnMetaByTurnId["turn-1"]?.contextWindow).toBe(4096);
+  });
+
+  it("normalizes undefined assistant text when completeAgentMessage receives undefined payload", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: undefined as unknown as string,
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-1",
+      text: undefined as unknown as string,
+      hasCustomName: true,
+    });
+
+    expect(next.itemsByThread["thread-1"]?.[0]).toMatchObject({
+      kind: "message",
+      role: "assistant",
+      text: "",
+      model: null,
+      contextWindow: null,
+      turnId: null,
+    });
+  });
+
+  it("keeps thread list unchanged when upserting user message for a workspace without thread summaries", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadsByWorkspace: { "ws-1": [] },
+      threadSortKeyByWorkspace: { "ws-1": "updated_at" },
+    };
+
+    const next = threadReducer(base, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-missing",
+      item: {
+        id: "user-1",
+        kind: "message",
+        role: "user",
+        text: "hello",
+      },
+      hasCustomName: false,
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]).toEqual([]);
+  });
+
+  it("switches phase back to starting when markReviewing clears a processing tool-running status", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: true,
+          phase: "tool_running",
+          processingStartedAt: 1000,
+          lastDurationMs: null,
+          lastActivityAt: 1200,
+          lastErrorAt: null,
+          lastErrorMessage: null,
+          turnStatus: "inProgress",
+          activeItemStatuses: {},
+          messagePhase: "unknown",
+          waitReason: "none",
+          retryState: "none",
+          lastMcpProgressMessage: null,
+        },
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "markReviewing",
+      threadId: "thread-1",
+      isReviewing: false,
+    });
+
+    expect(next.threadStatusById["thread-1"]?.phase).toBe("starting");
+    expect(next.threadStatusById["thread-1"]?.isReviewing).toBe(false);
+  });
+
+  it("returns original state when setActiveItemStatus writes the same status value", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          phase: "streaming",
+          processingStartedAt: 1000,
+          lastDurationMs: null,
+          lastActivityAt: 1200,
+          lastErrorAt: null,
+          lastErrorMessage: null,
+          turnStatus: "inProgress",
+          activeItemStatuses: { "item-1": "inProgress" },
+          messagePhase: "unknown",
+          waitReason: "none",
+          retryState: "none",
+          lastMcpProgressMessage: null,
+        },
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setActiveItemStatus",
+      threadId: "thread-1",
+      itemId: "item-1",
+      status: "inProgress",
+    });
+
+    expect(next).toBe(base);
+  });
+
+  it("removes stored parent rank when setThreadParent does not carry a usable ordering rank", () => {
+    const base: ThreadState = {
+      ...initialState,
+      threadParentById: { "thread-1": "parent-1" },
+      threadParentRankById: { "thread-1": 8 },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadParent",
+      threadId: "thread-1",
+      parentId: "parent-2",
+      ordering: { source: "missing-rank" },
+    });
+
+    expect(next.threadParentById["thread-1"]).toBe("parent-2");
+    expect(next.threadParentRankById["thread-1"]).toBeUndefined();
+  });
 });

@@ -11,6 +11,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Added reducer edge/no-op branch tests for `threads` to improve branch-path coverage around turn metadata normalization, parent rank cleanup, and status idempotency.
+- Evidence code path: `src/features/threads/hooks/useThreadsReducer.test.ts`.
 - Expanded App entry smoke coverage for `src/App.tsx` with route fallback, rerender route-switch, and main-render error-path assertions.
 - Evidence code path: `src/App.main-smoke.test.tsx`.
 - Added additional App window-label edge-case smoke assertions to keep the entry routing branch behavior explicit under rerender and empty-label states.
