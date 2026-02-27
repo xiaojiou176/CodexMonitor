@@ -1032,6 +1032,34 @@ Context：
 3. 可执行验证：lint/typecheck/check:rust/workflow-yaml/新增 E2E 均已通过  
 4. 债务项：已被明确暴露并纳入后续治理待办
 
+### 13.4 Coverage 冲刺 Wave-1（2026-02-27）
+
+本波次目标：优先补齐高 ROI 测试面，验证“新增测试可稳定运行 + 不引入假绿”。
+
+1. 本波次新增/增强测试文件
+- `src/features/app/components/MainHeader.test.tsx`（新增，9 tests）
+- `src/features/files/components/FileTreePanel.test.tsx`（新增，5 tests）
+- `src/features/git/components/GitDiffViewer.test.tsx`（新增，5 tests）
+- `src/features/workspaces/hooks/useWorkspaces.test.tsx`（增强到 26 tests）
+
+2. 关键覆盖提升（单文件可审计）
+- `MainHeader.tsx`：约 `73.27% -> 86.63%`（Statements/Lines），分支覆盖显著提升。
+- `FileTreePanel.tsx`：从低覆盖提升到可用区间，覆盖加载态/空态/折叠筛选/错误提示核心分支。
+- `GitDiffViewer.tsx`：新增真实渲染+交互+异常路径测试，覆盖提升到高可用区间（Statements/Lines > 80%）。
+- `useWorkspaces.ts`：函数覆盖接近完整，语句覆盖显著提升（约 `49.15% -> 76.65%`）。
+
+3. 本波次回归结果
+- 新增/增强测试文件全部单测通过。
+- 全量严格门禁仍未达标：`global coverage 56.73% / 75.90% / 69.83% / 56.73%`（S/B/F/L，阈值均为 80%）。
+- 结论：本波次已确认“增量有效”，但距离 strict 80% 仍有系统性差距，需要继续并发波次推进。
+
+4. Wave-2 优先级（并发执行）
+- `src/features/settings/components/SettingsView.tsx`
+- `src/features/app/components/Sidebar.tsx`
+- `src/features/git/components/GitDiffPanelModeContent.tsx`
+- `src/features/composer/components/ComposerInput.tsx`
+- `src/features/app/components/OpenAppMenu.tsx`
+
 ## 14. Lazy-Load Evidence（Refactor Batch）
 
 - Runtime evidence references:

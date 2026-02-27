@@ -377,3 +377,23 @@ ASCII Trend:
 - Env governance impact:
   - No new runtime-prefixed environment keys introduced.
   - Existing env schema coverage and runtime checks remain unchanged.
+
+## 2026-02-27 Coverage Wave-1 Audit
+
+- Scope: frontend test coverage uplift wave for true-green hardening.
+- Changed test files:
+  - `src/features/app/components/MainHeader.test.tsx`
+  - `src/features/files/components/FileTreePanel.test.tsx`
+  - `src/features/git/components/GitDiffViewer.test.tsx`
+  - `src/features/workspaces/hooks/useWorkspaces.test.tsx`
+  - `测试深度加强治理Plan.md`
+- Gate evidence:
+  - `npm run test:coverage:gate:strict` executed successfully with all tests passing; strict coverage threshold still failing at global scope (`56.73/75.90/69.83/56.73` vs required `80/80/80/80`).
+- Env governance impact:
+  - No environment variable schema or runtime-prefixed env behavior changed.
+
+### Compatibility Opt-In Record
+
+- 触发原因: 本波次对前端测试体系进行覆盖率冲刺，新增/增强多个测试文件，触发兼容可选记录门禁以确保“变更原因可审计”。
+- 回退条件: 若新增测试引入稳定性回归（例如在 `npm run test:coverage:gate:strict` 下出现可复现失败），则回退到本波次前测试集并逐个用例二分恢复。
+- 结果差异: 增强了 `MainHeader/FileTreePanel/GitDiffViewer/useWorkspaces` 的测试覆盖与交互断言；不涉及运行时环境变量和生产行为变更。
