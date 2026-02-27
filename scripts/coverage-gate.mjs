@@ -9,17 +9,36 @@ import { pathToFileURL } from "node:url";
 const rootDir = process.cwd();
 const coverageRootDir = path.join(rootDir, ".runtime-cache", "coverage", "vitest-gate");
 const reportDir = path.join(rootDir, ".runtime-cache", "test_output", "coverage-gate");
+const baselinePath = path.join(reportDir, "baseline.json");
+const globalCoverageIncludePattern = "src/**/*.{ts,tsx}";
 const globalMinimumThresholds = {
   statements: 80,
   lines: 80,
   functions: 80,
   branches: 80,
 };
-const thresholdEnvConfig = {
-  statements: { env: "COVERAGE_MIN_STATEMENTS", defaultValue: 80 },
-  lines: { env: "COVERAGE_MIN_LINES", defaultValue: 80 },
-  functions: { env: "COVERAGE_MIN_FUNCTIONS", defaultValue: 80 },
-  branches: { env: "COVERAGE_MIN_BRANCHES", defaultValue: 80 },
+const supportedGateModes = new Set(["default", "strict"]);
+const targetThresholdEnvConfig = {
+  statements: {
+    env: "COVERAGE_TARGET_STATEMENTS",
+    legacyEnv: "COVERAGE_MIN_STATEMENTS",
+    defaultValue: 80,
+  },
+  lines: {
+    env: "COVERAGE_TARGET_LINES",
+    legacyEnv: "COVERAGE_MIN_LINES",
+    defaultValue: 80,
+  },
+  functions: {
+    env: "COVERAGE_TARGET_FUNCTIONS",
+    legacyEnv: "COVERAGE_MIN_FUNCTIONS",
+    defaultValue: 80,
+  },
+  branches: {
+    env: "COVERAGE_TARGET_BRANCHES",
+    legacyEnv: "COVERAGE_MIN_BRANCHES",
+    defaultValue: 80,
+  },
 };
 const criticalScopeConfig = [
   {
@@ -51,31 +70,43 @@ export function parseThresholdValue(metric, envKey, defaultValue) {
   if (parsed < 0 || parsed > 100) {
     throw new Error(`Invalid ${envKey} value: "${raw}" must be between 0 and 100`);
   }
-  const floorValue = globalMinimumThresholds[metric];
-  if (parsed < floorValue) {
-    throw new Error(
-      `Invalid ${envKey} value: "${raw}" is below enforced minimum ${floorValue}`,
-    );
-  }
   return { value: parsed, source: "env" };
 }
 
-export function resolveThresholds() {
-  const thresholds = {};
-  const thresholdSources = {};
-  for (const [metric, config] of Object.entries(thresholdEnvConfig)) {
-    const { value, source } = parseThresholdValue(metric, config.env, config.defaultValue);
-    thresholds[metric] = value;
-    thresholdSources[metric] = { env: config.env, source };
+export function resolveTargetThresholds() {
+  const targetThresholds = {};
+  const targetSources = {};
+  for (const [metric, config] of Object.entries(targetThresholdEnvConfig)) {
+    const primaryRaw = process.env[config.env];
+    const fallbackRaw = process.env[config.legacyEnv];
+    const envToUse = primaryRaw !== undefined && primaryRaw.trim() !== ""
+      ? config.env
+      : config.legacyEnv;
+    const { value, source } = parseThresholdValue(metric, envToUse, config.defaultValue);
+    targetThresholds[metric] = value;
+    targetSources[metric] = {
+      env: config.env,
+      legacyEnv: config.legacyEnv,
+      source: source === "default" ? "default" : (envToUse === config.env ? "env" : "legacy-env"),
+    };
   }
-  return { thresholds, thresholdSources };
+  return { targetThresholds, targetSources };
+}
+
+export function parseGateMode(argv = process.argv.slice(2)) {
+  const modeArg = argv.find((arg) => arg.startsWith("--mode="));
+  if (!modeArg) {
+    return "default";
+  }
+  const parsedMode = modeArg.slice("--mode=".length).trim().toLowerCase();
+  if (!supportedGateModes.has(parsedMode)) {
+    throw new Error(`Invalid --mode value: \"${parsedMode}\". Supported values: default, strict`);
+  }
+  return parsedMode;
 }
 
 export function runVitestCoverage(coverageDir) {
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-  const scopedCoverageIncludes = criticalScopeConfig.map(
-    (scope) => `${scope.prefix}**/*.{ts,tsx}`,
-  );
   const args = [
     "exec",
     "--",
@@ -90,12 +121,10 @@ export function runVitestCoverage(coverageDir) {
     "--coverage.exclude=src/**/*.test.tsx",
     "--coverage.exclude=src/test/**",
     "--coverage.exclude=src/main.tsx",
+    `--coverage.include=${globalCoverageIncludePattern}`,
     "--testTimeout=15000",
     "--hookTimeout=15000",
   ];
-  for (const includePattern of scopedCoverageIncludes) {
-    args.push(`--coverage.include=${includePattern}`);
-  }
 
   return new Promise((resolve, reject) => {
     const child = spawn(npmCommand, args, {
@@ -181,6 +210,97 @@ export function collectGlobalFailures(thresholds, actualValues) {
   return failures;
 }
 
+export async function readBaselineThresholds(filePath) {
+  try {
+    const raw = await readFile(filePath, "utf-8");
+    const parsed = JSON.parse(raw);
+    const metrics = parsed?.metrics;
+    if (!metrics || typeof metrics !== "object") {
+      return null;
+    }
+    const normalized = {};
+    for (const metric of Object.keys(globalMinimumThresholds)) {
+      const value = metrics[metric];
+      if (typeof value !== "number" || Number.isNaN(value) || value < 0 || value > 100) {
+        return null;
+      }
+      normalized[metric] = Number(value.toFixed(2));
+    }
+    return normalized;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("ENOENT")) {
+      return null;
+    }
+    const traceId = `coverage-baseline-${Date.now()}`;
+    console.error("[coverage-gate][baseline-read-failed]", {
+      traceId,
+      requestId: traceId,
+      status: "failed",
+      error: message,
+      baselinePath: filePath,
+    });
+    throw error;
+  }
+}
+
+export function resolveRequiredThresholds(targetThresholds, baselineThresholds, targetSources = {}) {
+  const requiredThresholds = {};
+  for (const metric of Object.keys(globalMinimumThresholds)) {
+    const target = targetThresholds[metric];
+    const baseline = baselineThresholds?.[metric];
+    if (baseline === undefined) {
+      requiredThresholds[metric] = target;
+      continue;
+    }
+    const source = targetSources?.[metric]?.source;
+    if (source === "default") {
+      requiredThresholds[metric] = baseline;
+      continue;
+    }
+    requiredThresholds[metric] = Number(Math.max(target, baseline).toFixed(2));
+  }
+  return requiredThresholds;
+}
+
+export function buildMetricComparisons(actualValues, targetThresholds, baselineThresholds, requiredThresholds) {
+  const comparisons = {};
+  for (const metric of Object.keys(globalMinimumThresholds)) {
+    const actual = actualValues[metric];
+    const target = targetThresholds[metric];
+    const baseline = baselineThresholds?.[metric] ?? null;
+    const required = requiredThresholds[metric];
+    comparisons[metric] = {
+      actual,
+      target,
+      baseline,
+      required,
+      pass: actual >= required,
+    };
+  }
+  return comparisons;
+}
+
+export function buildNextBaseline(actualValues, baselineThresholds) {
+  const nextBaseline = {};
+  for (const metric of Object.keys(globalMinimumThresholds)) {
+    const baseline = baselineThresholds?.[metric] ?? 0;
+    nextBaseline[metric] = Number(Math.max(actualValues[metric], baseline).toFixed(2));
+  }
+  return nextBaseline;
+}
+
+export async function writeBaselineThresholds(filePath, metrics, runId) {
+  const baseline = {
+    version: 1,
+    runId,
+    updatedAtUtc: new Date().toISOString(),
+    includePattern: globalCoverageIncludePattern,
+    metrics,
+  };
+  await writeFile(filePath, `${JSON.stringify(baseline, null, 2)}\n`, "utf-8");
+}
+
 export function collectCriticalScopeFailures(criticalScopes) {
   const failures = [];
   for (const scope of criticalScopes) {
@@ -216,22 +336,30 @@ function formatPercent(value) {
   return `${Number(value).toFixed(2)}%`;
 }
 
-function logCoverageSummary({ actualValues, thresholds, criticalScopes, latestPath, runId, coverageDir }) {
+function logCoverageSummary({
+  gateMode,
+  metricComparisons,
+  criticalScopes,
+  latestPath,
+  runId,
+  coverageDir,
+  baselinePath: resolvedBaselinePath,
+  baselineThresholds,
+}) {
   console.log("\n[Coverage Gate]");
+  console.log(`- mode: ${gateMode}`);
   console.log(`- run: ${runId}`);
   console.log(`- coverageDir: ${coverageDir}`);
   console.log(`- report: ${latestPath}`);
-  console.log("- global:");
-  console.log(
-    `  statements ${formatPercent(actualValues.statements)} (min ${formatPercent(thresholds.statements)})`,
-  );
-  console.log(`  lines ${formatPercent(actualValues.lines)} (min ${formatPercent(thresholds.lines)})`);
-  console.log(
-    `  functions ${formatPercent(actualValues.functions)} (min ${formatPercent(thresholds.functions)})`,
-  );
-  console.log(
-    `  branches ${formatPercent(actualValues.branches)} (min ${formatPercent(thresholds.branches)})`,
-  );
+  console.log(`- baseline: ${resolvedBaselinePath} ${baselineThresholds ? "(loaded)" : "(missing)"}`);
+  console.log(`- global (${globalCoverageIncludePattern}):`);
+  for (const [metric, comparison] of Object.entries(metricComparisons)) {
+    const baselineLabel = comparison.baseline === null ? "n/a" : formatPercent(comparison.baseline);
+    const status = comparison.pass ? "PASS" : "FAIL";
+    console.log(
+      `  ${metric} current ${formatPercent(comparison.actual)} | baseline ${baselineLabel} | target ${formatPercent(comparison.target)} | required ${formatPercent(comparison.required)} | ${status}`,
+    );
+  }
   console.log("- critical scopes:");
   for (const scope of criticalScopes) {
     console.log(`  ${scope.name} | files=${scope.fileCount} | prefix=${scope.prefix}`);
@@ -291,12 +419,28 @@ export async function main() {
   const coverageDir = path.join(coverageRootDir, runId);
   const summaryPath = path.join(coverageDir, "coverage-summary.json");
 
-  let thresholds;
-  let thresholdSources;
+  let gateMode;
+  let targetThresholds;
+  let targetSources;
   try {
-    const resolved = resolveThresholds();
-    thresholds = resolved.thresholds;
-    thresholdSources = resolved.thresholdSources;
+    gateMode = parseGateMode();
+    if (gateMode === "strict") {
+      targetThresholds = { ...globalMinimumThresholds };
+      targetSources = Object.fromEntries(
+        Object.entries(targetThresholdEnvConfig).map(([metric, config]) => [
+          metric,
+          {
+            env: config.env,
+            legacyEnv: config.legacyEnv,
+            source: "strict-fixed-80",
+          },
+        ]),
+      );
+    } else {
+      const resolved = resolveTargetThresholds();
+      targetThresholds = resolved.targetThresholds;
+      targetSources = resolved.targetSources;
+    }
   } catch (error) {
     console.error("❌ Invalid coverage threshold configuration");
     console.error(error instanceof Error ? error.message : String(error));
@@ -326,7 +470,19 @@ export async function main() {
     functions: readPct(total, "functions"),
     branches: readPct(total, "branches"),
   };
-  const globalFailures = collectGlobalFailures(thresholds, actualValues);
+  const baselineThresholds = gateMode === "strict"
+    ? null
+    : await readBaselineThresholds(baselinePath);
+  const requiredThresholds = gateMode === "strict"
+    ? { ...globalMinimumThresholds }
+    : resolveRequiredThresholds(targetThresholds, baselineThresholds, targetSources);
+  const metricComparisons = buildMetricComparisons(
+    actualValues,
+    targetThresholds,
+    baselineThresholds,
+    requiredThresholds,
+  );
+  const globalFailures = collectGlobalFailures(requiredThresholds, actualValues);
   const criticalScopes = criticalScopeConfig.map((scopeConfig) => {
     const { fileCount, coverage } = aggregateScopeCoverage(summary, scopeConfig.prefix);
     return {
@@ -339,32 +495,65 @@ export async function main() {
   const failures = [...globalFailures, ...criticalFailures];
 
   const report = {
+    gateMode,
     runId,
     timestampPst: new Date().toLocaleString("sv-SE", {
       timeZone: "America/Los_Angeles",
       hour12: false,
     }),
-    thresholds,
+    targetThresholds,
+    baselineThresholds,
+    requiredThresholds,
     globalMinimumThresholds,
-    thresholdSources,
+    thresholdSources: targetSources,
+    globalCoverageIncludePattern,
+    global: {
+      includePattern: globalCoverageIncludePattern,
+      targetThresholds,
+      baselineThresholds,
+      requiredThresholds,
+      minimumThresholds: globalMinimumThresholds,
+      coverage: actualValues,
+      metricComparisons,
+      failures: globalFailures,
+    },
+    critical: {
+      scopes: criticalScopes,
+      failures: criticalFailures,
+    },
     coverage: actualValues,
+    metricComparisons,
     criticalScopes,
     pass: failures.length === 0,
     failures,
     summaryPath,
     coverageDir,
+    baselinePath,
   };
 
   const latestPath = path.join(reportDir, "latest.json");
   await writeFile(latestPath, `${JSON.stringify(report, null, 2)}\n`, "utf-8");
 
-  logCoverageSummary({ actualValues, thresholds, criticalScopes, latestPath, runId, coverageDir });
+  logCoverageSummary({
+    gateMode,
+    metricComparisons,
+    criticalScopes,
+    latestPath,
+    runId,
+    coverageDir,
+    baselinePath,
+    baselineThresholds,
+  });
 
   if (failures.length > 0) {
     logFailureShortfall(failures);
     process.exit(3);
   }
 
+  if (gateMode === "default") {
+    const nextBaseline = buildNextBaseline(actualValues, baselineThresholds);
+    await writeBaselineThresholds(baselinePath, nextBaseline, runId);
+  }
   console.log("✅ Coverage gate passed");
 }
 

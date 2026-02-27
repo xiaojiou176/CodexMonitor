@@ -8,6 +8,7 @@ import { buildMutationConfig } from "./mutation-stryker.config.mjs";
 
 const rootDir = process.cwd();
 const reportDir = path.join(rootDir, ".runtime-cache", "test_output", "mutation-gate");
+const latestReportPath = path.join(reportDir, "latest.json");
 const runId = `${Date.now()}-${process.pid}`;
 const tempConfigPath = path.join(rootDir, `.stryker-${runId}.config.mjs`);
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -19,14 +20,6 @@ const thresholdBreak = thresholdEnvRaw && thresholdEnvRaw.trim() !== ""
 const mutateEnvRaw = process.env.MUTATION_MUTATE;
 const mutationBaseSha = process.env.MUTATION_BASE_SHA?.trim() || "";
 const mutationHeadSha = process.env.MUTATION_HEAD_SHA?.trim() || "";
-const skipAssertionGuard = process.env.MUTATION_SKIP_ASSERTION_GUARD === "true";
-
-if (!Number.isFinite(thresholdBreak) || thresholdBreak < 0 || thresholdBreak > 100) {
-  console.error(
-    `❌ Invalid MUTATION_MIN_SCORE: "${thresholdEnvRaw}" must be a finite number in [0, 100]`,
-  );
-  process.exit(2);
-}
 
 function isMutationTarget(filePath) {
   if (!filePath.startsWith("src/features/threads/") && !filePath.startsWith("src/services/")) {
@@ -125,9 +118,33 @@ function runCommand(name, args) {
   });
 }
 
+async function writeLatestStatus(status, payload = {}) {
+  await mkdir(reportDir, { recursive: true });
+  const snapshot = {
+    status,
+    runId,
+    dryRun: DRY_RUN,
+    thresholdBreak,
+    mutationBaseSha,
+    mutationHeadSha,
+    generatedAt: new Date().toISOString(),
+    ...payload,
+  };
+  await writeFile(latestReportPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf-8");
+}
+
 async function main() {
+  let mutate = [];
+  let mutateSource = "default";
+
   try {
     await mkdir(reportDir, { recursive: true });
+    if (!Number.isFinite(thresholdBreak) || thresholdBreak < 0 || thresholdBreak > 100) {
+      throw new Error(
+        `Invalid MUTATION_MIN_SCORE: "${thresholdEnvRaw}" must be a finite number in [0, 100]`,
+      );
+    }
+
     const mutateFromEnv = mutateEnvRaw && mutateEnvRaw.trim() !== ""
       ? mutateEnvRaw
         .split(",")
@@ -137,24 +154,31 @@ async function main() {
     const mutateFromDiff = !mutateFromEnv && mutationBaseSha && mutationHeadSha
       ? resolveChangedMutateFiles(mutationBaseSha, mutationHeadSha)
       : null;
-    const mutate = mutateFromEnv ?? (
-      mutateFromDiff && mutateFromDiff.length > 0
-        ? mutateFromDiff
-        : resolveDefaultMutateFiles()
-    );
+    if (mutateFromEnv) {
+      mutate = mutateFromEnv;
+      mutateSource = "env";
+    } else if (mutateFromDiff) {
+      mutate = mutateFromDiff;
+      mutateSource = "git-diff";
+    } else {
+      mutate = resolveDefaultMutateFiles();
+      mutateSource = "default";
+    }
+
+    console.log("[mutation-gate] Phase 1/2: assertion guard (anti-placebo)");
+    await runCommand("assertion-guard", ["run", "test:assertions:guard"]);
 
     if (mutateFromDiff && mutateFromDiff.length === 0) {
       console.log("[mutation-gate] No mutation targets changed in diff scope.");
       console.log(`[mutation-gate] range=${mutationBaseSha}..${mutationHeadSha}`);
       console.log("✅ Mutation gate skipped (no critical mutation targets in this change set)");
+      await writeLatestStatus("skip", {
+        mutateSource,
+        mutate,
+        mutateCount: mutate.length,
+        reason: "no-critical-targets-in-diff",
+      });
       return;
-    }
-
-    if (skipAssertionGuard) {
-      console.log("[mutation-gate] Phase 1/2: assertion guard skipped (MUTATION_SKIP_ASSERTION_GUARD=true)");
-    } else {
-      console.log("[mutation-gate] Phase 1/2: assertion guard (anti-placebo)");
-      await runCommand("assertion-guard", ["run", "test:assertions:guard"]);
     }
 
     const config = buildMutationConfig({ mutate, thresholdBreak });
@@ -175,6 +199,12 @@ async function main() {
 
     if (DRY_RUN) {
       console.log("✅ Mutation gate dry-run passed (config generated, execution skipped)");
+      await writeLatestStatus("dry-run", {
+        mutateSource,
+        mutate,
+        mutateCount: mutate.length,
+        configPath: tempConfigPath,
+      });
       return;
     }
 
@@ -196,6 +226,29 @@ async function main() {
     });
 
     console.log("✅ Mutation gate passed");
+    await writeLatestStatus("pass", {
+      mutateSource,
+      mutate,
+      mutateCount: mutate.length,
+      configPath: tempConfigPath,
+    });
+  } catch (error) {
+    const traceId = `mutation-gate-${Date.now()}`;
+    console.error("[mutation-gate][run-failed]", {
+      traceId,
+      requestId: traceId,
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+      mutateSource,
+      mutateCount: mutate.length,
+    });
+    await writeLatestStatus("fail", {
+      mutateSource,
+      mutate,
+      mutateCount: mutate.length,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   } finally {
     await unlink(tempConfigPath).catch(() => {});
   }

@@ -1,6 +1,9 @@
 name: Real Integrations
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
   schedule:
     - cron: "30 3 * * 1"
@@ -51,8 +54,79 @@ jobs:
         id: preflight
         run: npm run test:live:preflight
 
+      - name: Strict gate on main (no silent skip)
+        if: always() && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const reportPath = ".runtime-cache/test_output/live-preflight/latest.json";
+          const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+
+          function appendSummary(lines) {
+            if (!summaryPath) return;
+            fs.appendFileSync(summaryPath, `${lines.join("\n")}\n`, "utf-8");
+          }
+
+          let report = null;
+          try {
+            report = JSON.parse(fs.readFileSync(reportPath, "utf-8"));
+          } catch (error) {
+            appendSummary([
+              "## Real Integrations (Strict Main Gate)",
+              "",
+              "- Status: failed",
+              `- Reason: live preflight report missing or unreadable (\`${reportPath}\`)`,
+            ]);
+            console.error(`[real-integration] strict gate failed: unable to read ${reportPath}`);
+            process.exit(1);
+          }
+
+          const status = String(report?.status ?? "unknown");
+          const runAny = report?.runAny === true;
+          const checks = Array.isArray(report?.checks) ? report.checks : [];
+          const missingOrFailed = checks.filter((item) => {
+            const checkStatus = String(item?.status ?? "");
+            return checkStatus === "missing" || checkStatus === "failed";
+          });
+
+          const summaryLines = [
+            "## Real Integrations (Strict Main Gate)",
+            "",
+            `- Branch: ${process.env.GITHUB_REF ?? "unknown"}`,
+            `- Preflight status: ${status}`,
+            `- run_any: ${runAny ? "true" : "false"}`,
+          ];
+
+          if (missingOrFailed.length > 0) {
+            summaryLines.push("- Missing/failed prerequisites:");
+            for (const item of missingOrFailed) {
+              const name = String(item?.name ?? "unknown");
+              const message = String(item?.message ?? "no details");
+              const source = String(item?.source ?? "unknown");
+              summaryLines.push(`  - ${name}: ${message} (source: ${source})`);
+            }
+          } else {
+            summaryLines.push("- Missing/failed prerequisites: none");
+          }
+
+          if (report?.reason) {
+            summaryLines.push(`- Diagnostic: ${String(report.reason)}`);
+          }
+          appendSummary(summaryLines);
+
+          if (!runAny) {
+            console.error("[real-integration] strict gate failed: no runnable live checks for main branch");
+            process.exit(1);
+          }
+          if (status !== "passed") {
+            console.error(`[real-integration] strict gate failed: live preflight status=${status}`);
+            process.exit(1);
+          }
+          NODE
+
       - name: Skip notice (optional workflow)
-        if: steps.preflight.outputs.run_any != 'true'
+        if: steps.preflight.outputs.run_any != 'true' && github.ref != 'refs/heads/main'
         run: |
           echo "::notice::${{ steps.preflight.outputs.reason }}"
           {

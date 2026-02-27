@@ -202,6 +202,7 @@ async function main() {
   await runParallelTasks("Parallel long tasks", [
     createTaskRunner("test:coverage:gate", ["run", "test:coverage:gate"], { heartbeatMs }),
     createTaskRunner("check:rust", ["run", "check:rust"], { heartbeatMs }),
+    createTaskRunner("test:rust:lib-bins", ["run", "test:rust:lib-bins"], { heartbeatMs }),
     createTaskRunner("test:smoke:ui", ["run", "test:smoke:ui"], { heartbeatMs }),
     createTaskRunner("test:live:preflight", ["run", "test:live:preflight"], { heartbeatMs }),
   ]);

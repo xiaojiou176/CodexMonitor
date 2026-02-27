@@ -34,6 +34,13 @@ Date: 2026-02-26
 - Evidence artifacts: `.runtime-cache/test_output/ci-fixes/npm-install.log`, `.runtime-cache/test_output/ci-fixes/test-mutation-gate-dry-run.log`, `.runtime-cache/test_output/ci-fixes/mutation-target-precheck.log`, `.runtime-cache/test_output/ci-fixes/mutation-target-files.txt`, `.runtime-cache/test_output/ci-fixes/test-assertions-guard.log`, `.runtime-cache/test_output/ci-fixes/env-rationalize-check.log`, `.runtime-cache/test_output/ci-fixes/typecheck.log`, `.runtime-cache/test_output/ci-fixes/actionlint-ci.log`.
 - Evidence code paths: `package.json`, `package-lock.json`, `src-tauri/Cargo.lock`, `scripts/mutation-gate.mjs`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
 
+## Gate Hardening Update (2026-02-27)
+
+- CI now enforces key user-journey E2E in PR workflow (`workspace-lifecycle`, `approval-interrupt`, `worktree-flow`) and keeps browser matrix baseline at `chromium + webkit`.
+- Coverage governance keeps dual-mode policy (`default` ratchet + `strict` fixed floor), with script-level test coverage on gate logic and env-count schema alignment.
+- Preflight/pre-push governance now includes Rust `--lib --bins` verification in orchestrated local checks.
+- Evidence code paths: `.github/workflows/ci.yml`, `.github/workflows/real-integration.yml`, `.github/workflows/release.yml`, `scripts/coverage-gate.mjs`, `scripts/coverage-gate.test.mjs`, `scripts/preflight-orchestrated.mjs`, `scripts/check-env-count.mjs`.
+
 ## Env Variant Files
 
 - `.env` (5 keys)

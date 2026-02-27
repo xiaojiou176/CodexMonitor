@@ -240,8 +240,7 @@ repos:
 
       - id: env-count-check
         name: env matrix count check
-        entry: >-
-          node -e "const fs=require('fs');const p='.env.example';const s='config/env.schema.json';if(!fs.existsSync(p)||!fs.existsSync(s)){process.exit(0)}const env=fs.readFileSync(p,'utf8').split(/\\r?\\n/).filter(l=>l&&!l.startsWith('#')&&l.includes('='));const schema=JSON.parse(fs.readFileSync(s,'utf8'));const props=Object.keys((schema&&schema.properties)||{});if(env.length<props.length){console.error('env count mismatch: .env.example='+env.length+', schema='+props.length);process.exit(1)}"
+        entry: node scripts/check-env-count.mjs
         language: system
         pass_filenames: false
         always_run: true

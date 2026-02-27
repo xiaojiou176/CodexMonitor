@@ -56,9 +56,11 @@ npm run test:assertions:guard
 
 - Lint Gate: `npm run lint:strict`
 - Assertion Gate: `npm run test:assertions:guard`
-- Coverage Gate: `npm run test:coverage`（若本次任务触及核心路径，需校验关键模块 `>=95%`）
+- Coverage Gate: `npm run test:coverage:gate`（强制阈值：全局 `>=80%`，关键模块 `>=95%`）
 - Type Gate: `npm run typecheck`
 - Doc-Drift Gate: 行为/配置/接口变更需同步文档
+- Pre-commit Phase 2（并行）含：`check:critical-path-logging`、`check:secrets:staged`、`check:keys:source-policy`、`check:real-llm-alias-usage`、`env:doctor:staged`、`env:rationalize:check`、`check:lazy-load:evidence-gate`、`check:compat:option-log`
+- Pre-push 新规则（仓库级强制）：`npm run preflight:orchestrated` 的 Phase 2 同时执行 `npm run check:rust` 与 `npm run test:rust:lib-bins`
 
 ## 变更注意事项
 

@@ -80,9 +80,14 @@ jobs:
         run: npm ci
       - name: Run JS mutation gate (full critical scope)
         if: steps.detect_js.outputs.should_run == 'true'
-        env:
-          MUTATION_SKIP_ASSERTION_GUARD: "true"
         run: npm run test:mutation:gate
+      - name: Upload mutation latest report
+        if: always() && steps.detect_js.outputs.should_run == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutation-gate-latest-weekly
+          path: .runtime-cache/test_output/mutation-gate/latest.json
+          if-no-files-found: warn
 
   mutation-rust:
     runs-on: ubuntu-latest

@@ -426,7 +426,7 @@ At the end of a task:
 5. Run `npm run env:doctor:dev` (or `npm run env:doctor:live` for live-integration work).
 6. Run `npm run test` when you touched threads, settings, updater, shared utils, or backend cores.
 7. Run `npm run typecheck`.
-8. If you changed Rust backend code, run `npm run check:rust`.
+8. If you changed Rust backend code, run `npm run check:rust` and `npm run test:rust:lib-bins`.
 9. Keep Husky hooks enabled (`pre-commit` and `pre-push`) so these checks run before pushing.
 
 ## 测试与质量铁律（2026-02）
@@ -450,7 +450,7 @@ This section is mandatory for all future AI code changes in this repository.
 
 1. Live 验证 Gate：有条件时必须提供真实外部交互证据（请求记录、响应摘要或测试日志）。
 2. Lint Gate：`npm run lint:strict` 结果为零错误、零警告。
-3. Coverage Gate：覆盖率报告显示全局 `>= 80%`，关键模块 `>= 95%`。
+3. Coverage Gate：执行 `npm run test:coverage:gate`，并满足全局 `>= 80%`、关键模块 `>= 95%`。
 4. Assertion Gate：`npm run test:assertions:guard` 必须通过。
 5. 并发 Gate：可并发检查任务需有并发执行记录或等价日志证据。
 6. Long-Test Heartbeat Gate：长测试日志必须出现连续心跳信息（阶段、时间、进度）。
@@ -483,7 +483,7 @@ This section is mandatory for all future AI code changes in this repository.
 
 1. Live 验证 Gate：有条件时必须提供真实外部交互证据（请求记录、响应摘要或测试日志）。
 2. Lint Gate：`npm run lint:strict` 结果为零错误、零警告。
-3. Coverage Gate：覆盖率报告显示全局 `>= 80%`，关键模块 `>= 95%`。
+3. Coverage Gate：执行 `npm run test:coverage:gate`，并满足全局 `>= 80%`、关键模块 `>= 95%`。
 4. Assertion Gate：`npm run test:assertions:guard` 必须通过。
 5. 并发 Gate：可并发检查任务需有并发执行记录或等价日志证据。
 6. Long-Test Heartbeat Gate：长测试日志必须出现连续心跳信息（阶段、时间、进度）。

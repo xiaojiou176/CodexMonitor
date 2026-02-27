@@ -1,24 +1,43 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   aggregateScopeCoverage,
+  buildMetricComparisons,
+  buildNextBaseline,
   collectCriticalScopeFailures,
   collectGlobalFailures,
   normalizePath,
   parseThresholdValue,
+  parseGateMode,
   readPct,
+  readBaselineThresholds,
+  resolveRequiredThresholds,
+  resolveTargetThresholds,
+  writeBaselineThresholds,
 } from "./coverage-gate.mjs";
 
 describe("coverage-gate helpers", () => {
   const originalEnv = {
     COVERAGE_MIN_STATEMENTS: process.env.COVERAGE_MIN_STATEMENTS,
+    COVERAGE_MIN_LINES: process.env.COVERAGE_MIN_LINES,
+    COVERAGE_MIN_FUNCTIONS: process.env.COVERAGE_MIN_FUNCTIONS,
+    COVERAGE_MIN_BRANCHES: process.env.COVERAGE_MIN_BRANCHES,
+    COVERAGE_TARGET_STATEMENTS: process.env.COVERAGE_TARGET_STATEMENTS,
+    COVERAGE_TARGET_LINES: process.env.COVERAGE_TARGET_LINES,
+    COVERAGE_TARGET_FUNCTIONS: process.env.COVERAGE_TARGET_FUNCTIONS,
+    COVERAGE_TARGET_BRANCHES: process.env.COVERAGE_TARGET_BRANCHES,
   };
 
   afterEach(() => {
-    if (originalEnv.COVERAGE_MIN_STATEMENTS === undefined) {
-      delete process.env.COVERAGE_MIN_STATEMENTS;
-    } else {
-      process.env.COVERAGE_MIN_STATEMENTS = originalEnv.COVERAGE_MIN_STATEMENTS;
+    for (const [envKey, envValue] of Object.entries(originalEnv)) {
+      if (envValue === undefined) {
+        delete process.env[envKey];
+      } else {
+        process.env[envKey] = envValue;
+      }
     }
   });
 
@@ -36,6 +55,34 @@ describe("coverage-gate helpers", () => {
       () => parseThresholdValue("statements", "COVERAGE_MIN_STATEMENTS", 43),
       /must be between 0 and 100/,
     );
+  });
+
+  it("parseGateMode defaults to default and supports strict", () => {
+    assert.equal(parseGateMode([]), "default");
+    assert.equal(parseGateMode(["--mode=strict"]), "strict");
+    assert.throws(
+      () => parseGateMode(["--mode=unknown"]),
+      /Supported values: default, strict/,
+    );
+  });
+
+  it("resolveTargetThresholds supports target env and legacy env fallback", () => {
+    delete process.env.COVERAGE_TARGET_STATEMENTS;
+    process.env.COVERAGE_MIN_STATEMENTS = "72.5";
+    process.env.COVERAGE_TARGET_LINES = "81";
+    delete process.env.COVERAGE_MIN_LINES;
+    delete process.env.COVERAGE_TARGET_FUNCTIONS;
+    delete process.env.COVERAGE_MIN_FUNCTIONS;
+    delete process.env.COVERAGE_TARGET_BRANCHES;
+    delete process.env.COVERAGE_MIN_BRANCHES;
+
+    const { targetThresholds, targetSources } = resolveTargetThresholds();
+    assert.equal(targetThresholds.statements, 72.5);
+    assert.equal(targetSources.statements.source, "legacy-env");
+    assert.equal(targetThresholds.lines, 81);
+    assert.equal(targetSources.lines.source, "env");
+    assert.equal(targetThresholds.functions, 80);
+    assert.equal(targetSources.functions.source, "default");
   });
 
   it("normalizes windows-style paths", () => {
@@ -123,5 +170,75 @@ describe("coverage-gate helpers", () => {
   it("readPct returns normalized metric precision and rejects missing metrics", () => {
     assert.equal(readPct({ lines: { pct: 66.666 } }, "lines"), 66.67);
     assert.throws(() => readPct({}, "lines"), /coverage-summary missing metric/);
+  });
+
+  it("baseline thresholds are loaded/written and required threshold prevents regression", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "coverage-gate-"));
+    const baselineFile = path.join(tempDir, "baseline.json");
+    const baselineMetrics = {
+      statements: 66,
+      lines: 67,
+      functions: 68,
+      branches: 69,
+    };
+
+    await writeBaselineThresholds(baselineFile, baselineMetrics, "run-1");
+    const loadedBaseline = await readBaselineThresholds(baselineFile);
+    assert.deepEqual(loadedBaseline, baselineMetrics);
+
+    const targetThresholds = {
+      statements: 60,
+      lines: 80,
+      functions: 65,
+      branches: 70,
+    };
+    const requiredThresholds = resolveRequiredThresholds(targetThresholds, loadedBaseline, {
+      statements: { source: "default" },
+      lines: { source: "env" },
+      functions: { source: "legacy-env" },
+      branches: { source: "default" },
+    });
+    assert.deepEqual(requiredThresholds, {
+      statements: 66,
+      lines: 80,
+      functions: 68,
+      branches: 69,
+    });
+
+    const comparisons = buildMetricComparisons(
+      { statements: 66.2, lines: 79.2, functions: 68, branches: 70.1 },
+      targetThresholds,
+      loadedBaseline,
+      requiredThresholds,
+    );
+    assert.equal(comparisons.statements.pass, true);
+    assert.equal(comparisons.lines.pass, false);
+
+    assert.deepEqual(
+      buildNextBaseline(
+        { statements: 67, lines: 66, functions: 68.2, branches: 70 },
+        loadedBaseline,
+      ),
+      { statements: 67, lines: 67, functions: 68.2, branches: 70 },
+    );
+  });
+
+  it("strict mode semantics use fixed 80 and do not rely on baseline", () => {
+    const strictRequired = {
+      statements: 80,
+      lines: 80,
+      functions: 80,
+      branches: 80,
+    };
+    const strictComparisons = buildMetricComparisons(
+      { statements: 80, lines: 79.99, functions: 85, branches: 80.01 },
+      strictRequired,
+      null,
+      strictRequired,
+    );
+    assert.equal(strictComparisons.statements.pass, true);
+    assert.equal(strictComparisons.lines.pass, false);
+    assert.equal(strictComparisons.functions.pass, true);
+    assert.equal(strictComparisons.branches.pass, true);
   });
 });

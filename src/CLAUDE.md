@@ -48,8 +48,13 @@ npm run typecheck
 ```bash
 npm run test
 npm run test:e2e:smoke
-npm run test:coverage
+npm run test:coverage:gate
 ```
+
+## Hook Gate 对齐
+
+- pre-commit Phase 2（并行）包含 `check:critical-path-logging` 在内的安全与合规 gate，遵循 `scripts/precommit-orchestrated.mjs`。
+- pre-push（`npm run preflight:orchestrated`）Phase 2 强制执行 Rust `check + test`：`npm run check:rust` + `npm run test:rust:lib-bins`。
 
 ## 变更注意事项
 

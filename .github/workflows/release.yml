@@ -208,8 +208,58 @@ jobs:
         run: npm run test:coverage:gate
 
   quality_e2e_smoke:
+    name: quality_e2e_smoke (${{ matrix.browser }})
     runs-on: ubuntu-latest
     timeout-minutes: 70
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+      - name: Install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-ms-playwright-
+      - name: Install Playwright browser (${{ matrix.browser }})
+        run: npx playwright install --with-deps "${{ matrix.browser }}"
+      - name: E2E smoke (${{ matrix.browser }})
+        run: npm run test:e2e:smoke -- --project="${{ matrix.browser }}"
+      - name: Upload Playwright artifacts (${{ matrix.browser }})
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-artifacts-${{ matrix.browser }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+  quality_a11y:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -238,10 +288,64 @@ jobs:
           key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-ms-playwright-
-      - name: Install Playwright browser
-        run: npm run test:e2e:install
-      - name: E2E smoke
-        run: npm run test:e2e:smoke
+      - name: Install Playwright browser (chromium)
+        run: npx playwright install --with-deps chromium
+      - name: A11y sweep
+        run: npx playwright test e2e/a11y.spec.ts --project=chromium
+      - name: Upload Playwright a11y artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-a11y-artifacts
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+  quality_interaction_sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+      - name: Install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-ms-playwright-
+      - name: Install Playwright browser (chromium)
+        run: npx playwright install --with-deps chromium
+      - name: Interaction sweep
+        run: npx playwright test e2e/interaction-sweep.spec.ts --project=chromium
+      - name: Upload Playwright interaction artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-interaction-artifacts
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
 
   quality_rust_tests:
     runs-on: ubuntu-latest
@@ -328,6 +432,8 @@ jobs:
       - quality_js_test
       - quality_coverage
       - quality_e2e_smoke
+      - quality_a11y
+      - quality_interaction_sweep
       - quality_rust_tests
     permissions:
       contents: read
@@ -505,6 +611,8 @@ jobs:
       - quality_js_test
       - quality_coverage
       - quality_e2e_smoke
+      - quality_a11y
+      - quality_interaction_sweep
       - quality_rust_tests
     permissions:
       contents: read
@@ -604,6 +712,8 @@ jobs:
       - quality_js_test
       - quality_coverage
       - quality_e2e_smoke
+      - quality_a11y
+      - quality_interaction_sweep
       - quality_rust_tests
     permissions:
       contents: read

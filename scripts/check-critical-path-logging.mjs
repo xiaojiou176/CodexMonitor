@@ -2,7 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 
-const MODE_RAW = (process.env.CRITICAL_LOG_GUARD_MODE ?? "warn").toLowerCase();
+const MODE_RAW = (process.env.CRITICAL_LOG_GUARD_MODE ?? "fail").toLowerCase();
 const MODE = MODE_RAW === "fail" ? "fail" : "warn";
 const BYPASS = process.env.CRITICAL_LOG_GUARD_BYPASS === "1";
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -138,13 +138,16 @@ function evaluate(targetsByFile) {
   return { violations, targetCount };
 }
 
-function printFindings(header, findings) {
-  console.error(header);
-  for (const item of findings.slice(0, MAX_REPORTS)) {
-    console.error(`  - ${item.file}:${item.line} [${item.type}] ${item.snippet}`);
+function printFindings(header, findings, log = console.error) {
+  log(header);
+  log("  missing structured logging near critical-path additions:");
+  for (const [index, item] of findings.slice(0, MAX_REPORTS).entries()) {
+    log(`  ${String(index + 1).padStart(2, " ")}. ${item.file}:${item.line} [${item.type}]`);
+    log(`      added: ${item.snippet}`);
+    log("      required: include traceId/requestId and error/code/status in nearby log fields");
   }
   if (findings.length > MAX_REPORTS) {
-    console.error(`  - ...and ${findings.length - MAX_REPORTS} more`);
+    log(`  - ...and ${findings.length - MAX_REPORTS} more`);
   }
 }
 
@@ -192,19 +195,13 @@ function main() {
   const header = `[security][critical-logging] ${modeLabel}: missing structured log fields near critical path.`;
 
   if (MODE === "fail") {
-    printFindings(header, violations);
-    console.error("  required fields around logging: traceId/requestId + error/code/status.");
+    printFindings(header, violations, console.error);
+    console.error("  tip: inspect staged context with `git diff --cached -U8 -- <file>` and add structured logs nearby.");
     console.error("  switch to warn mode: CRITICAL_LOG_GUARD_MODE=warn");
     process.exit(1);
   }
 
-  console.warn(header);
-  for (const item of violations.slice(0, MAX_REPORTS)) {
-    console.warn(`  - ${item.file}:${item.line} [${item.type}] ${item.snippet}`);
-  }
-  if (violations.length > MAX_REPORTS) {
-    console.warn(`  - ...and ${violations.length - MAX_REPORTS} more`);
-  }
+  printFindings(header, violations, console.warn);
   console.warn("  currently warn-only. set CRITICAL_LOG_GUARD_MODE=fail to enforce.");
 }
 
