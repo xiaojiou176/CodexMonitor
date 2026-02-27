@@ -62,3 +62,5 @@ CodexMonitor reads configuration from these layers:
   - `stale > 24h`
 - Timestamp source precedence is `payload.timestamp` -> `payload.timestampPst` -> file `mtime` fallback.
 - `Generated at` is dashboard build time only; gate execution time must be read from each report `Last Update` value.
+- Dashboard regeneration command: `node scripts/generate-testing-governance-dashboard.mjs`
+- Evidence inputs are read from `.runtime-cache/test_output/*/latest.json` and reflected in `docs/reference/testing-governance-dashboard.md`.
