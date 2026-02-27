@@ -61,6 +61,26 @@
   - `branches: 78.27%`
 - 当前最大瓶颈仍是 `src/App.tsx`（未覆盖行约 3375），已确认为下一阶段主攻目标；其余高缺口文件已进入 70-80% 区间的持续抬升阶段。
 
+### Wave-11 最新进展（2026-02-27）
+
+- 本波继续并发补齐 0%/低覆盖 hook，并完成 `App.tsx` 第二轮可测性拆分：
+  - `src/features/app/hooks/useAppMenuEvents.test.tsx`（新增）
+  - `src/features/dictation/hooks/useDictation.test.tsx`（新增）
+  - `src/features/app/hooks/useDictationController.test.tsx`（新增）
+  - `src/features/mobile/hooks/useMobileServerSetup.test.tsx`（新增）
+  - `src/features/app/utils/appUiHelpers.ts`（新增派生函数）
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`（新增 parity 契约）
+  - `src/App.tsx`（替换为 helper 调用，行为不变）
+- strict 覆盖门禁继续提升到：
+  - `statements/lines: 71.52%`
+  - `functions: 76.10%`
+  - `branches: 78.36%`
+- 距离 80 终态剩余差距：
+  - `lines/statements: 8.48pp`
+  - `functions: 3.90pp`
+  - `branches: 1.64pp`
+- 结论：增速稳定，但若要冲到 80，必须进入 `App.tsx` 主体结构化拆分与主流程集成测试并行攻坚阶段（仅靠局部补测已接近收益递减）。
+
 ---
 
 ## 2. 当前已做到什么（优势盘点）

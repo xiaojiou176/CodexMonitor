@@ -35,6 +35,38 @@ export function deriveTabletTab(activeTab: AppTab): "codex" | "git" | "log" {
   return activeTab === "projects" || activeTab === "home" ? "codex" : activeTab;
 }
 
+export function deriveIsGitPanelVisible(params: {
+  hasActiveWorkspace: boolean;
+  isCompact: boolean;
+  isTablet: boolean;
+  tabletTab: "codex" | "git" | "log";
+  activeTab: AppTab;
+  rightPanelCollapsed: boolean;
+}): boolean {
+  return Boolean(
+    params.hasActiveWorkspace &&
+      (params.isCompact
+        ? (params.isTablet ? params.tabletTab : params.activeTab) === "git"
+        : !params.rightPanelCollapsed),
+  );
+}
+
+export function deriveShowCompactCodexThreadActions(params: {
+  hasActiveWorkspace: boolean;
+  isCompact: boolean;
+  isPhone: boolean;
+  isTablet: boolean;
+  activeTab: AppTab;
+  tabletTab: "codex" | "git" | "log";
+}): boolean {
+  return (
+    params.hasActiveWorkspace &&
+    params.isCompact &&
+    ((params.isPhone && params.activeTab === "codex") ||
+      (params.isTablet && params.tabletTab === "codex"))
+  );
+}
+
 export function shouldLoadGitHubPanelData(params: {
   isGitPanelVisible: boolean;
   gitPanelMode: GitPanelMode;

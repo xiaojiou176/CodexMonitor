@@ -156,6 +156,8 @@ import {
   buildGitStatusForPanel,
   clampMessageFontSize,
   countDiffLineStats,
+  deriveIsGitPanelVisible,
+  deriveShowCompactCodexThreadActions,
   deriveTabletTab,
   type DiffLineStats,
   loadMessageFontSize,
@@ -525,10 +527,14 @@ function MainApp() {
     handleGitPullRequestCommentsChange,
     resetGitHubPanelState,
   } = useGitHubPanelController();
-  const isGitPanelVisible = Boolean(
-    activeWorkspace &&
-      (isCompact ? (isTablet ? tabletTab : activeTab) === "git" : !rightPanelCollapsed),
-  );
+  const isGitPanelVisible = deriveIsGitPanelVisible({
+    hasActiveWorkspace: Boolean(activeWorkspace),
+    isCompact,
+    isTablet,
+    tabletTab,
+    activeTab,
+    rightPanelCollapsed,
+  });
 
   const {
     centerMode,
@@ -2524,10 +2530,14 @@ function MainApp() {
   }${!isCompact && sidebarCollapsed ? " sidebar-collapsed" : ""}${
     !isCompact && rightPanelCollapsed ? " right-panel-collapsed" : ""
   }`;
-  const showCompactCodexThreadActions =
-    Boolean(activeWorkspace) &&
-    isCompact &&
-    ((isPhone && activeTab === "codex") || (isTablet && tabletTab === "codex"));
+  const showCompactCodexThreadActions = deriveShowCompactCodexThreadActions({
+    hasActiveWorkspace: Boolean(activeWorkspace),
+    isCompact,
+    isPhone,
+    isTablet,
+    activeTab,
+    tabletTab,
+  });
   const showMobilePollingFetchStatus =
     showCompactCodexThreadActions &&
     Boolean(activeWorkspace?.connected) &&

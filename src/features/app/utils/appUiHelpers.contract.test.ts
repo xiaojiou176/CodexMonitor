@@ -6,6 +6,8 @@ import {
   buildCommandPaletteItems,
   buildCompactThreadConnectionIndicatorMeta,
   buildGitStatusForPanel,
+  deriveIsGitPanelVisible,
+  deriveShowCompactCodexThreadActions,
   deriveTabletTab,
   resolveCompactThreadConnectionState,
   shouldLoadGitHubPanelData,
@@ -30,6 +32,38 @@ function legacyShouldLoadGitHubPanelData(params: {
     (params.gitPanelMode === "issues" ||
       params.gitPanelMode === "prs" ||
       (params.shouldLoadDiffs && params.diffSource === "pr"))
+  );
+}
+
+function legacyIsGitPanelVisible(params: {
+  hasActiveWorkspace: boolean;
+  isCompact: boolean;
+  isTablet: boolean;
+  tabletTab: "codex" | "git" | "log";
+  activeTab: AppTab;
+  rightPanelCollapsed: boolean;
+}): boolean {
+  return Boolean(
+    params.hasActiveWorkspace &&
+      (params.isCompact
+        ? (params.isTablet ? params.tabletTab : params.activeTab) === "git"
+        : !params.rightPanelCollapsed),
+  );
+}
+
+function legacyShowCompactCodexThreadActions(params: {
+  hasActiveWorkspace: boolean;
+  isCompact: boolean;
+  isPhone: boolean;
+  isTablet: boolean;
+  activeTab: AppTab;
+  tabletTab: "codex" | "git" | "log";
+}): boolean {
+  return (
+    params.hasActiveWorkspace &&
+    params.isCompact &&
+    ((params.isPhone && params.activeTab === "codex") ||
+      (params.isTablet && params.tabletTab === "codex"))
   );
 }
 
@@ -230,6 +264,64 @@ describe("appUiHelpers contract", () => {
           for (const diffSource of diffSources) {
             const params = { isGitPanelVisible, gitPanelMode, shouldLoadDiffs, diffSource };
             expect(shouldLoadGitHubPanelData(params)).toBe(legacyShouldLoadGitHubPanelData(params));
+          }
+        }
+      }
+    }
+  });
+
+  it("keeps git panel visibility derivation semantics", () => {
+    const bools = [true, false];
+    const tabs: AppTab[] = ["home", "projects", "codex", "git", "log"];
+    const tabletTabs: Array<"codex" | "git" | "log"> = ["codex", "git", "log"];
+
+    for (const hasActiveWorkspace of bools) {
+      for (const isCompact of bools) {
+        for (const isTablet of bools) {
+          for (const tabletTab of tabletTabs) {
+            for (const activeTab of tabs) {
+              for (const rightPanelCollapsed of bools) {
+                const params = {
+                  hasActiveWorkspace,
+                  isCompact,
+                  isTablet,
+                  tabletTab,
+                  activeTab,
+                  rightPanelCollapsed,
+                };
+                expect(deriveIsGitPanelVisible(params)).toBe(legacyIsGitPanelVisible(params));
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("keeps compact codex thread action visibility semantics", () => {
+    const bools = [true, false];
+    const tabs: AppTab[] = ["home", "projects", "codex", "git", "log"];
+    const tabletTabs: Array<"codex" | "git" | "log"> = ["codex", "git", "log"];
+
+    for (const hasActiveWorkspace of bools) {
+      for (const isCompact of bools) {
+        for (const isPhone of bools) {
+          for (const isTablet of bools) {
+            for (const activeTab of tabs) {
+              for (const tabletTab of tabletTabs) {
+                const params = {
+                  hasActiveWorkspace,
+                  isCompact,
+                  isPhone,
+                  isTablet,
+                  activeTab,
+                  tabletTab,
+                };
+                expect(deriveShowCompactCodexThreadActions(params)).toBe(
+                  legacyShowCompactCodexThreadActions(params),
+                );
+              }
+            }
           }
         }
       }

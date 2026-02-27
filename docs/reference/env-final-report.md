@@ -92,6 +92,23 @@ Date: 2026-02-26
 - Evidence artifact:
   - `.runtime-cache/coverage/vitest-gate/1772182758070-56324-hsfwvw`
 
+## Coverage Wave-11 Update (2026-02-27)
+
+- Added another parallel batch focused on previously 0%-coverage hooks and App-adjacent parity:
+  - `src/features/app/hooks/useAppMenuEvents.test.tsx`
+  - `src/features/dictation/hooks/useDictation.test.tsx`
+  - `src/features/app/hooks/useDictationController.test.tsx`
+  - `src/features/mobile/hooks/useMobileServerSetup.test.tsx`
+  - `src/features/app/utils/appUiHelpers.ts`
+  - `src/features/app/utils/appUiHelpers.contract.test.ts`
+  - `src/App.tsx`
+- Strict coverage gate evidence (`npm run test:coverage:gate:strict`):
+  - statements/lines: `71.52%`
+  - functions: `76.10%`
+  - branches: `78.36%`
+- Evidence artifact:
+  - `.runtime-cache/coverage/vitest-gate/1772183272258-96724-9v9x2s`
+
 ## Env Variant Files
 
 - `.env` (5 keys)
