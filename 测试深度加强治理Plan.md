@@ -1060,6 +1060,45 @@ Context：
 - `src/features/composer/components/ComposerInput.tsx`
 - `src/features/app/components/OpenAppMenu.tsx`
 
+### 13.5 Coverage 冲刺 Wave-2（2026-02-27）
+
+本波次目标：并发攻坚 5 个高未覆盖文件，验证“单文件提升可转化为全量 strict 提升”。
+
+1. 本波次新增/增强测试文件
+- `src/features/app/components/Sidebar.test.tsx`（增强）
+- `src/features/settings/components/SettingsView.test.tsx`（增强）
+- `src/features/settings/components/SettingsView.features-layout-shortcuts.test.tsx`（增强）
+- `src/features/git/components/GitDiffPanelModeContent.test.tsx`（新增）
+- `src/features/composer/components/ComposerInput.behavior.test.tsx`（新增）
+- `src/features/app/components/OpenAppMenu.test.tsx`（新增）
+
+2. 单文件覆盖收益（关键样本）
+- `Sidebar.tsx`: `74.74% -> 83.44%`（Lines/Statements）
+- `SettingsView.tsx`: `64.88% -> 70.23%`（Lines/Statements），Branches 提升到 `84.10%`
+- `GitDiffPanelModeContent.tsx`: 从低覆盖提升到 `95.08%`（Lines/Statements）
+- `ComposerInput.tsx`: 从 `49.03%` 提升到 `89.51%`（Lines/Statements），Branches 到 `80.32%`
+- `OpenAppMenu.tsx`: 从 `4.64%` 提升到 `89.02%`（Lines/Statements）
+
+3. 全量 strict gate 结果
+- `npm run test:coverage:gate:strict`
+- 全量测试：`150 files / 1428 tests` 全通过。
+- 覆盖率提升到：
+  - Statements `59.05%`
+  - Lines `59.05%`
+  - Functions `70.94%`
+  - Branches `76.63%`
+- 结论：Wave-2 已证明并发补测路径有效，但距离 `80/80/80/80` 仍存在系统缺口。
+
+4. Wave-3 聚焦（继续并发）
+- 优先 0% 大文件且可测入口：
+  - `src/features/app/hooks/useGitCommitController.ts`
+  - `src/features/app/components/CommandPalette.tsx`
+  - `src/features/app/components/AppLayout.tsx`
+  - `src/features/app/components/LaunchScriptButton.tsx`
+  - `src/features/git/hooks/useGitActions.ts`
+- 同步评估超大文件策略：
+  - `src/App.tsx`（3432 行，0%）需拆分+契约测试协同推进。
+
 ## 14. Lazy-Load Evidence（Refactor Batch）
 
 - Runtime evidence references:

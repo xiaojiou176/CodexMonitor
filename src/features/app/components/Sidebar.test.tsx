@@ -70,6 +70,119 @@ const baseProps = {
 };
 
 describe("Sidebar", () => {
+  it("keeps rendering when persisted sidebar state payloads are malformed", () => {
+    window.localStorage.setItem("codexmonitor.threadOrderByWorkspace", "{bad-json");
+    window.localStorage.setItem("codexmonitor.workspaceOrderByGroup", "null");
+    window.localStorage.setItem(
+      "codexmonitor.subAgentRootCollapseByWorkspace",
+      JSON.stringify({ "ws-1": ["invalid-shape"] }),
+    );
+
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[
+          {
+            id: "ws-1",
+            name: "Workspace",
+            path: "/tmp/workspace",
+            connected: true,
+            settings: { sidebarCollapsed: false },
+          },
+        ]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [
+              {
+                id: "ws-1",
+                name: "Workspace",
+                path: "/tmp/workspace",
+                connected: true,
+                settings: { sidebarCollapsed: false },
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Workspace")).not.toBeNull();
+  });
+
+  it("applies persisted workspace/thread order and ignores invalid ids", () => {
+    window.localStorage.setItem(
+      "codexmonitor.workspaceOrderByGroup",
+      JSON.stringify({ __ungrouped_workspace_group__: ["ws-2", "missing", "ws-2", "ws-1"] }),
+    );
+    window.localStorage.setItem(
+      "codexmonitor.threadOrderByWorkspace",
+      JSON.stringify({ "ws-2": ["thread-2", "missing", "thread-2", "thread-1"] }),
+    );
+
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[
+          {
+            id: "ws-1",
+            name: "Alpha Repo",
+            path: "/tmp/alpha",
+            connected: true,
+            settings: { sidebarCollapsed: false },
+          },
+          {
+            id: "ws-2",
+            name: "Beta Repo",
+            path: "/tmp/beta",
+            connected: true,
+            settings: { sidebarCollapsed: false },
+          },
+        ]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [
+              {
+                id: "ws-1",
+                name: "Alpha Repo",
+                path: "/tmp/alpha",
+                connected: true,
+                settings: { sidebarCollapsed: false },
+              },
+              {
+                id: "ws-2",
+                name: "Beta Repo",
+                path: "/tmp/beta",
+                connected: true,
+                settings: { sidebarCollapsed: false },
+              },
+            ],
+          },
+        ]}
+        threadsByWorkspace={{
+          "ws-2": [
+            { id: "thread-1", name: "Alpha Thread", updatedAt: 3000 },
+            { id: "thread-2", name: "Beta Thread", updatedAt: 2000 },
+          ],
+        }}
+        activeWorkspaceId="ws-2"
+      />,
+    );
+
+    const workspaceNames = Array.from(
+      container.querySelectorAll(".workspace-row .workspace-name"),
+    ).map((node) => node.textContent?.trim());
+    expect(workspaceNames.slice(0, 2)).toEqual(["Beta Repo", "Alpha Repo"]);
+
+    const threadNames = Array.from(
+      container.querySelectorAll(".thread-row .thread-name"),
+    ).map((node) => node.textContent?.trim());
+    expect(threadNames.slice(0, 2)).toEqual(["Beta Thread", "Alpha Thread"]);
+  });
+
   it("toggles the search bar from the header icon", async () => {
     vi.useFakeTimers();
     render(<Sidebar {...baseProps} />);
@@ -146,6 +259,24 @@ describe("Sidebar", () => {
       name: "搜索工作区和对话",
     }) as HTMLInputElement;
     expect(reopened.value).toBe("");
+  });
+
+  it("clears search query from the clear button", async () => {
+    vi.useFakeTimers();
+    render(<Sidebar {...baseProps} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "切换搜索" }));
+    const input = screen.getByRole("textbox", {
+      name: "搜索工作区和对话",
+    }) as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "workspace" } });
+      vi.runOnlyPendingTimers();
+    });
+    expect(input.value).toBe("workspace");
+    fireEvent.click(screen.getByRole("button", { name: "清除搜索" }));
+    expect(input.value).toBe("");
   });
 
   it("opens add-workspace-from-url prompt from header action", async () => {
@@ -458,6 +589,118 @@ describe("Sidebar", () => {
     );
 
     expect(screen.getByText("Design System")).not.toBeNull();
+  });
+
+  it("shows selection bar for multi-select and clears it from cancel action", () => {
+    const workspace = {
+      id: "ws-1",
+      name: "Workspace",
+      path: "/tmp/workspace",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+    render(
+      <Sidebar
+        {...baseProps}
+        activeWorkspaceId="ws-1"
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspace],
+          },
+        ]}
+        threadsByWorkspace={{
+          "ws-1": [
+            { id: "thread-1", name: "Alpha", updatedAt: 1000 },
+            { id: "thread-2", name: "Beta", updatedAt: 900 },
+          ],
+        }}
+      />,
+    );
+
+    const alpha = screen.getByText("Alpha").closest(".thread-row");
+    const beta = screen.getByText("Beta").closest(".thread-row");
+    if (!alpha || !beta) {
+      throw new Error("Missing thread rows for selection test");
+    }
+
+    fireEvent.click(alpha);
+    fireEvent.click(beta, { ctrlKey: true });
+    expect(screen.getByText("已选 2 条")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(screen.queryByText("已选 2 条")).toBeNull();
+  });
+
+  it("opens add menu, triggers each option, and closes on scroll", async () => {
+    const onAddAgent = vi.fn();
+    const onAddWorktreeAgent = vi.fn();
+    const onAddCloneAgent = vi.fn();
+    const workspace = {
+      id: "ws-1",
+      name: "Workspace",
+      path: "/tmp/workspace",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    };
+
+    render(
+      <Sidebar
+        {...baseProps}
+        onAddAgent={onAddAgent}
+        onAddWorktreeAgent={onAddWorktreeAgent}
+        onAddCloneAgent={onAddCloneAgent}
+        activeWorkspaceId="ws-1"
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Workspaces",
+            workspaces: [workspace],
+          },
+        ]}
+      />,
+    );
+
+    const openAddMenu = () => fireEvent.click(screen.getByRole("button", { name: "添加对话选项" }));
+
+    openAddMenu();
+    fireEvent.click(screen.getByRole("button", { name: "新建对话" }));
+    expect(onAddAgent).toHaveBeenCalledWith(expect.objectContaining({ id: "ws-1" }));
+    expect(screen.queryByRole("button", { name: "新建工作树对话" })).toBeNull();
+
+    openAddMenu();
+    fireEvent.click(screen.getByRole("button", { name: "新建工作树对话" }));
+    expect(onAddWorktreeAgent).toHaveBeenCalledWith(expect.objectContaining({ id: "ws-1" }));
+
+    openAddMenu();
+    fireEvent.click(screen.getByRole("button", { name: "新建克隆对话" }));
+    expect(onAddCloneAgent).toHaveBeenCalledWith(expect.objectContaining({ id: "ws-1" }));
+
+    openAddMenu();
+    fireEvent.scroll(window);
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "新建对话" })).toBeNull();
+    });
+  });
+
+  it("renders busy workspace drop overlay state", () => {
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        isWorkspaceDropActive
+        workspaceDropText="正在添加项目..."
+      />,
+    );
+
+    const overlay = container.querySelector(".workspace-drop-overlay");
+    const overlayText = container.querySelector(".workspace-drop-overlay-text");
+    const overlayIcon = container.querySelector(".workspace-drop-overlay-icon");
+    expect(overlay?.className).toContain("is-active");
+    expect(overlayText?.className).toContain("is-busy");
+    expect(overlayIcon).toBeNull();
   });
 
   it("submits workspace custom name through callback", () => {

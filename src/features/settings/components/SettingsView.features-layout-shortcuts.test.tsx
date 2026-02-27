@@ -12,11 +12,16 @@ import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppSettings } from "../../../types";
 import { DEFAULT_COMMIT_MESSAGE_PROMPT } from "../../../utils/commitMessagePrompt";
+import * as tauriService from "../../../services/tauri";
+import * as openerPlugin from "@tauri-apps/plugin-opener";
 import { SettingsView } from "./SettingsView";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   ask: vi.fn(),
   open: vi.fn(),
+}));
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  revealItemInDir: vi.fn(),
 }));
 
 afterEach(async () => {
@@ -25,6 +30,7 @@ afterEach(async () => {
       queueMicrotask(resolve);
     });
   });
+  vi.restoreAllMocks();
   cleanup();
 });
 
@@ -174,6 +180,55 @@ const renderFeaturesSection = (
   return { onUpdateAppSettings };
 };
 describe("SettingsView Features", () => {
+  it("opens Codex config path in file manager", async () => {
+    const getPathSpy = vi
+      .spyOn(tauriService, "getCodexConfigPath")
+      .mockResolvedValue("/tmp/codex/config.toml");
+    const revealSpy = vi.mocked(openerPlugin.revealItemInDir).mockResolvedValue(
+      undefined,
+    );
+    renderFeaturesSection();
+
+    const configRow = screen
+      .getByText("配置文件")
+      .closest(".settings-toggle-row") as HTMLElement | null;
+    expect(configRow).not.toBeNull();
+    if (!configRow) {
+      throw new Error("Expected config row");
+    }
+
+    fireEvent.click(within(configRow).getByRole("button"));
+
+    await waitFor(() => {
+      expect(getPathSpy).toHaveBeenCalled();
+      expect(revealSpy).toHaveBeenCalledWith("/tmp/codex/config.toml");
+    });
+  });
+
+  it("shows open config error when reveal fails", async () => {
+    vi.spyOn(tauriService, "getCodexConfigPath").mockResolvedValue(
+      "/tmp/codex/config.toml",
+    );
+    vi.mocked(openerPlugin.revealItemInDir).mockRejectedValue(
+      new Error("cannot reveal"),
+    );
+    renderFeaturesSection();
+
+    const configRow = screen
+      .getByText("配置文件")
+      .closest(".settings-toggle-row") as HTMLElement | null;
+    expect(configRow).not.toBeNull();
+    if (!configRow) {
+      throw new Error("Expected config row");
+    }
+
+    fireEvent.click(within(configRow).getByRole("button"));
+
+    await waitFor(() => {
+      expect(screen.getByText("cannot reveal")).not.toBeNull();
+    });
+  });
+
   it("updates personality selection", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderFeaturesSection({ onUpdateAppSettings });
@@ -291,6 +346,79 @@ describe("SettingsView Features", () => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ autoArchiveSubAgentThreadsMaxAgeMinutes: 240 }),
       );
+    });
+  });
+
+  it("renders composer, dictation, open-apps, git, and model proxy sections", async () => {
+    cleanup();
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={{ ...baseSettings, remoteBackendProvider: "orbit" }}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "输入" }));
+    fireEvent.click(screen.getByRole("tab", { name: "编辑器" }));
+    await waitFor(() => {
+      expect(
+        screen.getByText("预设方案", { selector: "label.settings-field-label" }),
+      ).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "听写" }));
+    await waitFor(() => {
+      expect(
+        screen.getByText("偏好听写语言", { selector: "label.settings-field-label" }),
+      ).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "交互" }));
+    fireEvent.click(screen.getByRole("tab", { name: "打开方式" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "添加应用" })).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Git" }));
+    await waitFor(() => {
+      expect(
+        screen.getByText("Commit Message 生成提示词", {
+          selector: ".settings-field-label",
+        }),
+      ).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "AI 与服务" }));
+    fireEvent.click(screen.getByRole("tab", { name: "模型代理" }));
+    await waitFor(() => {
+      expect(
+        screen.getByText("CLIProxyAPI 集成", { selector: ".settings-section-title" }),
+      ).not.toBeNull();
     });
   });
 });
@@ -439,6 +567,120 @@ describe("SettingsView mobile layout", () => {
         Reflect.deleteProperty(window.navigator, "maxTouchPoints");
       }
     }
+  });
+});
+
+describe("SettingsView Server tailscale errors", () => {
+  it("renders tailscale status raw error for string failures", async () => {
+    vi.spyOn(tauriService, "tailscaleStatus").mockRejectedValue("status failed");
+    vi.spyOn(tauriService, "tailscaleDaemonCommandPreview").mockResolvedValue({
+      command: "tailscale up",
+      tokenConfigured: true,
+    });
+    vi.spyOn(tauriService, "tailscaleDaemonStatus").mockResolvedValue({
+      state: "stopped",
+      pid: null,
+      startedAtMs: null,
+      lastError: null,
+      listenAddr: "127.0.0.1:4732",
+    });
+
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={{ ...baseSettings, remoteBackendProvider: "tcp" }}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="server"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("status failed")).not.toBeNull();
+    });
+  });
+
+  it("renders tailscale command error for object message failures", async () => {
+    vi.spyOn(tauriService, "tailscaleStatus").mockResolvedValue({
+      installed: true,
+      running: true,
+      version: "1.0.0",
+      tailnetName: "dev-tailnet",
+      machineName: "dev-mac",
+      tailscaleIps: ["100.64.0.1"],
+      suggestedRemoteHost: null,
+      message: "ok",
+    });
+    vi.spyOn(tauriService, "tailscaleDaemonCommandPreview").mockRejectedValue({
+      message: "preview failed",
+    });
+    vi.spyOn(tauriService, "tailscaleDaemonStatus").mockResolvedValue({
+      state: "stopped",
+      pid: null,
+      startedAtMs: null,
+      lastError: null,
+      listenAddr: "127.0.0.1:4732",
+    });
+
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={{ ...baseSettings, remoteBackendProvider: "tcp" }}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="server"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("preview failed")).not.toBeNull();
+    });
   });
 });
 

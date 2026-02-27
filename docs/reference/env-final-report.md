@@ -397,3 +397,26 @@ ASCII Trend:
 - 触发原因: 本波次对前端测试体系进行覆盖率冲刺，新增/增强多个测试文件，触发兼容可选记录门禁以确保“变更原因可审计”。
 - 回退条件: 若新增测试引入稳定性回归（例如在 `npm run test:coverage:gate:strict` 下出现可复现失败），则回退到本波次前测试集并逐个用例二分恢复。
 - 结果差异: 增强了 `MainHeader/FileTreePanel/GitDiffViewer/useWorkspaces` 的测试覆盖与交互断言；不涉及运行时环境变量和生产行为变更。
+
+## 2026-02-27 Coverage Wave-2 Audit
+
+- Scope: 并发覆盖冲刺（SettingsView/Sidebar/GitDiffPanelModeContent/ComposerInput/OpenAppMenu）。
+- Changed test files:
+  - `src/features/app/components/Sidebar.test.tsx`
+  - `src/features/settings/components/SettingsView.test.tsx`
+  - `src/features/settings/components/SettingsView.features-layout-shortcuts.test.tsx`
+  - `src/features/git/components/GitDiffPanelModeContent.test.tsx`
+  - `src/features/composer/components/ComposerInput.behavior.test.tsx`
+  - `src/features/app/components/OpenAppMenu.test.tsx`
+  - `测试深度加强治理Plan.md`
+- Gate evidence:
+  - `npm run test:coverage:gate:strict` executed.
+  - Global coverage moved to `59.05/76.63/70.94/59.05` (S/B/F/L), still below strict 80.
+- Env governance impact:
+  - No environment variable, schema, or runtime-prefixed env behavior changed.
+
+### Compatibility Opt-In Record
+
+- 触发原因: Wave-2 为严格覆盖率目标实施多组件并发补测，触发兼容可选记录门禁。
+- 回退条件: 如新增测试在 CI 环境出现不可接受波动，按文件粒度回退本波新增测试并重跑 strict gate 验证。
+- 结果差异: 测试覆盖显著提升且未改变产品运行时行为；仅提升可证明真绿能力与审计证据完整性。

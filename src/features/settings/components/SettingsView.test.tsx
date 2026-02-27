@@ -145,7 +145,11 @@ const renderDisplaySection = (
   const props: ComponentProps<typeof SettingsView> = {
     reduceTransparency: options.reduceTransparency ?? false,
     onToggleTransparency,
-    appSettings: { ...baseSettings, ...options.appSettings },
+    appSettings: {
+      ...baseSettings,
+      remoteBackendProvider: "orbit",
+      ...options.appSettings,
+    },
     openAppIconById: {},
     onUpdateAppSettings,
     workspaceGroups: [],
@@ -219,7 +223,7 @@ const renderEnvironmentsSection = (
   const props: ComponentProps<typeof SettingsView> = {
     reduceTransparency: false,
     onToggleTransparency: vi.fn(),
-    appSettings: baseSettings,
+    appSettings: { ...baseSettings, remoteBackendProvider: "orbit" },
     openAppIconById: {},
     onUpdateAppSettings: vi.fn().mockResolvedValue(undefined),
     workspaceGroups: [],
@@ -368,6 +372,34 @@ describe("SettingsView Display", () => {
         expect.objectContaining({ uiScale: 0.1 }),
       );
     });
+  });
+
+  it("restores scale input when value is invalid", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({ onUpdateAppSettings, appSettings: { uiScale: 1.25 } });
+
+    const scaleInput = screen.getByLabelText("界面缩放") as HTMLInputElement;
+    fireEvent.change(scaleInput, { target: { value: "abc%" } });
+    fireEvent.blur(scaleInput);
+
+    await waitFor(() => {
+      expect(scaleInput.value).toBe("130%");
+    });
+    expect(onUpdateAppSettings).not.toHaveBeenCalled();
+  });
+
+  it("does not update scale when reset at default", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({ onUpdateAppSettings, appSettings: { uiScale: 1 } });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "重置" })[0]);
+
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("界面缩放") as HTMLInputElement).value,
+      ).toBe("100%");
+    });
+    expect(onUpdateAppSettings).not.toHaveBeenCalled();
   });
 
   it("commits font family changes on blur and enter", async () => {
