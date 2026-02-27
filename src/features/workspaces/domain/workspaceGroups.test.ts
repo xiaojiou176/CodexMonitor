@@ -122,6 +122,18 @@ describe("workspaceGroups domain", () => {
     expect(getWorkspaceGroupNameById("missing", workspaceById, workspaceGroupById)).toBe(null);
   });
 
+  it("returns null for worktree group when parent workspace is missing", () => {
+    const orphanWorktree = createWorkspace({
+      id: "ws-orphan",
+      kind: "worktree",
+      parentId: "missing-parent",
+      settings: { sidebarCollapsed: false, groupId: "ignored" },
+    });
+
+    const workspaceById = buildWorkspaceById([orphanWorktree]);
+    expect(getWorkspaceGroupId(orphanWorktree, workspaceById)).toBeNull();
+  });
+
   it("builds grouped sections, excludes worktrees, sorts workspace entries, and adds ungrouped", () => {
     const workspaceGroups: WorkspaceGroup[] = [
       { id: "group-a", name: "Group A", sortOrder: 1 },
@@ -171,5 +183,39 @@ describe("workspaceGroups domain", () => {
     expect(sections[1]?.id).toBe(null);
     expect(sections[1]?.name).toBe(RESERVED_GROUP_NAME);
     expect(sections[1]?.workspaces.map((workspace) => workspace.id)).toEqual(["main-u"]);
+  });
+
+  it("drops empty sections and routes unknown group ids into ungrouped", () => {
+    const workspaceGroups: WorkspaceGroup[] = [
+      { id: "group-a", name: "Group A", sortOrder: 1 },
+      { id: "group-b", name: "Group B", sortOrder: 2 },
+    ];
+
+    const workspaces: WorkspaceInfo[] = [
+      createWorkspace({
+        id: "main-z",
+        name: "Zulu",
+        settings: { sidebarCollapsed: false, groupId: "unknown-group", sortOrder: null },
+      }),
+      createWorkspace({
+        id: "main-a",
+        name: "Alpha",
+        settings: { sidebarCollapsed: false, groupId: null, sortOrder: null },
+      }),
+      createWorkspace({
+        id: "main-in-group",
+        name: "Grouped",
+        settings: { sidebarCollapsed: false, groupId: "group-a", sortOrder: null },
+      }),
+    ];
+
+    const sections = buildGroupedWorkspaces(workspaces, workspaceGroups);
+    expect(sections).toHaveLength(2);
+    expect(sections[0]?.id).toBe("group-a");
+    expect(sections[1]?.id).toBeNull();
+    expect(sections[1]?.workspaces.map((workspace) => workspace.id)).toEqual([
+      "main-a",
+      "main-z",
+    ]);
   });
 });

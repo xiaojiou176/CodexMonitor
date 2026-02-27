@@ -88,6 +88,23 @@ describe("RequestUserInputMessage", () => {
     expect(screen.queryByText("未提供可回答的问题。")).toBeNull();
   });
 
+  it("matches by thread when activeWorkspaceId is not provided", () => {
+    const onSubmit = vi.fn();
+    const first = createRequest({ request_id: "req-first", workspace_id: "ws-1" });
+    const second = createRequest({ request_id: "req-second", workspace_id: "ws-2" });
+
+    render(
+      <RequestUserInputMessage
+        requests={[first, second]}
+        activeThreadId="thread-1"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(screen.getByText("请求 1 / 2")).toBeTruthy();
+    expect(screen.getByText("Which option should we pick?")).toBeTruthy();
+  });
+
   it("submits selected option and notes, including plain-note question and skipping empty id", () => {
     const onSubmit = vi.fn();
     const request = createRequest({
@@ -175,5 +192,51 @@ describe("RequestUserInputMessage", () => {
     fireEvent.click(screen.getByRole("button", { name: "提交" }));
 
     expect(onSubmit).toHaveBeenCalledWith(request, { answers: {} });
+  });
+
+  it("uses option description when label is blank and supports note-only option answers", () => {
+    const onSubmit = vi.fn();
+    const request = createRequest({
+      params: {
+        thread_id: "thread-1",
+        turn_id: "turn-1",
+        item_id: "item-1",
+        questions: [
+          {
+            id: "q-desc",
+            question: "Pick one",
+            options: [{ label: "   ", description: "Description Fallback" }],
+          },
+          {
+            id: "q-note-only",
+            question: "Provide note only",
+            options: [{ label: "Option 1", description: "Desc" }],
+          },
+        ],
+      },
+    });
+
+    render(
+      <RequestUserInputMessage
+        requests={[request]}
+        activeThreadId="thread-1"
+        activeWorkspaceId="ws-1"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Description Fallback" }));
+    const textareas = screen.getAllByRole("textbox");
+    fireEvent.change(textareas[1]!, { target: { value: "  only note kept  " } });
+    fireEvent.click(screen.getByRole("button", { name: "提交" }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const [, response] = onSubmit.mock.calls[0];
+    expect(response).toEqual({
+      answers: {
+        "q-desc": { answers: ["Description Fallback"] },
+        "q-note-only": { answers: ["用户备注: only note kept"] },
+      },
+    });
   });
 });

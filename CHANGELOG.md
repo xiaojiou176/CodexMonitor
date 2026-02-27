@@ -11,6 +11,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Increased non-threads frontend coverage with new branch-focused tests for workspace URL prompt UI, GitHub PR comments/diffs hooks, workspace group domain edge cases, and request-user-input rendering/answer construction paths.
+- Evidence code paths: `src/features/workspaces/components/WorkspaceFromUrlPrompt.test.tsx`, `src/features/git/hooks/useGitHubPullRequestComments.test.tsx`, `src/features/git/hooks/useGitHubPullRequestDiffs.test.tsx`, `src/features/workspaces/domain/workspaceGroups.test.ts`, `src/features/app/components/RequestUserInputMessage.test.tsx`.
 - Added reducer edge/no-op branch tests for `threads` to improve branch-path coverage around turn metadata normalization, parent rank cleanup, and status idempotency.
 - Evidence code path: `src/features/threads/hooks/useThreadsReducer.test.ts`.
 - Expanded App entry smoke coverage for `src/App.tsx` with route fallback, rerender route-switch, and main-render error-path assertions.
