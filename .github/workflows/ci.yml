@@ -1000,7 +1000,23 @@ jobs:
           fi
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        run: choco install cmake llvm -y --no-progress
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $attempts = 3
+          for ($i = 1; $i -le $attempts; $i++) {
+            try {
+              choco install cmake llvm -y --no-progress
+              Write-Host "Windows dependency install succeeded on attempt $i/$attempts."
+              break
+            } catch {
+              if ($i -eq $attempts) {
+                throw
+              }
+              Write-Host "Install dependencies (Windows) failed on attempt $i/$attempts. Retrying in 20 seconds..."
+              Start-Sleep -Seconds 20
+            }
+          }
       - name: Configure LLVM (Windows)
         if: runner.os == 'Windows'
         run: |

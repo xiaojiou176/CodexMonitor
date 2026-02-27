@@ -2,6 +2,13 @@
 
 Date: 2026-02-26
 
+## CI Windows Rust Install Retry Update (2026-02-27)
+
+- Hardened `CI > Rust tests (Windows)` dependency bootstrap against transient Chocolatey network/install failures.
+- Replaced single-shot install with bounded retry loop (`3` attempts, `20s` backoff) for `cmake` and `llvm`.
+- Keeps failure semantics strict (final attempt still hard-fails), while reducing flaky red runs unrelated to product code.
+- Evidence code paths: `.github/workflows/ci.yml`, `docs/reference/env-final-report.md`.
+
 ## Final Counts (Single Source of Truth)
 
 - canonical_count: **12**
