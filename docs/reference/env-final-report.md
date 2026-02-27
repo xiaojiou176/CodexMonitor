@@ -856,3 +856,29 @@ ASCII Trend:
 - 触发原因: 生产构建与测试代码类型检查范围混用，导致门禁信号失真（构建失败并非发布代码问题）。
 - 回退条件: 若未来建立独立 `tsconfig.build.json` 并替代 `tsconfig.ci.json`，可按新配置回退脚本路径。
 - 结果差异: 提升 `build-tauri` 门禁信号质量，避免“测试类型漂移”误伤发布构建，同时不降低测试阶段严谨性。
+
+## 2026-02-27 Mutation False-Green Guard Audit
+
+- Scope: 修复 mutation gate 在“0 mutant / NaN score”场景仍判通过的假绿风险。
+- Changed files:
+  - `scripts/mutation-gate.mjs`
+  - `docs/reference/env-final-report.md`
+- Gate evidence:
+  - 本地执行 `npm run test:mutation:gate` 时，Stryker 输出：
+    - `Instrumented 0 source file(s) with 0 mutant(s)`
+    - `Final mutation score of NaN is greater than or equal to break threshold 80`
+  - 原脚本对上述场景未做阻断，导致“空跑绿灯”。
+  - 新增 guard：
+    - 读取 `.runtime-cache/test_output/mutation-gate/stryker-report.json`
+    - 当 `mutateCount > 0` 且 `files=0` 或 `mutants=0` 时直接失败
+  - 复验：
+    - `MUTATION_BASE_SHA=<base> MUTATION_HEAD_SHA=<head> npm run test:mutation:gate`（无关键目标）仍能正常 `skip`；
+    - 默认模式空跑将被 guard 拦截并失败。
+- Env governance impact:
+  - 无环境变量新增或变更。
+
+### Compatibility Opt-In Record
+
+- 触发原因: 变异门禁存在“空跑通过”路径，与“可证明真绿”目标冲突。
+- 回退条件: 若后续 Stryker 升级后原生修复 `NaN`/0-mutant 判定，可评估保留或简化该 guard。
+- 结果差异: 将 mutation 从“可假绿”提升为“必须有实证 mutant 才能过门禁”。

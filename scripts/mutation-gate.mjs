@@ -4,11 +4,13 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { spawn, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { buildMutationConfig } from "./mutation-stryker.config.mjs";
 
 const rootDir = process.cwd();
 const reportDir = path.join(rootDir, ".runtime-cache", "test_output", "mutation-gate");
 const latestReportPath = path.join(reportDir, "latest.json");
+const strykerReportPath = path.join(reportDir, "stryker-report.json");
 const runId = `${Date.now()}-${process.pid}`;
 const tempConfigPath = path.join(rootDir, `.stryker-${runId}.config.mjs`);
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -92,6 +94,38 @@ function resolveChangedMutateFiles(baseSha, headSha) {
 
 function npmCommand() {
   return process.platform === "win32" ? "npm.cmd" : "npm";
+}
+
+function countMutantsInReport(report) {
+  const files = report && typeof report === "object" ? report.files : null;
+  if (!files || typeof files !== "object") {
+    return { fileCount: 0, mutantCount: 0 };
+  }
+  const fileEntries = Object.values(files);
+  let mutantCount = 0;
+  for (const entry of fileEntries) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const mutants = entry.mutants;
+    if (Array.isArray(mutants)) {
+      mutantCount += mutants.length;
+    } else if (mutants && typeof mutants === "object") {
+      mutantCount += Object.keys(mutants).length;
+    }
+  }
+  return { fileCount: fileEntries.length, mutantCount };
+}
+
+function assertMutationReportHasExecutedMutants({ expectedMutateCount }) {
+  const report = JSON.parse(readFileSync(strykerReportPath, "utf8"));
+
+  const { fileCount, mutantCount } = countMutantsInReport(report);
+  if (expectedMutateCount > 0 && (fileCount === 0 || mutantCount === 0)) {
+    throw new Error(
+      `mutation false-green guard: expected >0 mutated files (requested=${expectedMutateCount}) but report has files=${fileCount}, mutants=${mutantCount}`,
+    );
+  }
 }
 
 function localBinPath(binName) {
@@ -224,6 +258,9 @@ async function main() {
         reject(new Error(`mutation failed with exit code ${code ?? 1}`));
       });
     });
+
+    // Guardrail against false-green mutation runs (e.g., no files matched / NaN score).
+    assertMutationReportHasExecutedMutants({ expectedMutateCount: mutate.length });
 
     console.log("✅ Mutation gate passed");
     await writeLatestStatus("pass", {
