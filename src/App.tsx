@@ -3341,7 +3341,11 @@ export function MainApp() {
   );
 }
 
-export function App() {
+type AppEntryProps = {
+  MainComponent?: typeof MainApp;
+};
+
+export function App({ MainComponent = MainApp }: AppEntryProps = {}) {
   const windowLabel = useWindowLabel();
   if (windowLabel === "about") {
     return (
@@ -3350,7 +3354,7 @@ export function App() {
       </Suspense>
     );
   }
-  return <MainApp />;
+  return <MainComponent />;
 }
 
 export default App;

@@ -34,13 +34,10 @@ describe("App window routing smoke", () => {
     const { useWindowLabel } = await import("./features/layout/hooks/useWindowLabel");
     vi.mocked(useWindowLabel).mockReturnValue("main");
 
-    const mainSpy = vi
-      .spyOn(AppModule, "MainApp")
-      .mockImplementation(() => <div data-testid="main-app-mock">Main</div>);
+    const MainEntryMock = () => <div data-testid="main-app-mock">Main</div>;
 
-    render(<AppModule.App />);
+    render(<AppModule.App MainComponent={MainEntryMock} />);
 
     expect(screen.getByTestId("main-app-mock")).toBeInTheDocument();
-    expect(mainSpy).toHaveBeenCalledTimes(1);
   });
 });

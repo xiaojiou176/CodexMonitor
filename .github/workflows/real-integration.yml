@@ -56,7 +56,7 @@ jobs:
         run: npm run test:live:preflight
 
       - name: Strict gate on required live triggers (no silent skip)
-        if: always() && github.ref == 'refs/heads/main'
+        if: always() && github.ref == 'refs/heads/main' && vars.REAL_INTEGRATIONS_STRICT_MAIN == 'true'
         env:
           PREFLIGHT_RUN_EXTERNAL: ${{ steps.preflight.outputs.run_external }}
           PREFLIGHT_RUN_LLM: ${{ steps.preflight.outputs.run_llm }}
@@ -147,6 +147,16 @@ jobs:
             process.exit(1);
           }
           NODE
+      - name: Strict gate disabled notice (main)
+        if: github.ref == 'refs/heads/main' && vars.REAL_INTEGRATIONS_STRICT_MAIN != 'true'
+        run: |
+          echo "::warning::REAL_INTEGRATIONS_STRICT_MAIN!=true, main dual-chain live gate is in advisory mode."
+          {
+            echo "## Real Integrations (Main Advisory Mode)"
+            echo ""
+            echo "- Status: advisory"
+            echo "- Reason: set repository variable \`REAL_INTEGRATIONS_STRICT_MAIN=true\` to enforce strict blocking on main."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Skip notice (optional workflow)
         if: steps.preflight.outputs.run_any != 'true' && github.ref != 'refs/heads/main'
@@ -304,7 +314,7 @@ jobs:
 
   required-main-dual-gate:
     runs-on: ubuntu-latest
-    if: always() && github.ref == 'refs/heads/main'
+    if: always() && github.ref == 'refs/heads/main' && vars.REAL_INTEGRATIONS_STRICT_MAIN == 'true'
     needs:
       - preflight
       - external-e2e

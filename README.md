@@ -332,8 +332,8 @@ Quality gates are intentionally layered by strictness to avoid policy drift:
    - Workflow jobs enforce the heaviest checks and evidence upload, including coverage/mutation/E2E/a11y/interaction sweeps and release-facing integration checks.
    - `main` and `pull_request` now always run in full mode (`run_js_tests/run_e2e/run_rust_tests=true`) regardless scoped-change detection, preventing skip-green on review branch and default branch.
    - CI type checking now uses `npm run typecheck:ci` (product code strict check, test/story files excluded) so legacy test typing debt cannot mask product regressions.
-   - Strict-main integration gate: `.github/workflows/real-integration.yml` enforces dual-chain success on `main` (`preflight` + `external-e2e` + `real-llm`) with no silent skip-green.
-   - Visual gate: `.github/workflows/ci.yml` job `visual-regression` runs Chromatic and now fails on missing `CHROMATIC_PROJECT_TOKEN` for both `main` and `pull_request`.
+  - Strict-main integration gate: `.github/workflows/real-integration.yml` supports strict dual-chain enforcement on `main` (`preflight` + `external-e2e` + `real-llm`) when repository variable `REAL_INTEGRATIONS_STRICT_MAIN=true`; otherwise it runs in advisory mode with explicit warnings/summaries.
+  - Visual gate: `.github/workflows/ci.yml` job `visual-regression` always enforces a local Storybook build gate, and additionally runs Chromatic cloud diff when `CHROMATIC_PROJECT_TOKEN` is available.
    - Functional hard gate: `.github/workflows/ci.yml` job `e2e-functional-regression` runs deterministic full functional suite (`smoke + interaction + workspace lifecycle + approval + worktree`) across `chromium + webkit`, enforced by `required-gate`.
    - Key journeys are now cross-engine guarded by `e2e-key-journeys` matrix (`chromium + webkit`).
    - `.github/workflows/chromatic.yml` is standalone/manual (`workflow_dispatch`) for manual re-runs and diagnostics.

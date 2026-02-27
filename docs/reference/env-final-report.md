@@ -79,10 +79,24 @@ Date: 2026-02-26
 ## CI Devil-Strict Escalation Update (2026-02-27)
 
 - Full-mode escalation now applies to both `main` and `pull_request` in `changes` detection outputs (no scoped skip-green on PRs).
-- `visual-regression` now hard-fails on missing `CHROMATIC_PROJECT_TOKEN` for both `main` and PR runs.
+- `visual-regression` now hard-gates Storybook static build on both `main` and PR runs, and executes Chromatic cloud diff when `CHROMATIC_PROJECT_TOKEN` is present.
 - `e2e-functional-regression` escalated from single-browser to cross-engine matrix (`chromium + webkit`) for functional parity validation.
 - `required-gate` now treats PR and `main` as strict contexts for JS/E2E/Rust/visual expectations.
 - Evidence code paths: `.github/workflows/ci.yml`, `README.md`, `docs/reference/env-final-report.md`.
+
+## Visual Gate Resilience Update (2026-02-27)
+
+- `CI > visual-regression` no longer relies on a secret-only pass condition.
+- Baseline strict gate is now repository-local (`npm run build-storybook`) so visual pipeline hygiene remains enforceable in forks and newly transferred repositories.
+- Chromatic remains first-class and is automatically added when `CHROMATIC_PROJECT_TOKEN` exists.
+- Evidence code paths: `.github/workflows/ci.yml`, `README.md`, `docs/reference/env-final-report.md`.
+
+## Real Integrations Main-Mode Toggle Update (2026-02-27)
+
+- Main-branch live dual-chain blocking is now controlled by repository variable `REAL_INTEGRATIONS_STRICT_MAIN`.
+- When `REAL_INTEGRATIONS_STRICT_MAIN=true`, strict mode is enforced (`preflight` + `external-e2e` + `real-llm` + `required-main-dual-gate`).
+- When unset/`!=true`, workflow remains visible in advisory mode with explicit warning/summary instead of hard-failing every push in unprovisioned forks.
+- Evidence code paths: `.github/workflows/real-integration.yml`, `README.md`, `docs/reference/env-final-report.md`.
 
 ## CI Hygiene + Typecheck Stabilization Update (2026-02-27)
 
