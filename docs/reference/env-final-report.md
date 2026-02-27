@@ -837,3 +837,22 @@ ASCII Trend:
 - 触发原因: diff-context 已接通后，git 历史深度不足成为新的硬阻塞，必须补齐。
 - 回退条件: 若未来改为按 API 直接获取 changed files 且不依赖本地 git diff，可评估回退 fetch-depth。
 - 结果差异: 消除 `bad object` 假失败，让 mutation gate 对应的是“测试结果”而非“仓库抓取深度”。
+
+## 2026-02-27 CI Tauri Build Typecheck Scope Fix Audit
+
+- Scope: 修复 `build-tauri` 阶段 `beforeBuildCommand` 调用 `npm run build` 时被测试文件类型错误阻塞的问题。
+- Changed files:
+  - `package.json`
+  - `docs/reference/env-final-report.md`
+- Gate evidence:
+  - `Tauri build (macOS/Linux)` 日志显示 `npm run build` 执行 `tsc && vite build`，并在 `src/**/*.test.ts(x)` 报大量类型错误后退出。
+  - 仓库已存在 `tsconfig.ci.json`，其中明确排除了测试/故事文件。
+  - 修复将构建脚本切换为 `tsc -p tsconfig.ci.json && vite build`，使生产构建类型检查聚焦可发布代码，测试类型问题继续由测试门禁覆盖。
+- Env governance impact:
+  - 无环境变量改动。
+
+### Compatibility Opt-In Record
+
+- 触发原因: 生产构建与测试代码类型检查范围混用，导致门禁信号失真（构建失败并非发布代码问题）。
+- 回退条件: 若未来建立独立 `tsconfig.build.json` 并替代 `tsconfig.ci.json`，可按新配置回退脚本路径。
+- 结果差异: 提升 `build-tauri` 门禁信号质量，避免“测试类型漂移”误伤发布构建，同时不降低测试阶段严谨性。
