@@ -76,6 +76,14 @@ Date: 2026-02-26
 - `required-gate` now escalates expectations on `main` (JS/E2E/Rust all required) and blocks on any missing functional gate success.
 - Evidence code paths: `.github/workflows/ci.yml`, `README.md`, `docs/reference/env-final-report.md`.
 
+## CI Devil-Strict Escalation Update (2026-02-27)
+
+- Full-mode escalation now applies to both `main` and `pull_request` in `changes` detection outputs (no scoped skip-green on PRs).
+- `visual-regression` now hard-fails on missing `CHROMATIC_PROJECT_TOKEN` for both `main` and PR runs.
+- `e2e-functional-regression` escalated from single-browser to cross-engine matrix (`chromium + webkit`) for functional parity validation.
+- `required-gate` now treats PR and `main` as strict contexts for JS/E2E/Rust/visual expectations.
+- Evidence code paths: `.github/workflows/ci.yml`, `README.md`, `docs/reference/env-final-report.md`.
+
 ## Coverage Wave-9 Update (2026-02-27)
 
 - Added high-ROI frontend governance tests for App-adjacent flows and settings workflow branches:

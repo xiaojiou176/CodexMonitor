@@ -330,10 +330,10 @@ Quality gates are intentionally layered by strictness to avoid policy drift:
    - Phase 2 medium parallel set: `npm run test` + `npm run check:rust`.
 3. `CI` (strict final arbitration, remote)
    - Workflow jobs enforce the heaviest checks and evidence upload, including coverage/mutation/E2E/a11y/interaction sweeps and release-facing integration checks.
-   - `main` now always runs in full mode (`run_js_tests/run_e2e/run_rust_tests=true`) regardless scoped-change detection, preventing skip-green on default branch.
+   - `main` and `pull_request` now always run in full mode (`run_js_tests/run_e2e/run_rust_tests=true`) regardless scoped-change detection, preventing skip-green on review branch and default branch.
    - Strict-main integration gate: `.github/workflows/real-integration.yml` enforces dual-chain success on `main` (`preflight` + `external-e2e` + `real-llm`) with no silent skip-green.
-   - Main visual gate: `.github/workflows/ci.yml` job `visual-regression` runs Chromatic and is enforced by `required-gate` on `main`.
-   - Functional hard gate: `.github/workflows/ci.yml` job `e2e-functional-regression` runs a deterministic Chromium functional suite (`smoke + interaction + workspace lifecycle + approval + worktree`) and is enforced by `required-gate`.
+   - Visual gate: `.github/workflows/ci.yml` job `visual-regression` runs Chromatic and now fails on missing `CHROMATIC_PROJECT_TOKEN` for both `main` and `pull_request`.
+   - Functional hard gate: `.github/workflows/ci.yml` job `e2e-functional-regression` runs deterministic full functional suite (`smoke + interaction + workspace lifecycle + approval + worktree`) across `chromium + webkit`, enforced by `required-gate`.
    - Key journeys are now cross-engine guarded by `e2e-key-journeys` matrix (`chromium + webkit`).
    - `.github/workflows/chromatic.yml` is standalone/manual (`workflow_dispatch`) for manual re-runs and diagnostics.
    - Accessibility and interaction gates: `.github/workflows/ci.yml` runs `npx playwright test e2e/a11y.spec.ts --project=chromium` and `npx playwright test e2e/interaction-sweep.spec.ts --project=chromium`.

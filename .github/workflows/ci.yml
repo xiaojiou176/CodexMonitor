@@ -79,7 +79,13 @@ jobs:
             fi
           fi
 
-          # Main branch is always full strict mode: never allow scoped skip to look green.
+          # PR and main branch are always full strict mode: never allow scoped skip to look green.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            force_full=true
+            run_js_tests=true
+            run_e2e=true
+            run_rust_tests=true
+          fi
           if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
             force_full=true
             run_js_tests=true
@@ -762,7 +768,7 @@ jobs:
           if-no-files-found: ignore
 
   e2e-functional-regression:
-    name: e2e-functional-regression
+    name: e2e-functional-regression (${{ matrix.browser }})
     runs-on: ubuntu-latest
     timeout-minutes: 55
     needs:
@@ -771,6 +777,10 @@ jobs:
       - lint-frontend
       - typecheck
     if: needs.changes.outputs.run_e2e == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -799,7 +809,7 @@ jobs:
           key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-ms-playwright-
-      - name: Install Playwright browser (chromium)
+      - name: Install Playwright browser (${{ matrix.browser }})
         run: |
           set -euo pipefail
           while true; do
@@ -808,8 +818,8 @@ jobs:
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npx playwright install --with-deps chromium
-      - name: E2E functional regression suite (chromium)
+          npx playwright install --with-deps "${{ matrix.browser }}"
+      - name: E2E functional regression suite (${{ matrix.browser }})
         run: |
           set -euo pipefail
           while true; do
@@ -824,13 +834,13 @@ jobs:
             e2e/workspace-lifecycle.spec.ts \
             e2e/approval-interrupt.spec.ts \
             e2e/worktree-flow.spec.ts \
-            --project=chromium \
+            --project="${{ matrix.browser }}" \
             --workers=1
       - name: Upload Playwright functional artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-functional-regression-artifacts
+          name: playwright-functional-regression-artifacts-${{ matrix.browser }}
           path: |
             playwright-report
             test-results
@@ -917,11 +927,8 @@ jobs:
             echo "CHROMATIC_PROJECT_TOKEN present."
             exit 0
           fi
-          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
-            echo "CHROMATIC_PROJECT_TOKEN missing on main; failing visual gate."
-            exit 1
-          fi
-          echo "::notice::CHROMATIC_PROJECT_TOKEN missing on pull_request; skipping visual regression run."
+          echo "CHROMATIC_PROJECT_TOKEN missing; failing visual gate."
+          exit 1
       - name: Run Chromatic
         if: env.CHROMATIC_PROJECT_TOKEN != ''
         run: npm run chromatic
@@ -1193,14 +1200,18 @@ jobs:
           set -euo pipefail
 
           strict_main=false
+          strict_pr=false
           if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
             strict_main=true
+          fi
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            strict_pr=true
           fi
 
           expected_js="${RUN_JS_TESTS}"
           expected_e2e="${RUN_E2E}"
           expected_rust="${RUN_RUST_TESTS}"
-          if [ "$strict_main" = "true" ]; then
+          if [ "$strict_main" = "true" ] || [ "$strict_pr" = "true" ]; then
             expected_js=true
             expected_e2e=true
             expected_rust=true
@@ -1232,8 +1243,12 @@ jobs:
           assert_success_when_expected "env-var-audit" true "${ENV_VAR_AUDIT_RESULT}"
           assert_success_when_expected "security-scans" true "${SECURITY_SCANS_RESULT}"
 
-          # Main branch must prove visual gate executed.
-          assert_success_when_expected "visual-regression" "$strict_main" "${VISUAL_REGRESSION_RESULT}"
+          # Main and PR must prove visual gate executed.
+          require_visual=false
+          if [ "$strict_main" = "true" ] || [ "$strict_pr" = "true" ]; then
+            require_visual=true
+          fi
+          assert_success_when_expected "visual-regression" "$require_visual" "${VISUAL_REGRESSION_RESULT}"
 
           # Conditionally-required jobs must never be silently skipped when enabled.
           assert_success_when_expected "test-js" "${expected_js}" "${TEST_JS_RESULT}"
