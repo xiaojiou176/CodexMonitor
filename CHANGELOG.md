@@ -14,6 +14,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Hardened key-journey E2E fallback behavior to eliminate skip-green risk: non-Tauri runtime now uses deterministic fallback assertions (no `testInfo.skip`) and strict report enforcement compatibility (`--enforce=fail`).
 - Evidence code paths: `e2e/workspace-lifecycle.spec.ts`, `e2e/approval-interrupt.spec.ts`, `e2e/worktree-flow.spec.ts`.
 - Evidence: `/tmp/pw-key-journeys.json` validated with `node scripts/check-playwright-report.mjs /tmp/pw-key-journeys.json --enforce=fail` (`skipped tests = 0`).
+- Stabilized interaction and functional regression E2E gates by replacing flaky runtime-dependent interaction assertions with deterministic accessibility-state assertions for usage/sort controls.
+- Evidence code paths: `e2e/interaction-sweep.spec.ts`, `e2e/helpers/interactions.ts`.
+- Evidence: local CI-parity suites passed for both engines:
+  - `npx playwright test e2e/interaction-sweep.spec.ts --project=chromium --project=webkit`
+  - `npx playwright test e2e/smoke.spec.ts e2e/interaction-sweep.spec.ts e2e/workspace-lifecycle.spec.ts e2e/approval-interrupt.spec.ts e2e/worktree-flow.spec.ts --project=chromium --workers=1`
+  - `npx playwright test e2e/smoke.spec.ts e2e/interaction-sweep.spec.ts e2e/workspace-lifecycle.spec.ts e2e/approval-interrupt.spec.ts e2e/worktree-flow.spec.ts --project=webkit --workers=1`
 - Fixed serious a11y contrast regressions on home/latest metadata text and error toast titles so dual-engine Playwright axe gates (Chromium + WebKit) pass under `critical+serious` blocking.
 - Evidence code paths: `src/styles/home.css`, `src/styles/error-toasts.css`.
 - Evidence: `.runtime-cache/test_output/a11y-local/latest.log`.
