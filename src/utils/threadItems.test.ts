@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { ConversationItem } from "../types";
 import {
   buildConversationItem,
+  buildItemsFromThread,
   buildConversationItemFromThreadItem,
   getThreadCreatedTimestamp,
   getThreadTimestamp,
+  isReviewingFromThread,
   mergeThreadItems,
   normalizeItem,
   prepareThreadItems,
@@ -1062,6 +1064,65 @@ describe("threadItems", () => {
     if (item && item.kind === "message") {
       expect(item.role).toBe("user");
       expect(item.text).toBe("Please run $deep    debug   mode right away");
+    }
+  });
+
+  it("builds items from turns and drops invalid thread items", () => {
+    const items = buildItemsFromThread({
+      turns: [
+        {
+          items: [
+            { type: "userMessage", id: "u-1", content: [{ type: "text", text: "hello" }] },
+            { type: "agentMessage", id: "a-1", content: [{ type: "output_text", text: "world" }] },
+            { type: "agentMessage", id: "", content: [{ type: "output_text", text: "ignored" }] },
+          ],
+        },
+      ],
+    });
+
+    expect(items).toHaveLength(2);
+    expect(items[0].kind).toBe("message");
+    expect(items[1].kind).toBe("message");
+  });
+
+  it("tracks latest review mode state from thread history", () => {
+    expect(
+      isReviewingFromThread({
+        turns: [
+          { items: [{ type: "enteredReviewMode" }] },
+          { items: [{ type: "exitedReviewMode" }] },
+          { items: [{ type: "enteredReviewMode" }] },
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      isReviewingFromThread({
+        turns: [{ items: [{ type: "enteredReviewMode" }, { type: "exitedReviewMode" }] }],
+      }),
+    ).toBe(false);
+  });
+
+  it("prefers local richer reasoning and diff content during merge", () => {
+    const mergedReasoning = mergeThreadItems(
+      [{ id: "r-1", kind: "reasoning", summary: "a", content: "b" }],
+      [{ id: "r-1", kind: "reasoning", summary: "long", content: "content-expanded" }],
+    );
+    expect(mergedReasoning).toHaveLength(1);
+    expect(mergedReasoning[0].kind).toBe("reasoning");
+    if (mergedReasoning[0].kind === "reasoning") {
+      expect(mergedReasoning[0].summary).toBe("long");
+      expect(mergedReasoning[0].content).toBe("content-expanded");
+    }
+
+    const mergedDiff = mergeThreadItems(
+      [{ id: "d-1", kind: "diff", title: "f.ts", diff: "a", status: null }],
+      [{ id: "d-1", kind: "diff", title: "f.ts", diff: "expanded-diff", status: "completed" }],
+    );
+    expect(mergedDiff).toHaveLength(1);
+    expect(mergedDiff[0].kind).toBe("diff");
+    if (mergedDiff[0].kind === "diff") {
+      expect(mergedDiff[0].diff).toBe("expanded-diff");
+      expect(mergedDiff[0].status).toBe("completed");
     }
   });
 

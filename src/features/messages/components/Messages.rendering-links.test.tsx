@@ -1089,4 +1089,121 @@ describe("Messages", () => {
     expect(container.querySelector(".reasoning-inline")).toBeNull();
   });
 
+  it("keeps native copy behavior when selection contains no file-link nodes", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-copy-no-file-links",
+        kind: "message",
+        role: "assistant",
+        text: "Plain text without path links should keep native copy.",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-copy-no-file-links"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const markdown = container.querySelector(".markdown") as HTMLElement | null;
+    expect(markdown).not.toBeNull();
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(markdown as HTMLElement);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    const setData = vi.fn();
+    fireEvent.copy(markdown as HTMLElement, {
+      clipboardData: {
+        setData,
+      },
+    });
+    expect(setData).not.toHaveBeenCalled();
+    selection?.removeAllRanges();
+  });
+
+  it("opens file preview from keyboard focus and closes via Escape", async () => {
+    readWorkspaceFileMock.mockResolvedValue({
+      content: "line-1\nline-2 target\nline-3",
+      truncated: false,
+    });
+    const items: ConversationItem[] = [
+      {
+        id: "msg-file-link-focus-escape",
+        kind: "message",
+        role: "assistant",
+        text: "Focus `src/features/messages/components/Markdown.tsx:2`",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-focus-preview"
+        workspaceId="ws-focus"
+        workspacePath="/tmp/repo"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const link = container.querySelector(".message-file-link") as HTMLElement | null;
+    expect(link).not.toBeNull();
+    fireEvent.focus(link as HTMLElement);
+
+    await waitFor(() => {
+      expect(screen.getByText("line-2 target")).not.toBeNull();
+    });
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByText("line-2 target")).toBeNull();
+    });
+  });
+
+  it("clicks preview open button to open full file path", async () => {
+    readWorkspaceFileMock.mockResolvedValue({
+      content: "line-1\nline-2 target\nline-3",
+      truncated: false,
+    });
+    const items: ConversationItem[] = [
+      {
+        id: "msg-file-link-preview-open-button",
+        kind: "message",
+        role: "assistant",
+        text: "Open `src/features/messages/components/Markdown.tsx:2`",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-preview-open-button"
+        workspaceId="ws-open-btn"
+        workspacePath="/tmp/repo"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const link = container.querySelector(".message-file-link") as HTMLElement | null;
+    expect(link).not.toBeNull();
+    fireEvent.mouseEnter(link as HTMLElement);
+    await waitFor(() => {
+      expect(screen.getByText("line-2 target")).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "打开完整文件" }));
+    expect(openFileLinkMock).toHaveBeenCalledWith(
+      "src/features/messages/components/Markdown.tsx:2",
+    );
+  });
+
 });

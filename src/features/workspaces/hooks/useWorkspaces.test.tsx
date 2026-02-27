@@ -980,6 +980,26 @@ describe("useWorkspaces.remove flows", () => {
       kind: "error",
     });
   });
+
+  it("removeWorktree respects cancellation", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    const removeWorktreeMock = vi.mocked(removeWorktree);
+    removeWorktreeMock.mockClear();
+    listWorkspacesMock.mockResolvedValue([worktree]);
+    askMock.mockResolvedValueOnce(false);
+
+    const { result } = renderHook(() => useWorkspaces());
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    await act(async () => {
+      await result.current.removeWorktree(worktree.id);
+    });
+
+    expect(removeWorktreeMock).not.toHaveBeenCalled();
+    expect(result.current.workspaces).toHaveLength(1);
+  });
 });
 
 describe("useWorkspaces.connectWorkspace", () => {
@@ -1005,6 +1025,31 @@ describe("useWorkspaces.connectWorkspace", () => {
         result.current.connectWorkspace(workspaceOne),
       ).rejects.toThrow("connect failed");
     });
+  });
+
+  it("marks workspace connected after successful connect + markWorkspaceConnected", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    const connectWorkspaceMock = vi.mocked(connectWorkspace);
+    listWorkspacesMock.mockResolvedValue([{ ...workspaceOne, connected: false }]);
+    connectWorkspaceMock.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useWorkspaces());
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    await act(async () => {
+      await result.current.connectWorkspace({
+        ...workspaceOne,
+        connected: false,
+      });
+      result.current.markWorkspaceConnected(workspaceOne.id);
+    });
+
+    expect(connectWorkspaceMock).toHaveBeenCalledWith(workspaceOne.id);
+    expect(
+      result.current.workspaces.find((entry) => entry.id === workspaceOne.id)?.connected,
+    ).toBeTruthy();
   });
 });
 
@@ -1320,5 +1365,24 @@ describe("useWorkspaces.workspace group operations", () => {
     });
     expect(onUpdateAppSettings).toHaveBeenCalled();
     expect(result.current.getWorkspaceGroupName(groupedWorkspace.id)).toBeNull();
+  });
+
+  it("returns null for group operations when app settings callbacks are missing", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    listWorkspacesMock.mockResolvedValue([workspaceOne]);
+
+    const { result } = renderHook(() => useWorkspaces());
+    await act(async () => {
+      await flushMicrotaskQueue();
+    });
+
+    await act(async () => {
+      await expect(result.current.createWorkspaceGroup("Alpha")).resolves.toBeNull();
+      await expect(
+        result.current.renameWorkspaceGroup("group-1", "Renamed"),
+      ).resolves.toBeNull();
+      await expect(result.current.moveWorkspaceGroup("group-1", "up")).resolves.toBeNull();
+      await expect(result.current.deleteWorkspaceGroup("group-1")).resolves.toBeNull();
+    });
   });
 });

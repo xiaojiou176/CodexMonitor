@@ -213,4 +213,73 @@ describe("useRemoteThreadLiveConnection wave-9b coverage", () => {
     expect(threadLiveSubscribeMock).not.toHaveBeenCalled();
     expect(refreshThread).not.toHaveBeenCalled();
   });
+
+  it("sets non-remote connection state from workspace connectivity", async () => {
+    const refreshThread = vi.fn().mockResolvedValue(undefined);
+
+    const { result, rerender } = renderHook(
+      ({ activeWorkspace }: { activeWorkspace: WorkspaceInfo | null }) =>
+        useRemoteThreadLiveConnection({
+          backendMode: "local",
+          activeWorkspace,
+          activeThreadId: "thread-1",
+          refreshThread,
+        }),
+      {
+        initialProps: { activeWorkspace: buildWorkspace(true) },
+      },
+    );
+
+    await flush();
+    expect(result.current.connectionState).toBe("live");
+
+    rerender({ activeWorkspace: buildWorkspace(false) });
+    await flush();
+
+    expect(result.current.connectionState).toBe("disconnected");
+    expect(threadLiveSubscribeMock).not.toHaveBeenCalled();
+    expect(refreshThread).not.toHaveBeenCalled();
+  });
+
+  it("stays disconnected when no active workspace/thread are selected", async () => {
+    const refreshThread = vi.fn().mockResolvedValue(undefined);
+
+    const { result } = renderHook(() =>
+      useRemoteThreadLiveConnection({
+        backendMode: "remote",
+        activeWorkspace: null,
+        activeThreadId: null,
+        refreshThread,
+      }),
+    );
+
+    await flush();
+    expect(result.current.connectionState).toBe("disconnected");
+    expect(threadLiveSubscribeMock).not.toHaveBeenCalled();
+    expect(refreshThread).not.toHaveBeenCalled();
+  });
+
+  it("reconnects disconnected workspace via reconnectWorkspace and handles subscribe failures", async () => {
+    const refreshThread = vi.fn().mockResolvedValue(undefined);
+    const reconnectWorkspace = vi.fn().mockResolvedValue(undefined);
+    threadLiveSubscribeMock.mockRejectedValueOnce(new Error("subscribe failed"));
+
+    const disconnectedWorkspace = buildWorkspace(false);
+    const { result } = renderHook(() =>
+      useRemoteThreadLiveConnection({
+        backendMode: "remote",
+        activeWorkspace: disconnectedWorkspace,
+        activeThreadId: "thread-1",
+        refreshThread,
+        reconnectWorkspace,
+      }),
+    );
+
+    await flush();
+    await flush();
+
+    expect(reconnectWorkspace).toHaveBeenCalledWith(disconnectedWorkspace);
+    expect(refreshThread).toHaveBeenCalledWith("ws-1", "thread-1");
+    expect(result.current.connectionState).toBe("disconnected");
+  });
 });

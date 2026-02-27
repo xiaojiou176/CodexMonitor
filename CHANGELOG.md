@@ -12,6 +12,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 - Exported `App` and `MainApp` from `src/App.tsx` to support phase-1 composition split and direct smoke-test coverage.
+- Added wave1-wave4 coverage tests for app orchestration, workspace flows, message file-link rendering, debug logs, layout secondary nodes, and thread item normalization/merge behavior.
+- Evidence code paths: `src/App.main-smoke.test.tsx`, `src/features/app/hooks/useRemoteThreadLiveConnection.wave9b.test.tsx`, `src/features/app/hooks/useUpdaterController.test.tsx`, `src/features/app/orchestration/useThreadCodexOrchestration.test.tsx`, `src/features/debug/hooks/useDebugLog.test.tsx`, `src/features/layout/hooks/layoutNodes/buildSecondaryNodes.test.tsx`, `src/features/messages/components/Messages.rendering-links.test.tsx`, `src/features/workspaces/hooks/useWorkspaces.test.tsx`, `src/utils/threadItems.test.ts`.
 - Sidebar thread status visuals now distinguish `waiting` from `processing`, and shift `reviewing` to a separate blue-green tone so status dot + badge are easier to scan.
 - Evidence code path: `src/styles/sidebar.css`.
 - Fixed remaining CI gates for `mutation-js` and `security-scans` with minimal scoped updates.
