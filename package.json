@@ -74,7 +74,7 @@
     "preflight:doc-drift:dry": "node scripts/preflight-doc-drift.mjs --dry-run",
     "precommit:orchestrated": "node scripts/precommit-orchestrated.mjs",
     "precommit:orchestrated:dry": "node scripts/precommit-orchestrated.mjs --dry-run",
-    "preflight:quick": "npm run test:assertions:guard && npm run guard:reuse-search && npm run typecheck",
+    "preflight:quick": "node scripts/preflight-orchestrated.mjs --quick-only",
     "preflight:orchestrated": "node scripts/preflight-orchestrated.mjs",
     "preflight:orchestrated:dry": "node scripts/preflight-orchestrated.mjs --dry-run",
     "precommit:repo": "npm run precommit:orchestrated",

@@ -309,8 +309,8 @@ Git hooks are enforced with Husky:
   - `npm run check:commit-message:secrets -- "$1"`
   - `npx --no-install commitlint --edit "$1"`
 - `pre-push`: runs `npm run preflight:orchestrated`
-  - Phase 1 (short first): `preflight:doc-drift (branch)` + `env:rationalize:check` + `env:doctor:dev` + `preflight:quick` (`test:assertions:guard` then `typecheck`).
-  - Phase 2 (parallel long jobs): `test`, `test:coverage:gate` (strict 80/95), `check:rust`, `test:smoke:ui`, and `test:live:preflight`, each with heartbeat logs every ~20s.
+  - Phase 1 (short first): `preflight:doc-drift (branch)` + `env:rationalize:check` + `env:doctor:dev` + `preflight:quick` (`typecheck` only).
+  - Phase 2 (parallel long jobs): `test:coverage:gate` (strict 80/95), `check:rust`, `test:smoke:ui`, and `test:live:preflight`, each with heartbeat logs every ~20s.
   - Parallel failure output preserves task names, so gate failures are directly attributable to the failing job.
 
 ### Pre-commit Governance Usage
