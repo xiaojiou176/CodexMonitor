@@ -16,6 +16,8 @@ jobs:
     outputs:
       rust_tauri_changed: ${{ steps.detect.outputs.rust_tauri_changed }}
       mutation_targets: ${{ steps.detect.outputs.mutation_targets }}
+      mutation_base_sha: ${{ steps.detect.outputs.mutation_base_sha }}
+      mutation_head_sha: ${{ steps.detect.outputs.mutation_head_sha }}
       force_full: ${{ steps.detect.outputs.force_full }}
       run_js_tests: ${{ steps.detect.outputs.run_js_tests }}
       run_e2e: ${{ steps.detect.outputs.run_e2e }}
@@ -108,6 +110,8 @@ jobs:
               echo "rust_tauri_changed=false"
             fi
             echo "mutation_targets=$MUTATION_TARGETS"
+            echo "mutation_base_sha=$BASE_SHA"
+            echo "mutation_head_sha=$HEAD_SHA"
             echo "force_full=$force_full"
             echo "run_js_tests=$run_js_tests"
             echo "run_e2e=$run_e2e"
@@ -454,8 +458,8 @@ jobs:
       - typecheck
     if: needs.changes.outputs.run_js_tests == 'true'
     env:
-      MUTATION_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
-      MUTATION_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+      MUTATION_BASE_SHA: ${{ needs.changes.outputs.mutation_base_sha }}
+      MUTATION_HEAD_SHA: ${{ needs.changes.outputs.mutation_head_sha }}
       MUTATION_MUTATE: ${{ needs.changes.outputs.mutation_targets }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

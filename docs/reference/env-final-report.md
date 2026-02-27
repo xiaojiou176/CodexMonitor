@@ -795,3 +795,25 @@ ASCII Trend:
 - 触发原因: 在严格门禁保持不降级前提下，必须修复“超时取消导致假红”的流程性阻塞。
 - 回退条件: 若后续观测到 mutation 运行稳定显著低于 45 分钟，可回调 timeout 并保留相同测试覆盖与阈值。
 - 结果差异: 提升 CI 结果可信度（从“可能被超时打断”到“能完成真判断”），不降低任何质量标准。
+
+## 2026-02-27 CI Mutation Diff-Context Fix Audit
+
+- Scope: 修复 `mutation-js` 在 `push` 事件下无法读取 diff 上下文（base/head 为空）导致退化为全量 critical modules 变异的问题。
+- Changed files:
+  - `.github/workflows/ci.yml`
+  - `docs/reference/env-final-report.md`
+- Gate evidence:
+  - 运行日志显示 `mutation-js` 环境变量在 push 场景为:
+    - `MUTATION_BASE_SHA:`
+    - `MUTATION_HEAD_SHA:`
+    - `MUTATION_MUTATE:`
+  - `scripts/mutation-gate.mjs` 在 base/head 为空时会走 `scope=default(critical modules)`，触发超长执行。
+  - 修复后在 `changes` job 显式输出 `mutation_base_sha`/`mutation_head_sha`，并在 `mutation-js` job 环境中使用这些输出值，确保 push/PR 都能按真实 diff 计算。
+- Env governance impact:
+  - 无新增环境变量；仅修正 CI 内部上下文传递。
+
+### Compatibility Opt-In Record
+
+- 触发原因: `mutation-js` 的 push 场景上下文传递缺失导致门禁时长和结果可信度下降，需做协议级修复。
+- 回退条件: 若未来统一改为全量 mutation 专用夜间流水线并移出主干门禁，可回退 diff-context 透传方案。
+- 结果差异: 保留 mutation 严格性，同时显著降低“无关改动触发超长全量变异”的误伤，提升门禁可持续性。
