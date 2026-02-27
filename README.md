@@ -332,8 +332,12 @@ Quality gates are intentionally layered by strictness to avoid policy drift:
    - Workflow jobs enforce the heaviest checks and evidence upload, including coverage/mutation/E2E/a11y/interaction sweeps and release-facing integration checks.
    - `main` and `pull_request` now always run in full mode (`run_js_tests/run_e2e/run_rust_tests=true`) regardless scoped-change detection, preventing skip-green on review branch and default branch.
    - CI type checking now uses `npm run typecheck:ci` (product code strict check, test/story files excluded) so legacy test typing debt cannot mask product regressions.
-  - Strict-main integration gate: `.github/workflows/real-integration.yml` supports strict dual-chain enforcement on `main` (`preflight` + `external-e2e` + `real-llm`) when repository variable `REAL_INTEGRATIONS_STRICT_MAIN=true`; otherwise it runs in advisory mode with explicit warnings/summaries.
-  - Visual gate: `.github/workflows/ci.yml` job `visual-regression` always enforces a local Storybook build gate, and additionally runs Chromatic cloud diff when `CHROMATIC_PROJECT_TOKEN` is available.
+   - Strict-main integration gate: `.github/workflows/real-integration.yml` now enforces dual-chain blocking on `main` unconditionally (`preflight` + `external-e2e` + `real-llm` + `required-main-dual-gate`) with no advisory fallback path.
+   - Coverage gate in CI enforces the ratcheted policy (`npm run test:coverage:gate`) to prevent regression while keeping required gates aligned with current repository baseline.
+   - Mutation gate now hard-fails protected flows (`pull_request` + `main`) if mutation run resolves to `status=skip`.
+   - E2E strict skip guard: key journeys and functional regression suites emit JSON and fail if skipped tests are detected (`scripts/check-playwright-report.mjs`).
+   - E2E evidence retention: key journey / functional JSON summaries are uploaded as CI artifacts on every run (`if: always()`).
+   - Visual gate: `.github/workflows/ci.yml` job `visual-regression` always enforces a local Storybook build gate, and additionally runs Chromatic cloud diff when `CHROMATIC_PROJECT_TOKEN` is available.
    - Functional hard gate: `.github/workflows/ci.yml` job `e2e-functional-regression` runs deterministic full functional suite (`smoke + interaction + workspace lifecycle + approval + worktree`) across `chromium + webkit`, enforced by `required-gate`.
    - Key journeys are now cross-engine guarded by `e2e-key-journeys` matrix (`chromium + webkit`).
    - `.github/workflows/chromatic.yml` is standalone/manual (`workflow_dispatch`) for manual re-runs and diagnostics.
@@ -341,12 +345,12 @@ Quality gates are intentionally layered by strictness to avoid policy drift:
 
 Coverage gate policy (`scripts/coverage-gate.mjs`):
 
-- Global minimum thresholds are fixed at `>=80` for `statements`, `lines`, `functions`, and `branches`.
+- Global minimum thresholds are fixed at `>=85` for `statements`, `lines`, `functions`, and `branches`.
 - Default mode (`npm run test:coverage:gate`) is ratcheted sustainability mode:
   - Without explicit env targets, required threshold follows repository baseline (`config/coverage-gate-baseline.json`) to prevent regression and only ratchets upward.
   - With explicit `COVERAGE_TARGET_*` (or legacy `COVERAGE_MIN_*`), required becomes `max(explicit_target, baseline)` per metric.
   - Runtime fallback baseline (`.runtime-cache/test_output/coverage-gate/baseline.json`) is used only when repository baseline is unavailable.
-- Strict mode (`npm run test:coverage:gate:strict`) ignores baseline input and enforces fixed global `80/80/80/80`.
+- Strict mode (`npm run test:coverage:gate:strict`) ignores baseline input and enforces fixed global `85/85/85/85`.
 - Critical scope thresholds are hard-gated as implemented:
   - `src/features/threads/`: `statements>=95`, `lines>=95`, `functions>=95`, `branches>=92`
   - `src/services/`: `statements>=95`, `lines>=95`, `functions>=95`, `branches>=95`
@@ -362,7 +366,11 @@ Git hooks are enforced with Husky:
   - Phase 1: `preflight:doc-drift` checks staged files and requires staged docs updates for doc-sensitive changes (`README.md`, `AGENTS.md`, `CLAUDE.md`, `src/{AGENTS,CLAUDE}.md`, `src-tauri/{AGENTS,CLAUDE}.md`, `CHANGELOG.md`, or `docs/*`).
   - Phase 2 (parallel security + compliance gates): `check:secrets:staged`, `check:keys:source-policy`, `check:real-llm-alias-usage`, `check:critical-path-logging`, `env:doctor:staged`, `env:rationalize:check`, `check:lazy-load:evidence-gate`, and `check:compat:option-log`.
   - Critical-path logging gate checks newly staged critical-path additions (`catch` blocks / third-party API calls) for structured log context (`traceId`/`requestId` + `error`/`code`/`status`) and defaults to fail mode unless `CRITICAL_LOG_GUARD_MODE=warn`.
-  - Phase 3: runs `test:assertions:guard`, `guard:reuse-search`, and `lint:strict` in parallel.
+  - Phase 3 baseline: runs `test:assertions:guard`, `guard:reuse-search`, and `lint:strict` in parallel.
+  - Phase 3 conditional hard gates:
+    - staged TS/config/workflow/app code changes trigger `typecheck:ci`
+    - staged workflow YAML changes trigger local `actionlint -color`
+    - staged Rust changes trigger `check:rust`
 - `commit-msg`: runs secret scan and conventional-commit lint:
   - `npm run check:commit-message:secrets -- "$1"`
   - `npx --no-install commitlint --edit "$1"`

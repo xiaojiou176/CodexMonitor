@@ -54,8 +54,16 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - CI `security-scans` now uses full git history checkout (`fetch-depth: 0`) so gitleaks diff-range scanning no longer fails on missing base commits.
 - `required-gate` now only enforces `build-tauri` success when Rust test stage actually succeeded, preventing duplicate false negatives when upstream Rust-required jobs already failed.
 - Calibrated `threads` critical branch threshold to `92%` while preserving `95%` requirements for threads statements/lines/functions and all service metrics.
+- Real Integrations main-branch gate is now non-optional: strict dual-chain enforcement (`external-e2e` + `real-llm`) is always required on `main`.
+- CI coverage gate remains required with ratcheted baseline policy (`test:coverage:gate`) to block regressions while preserving immediate mergeability.
+- CI mutation gate now rejects `status=skip` on protected flows (`pull_request` and `main`), removing skip-green behavior for critical mutation checks.
+- Key-journeys and functional-regression E2E jobs now emit JSON reports, enforce zero skipped tests, and always upload JSON evidence artifacts.
+- Husky `pre-commit` orchestration is stricter with staged-scope conditional hard gates:
+  - TS/config/workflow/app staged changes now require `typecheck:ci`
+  - workflow YAML staged changes now require local `actionlint -color`
+  - Rust staged changes now require `check:rust`
 - Evidence: `.runtime-cache/test_output/coverage-gate/latest.json`.
-- Evidence code paths: `scripts/coverage-gate.mjs`, `.github/workflows/ci.yml`.
+- Evidence code paths: `scripts/coverage-gate.mjs`, `scripts/check-playwright-report.mjs`, `.github/workflows/ci.yml`, `.github/workflows/real-integration.yml`.
 - Hardened CI portability by adding ripgrep-independent fallbacks in env/assertion/mutation guards and fixing workflow hygiene/toolchain wiring in `ci.yml`.
 - Evidence: `.runtime-cache/test_output/coverage-gate/latest.json`, `.runtime-cache/test_output/live-preflight/latest.json`.
 - Evidence code paths: `.github/workflows/ci.yml`, `scripts/env-rationalize.mjs`, `scripts/guard-placebo-assertions.mjs`, `scripts/mutation-gate.mjs`, `scripts/mutation-stryker.config.mjs`.

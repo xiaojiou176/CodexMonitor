@@ -151,6 +151,24 @@ Date: 2026-02-26
 - Evidence artifacts: `.runtime-cache/test_output/coverage-gate/latest.json`, `/tmp/ci_failed.log`.
 - Evidence code paths: `.github/workflows/ci.yml`, `scripts/coverage-gate.mjs`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
 
+## Real Integrations Hard-Strict Main Update (2026-02-27)
+
+- Removed `REAL_INTEGRATIONS_STRICT_MAIN` advisory toggle from mainline live gates.
+- `preflight` strict check and `required-main-dual-gate` now always enforce dual-chain success on `main` (`external-e2e` + `real-llm`), eliminating config-level downgrade paths.
+- Updated README governance wording to reflect unconditionally strict behavior on `main`.
+- Evidence code paths: `.github/workflows/real-integration.yml`, `README.md`, `CHANGELOG.md`.
+
+## CI Strictness Reinforcement Wave (2026-02-27)
+
+- CI docs-drift gate now executes `preflight:doc-drift -- --mode=branch` to align remote gate semantics with local policy script.
+- CI coverage gate remains required with ratcheted policy (`test:coverage:gate`) to prevent regression while avoiding deterministic red on current global debt.
+- CI mutation gate now fails protected flows when mutation status resolves to `skip`.
+- E2E key journeys and functional regression now:
+  - emit JSON reports to `.runtime-cache/test_output/e2e/*.json`
+  - fail if skipped tests are present (`scripts/check-playwright-report.mjs`)
+  - upload JSON reports as artifacts on every run (`if: always()`).
+- Evidence code paths: `.github/workflows/ci.yml`, `scripts/check-playwright-report.mjs`, `README.md`, `CHANGELOG.md`.
+
 ## Coverage Wave-9 Update (2026-02-27)
 
 - Added high-ROI frontend governance tests for App-adjacent flows and settings workflow branches:

@@ -275,50 +275,14 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-      - name: Gate docs drift on critical code/config changes
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          else
-            BASE_SHA="${{ github.event.before }}"
-            HEAD_SHA="${{ github.sha }}"
-          fi
-
-          if [ -z "${BASE_SHA:-}" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            echo "No valid base SHA found; skipping docs drift diff gate."
-            exit 0
-          fi
-
-          CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
-          echo "Changed files between $BASE_SHA..$HEAD_SHA:"
-          printf '%s\n' "$CHANGED_FILES"
-
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "No changed files; docs drift gate passed."
-            exit 0
-          fi
-
-          if ! printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(src/|src-tauri/|scripts/|config/)'; then
-            echo "No critical code/config changes; docs drift gate passed."
-            exit 0
-          fi
-
-          if printf '%s\n' "$CHANGED_FILES" | grep -Eq '(^|/)(README\.md|AGENTS\.md|CLAUDE\.md|CHANGELOG\.md)$|^docs/'; then
-            echo "Detected docs update with critical changes; docs drift gate passed."
-            exit 0
-          fi
-
-          echo "Critical code/config changes detected without matching docs updates."
-          echo "Please update README/AGENTS/CLAUDE/CHANGELOG or docs/ in the same change set."
-          exit 1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
       - name: Install dependencies
         run: npm ci
+      - name: Gate docs drift on critical code/config changes
+        run: npm run preflight:doc-drift -- --mode=branch
       - name: Check app-server docs sync
         run: npm run docs:check:app-server-events
   env-governance:
@@ -488,6 +452,24 @@ jobs:
           fi
       - name: Mutation gate (critical modules)
         run: npm run test:mutation:gate
+      - name: Enforce mutation execution on PR/main
+        if: always() && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+        run: |
+          set -euo pipefail
+          report_path=".runtime-cache/test_output/mutation-gate/latest.json"
+          if [ ! -f "${report_path}" ]; then
+            echo "Mutation report missing: ${report_path}"
+            exit 1
+          fi
+          REPORT_PATH="${report_path}" node <<'NODE'
+          const fs = require("fs");
+          const reportPath = process.env.REPORT_PATH;
+          const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+          if (report.status === "skip") {
+            console.error(`Mutation gate reported skip on protected flow (${reportPath}).`);
+            process.exit(1);
+          }
+          NODE
       - name: Upload mutation latest report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -759,13 +741,21 @@ jobs:
       - name: E2E key journeys (${{ matrix.browser }})
         run: |
           set -euo pipefail
+          mkdir -p .runtime-cache/test_output/e2e
           while true; do
             echo "[heartbeat][e2e-key-journeys] $(date -u +'%Y-%m-%dT%H:%M:%SZ') key journeys running..."
             sleep 20
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npx playwright test e2e/workspace-lifecycle.spec.ts e2e/approval-interrupt.spec.ts e2e/worktree-flow.spec.ts --project="${{ matrix.browser }}"
+          report_path=".runtime-cache/test_output/e2e/key-journeys-${{ matrix.browser }}.json"
+          npx playwright test \
+            e2e/workspace-lifecycle.spec.ts \
+            e2e/approval-interrupt.spec.ts \
+            e2e/worktree-flow.spec.ts \
+            --project="${{ matrix.browser }}" \
+            --reporter=json > "${report_path}"
+          node scripts/check-playwright-report.mjs "${report_path}" "e2e-key-journeys-${{ matrix.browser }}"
       - name: Upload Playwright key journey artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -775,6 +765,13 @@ jobs:
             playwright-report
             test-results
           if-no-files-found: ignore
+      - name: Upload key journey JSON report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-key-journey-json-${{ matrix.browser }}
+          path: .runtime-cache/test_output/e2e/key-journeys-${{ matrix.browser }}.json
+          if-no-files-found: warn
 
   e2e-functional-regression:
     name: e2e-functional-regression (${{ matrix.browser }})
@@ -831,12 +828,14 @@ jobs:
       - name: E2E functional regression suite (${{ matrix.browser }})
         run: |
           set -euo pipefail
+          mkdir -p .runtime-cache/test_output/e2e
           while true; do
             echo "[heartbeat][e2e-functional] $(date -u +'%Y-%m-%dT%H:%M:%SZ') functional regression suite running..."
             sleep 20
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          report_path=".runtime-cache/test_output/e2e/functional-${{ matrix.browser }}.json"
           npx playwright test \
             e2e/smoke.spec.ts \
             e2e/interaction-sweep.spec.ts \
@@ -844,7 +843,9 @@ jobs:
             e2e/approval-interrupt.spec.ts \
             e2e/worktree-flow.spec.ts \
             --project="${{ matrix.browser }}" \
-            --workers=1
+            --workers=1 \
+            --reporter=json > "${report_path}"
+          node scripts/check-playwright-report.mjs "${report_path}" "e2e-functional-regression-${{ matrix.browser }}"
       - name: Upload Playwright functional artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -854,6 +855,13 @@ jobs:
             playwright-report
             test-results
           if-no-files-found: ignore
+      - name: Upload functional regression JSON report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-functional-regression-json-${{ matrix.browser }}
+          path: .runtime-cache/test_output/e2e/functional-${{ matrix.browser }}.json
+          if-no-files-found: warn
 
   security-scans:
     runs-on: ubuntu-latest

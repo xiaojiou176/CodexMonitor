@@ -65,6 +65,8 @@ const sameLiteralAssertionPattern = new RegExp(
   "gms",
 );
 const toBeDefinedPattern = /\bexpect\s*\([^\n)]*\)\s*\.\s*toBeDefined\s*\(\s*\)/gm;
+const truthyLiteralPattern = /\bexpect\s*\(\s*true\s*\)\s*\.\s*toBeTruthy\s*\(\s*\)/gm;
+const falsyLiteralPattern = /\bexpect\s*\(\s*false\s*\)\s*\.\s*toBeFalsy\s*\(\s*\)/gm;
 const toBeDefinedAllowToken = "codex-allow-toBeDefined";
 
 const findings = [];
@@ -82,6 +84,8 @@ for (const relativePath of files) {
   const content = readFileSync(absolutePath, "utf8");
   let sameLiteralMatch;
   let toBeDefinedMatch;
+  let truthyLiteralMatch;
+  let falsyLiteralMatch;
 
   while ((sameLiteralMatch = sameLiteralAssertionPattern.exec(content)) !== null) {
     const { line, col } = toLoc(content, sameLiteralMatch.index);
@@ -98,6 +102,32 @@ for (const relativePath of files) {
   }
 
   const lines = content.split("\n");
+  while ((truthyLiteralMatch = truthyLiteralPattern.exec(content)) !== null) {
+    const { line, col } = toLoc(content, truthyLiteralMatch.index);
+    findings.push({
+      relativePath,
+      line,
+      col,
+      code: "TRUTHY_LITERAL_ASSERTION",
+      message:
+        "Literal `expect(true).toBeTruthy()` is a placebo assertion. Assert business behavior instead.",
+      snippet: truthyLiteralMatch[0].replace(/\s+/g, " "),
+    });
+  }
+
+  while ((falsyLiteralMatch = falsyLiteralPattern.exec(content)) !== null) {
+    const { line, col } = toLoc(content, falsyLiteralMatch.index);
+    findings.push({
+      relativePath,
+      line,
+      col,
+      code: "FALSY_LITERAL_ASSERTION",
+      message:
+        "Literal `expect(false).toBeFalsy()` is a placebo assertion. Assert business behavior instead.",
+      snippet: falsyLiteralMatch[0].replace(/\s+/g, " "),
+    });
+  }
+
   while ((toBeDefinedMatch = toBeDefinedPattern.exec(content)) !== null) {
     const { line, col } = toLoc(content, toBeDefinedMatch.index);
     const currentLine = lines[line - 1] ?? "";
