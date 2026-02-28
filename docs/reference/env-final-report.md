@@ -11,10 +11,14 @@ Date: 2026-02-26
     - Credential variable: `GH_BILLING_TOKEN` (optional; used to read org Actions billing usage).
     - Repo vars: `CI_BILLING_FALLBACK_PCT` (default `98`), `CI_FORCE_E2_CORE`, `CI_FORCE_GH_HOSTED`.
   - Kept strict gates unchanged (`required-gate` still enforces the same job outcomes).
+  - Hardened fallback: when billing API is unavailable, Linux governance route now falls back to `e2-core` (`billing-api-unavailable-fallback-e2-core`) instead of staying on hosted.
+  - Added strict `live-env-gate` to enforce real environment prerequisites in CI (`REAL_EXTERNAL_URL`, `REAL_LLM_BASE_URL`, `GEMINI_API_KEY`) and wired it into `required-gate`.
   - Added self-hosted performance hardening:
     - Linux dependency installs in `lint-backend`, `test-tauri` (Linux), and `build-tauri` (Linux) now run only when packages are missing.
     - E2E Playwright install on self-hosted uses lock-protected one-time dependency prep (`/tmp/codexmonitor-playwright-deps-v1`) and then installs browser binaries only.
     - GitHub-hosted E2E keeps `--with-deps` behavior unchanged.
+  - Added cache-hit telemetry emission to `GITHUB_STEP_SUMMARY` for key jobs (`node-deps-preheat`, `pre-commit`, `lint-frontend`, `typecheck`) to improve runtime tuning observability.
+  - Updated local pre-push defaults to favor CI capacity: medium local gate execution is now opt-in via `PREFLIGHT_LOCAL_HEAVY=true`.
 
 - Mainline CI failure follow-up:
   - Added `clang` and `libclang-dev` to `lint-backend` Linux dependency install so `whisper-rs-sys` bindgen no longer fails on missing `libclang` during clippy.
