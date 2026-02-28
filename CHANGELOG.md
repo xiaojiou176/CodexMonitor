@@ -11,6 +11,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Further reduced `e2-core` queue contention by pinning additional medium CI jobs to GitHub-hosted runners (`lint-frontend`, `lint-backend`, `typecheck`, `security-scans`), leaving self-hosted capacity for heavier execution paths.
 - Reduced self-hosted queue pressure in CI by pinning lightweight governance jobs to GitHub-hosted runners on all events (`changes`, `node-deps-preheat`, `workflow-hygiene`, `commitlint`, `docs-drift`, `env-governance`, `env-var-audit`, `required-gate`), while keeping heavy execution jobs on `e2-core` for non-PR events.
 - Increased self-hosted concurrency for fork `xiaojiou176/CodexMonitor` by adding a second runner service on the existing VM (`codexmonitor-e2-core-02`) with labels `e2-core, ssd-fast`.
 - Routed GitHub Actions Linux jobs to dynamic runner selection: `pull_request` uses `ubuntu-latest`, while `push/main`, `workflow_dispatch`, and `schedule` use self-hosted `e2-core` to enforce trust-boundary split and use dedicated runner capacity.
