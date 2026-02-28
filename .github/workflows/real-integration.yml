@@ -36,9 +36,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-node-modules-
+            ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-
       - name: Install dependencies
         if: steps.node_modules_cache.outputs.cache-hit != 'true'
         run: |
@@ -209,9 +209,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-node-modules-
+            ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-
       - name: Install dependencies
         if: needs.preflight.outputs.run_external == 'true' && steps.node_modules_cache.outputs.cache-hit != 'true'
         run: |
@@ -229,9 +229,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ms-playwright-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-ms-playwright-
+            ${{ runner.os }}-${{ runner.arch }}-ms-playwright-
 
       - name: Install Playwright browser
         if: needs.preflight.outputs.run_external == 'true'
@@ -283,9 +283,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-node-modules-
+            ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-
       - name: Install dependencies
         if: needs.preflight.outputs.run_llm == 'true' && steps.node_modules_cache.outputs.cache-hit != 'true'
         run: |

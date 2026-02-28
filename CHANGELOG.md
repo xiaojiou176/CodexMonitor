@@ -11,6 +11,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Hardened CI cache key strategy across workflows by adding architecture + Node major dimension to dependency/browser caches:
+  - `node_modules` cache keys now use `${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}`.
+  - Playwright browser cache keys now use `${{ runner.os }}-${{ runner.arch }}-ms-playwright-${{ hashFiles('package-lock.json') }}`.
+- Added `.github/actionlint.yaml` self-hosted label configuration (`e2-core`) so workflow linting remains strict while supporting custom runner labels.
 - Re-routed CI heavy jobs back to self-hosted `e2-core` to prioritize local compute for expensive workloads (`pre-commit`, `lint-backend`, `test-js`, `coverage-js`, `mutation-js`, all E2E suites, `security-scans`, `visual-regression`), while keeping lightweight governance jobs on GitHub-hosted runners.
 - Completed CI queue-elimination on mainline by moving `pre-commit` to GitHub-hosted as well, removing the last `e2-core`-gated job from `ci.yml` and preventing head-of-line blocking during push validation.
 - Applied queue-elimination routing for CI matrix-heavy jobs by moving high fan-out suites to GitHub-hosted runners (`test-js`, `coverage-js`, `mutation-js`, `e2e-smoke`, `e2e-a11y`, `e2e-interaction-sweep`, `e2e-key-journeys`, `e2e-functional-regression`, `visual-regression`) to remove `e2-core` saturation on mainline runs.

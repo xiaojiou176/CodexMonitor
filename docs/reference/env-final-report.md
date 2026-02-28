@@ -20,6 +20,10 @@ Date: 2026-02-26
   - `e2e-smoke`, `e2e-a11y`, `e2e-interaction-sweep`, `e2e-key-journeys`, `e2e-functional-regression`
   - `security-scans`, `visual-regression`
 - Lightweight governance paths remain on GitHub-hosted (`changes`, `node-deps-preheat`, `workflow-hygiene`, `commitlint`, `docs-drift`, `env-governance`, `env-var-audit`, `required-gate`).
+- Cache hardening follow-up improved determinism and cross-runner correctness by strengthening key cardinality:
+  - `node_modules` caches include `runner.arch` and Node major (`node20`).
+  - Playwright browser caches include `runner.arch`.
+  - Added `.github/actionlint.yaml` with `self-hosted-runner.labels: [e2-core]` so strict workflow linting supports custom self-hosted labels.
 - Evidence code paths: `.github/workflows/ci.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
 
 ## Self-Hosted Runner Split Update (2026-02-28)
