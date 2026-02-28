@@ -135,7 +135,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -203,7 +203,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -241,7 +241,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -295,7 +295,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -323,7 +323,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -351,7 +351,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -417,7 +417,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -458,7 +458,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -506,7 +506,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -571,7 +571,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -585,9 +585,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ms-playwright-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-ms-playwright-
+            ${{ runner.os }}-${{ runner.arch }}-ms-playwright-
       - name: Install Playwright browser (${{ matrix.browser }})
         run: |
           set -euo pipefail
@@ -643,7 +643,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -657,9 +657,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ms-playwright-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-ms-playwright-
+            ${{ runner.os }}-${{ runner.arch }}-ms-playwright-
       - name: Install Playwright browser (${{ matrix.browser }})
         run: |
           set -euo pipefail
@@ -715,7 +715,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -729,9 +729,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ms-playwright-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-ms-playwright-
+            ${{ runner.os }}-${{ runner.arch }}-ms-playwright-
       - name: Install Playwright browser (${{ matrix.browser }})
         run: |
           set -euo pipefail
@@ -787,7 +787,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -801,9 +801,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ms-playwright-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-ms-playwright-
+            ${{ runner.os }}-${{ runner.arch }}-ms-playwright-
       - name: Install Playwright browser (${{ matrix.browser }})
         run: |
           set -euo pipefail
@@ -874,7 +874,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -888,9 +888,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ms-playwright-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-ms-playwright-
+            ${{ runner.os }}-${{ runner.arch }}-ms-playwright-
       - name: Install Playwright browser (${{ matrix.browser }})
         run: |
           set -euo pipefail
@@ -959,7 +959,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
@@ -1019,7 +1019,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
       - name: Install dependencies (cache-aware)
         run: |
           set -euo pipefail
