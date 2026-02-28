@@ -2,6 +2,16 @@
 
 Date: 2026-02-26
 
+## Queue Pressure Reduction + Dual Runner Update (2026-02-28)
+
+- Added a second self-hosted runner service for fork `xiaojiou176/CodexMonitor` on existing VM `github-runner-core-01`:
+  - `codexmonitor-e2-core-01`
+  - `codexmonitor-e2-core-02`
+- Kept trust-boundary split while reducing queue pressure by moving lightweight governance jobs in CI to GitHub-hosted on all events:
+  - `changes`, `node-deps-preheat`, `workflow-hygiene`, `commitlint`, `docs-drift`, `env-governance`, `env-var-audit`, `required-gate`.
+- Preserved non-PR self-hosted execution for heavy workloads by leaving execution-intensive jobs on `e2-core`.
+- Evidence code paths: `.github/workflows/ci.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
+
 ## Self-Hosted Runner Split Update (2026-02-28)
 
 - Applied trust-boundary runner split for Linux GitHub Actions jobs:
