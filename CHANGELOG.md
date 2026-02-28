@@ -11,6 +11,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Hardened CI/release secret-scanning reliability on shared self-hosted runners by replacing `gitleaks-action` with runner-local binary install + explicit `gitleaks git` execution, removing `/tmp` cache collisions across parallel jobs.
+- Added self-healing fallback for pre-commit cache corruption in CI/release gates: if `InvalidManifestError` is detected, the workflow now cleans pre-commit cache and retries once before failing.
 - Hardened CI cache key strategy across workflows by adding architecture + Node major dimension to dependency/browser caches:
   - `node_modules` cache keys now use `${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}`.
   - Playwright browser cache keys now use `${{ runner.os }}-${{ runner.arch }}-ms-playwright-${{ hashFiles('package-lock.json') }}`.

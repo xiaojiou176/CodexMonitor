@@ -225,7 +225,21 @@ jobs:
       - name: Run pre-commit hooks (server gate)
         env:
           CRITICAL_LOG_GUARD_MODE: fail
-        run: pre-commit run --all-files --show-diff-on-failure
+        run: |
+          set -euo pipefail
+          if pre-commit run --all-files --show-diff-on-failure; then
+            exit 0
+          fi
+
+          PRECOMMIT_LOG="${HOME}/.cache/pre-commit/pre-commit.log"
+          if [ -f "${PRECOMMIT_LOG}" ] && grep -q "InvalidManifestError" "${PRECOMMIT_LOG}"; then
+            echo "Detected corrupted pre-commit cache. Cleaning cache and retrying once."
+            pre-commit clean || true
+            rm -rf "${HOME}/.cache/pre-commit"
+            pre-commit run --all-files --show-diff-on-failure
+          else
+            exit 1
+          fi
 
   lint-frontend:
     runs-on: ubuntu-latest
@@ -992,10 +1006,20 @@ jobs:
       - name: Cargo audit
         run: cargo audit
         working-directory: src-tauri
+      - name: Install gitleaks (runner-local)
+        run: |
+          set -euo pipefail
+          VERSION="8.24.3"
+          BIN_DIR="${RUNNER_TEMP}/gitleaks-${VERSION}"
+          mkdir -p "${BIN_DIR}"
+          curl -sSL \
+            -o "${BIN_DIR}/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"
+          tar -xzf "${BIN_DIR}/gitleaks.tar.gz" -C "${BIN_DIR}"
+          chmod +x "${BIN_DIR}/gitleaks"
+          echo "${BIN_DIR}" >> "${GITHUB_PATH}"
       - name: Secret scan (gitleaks)
-        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gitleaks git --redact --verbose --exit-code 1 --config .gitleaks.toml
 
   visual-regression:
     runs-on: e2-core
