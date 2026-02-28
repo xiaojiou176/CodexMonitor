@@ -4,6 +4,18 @@ Date: 2026-02-26
 
 ## Queue Pressure Reduction + Dual Runner Update (2026-02-28)
 
+- Added CI Linux runner quota fallback routing in `.github/workflows/ci.yml`:
+  - Introduced `runner-router` (self-hosted `e2-core`) to decide Linux governance runner target.
+  - Governance jobs now consume `needs.runner-router.outputs.linux_runner` and automatically flip from `ubuntu-latest` to `e2-core` when configured billing threshold is reached.
+  - Added controls:
+    - Credential variable: `GH_BILLING_TOKEN` (optional; used to read org Actions billing usage).
+    - Repo vars: `CI_BILLING_FALLBACK_PCT` (default `98`), `CI_FORCE_E2_CORE`, `CI_FORCE_GH_HOSTED`.
+  - Kept strict gates unchanged (`required-gate` still enforces the same job outcomes).
+  - Added self-hosted performance hardening:
+    - Linux dependency installs in `lint-backend`, `test-tauri` (Linux), and `build-tauri` (Linux) now run only when packages are missing.
+    - E2E Playwright install on self-hosted uses lock-protected one-time dependency prep (`/tmp/codexmonitor-playwright-deps-v1`) and then installs browser binaries only.
+    - GitHub-hosted E2E keeps `--with-deps` behavior unchanged.
+
 - Mainline CI failure follow-up:
   - Added `clang` and `libclang-dev` to `lint-backend` Linux dependency install so `whisper-rs-sys` bindgen no longer fails on missing `libclang` during clippy.
   - Added per-suite/browser `PLAYWRIGHT_WEB_PORT` routing in `.github/workflows/ci.yml` (`17473-17482`) to remove cross-job localhost port contention on shared `e2-core` runners.

@@ -11,6 +11,16 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Added CI Linux runner auto-routing with hosted-quota fallback in `.github/workflows/ci.yml`:
+  - New `runner-router` job (runs on `e2-core`) decides Linux runner target for lightweight governance jobs.
+  - Default route remains `ubuntu-latest`; when billing threshold is reached, route flips to `e2-core`.
+  - Added manual overrides via repo variables: `CI_FORCE_E2_CORE`, `CI_FORCE_GH_HOSTED`.
+  - Added configurable threshold variable: `CI_BILLING_FALLBACK_PCT` (default `98`).
+  - Added optional org billing token credential: `GH_BILLING_TOKEN` for quota-aware routing.
+- Reduced self-hosted CI cold-start overhead without lowering gates:
+  - Linux apt dependencies in `lint-backend`, `test-tauri` (Linux), and `build-tauri` (Linux) are now installed only when missing.
+  - E2E Playwright setup on self-hosted runners now uses lock-protected one-time `install-deps` marker (`/tmp/codexmonitor-playwright-deps-v1`) and avoids repeated per-job apt dependency installs.
+  - GitHub-hosted behavior remains unchanged (`playwright install --with-deps`) for portability.
 - Fixed CI reliability regressions after self-hosted heavy-routing by:
   - installing `clang` + `libclang-dev` in `lint-backend` Linux dependencies so `whisper-rs-sys` bindgen can resolve `libclang` during clippy builds.
   - assigning distinct `PLAYWRIGHT_WEB_PORT` ranges per E2E suite/browser matrix to prevent cross-job localhost port collisions on shared `e2-core` hosts.
