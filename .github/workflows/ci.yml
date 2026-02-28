@@ -185,7 +185,7 @@ jobs:
         run: printf '%s\n' "$HEAD_COMMIT_MESSAGE" | npm run commitlint
 
   pre-commit:
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
+    runs-on: ubuntu-latest
     needs: [changes]
     timeout-minutes: 40
     steps:
