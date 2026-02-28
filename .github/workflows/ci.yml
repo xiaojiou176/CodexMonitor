@@ -336,17 +336,28 @@ jobs:
           components: clippy
       - name: Install Linux dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            clang \
-            libclang-dev \
-            cmake \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libasound2-dev \
+          set -euo pipefail
+          required_pkgs=(
+            clang
+            libclang-dev
+            cmake
+            libwebkit2gtk-4.1-dev
+            libgtk-3-dev
+            libayatana-appindicator3-dev
+            librsvg2-dev
+            libasound2-dev
             pkg-config
+          )
+          missing_pkgs=()
+          for pkg in "${required_pkgs[@]}"; do
+            dpkg -s "${pkg}" >/dev/null 2>&1 || missing_pkgs+=("${pkg}")
+          done
+          if [ "${#missing_pkgs[@]}" -eq 0 ]; then
+            echo "Linux dependencies already installed. Skipping apt install."
+            exit 0
+          fi
+          sudo apt-get update
+          sudo apt-get install -y "${missing_pkgs[@]}"
       - name: Prepare frontend dist placeholder
         run: mkdir -p dist
       - name: Cargo lint (clippy)
@@ -670,7 +681,22 @@ jobs:
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npx playwright install --with-deps "${{ matrix.browser }}"
+          if [ "${RUNNER_ENVIRONMENT:-}" = "self-hosted" ]; then
+            LOCK_FILE="/tmp/codexmonitor-playwright-deps.lock"
+            MARKER_FILE="/tmp/codexmonitor-playwright-deps-v1"
+            exec 9>"${LOCK_FILE}"
+            flock 9
+            if [ ! -f "${MARKER_FILE}" ]; then
+              npx playwright install-deps "${{ matrix.browser }}"
+              touch "${MARKER_FILE}"
+            else
+              echo "Playwright system deps already prepared on self-hosted runner."
+            fi
+            flock -u 9
+            npx playwright install "${{ matrix.browser }}"
+          else
+            npx playwright install --with-deps "${{ matrix.browser }}"
+          fi
       - name: E2E smoke (${{ matrix.browser }})
         run: |
           set -euo pipefail
@@ -744,7 +770,22 @@ jobs:
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npx playwright install --with-deps "${{ matrix.browser }}"
+          if [ "${RUNNER_ENVIRONMENT:-}" = "self-hosted" ]; then
+            LOCK_FILE="/tmp/codexmonitor-playwright-deps.lock"
+            MARKER_FILE="/tmp/codexmonitor-playwright-deps-v1"
+            exec 9>"${LOCK_FILE}"
+            flock 9
+            if [ ! -f "${MARKER_FILE}" ]; then
+              npx playwright install-deps "${{ matrix.browser }}"
+              touch "${MARKER_FILE}"
+            else
+              echo "Playwright system deps already prepared on self-hosted runner."
+            fi
+            flock -u 9
+            npx playwright install "${{ matrix.browser }}"
+          else
+            npx playwright install --with-deps "${{ matrix.browser }}"
+          fi
       - name: E2E a11y sweep (${{ matrix.browser }})
         run: |
           set -euo pipefail
@@ -818,7 +859,22 @@ jobs:
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npx playwright install --with-deps "${{ matrix.browser }}"
+          if [ "${RUNNER_ENVIRONMENT:-}" = "self-hosted" ]; then
+            LOCK_FILE="/tmp/codexmonitor-playwright-deps.lock"
+            MARKER_FILE="/tmp/codexmonitor-playwright-deps-v1"
+            exec 9>"${LOCK_FILE}"
+            flock 9
+            if [ ! -f "${MARKER_FILE}" ]; then
+              npx playwright install-deps "${{ matrix.browser }}"
+              touch "${MARKER_FILE}"
+            else
+              echo "Playwright system deps already prepared on self-hosted runner."
+            fi
+            flock -u 9
+            npx playwright install "${{ matrix.browser }}"
+          else
+            npx playwright install --with-deps "${{ matrix.browser }}"
+          fi
       - name: E2E interaction sweep (${{ matrix.browser }})
         run: |
           set -euo pipefail
@@ -892,7 +948,22 @@ jobs:
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npx playwright install --with-deps "${{ matrix.browser }}"
+          if [ "${RUNNER_ENVIRONMENT:-}" = "self-hosted" ]; then
+            LOCK_FILE="/tmp/codexmonitor-playwright-deps.lock"
+            MARKER_FILE="/tmp/codexmonitor-playwright-deps-v1"
+            exec 9>"${LOCK_FILE}"
+            flock 9
+            if [ ! -f "${MARKER_FILE}" ]; then
+              npx playwright install-deps "${{ matrix.browser }}"
+              touch "${MARKER_FILE}"
+            else
+              echo "Playwright system deps already prepared on self-hosted runner."
+            fi
+            flock -u 9
+            npx playwright install "${{ matrix.browser }}"
+          else
+            npx playwright install --with-deps "${{ matrix.browser }}"
+          fi
       - name: E2E key journeys (${{ matrix.browser }})
         run: |
           set -euo pipefail
@@ -981,7 +1052,22 @@ jobs:
           done &
           HEARTBEAT_PID=$!
           trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
-          npx playwright install --with-deps "${{ matrix.browser }}"
+          if [ "${RUNNER_ENVIRONMENT:-}" = "self-hosted" ]; then
+            LOCK_FILE="/tmp/codexmonitor-playwright-deps.lock"
+            MARKER_FILE="/tmp/codexmonitor-playwright-deps-v1"
+            exec 9>"${LOCK_FILE}"
+            flock 9
+            if [ ! -f "${MARKER_FILE}" ]; then
+              npx playwright install-deps "${{ matrix.browser }}"
+              touch "${MARKER_FILE}"
+            else
+              echo "Playwright system deps already prepared on self-hosted runner."
+            fi
+            flock -u 9
+            npx playwright install "${{ matrix.browser }}"
+          else
+            npx playwright install --with-deps "${{ matrix.browser }}"
+          fi
       - name: E2E functional regression suite (${{ matrix.browser }})
         run: |
           set -euo pipefail
@@ -1177,15 +1263,26 @@ jobs:
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            cmake \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libasound2-dev \
+          set -euo pipefail
+          required_pkgs=(
+            cmake
+            libwebkit2gtk-4.1-dev
+            libgtk-3-dev
+            libayatana-appindicator3-dev
+            librsvg2-dev
+            libasound2-dev
             pkg-config
+          )
+          missing_pkgs=()
+          for pkg in "${required_pkgs[@]}"; do
+            dpkg -s "${pkg}" >/dev/null 2>&1 || missing_pkgs+=("${pkg}")
+          done
+          if [ "${#missing_pkgs[@]}" -eq 0 ]; then
+            echo "Linux dependencies already installed. Skipping apt install."
+            exit 0
+          fi
+          sudo apt-get update
+          sudo apt-get install -y "${missing_pkgs[@]}"
       - name: Install cargo-nextest (Linux, cache-aware)
         if: runner.os == 'Linux'
         run: |
@@ -1330,15 +1427,26 @@ jobs:
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            cmake \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libasound2-dev \
+          set -euo pipefail
+          required_pkgs=(
+            cmake
+            libwebkit2gtk-4.1-dev
+            libgtk-3-dev
+            libayatana-appindicator3-dev
+            librsvg2-dev
+            libasound2-dev
             pkg-config
+          )
+          missing_pkgs=()
+          for pkg in "${required_pkgs[@]}"; do
+            dpkg -s "${pkg}" >/dev/null 2>&1 || missing_pkgs+=("${pkg}")
+          done
+          if [ "${#missing_pkgs[@]}" -eq 0 ]; then
+            echo "Linux dependencies already installed. Skipping apt install."
+            exit 0
+          fi
+          sudo apt-get update
+          sudo apt-get install -y "${missing_pkgs[@]}"
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         run: choco install cmake llvm -y --no-progress
