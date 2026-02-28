@@ -13,6 +13,9 @@ Date: 2026-02-26
   - Kept strict gates unchanged (`required-gate` still enforces the same job outcomes).
   - Hardened fallback: when billing API is unavailable, Linux governance route now falls back to `e2-core` (`billing-api-unavailable-fallback-e2-core`) instead of staying on hosted.
   - Added strict `live-env-gate` to enforce real environment prerequisites in CI (`REAL_EXTERNAL_URL`, `REAL_LLM_BASE_URL`, `GEMINI_API_KEY`) and wired it into `required-gate`.
+  - Removed optional secret/env bypass in integration/visual pipelines:
+    - `real-integration.yml` no longer emits skip notices for missing external/LLM prerequisites; missing prerequisites now block the workflow.
+    - `ci.yml` now fails visual gate when `CHROMATIC_PROJECT_TOKEN` is absent.
   - Added self-hosted performance hardening:
     - Linux dependency installs in `lint-backend`, `test-tauri` (Linux), and `build-tauri` (Linux) now run only when packages are missing.
     - E2E Playwright install on self-hosted uses lock-protected one-time dependency prep (`/tmp/codexmonitor-playwright-deps-v1`) and then installs browser binaries only.
