@@ -163,7 +163,8 @@ jobs:
                 reason="billing-ok-${used}/${included}"
               fi
             else
-              reason="billing-api-unavailable"
+              linux_runner="e2-core"
+              reason="billing-api-unavailable-fallback-e2-core"
             fi
           else
             reason="no-billing-token"
@@ -172,6 +173,27 @@ jobs:
           echo "linux_runner=${linux_runner}" >> "${GITHUB_OUTPUT}"
           echo "routing_reason=${reason}" >> "${GITHUB_OUTPUT}"
           echo "Selected runner: ${linux_runner} (${reason})"
+
+  live-env-gate:
+    runs-on: e2-core
+    needs: [changes]
+    env:
+      REAL_EXTERNAL_URL: ${{ secrets.REAL_EXTERNAL_URL }}
+      REAL_LLM_BASE_URL: ${{ secrets.REAL_LLM_BASE_URL }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: Enforce real integration environment readiness
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${REAL_EXTERNAL_URL:-}" ] || missing+=("REAL_EXTERNAL_URL")
+          [ -n "${REAL_LLM_BASE_URL:-}" ] || missing+=("REAL_LLM_BASE_URL")
+          [ -n "${GEMINI_API_KEY:-}" ] || missing+=("GEMINI_API_KEY")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Missing required CI live env: %s\n' "$(IFS=, ; echo "${missing[*]}")"
+            exit 1
+          fi
+          echo "Live integration env gate passed."
 
   node-deps-preheat:
     runs-on: ${{ needs.runner-router.outputs.linux_runner }}
@@ -200,6 +222,14 @@ jobs:
             echo "node_modules cache miss/incomplete, running npm ci."
             npm ci
           fi
+      - name: Emit cache telemetry
+        if: always()
+        run: |
+          {
+            echo "### Cache telemetry"
+            echo "- job: node-deps-preheat"
+            echo "- node_modules cache-hit: ${{ steps.node_modules_cache.outputs.cache-hit }}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   workflow-hygiene:
     runs-on: ${{ needs.runner-router.outputs.linux_runner }}
@@ -269,6 +299,7 @@ jobs:
             npm ci
           fi
       - name: Cache pre-commit
+        id: precommit_cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/pre-commit
@@ -291,10 +322,19 @@ jobs:
             echo "Detected corrupted pre-commit cache. Cleaning cache and retrying once."
             pre-commit clean || true
             rm -rf "${HOME}/.cache/pre-commit"
-            pre-commit run --all-files --show-diff-on-failure
+              pre-commit run --all-files --show-diff-on-failure
           else
             exit 1
           fi
+      - name: Emit cache telemetry
+        if: always()
+        run: |
+          {
+            echo "### Cache telemetry"
+            echo "- job: pre-commit"
+            echo "- node_modules cache-hit: ${{ steps.node_modules_cache.outputs.cache-hit }}"
+            echo "- pre-commit cache-hit: ${{ steps.precommit_cache.outputs.cache-hit }}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   lint-frontend:
     runs-on: ${{ needs.runner-router.outputs.linux_runner }}
@@ -320,6 +360,14 @@ jobs:
             echo "node_modules cache miss/incomplete, running npm ci."
             npm ci
           fi
+      - name: Emit cache telemetry
+        if: always()
+        run: |
+          {
+            echo "### Cache telemetry"
+            echo "- job: lint-frontend"
+            echo "- node_modules cache-hit: ${{ steps.node_modules_cache.outputs.cache-hit }}"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Lint frontend (strict)
         run: npm run lint:strict
       - name: Test assertion guard
@@ -387,6 +435,14 @@ jobs:
             echo "node_modules cache miss/incomplete, running npm ci."
             npm ci
           fi
+      - name: Emit cache telemetry
+        if: always()
+        run: |
+          {
+            echo "### Cache telemetry"
+            echo "- job: typecheck"
+            echo "- node_modules cache-hit: ${{ steps.node_modules_cache.outputs.cache-hit }}"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Typecheck
         run: npm run typecheck:ci
   docs-drift:
@@ -1468,6 +1524,7 @@ jobs:
     if: always()
     needs:
       - changes
+      - live-env-gate
       - runner-router
       - workflow-hygiene
       - commitlint
@@ -1494,6 +1551,7 @@ jobs:
       RUN_JS_TESTS: ${{ needs.changes.outputs.run_js_tests }}
       RUN_E2E: ${{ needs.changes.outputs.run_e2e }}
       RUN_RUST_TESTS: ${{ needs.changes.outputs.run_rust_tests }}
+      LIVE_ENV_GATE_RESULT: ${{ needs.live-env-gate.result }}
       WORKFLOW_HYGIENE_RESULT: ${{ needs.workflow-hygiene.result }}
       COMMITLINT_RESULT: ${{ needs.commitlint.result }}
       PRE_COMMIT_RESULT: ${{ needs.pre-commit.result }}
@@ -1563,6 +1621,7 @@ jobs:
           # Always-required jobs.
           assert_success_when_expected "workflow-hygiene" true "${WORKFLOW_HYGIENE_RESULT}"
           assert_success_when_expected "commitlint" true "${COMMITLINT_RESULT}"
+          assert_success_when_expected "live-env-gate" true "${LIVE_ENV_GATE_RESULT}"
           assert_success_when_expected "pre-commit" true "${PRE_COMMIT_RESULT}"
           assert_success_when_expected "lint-frontend" true "${LINT_FRONTEND_RESULT}"
           assert_success_when_expected "typecheck" true "${TYPECHECK_RESULT}"

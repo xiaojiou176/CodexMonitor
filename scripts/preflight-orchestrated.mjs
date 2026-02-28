@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const QUICK_ONLY = process.argv.includes("--quick-only");
+const PREFLIGHT_LOCAL_HEAVY = (process.env.PREFLIGHT_LOCAL_HEAVY ?? "false").toLowerCase() === "true";
 const HEARTBEAT_LEVEL = (process.env.PREFLIGHT_HEARTBEAT_LEVEL ?? "normal").toLowerCase();
 
 const HEARTBEAT_CONFIG = {
@@ -205,10 +206,14 @@ async function main() {
     createTaskRunner("lint:strict", ["run", "lint:strict"], { heartbeatMs }),
   ]);
 
-  console.log("[preflight] Phase 2/2: medium-strength jobs in parallel with heartbeat");
-  await runParallelTasks("Parallel medium tasks", [
-    createTaskRunner("check:rust", ["run", "check:rust"], { heartbeatMs }),
-  ]);
+  if (PREFLIGHT_LOCAL_HEAVY) {
+    console.log("[preflight] Phase 2/2: medium-strength jobs in parallel with heartbeat");
+    await runParallelTasks("Parallel medium tasks", [
+      createTaskRunner("check:rust", ["run", "check:rust"], { heartbeatMs }),
+    ]);
+  } else {
+    console.log("[preflight] Phase 2/2: skipping local medium jobs by default (set PREFLIGHT_LOCAL_HEAVY=true to enable).");
+  }
 
   console.log("[preflight] All gates passed.");
 }

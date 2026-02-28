@@ -17,10 +17,19 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   - Added manual overrides via repo variables: `CI_FORCE_E2_CORE`, `CI_FORCE_GH_HOSTED`.
   - Added configurable threshold variable: `CI_BILLING_FALLBACK_PCT` (default `98`).
   - Added optional org billing token credential: `GH_BILLING_TOKEN` for quota-aware routing.
+- Hardened CI fallback behavior for lightweight jobs:
+  - When the GitHub billing API is unavailable, router now falls back to `e2-core` (`billing-api-unavailable-fallback-e2-core`) instead of silently staying on hosted.
+- Added strict live environment gate in CI (`live-env-gate`):
+  - Enforces presence of `REAL_EXTERNAL_URL`, `REAL_LLM_BASE_URL`, and `GEMINI_API_KEY` before protected quality chain execution.
+  - Wired into `required-gate` as an always-required blocking check.
 - Reduced self-hosted CI cold-start overhead without lowering gates:
   - Linux apt dependencies in `lint-backend`, `test-tauri` (Linux), and `build-tauri` (Linux) are now installed only when missing.
   - E2E Playwright setup on self-hosted runners now uses lock-protected one-time `install-deps` marker (`/tmp/codexmonitor-playwright-deps-v1`) and avoids repeated per-job apt dependency installs.
   - GitHub-hosted behavior remains unchanged (`playwright install --with-deps`) for portability.
+- Added cache observability summaries for key jobs (`node-deps-preheat`, `pre-commit`, `lint-frontend`, `typecheck`) by writing cache-hit telemetry to `GITHUB_STEP_SUMMARY`.
+- Rebalanced local pre-push resource usage toward CI-first validation:
+  - `preflight:orchestrated` now skips local medium gates (notably `check:rust`) by default.
+  - Opt-in remains available via `PREFLIGHT_LOCAL_HEAVY=true`.
 - Fixed CI reliability regressions after self-hosted heavy-routing by:
   - installing `clang` + `libclang-dev` in `lint-backend` Linux dependencies so `whisper-rs-sys` bindgen can resolve `libclang` during clippy builds.
   - assigning distinct `PLAYWRIGHT_WEB_PORT` ranges per E2E suite/browser matrix to prevent cross-job localhost port collisions on shared `e2-core` hosts.
