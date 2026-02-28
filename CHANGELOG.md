@@ -22,6 +22,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added strict live environment gate in CI (`live-env-gate`):
   - Enforces presence of `REAL_EXTERNAL_URL`, `REAL_LLM_BASE_URL`, and `GEMINI_API_KEY` before protected quality chain execution.
   - Wired into `required-gate` as an always-required blocking check.
+- Enforced strict "no missing key/env bypass" policy in workflows:
+  - `real-integration.yml` now runs as strict mode for all triggers (push main, workflow_dispatch, schedule), removing optional skip notices for external and LLM chains.
+  - `ci.yml` visual gate now hard-fails when `CHROMATIC_PROJECT_TOKEN` is missing (no notice-only fallback).
 - Reduced self-hosted CI cold-start overhead without lowering gates:
   - Linux apt dependencies in `lint-backend`, `test-tauri` (Linux), and `build-tauri` (Linux) are now installed only when missing.
   - E2E Playwright setup on self-hosted runners now uses lock-protected one-time `install-deps` marker (`/tmp/codexmonitor-playwright-deps-v1`) and avoids repeated per-job apt dependency installs.

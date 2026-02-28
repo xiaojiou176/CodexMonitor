@@ -1267,9 +1267,11 @@ jobs:
       - name: Run Chromatic (cloud visual diff)
         if: env.CHROMATIC_PROJECT_TOKEN != ''
         run: npm run chromatic
-      - name: Chromatic unavailable notice
+      - name: Chromatic token required
         if: env.CHROMATIC_PROJECT_TOKEN == ''
-        run: echo "::notice::CHROMATIC_PROJECT_TOKEN missing; local Storybook build gate enforced."
+        run: |
+          echo "::error::CHROMATIC_PROJECT_TOKEN missing; strict visual gate requires cloud diff."
+          exit 1
 
   test-tauri:
     name: Rust tests (${{ matrix.platform.name }})

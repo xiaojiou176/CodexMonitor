@@ -56,11 +56,7 @@ jobs:
         run: npm run test:live:preflight
 
       - name: Strict gate on required live triggers (no silent skip)
-        if: >-
-          always() &&
-          github.ref == 'refs/heads/main' &&
-          steps.preflight.outputs.run_external == 'true' &&
-          steps.preflight.outputs.run_llm == 'true'
+        if: always()
         env:
           PREFLIGHT_RUN_EXTERNAL: ${{ steps.preflight.outputs.run_external }}
           PREFLIGHT_RUN_LLM: ${{ steps.preflight.outputs.run_llm }}
@@ -151,31 +147,6 @@ jobs:
             process.exit(1);
           }
           NODE
-      - name: Strict gate unavailable notice (main)
-        if: >-
-          github.ref == 'refs/heads/main' &&
-          (steps.preflight.outputs.run_external != 'true' || steps.preflight.outputs.run_llm != 'true')
-        run: |
-          echo "::warning::Real Integrations strict main gate not enforceable: live secrets/chains unavailable."
-          {
-            echo "## Real Integrations (Main)"
-            echo ""
-            echo "- Status: advisory (strict gate unavailable)"
-            echo "- Reason: run_external=${{ steps.preflight.outputs.run_external }}, run_llm=${{ steps.preflight.outputs.run_llm }}"
-            echo "- Action: configure REAL_EXTERNAL_URL + REAL_LLM_BASE_URL + GEMINI_API_KEY to enforce strict dual-chain blocking."
-          } >> "$GITHUB_STEP_SUMMARY"
-      - name: Skip notice (optional workflow)
-        if: steps.preflight.outputs.run_any != 'true' && github.ref != 'refs/heads/main'
-        run: |
-          echo "::notice::${{ steps.preflight.outputs.reason }}"
-          {
-            echo "## Real Integrations"
-            echo ""
-            echo "Status: skipped (optional)"
-            echo ""
-            echo "Reason: ${{ steps.preflight.outputs.reason }}"
-          } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Upload live preflight report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -191,21 +162,13 @@ jobs:
     env:
       REAL_EXTERNAL_URL: ${{ secrets.REAL_EXTERNAL_URL }}
     steps:
-      - name: External E2E skip notice
-        if: needs.preflight.outputs.run_external != 'true'
-        run: |
-          echo "::notice::REAL_EXTERNAL_URL missing, external E2E not executed."
-
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        if: needs.preflight.outputs.run_external == 'true'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        if: needs.preflight.outputs.run_external == 'true'
         with:
           node-version: "20"
           cache: "npm"
       - name: Restore node_modules cache
         id: node_modules_cache
-        if: needs.preflight.outputs.run_external == 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
@@ -213,7 +176,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-
       - name: Install dependencies
-        if: needs.preflight.outputs.run_external == 'true' && steps.node_modules_cache.outputs.cache-hit != 'true'
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           while true; do
@@ -225,7 +188,6 @@ jobs:
           npm ci
 
       - name: Cache Playwright browsers
-        if: needs.preflight.outputs.run_external == 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ms-playwright
@@ -234,7 +196,6 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-ms-playwright-
 
       - name: Install Playwright browser
-        if: needs.preflight.outputs.run_external == 'true'
         run: |
           set -euo pipefail
           while true; do
@@ -246,7 +207,6 @@ jobs:
           npm run test:e2e:install
 
       - name: Run external E2E
-        if: needs.preflight.outputs.run_external == 'true'
         run: |
           set -euo pipefail
           while true; do
@@ -265,21 +225,13 @@ jobs:
       REAL_LLM_BASE_URL: ${{ secrets.REAL_LLM_BASE_URL }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
-      - name: Real LLM skip notice
-        if: needs.preflight.outputs.run_llm != 'true'
-        run: |
-          echo "::notice::REAL_LLM_BASE_URL/GEMINI_API_KEY missing, LLM smoke not executed."
-
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        if: needs.preflight.outputs.run_llm == 'true'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        if: needs.preflight.outputs.run_llm == 'true'
         with:
           node-version: "20"
           cache: "npm"
       - name: Restore node_modules cache
         id: node_modules_cache
-        if: needs.preflight.outputs.run_llm == 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules
@@ -287,7 +239,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-
       - name: Install dependencies
-        if: needs.preflight.outputs.run_llm == 'true' && steps.node_modules_cache.outputs.cache-hit != 'true'
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           while true; do
@@ -299,7 +251,6 @@ jobs:
           npm ci
 
       - name: Run real LLM smoke
-        if: needs.preflight.outputs.run_llm == 'true'
         run: |
           set -euo pipefail
           while true; do
@@ -311,7 +262,7 @@ jobs:
           npm run test:real:llm
 
       - name: Upload real LLM report
-        if: needs.preflight.outputs.run_llm == 'true'
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: real-llm-report
@@ -320,11 +271,7 @@ jobs:
 
   required-main-dual-gate:
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
-    if: >-
-      always() &&
-      github.ref == 'refs/heads/main' &&
-      needs.preflight.outputs.run_external == 'true' &&
-      needs.preflight.outputs.run_llm == 'true'
+    if: always()
     needs:
       - preflight
       - external-e2e
