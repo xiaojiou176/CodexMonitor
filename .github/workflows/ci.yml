@@ -627,6 +627,7 @@ jobs:
       - typecheck
     if: needs.changes.outputs.run_js_tests == 'true'
     env:
+      MUTATION_MIN_SCORE: ${{ github.ref == 'refs/heads/main' && '90' || '85' }}
       MUTATION_BASE_SHA: ${{ needs.changes.outputs.mutation_base_sha }}
       MUTATION_HEAD_SHA: ${{ needs.changes.outputs.mutation_head_sha }}
       MUTATION_MUTATE: ${{ needs.changes.outputs.mutation_targets }}
@@ -655,7 +656,15 @@ jobs:
             npm ci
           fi
       - name: Mutation gate (critical modules)
-        run: npm run test:mutation:gate
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][mutation-js] $(date -u +'%Y-%m-%dT%H:%M:%SZ') mutation gate running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          npm run test:mutation:gate
       - name: Enforce mutation execution on PR/main
         if: >-
           always() &&

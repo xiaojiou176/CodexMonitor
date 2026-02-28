@@ -2,6 +2,14 @@
 
 Date: 2026-02-26
 
+## Mutation Governance Update (2026-02-28)
+
+- Updated `.github/workflows/ci.yml` mutation threshold policy to layered gating:
+  - `pull_request`: mutation score threshold `85`.
+  - `main`: mutation score threshold `90`.
+- Added mutation heartbeat logging in CI mutation execution to emit periodic progress output during long-running mutation jobs.
+- Added release mutation gate blocking in `.github/workflows/release.yml` so release workflow is blocked when mutation gate requirements are not satisfied.
+
 ## Queue Pressure Reduction + Dual Runner Update (2026-02-28)
 
 - Added CI Linux runner quota fallback routing in `.github/workflows/ci.yml`:

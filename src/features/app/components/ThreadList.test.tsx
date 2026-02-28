@@ -100,7 +100,7 @@ describe("ThreadList", () => {
     const row = screen.getByText("Alpha").closest(".thread-row");
     const trigger = screen.getByRole("button", { name: "更多操作" });
     expect(trigger.getAttribute("tabindex")).not.toBe("-1");
-    expect(row?.getAttribute("role")).toBe("button");
+    expect(row?.getAttribute("aria-label")).toBe("选择对话 Alpha");
     expect(row?.getAttribute("tabindex")).toBe("0");
 
     if (!row) {

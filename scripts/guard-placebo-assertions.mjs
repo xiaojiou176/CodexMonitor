@@ -14,9 +14,29 @@ const globArgs = [
   "-g",
   "src/**/*.test.tsx",
   "-g",
+  "src/**/*.spec.ts",
+  "-g",
+  "src/**/*.spec.tsx",
+  "-g",
+  "src/**/*.test.js",
+  "-g",
+  "src/**/*.test.jsx",
+  "-g",
+  "src/**/*.spec.js",
+  "-g",
+  "src/**/*.spec.jsx",
+  "-g",
   "e2e/**/*.spec.ts",
   "-g",
   "e2e/**/*.test.ts",
+  "-g",
+  "e2e/**/*.spec.tsx",
+  "-g",
+  "e2e/**/*.test.tsx",
+  "-g",
+  "e2e/**/*.spec.js",
+  "-g",
+  "e2e/**/*.test.js",
 ];
 
 function listTestFiles() {
@@ -36,8 +56,18 @@ function listTestFiles() {
     "--",
     ":(glob)src/**/*.test.ts",
     ":(glob)src/**/*.test.tsx",
+    ":(glob)src/**/*.spec.ts",
+    ":(glob)src/**/*.spec.tsx",
+    ":(glob)src/**/*.test.js",
+    ":(glob)src/**/*.test.jsx",
+    ":(glob)src/**/*.spec.js",
+    ":(glob)src/**/*.spec.jsx",
     ":(glob)e2e/**/*.spec.ts",
     ":(glob)e2e/**/*.test.ts",
+    ":(glob)e2e/**/*.spec.tsx",
+    ":(glob)e2e/**/*.test.tsx",
+    ":(glob)e2e/**/*.spec.js",
+    ":(glob)e2e/**/*.test.js",
   ];
   const gitResult = spawnSync("git", gitLsFilesArgs, {
     cwd: rootDir,
@@ -64,9 +94,25 @@ const sameLiteralAssertionPattern = new RegExp(
   `expect\\s*\\(\\s*(?<literal>${simpleLiteralPattern.source})\\s*\\)\\s*\\.\\s*(?:toBe|toEqual|toStrictEqual)\\s*\\(\\s*\\k<literal>\\s*\\)`,
   "gms",
 );
+const simpleExpressionPattern =
+  /[A-Za-z_$][\w$]*(?:\s*(?:\.[A-Za-z_$][\w$]*|\[\s*(?:\d+|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')\s*\]))*/;
+const sameExpressionAssertionPattern = new RegExp(
+  `expect\\s*\\(\\s*(?<expr>${simpleExpressionPattern.source})\\s*\\)\\s*\\.\\s*(?:toBe|toEqual|toStrictEqual)\\s*\\(\\s*\\k<expr>\\s*\\)`,
+  "gms",
+);
 const toBeDefinedPattern = /\bexpect\s*\([^\n)]*\)\s*\.\s*toBeDefined\s*\(\s*\)/gm;
-const truthyLiteralPattern = /\bexpect\s*\(\s*true\s*\)\s*\.\s*toBeTruthy\s*\(\s*\)/gm;
-const falsyLiteralPattern = /\bexpect\s*\(\s*false\s*\)\s*\.\s*toBeFalsy\s*\(\s*\)/gm;
+const truthyLiteralAssertionPatterns = [
+  /\bexpect\s*\(\s*true\s*\)\s*\.\s*toBeTruthy\s*\(\s*\)/gm,
+  /\bexpect\s*\(\s*(?:[1-9]\d*|0*\.\d*[1-9]\d*)\s*\)\s*\.\s*toBeTruthy\s*\(\s*\)/gm,
+  /\bexpect\s*\(\s*(?:"(?:\\.|[^"\\])+"|'(?:\\.|[^'\\])+'|`(?:\\.|[^`\\])+`)\s*\)\s*\.\s*toBeTruthy\s*\(\s*\)/gm,
+  /\bexpect\s*\(\s*(?:\[\s*\]|\{\s*\})\s*\)\s*\.\s*toBeTruthy\s*\(\s*\)/gm,
+];
+const falsyLiteralAssertionPatterns = [
+  /\bexpect\s*\(\s*false\s*\)\s*\.\s*toBeFalsy\s*\(\s*\)/gm,
+  /\bexpect\s*\(\s*(?:0+(?:\.0+)?)\s*\)\s*\.\s*toBeFalsy\s*\(\s*\)/gm,
+  /\bexpect\s*\(\s*(?:""|''|``)\s*\)\s*\.\s*toBeFalsy\s*\(\s*\)/gm,
+  /\bexpect\s*\(\s*(?:null|undefined)\s*\)\s*\.\s*toBeFalsy\s*\(\s*\)/gm,
+];
 const toBeDefinedAllowToken = "codex-allow-toBeDefined";
 
 const findings = [];
@@ -83,9 +129,8 @@ for (const relativePath of files) {
   const absolutePath = path.join(rootDir, relativePath);
   const content = readFileSync(absolutePath, "utf8");
   let sameLiteralMatch;
+  let sameExpressionMatch;
   let toBeDefinedMatch;
-  let truthyLiteralMatch;
-  let falsyLiteralMatch;
 
   while ((sameLiteralMatch = sameLiteralAssertionPattern.exec(content)) !== null) {
     const { line, col } = toLoc(content, sameLiteralMatch.index);
@@ -101,31 +146,50 @@ for (const relativePath of files) {
     });
   }
 
-  const lines = content.split("\n");
-  while ((truthyLiteralMatch = truthyLiteralPattern.exec(content)) !== null) {
-    const { line, col } = toLoc(content, truthyLiteralMatch.index);
+  while ((sameExpressionMatch = sameExpressionAssertionPattern.exec(content)) !== null) {
+    const { line, col } = toLoc(content, sameExpressionMatch.index);
     findings.push({
       relativePath,
       line,
       col,
-      code: "TRUTHY_LITERAL_ASSERTION",
+      code: "SAME_EXPRESSION_ASSERTION",
       message:
-        "Literal `expect(true).toBeTruthy()` is a placebo assertion. Assert business behavior instead.",
-      snippet: truthyLiteralMatch[0].replace(/\s+/g, " "),
+        "Do not assert an expression against itself; compare against an independent expected value.",
+      snippet: sameExpressionMatch[0].replace(/\s+/g, " "),
     });
   }
 
-  while ((falsyLiteralMatch = falsyLiteralPattern.exec(content)) !== null) {
-    const { line, col } = toLoc(content, falsyLiteralMatch.index);
-    findings.push({
-      relativePath,
-      line,
-      col,
-      code: "FALSY_LITERAL_ASSERTION",
-      message:
-        "Literal `expect(false).toBeFalsy()` is a placebo assertion. Assert business behavior instead.",
-      snippet: falsyLiteralMatch[0].replace(/\s+/g, " "),
-    });
+  const lines = content.split("\n");
+  for (const truthyLiteralPattern of truthyLiteralAssertionPatterns) {
+    let truthyLiteralMatch;
+    while ((truthyLiteralMatch = truthyLiteralPattern.exec(content)) !== null) {
+      const { line, col } = toLoc(content, truthyLiteralMatch.index);
+      findings.push({
+        relativePath,
+        line,
+        col,
+        code: "TRUTHY_LITERAL_ASSERTION",
+        message:
+          "Deterministic literal `toBeTruthy()` assertion is a placebo. Assert concrete behavior instead.",
+        snippet: truthyLiteralMatch[0].replace(/\s+/g, " "),
+      });
+    }
+  }
+
+  for (const falsyLiteralPattern of falsyLiteralAssertionPatterns) {
+    let falsyLiteralMatch;
+    while ((falsyLiteralMatch = falsyLiteralPattern.exec(content)) !== null) {
+      const { line, col } = toLoc(content, falsyLiteralMatch.index);
+      findings.push({
+        relativePath,
+        line,
+        col,
+        code: "FALSY_LITERAL_ASSERTION",
+        message:
+          "Deterministic literal `toBeFalsy()` assertion is a placebo. Assert concrete behavior instead.",
+        snippet: falsyLiteralMatch[0].replace(/\s+/g, " "),
+      });
+    }
   }
 
   while ((toBeDefinedMatch = toBeDefinedPattern.exec(content)) !== null) {

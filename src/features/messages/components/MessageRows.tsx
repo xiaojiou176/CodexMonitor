@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import Check from "lucide-react/dist/esm/icons/check";
@@ -132,6 +132,7 @@ const ImageLightbox = memo(function ImageLightbox({
   onNavigate?: (index: number) => void;
 }) {
   const activeImage = images[activeIndex];
+  const dialogLabelId = useId();
   const [activeImageDimensions, setActiveImageDimensions] = useState<{
     width: number;
     height: number;
@@ -198,12 +199,16 @@ const ImageLightbox = memo(function ImageLightbox({
       className="message-image-lightbox"
       role="dialog"
       aria-modal="true"
+      aria-labelledby={dialogLabelId}
       onClick={onClose}
     >
       <div
         className="message-image-lightbox-content"
         onClick={(event) => event.stopPropagation()}
       >
+        <h2 id={dialogLabelId} className="sr-only">
+          {`图片预览 ${activeIndex + 1}/${images.length}`}
+        </h2>
         <button
           type="button"
           className="message-image-lightbox-close"

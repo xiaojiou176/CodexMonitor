@@ -197,7 +197,6 @@ function ThreadRowItemComponent({
         isDropTargetAfter ? " thread-row-drop-target-after" : ""
       }`}
       style={indentStyle}
-      role="button"
       tabIndex={0}
       aria-label={`选择对话 ${threadName}`}
       onClick={handleRowClick}
