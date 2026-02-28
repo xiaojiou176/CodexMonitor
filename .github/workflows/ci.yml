@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     outputs:
       rust_tauri_changed: ${{ steps.detect.outputs.rust_tauri_changed }}
       mutation_targets: ${{ steps.detect.outputs.mutation_targets }}
@@ -118,9 +118,64 @@ jobs:
             echo "run_rust_tests=$run_rust_tests"
           } >> "$GITHUB_OUTPUT"
 
-  node-deps-preheat:
-    runs-on: ubuntu-latest
+  runner-router:
+    runs-on: e2-core
     needs: [changes]
+    outputs:
+      linux_runner: ${{ steps.route.outputs.linux_runner }}
+      routing_reason: ${{ steps.route.outputs.routing_reason }}
+    steps:
+      - name: Decide Linux runner (hosted vs self-hosted fallback)
+        id: route
+        env:
+          GH_BILLING_TOKEN: ${{ secrets.GH_BILLING_TOKEN }}
+          CI_FORCE_E2_CORE: ${{ vars.CI_FORCE_E2_CORE }}
+          CI_FORCE_GH_HOSTED: ${{ vars.CI_FORCE_GH_HOSTED }}
+          CI_BILLING_FALLBACK_PCT: ${{ vars.CI_BILLING_FALLBACK_PCT }}
+        run: |
+          set -euo pipefail
+          linux_runner="ubuntu-latest"
+          reason="default-hosted"
+
+          if [ "${CI_FORCE_E2_CORE:-}" = "true" ]; then
+            linux_runner="e2-core"
+            reason="force-e2-core"
+          elif [ "${CI_FORCE_GH_HOSTED:-}" = "true" ]; then
+            linux_runner="ubuntu-latest"
+            reason="force-gh-hosted"
+          elif [ -n "${GH_BILLING_TOKEN:-}" ]; then
+            threshold="${CI_BILLING_FALLBACK_PCT:-98}"
+            api="https://api.github.com/orgs/${GITHUB_REPOSITORY_OWNER}/settings/billing/actions"
+            response="$(curl -fsSL \
+              -H "Authorization: Bearer ${GH_BILLING_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$api" || true)"
+
+            if [ -n "${response}" ]; then
+              included="$(python3 -c 'import json,sys;print(int((json.loads(sys.stdin.read() or "{}")).get("included_minutes") or 0))' <<< "${response}")"
+              used="$(python3 -c 'import json,sys;print(int((json.loads(sys.stdin.read() or "{}")).get("total_minutes_used") or 0))' <<< "${response}")"
+
+              if [ "${included}" -gt 0 ] && [ "${used}" -ge $(( included * threshold / 100 )) ]; then
+                linux_runner="e2-core"
+                reason="billing-threshold-${used}/${included}"
+              else
+                reason="billing-ok-${used}/${included}"
+              fi
+            else
+              reason="billing-api-unavailable"
+            fi
+          else
+            reason="no-billing-token"
+          fi
+
+          echo "linux_runner=${linux_runner}" >> "${GITHUB_OUTPUT}"
+          echo "routing_reason=${reason}" >> "${GITHUB_OUTPUT}"
+          echo "Selected runner: ${linux_runner} (${reason})"
+
+  node-deps-preheat:
+    runs-on: ${{ needs.runner-router.outputs.linux_runner }}
+    needs: [changes, runner-router]
     if: needs.changes.outputs.run_js_tests == 'true' || needs.changes.outputs.run_e2e == 'true'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -147,8 +202,8 @@ jobs:
           fi
 
   workflow-hygiene:
-    runs-on: ubuntu-latest
-    needs: [changes]
+    runs-on: ${{ needs.runner-router.outputs.linux_runner }}
+    needs: [changes, runner-router]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install shellcheck and actionlint
@@ -163,8 +218,8 @@ jobs:
         run: actionlint -color
 
   commitlint:
-    runs-on: ubuntu-latest
-    needs: [changes]
+    runs-on: ${{ needs.runner-router.outputs.linux_runner }}
+    needs: [changes, runner-router]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -242,8 +297,8 @@ jobs:
           fi
 
   lint-frontend:
-    runs-on: ubuntu-latest
-    needs: [changes]
+    runs-on: ${{ needs.runner-router.outputs.linux_runner }}
+    needs: [changes, runner-router]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -298,8 +353,8 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D clippy::dbg_macro -D clippy::todo
         working-directory: src-tauri
   typecheck:
-    runs-on: ubuntu-latest
-    needs: [changes]
+    runs-on: ${{ needs.runner-router.outputs.linux_runner }}
+    needs: [changes, runner-router]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -324,8 +379,8 @@ jobs:
       - name: Typecheck
         run: npm run typecheck:ci
   docs-drift:
-    runs-on: ubuntu-latest
-    needs: [changes]
+    runs-on: ${{ needs.runner-router.outputs.linux_runner }}
+    needs: [changes, runner-router]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -354,8 +409,8 @@ jobs:
       - name: Check app-server docs sync
         run: npm run docs:check:app-server-events
   env-governance:
-    runs-on: ubuntu-latest
-    needs: [changes]
+    runs-on: ${{ needs.runner-router.outputs.linux_runner }}
+    needs: [changes, runner-router]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -384,8 +439,8 @@ jobs:
       - name: Env doctor
         run: npm run env:doctor:dev
   env-var-audit:
-    runs-on: ubuntu-latest
-    needs: [changes]
+    runs-on: ${{ needs.runner-router.outputs.linux_runner }}
+    needs: [changes, runner-router]
     env:
       PROCESS_ENV_REF_MAX: "70"
       OS_GETENV_REF_MAX: "5"
@@ -1301,10 +1356,11 @@ jobs:
         run: ${{ matrix.platform.build_command }}
 
   required-gate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ needs.runner-router.outputs.linux_runner }}
     if: always()
     needs:
       - changes
+      - runner-router
       - workflow-hygiene
       - commitlint
       - pre-commit
@@ -1351,7 +1407,10 @@ jobs:
       VISUAL_REGRESSION_RESULT: ${{ needs.visual-regression.result }}
       TEST_TAURI_RESULT: ${{ needs.test-tauri.result }}
       BUILD_TAURI_RESULT: ${{ needs.build-tauri.result }}
+      ROUTING_REASON: ${{ needs.runner-router.outputs.routing_reason }}
     steps:
+      - name: Emit routing decision
+        run: echo "Linux runner route=${{ runner.name }} reason=${ROUTING_REASON}"
       - name: Enforce required gate (strict on main)
         run: |
           set -euo pipefail
