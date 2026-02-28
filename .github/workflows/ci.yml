@@ -283,6 +283,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            clang \
+            libclang-dev \
             cmake \
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
@@ -564,6 +566,8 @@ jobs:
     name: e2e-smoke (${{ matrix.browser }})
     runs-on: e2-core
     timeout-minutes: 35
+    env:
+      PLAYWRIGHT_WEB_PORT: ${{ matrix.browser == 'chromium' && '17473' || '17474' }}
     needs:
       - changes
       - node-deps-preheat
@@ -636,6 +640,8 @@ jobs:
     name: e2e-a11y (${{ matrix.browser }})
     runs-on: e2-core
     timeout-minutes: 35
+    env:
+      PLAYWRIGHT_WEB_PORT: ${{ matrix.browser == 'chromium' && '17475' || '17476' }}
     needs:
       - changes
       - node-deps-preheat
@@ -708,6 +714,8 @@ jobs:
     name: e2e-interaction-sweep (${{ matrix.browser }})
     runs-on: e2-core
     timeout-minutes: 35
+    env:
+      PLAYWRIGHT_WEB_PORT: ${{ matrix.browser == 'chromium' && '17477' || '17478' }}
     needs:
       - changes
       - node-deps-preheat
@@ -780,6 +788,8 @@ jobs:
     name: e2e-key-journeys (${{ matrix.browser }})
     runs-on: e2-core
     timeout-minutes: 45
+    env:
+      PLAYWRIGHT_WEB_PORT: ${{ matrix.browser == 'chromium' && '17479' || '17480' }}
     needs:
       - changes
       - node-deps-preheat
@@ -867,6 +877,8 @@ jobs:
     name: e2e-functional-regression (${{ matrix.browser }})
     runs-on: e2-core
     timeout-minutes: 55
+    env:
+      PLAYWRIGHT_WEB_PORT: ${{ matrix.browser == 'chromium' && '17481' || '17482' }}
     needs:
       - changes
       - node-deps-preheat
