@@ -11,6 +11,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Re-routed CI heavy jobs back to self-hosted `e2-core` to prioritize local compute for expensive workloads (`pre-commit`, `lint-backend`, `test-js`, `coverage-js`, `mutation-js`, all E2E suites, `security-scans`, `visual-regression`), while keeping lightweight governance jobs on GitHub-hosted runners.
 - Completed CI queue-elimination on mainline by moving `pre-commit` to GitHub-hosted as well, removing the last `e2-core`-gated job from `ci.yml` and preventing head-of-line blocking during push validation.
 - Applied queue-elimination routing for CI matrix-heavy jobs by moving high fan-out suites to GitHub-hosted runners (`test-js`, `coverage-js`, `mutation-js`, `e2e-smoke`, `e2e-a11y`, `e2e-interaction-sweep`, `e2e-key-journeys`, `e2e-functional-regression`, `visual-regression`) to remove `e2-core` saturation on mainline runs.
 - Further reduced `e2-core` queue contention by pinning additional medium CI jobs to GitHub-hosted runners (`lint-frontend`, `lint-backend`, `typecheck`, `security-scans`), leaving self-hosted capacity for heavier execution paths.
