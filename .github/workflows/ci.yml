@@ -185,7 +185,7 @@ jobs:
         run: printf '%s\n' "$HEAD_COMMIT_MESSAGE" | npm run commitlint
 
   pre-commit:
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     needs: [changes]
     timeout-minutes: 40
     steps:
@@ -256,7 +256,7 @@ jobs:
       - name: Test assertion guard
         run: npm run test:assertions:guard
   lint-backend:
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     needs: [changes]
     if: needs.changes.outputs.rust_tauri_changed == 'true'
     steps:
@@ -394,7 +394,7 @@ jobs:
             exit 1
           fi
   test-js:
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -439,7 +439,7 @@ jobs:
           npm run test -- --maxWorkers=50% --shard=${{ matrix.shard_index }}/2
 
   coverage-js:
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     timeout-minutes: 35
     needs:
       - changes
@@ -480,7 +480,7 @@ jobs:
           npm run test:coverage:gate
 
   mutation-js:
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     timeout-minutes: 90
     needs:
       - changes
@@ -548,7 +548,7 @@ jobs:
 
   e2e-smoke:
     name: e2e-smoke (${{ matrix.browser }})
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     timeout-minutes: 35
     needs:
       - changes
@@ -620,7 +620,7 @@ jobs:
 
   e2e-a11y:
     name: e2e-a11y (${{ matrix.browser }})
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     timeout-minutes: 35
     needs:
       - changes
@@ -692,7 +692,7 @@ jobs:
 
   e2e-interaction-sweep:
     name: e2e-interaction-sweep (${{ matrix.browser }})
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     timeout-minutes: 35
     needs:
       - changes
@@ -764,7 +764,7 @@ jobs:
 
   e2e-key-journeys:
     name: e2e-key-journeys (${{ matrix.browser }})
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     timeout-minutes: 45
     needs:
       - changes
@@ -851,7 +851,7 @@ jobs:
 
   e2e-functional-regression:
     name: e2e-functional-regression (${{ matrix.browser }})
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     timeout-minutes: 55
     needs:
       - changes
@@ -940,7 +940,7 @@ jobs:
           if-no-files-found: warn
 
   security-scans:
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     timeout-minutes: 35
     needs: [changes]
     steps:
@@ -998,7 +998,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   visual-regression:
-    runs-on: ubuntu-latest
+    runs-on: e2-core
     timeout-minutes: 40
     needs:
       - changes

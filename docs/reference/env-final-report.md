@@ -15,6 +15,11 @@ Date: 2026-02-26
 - Queue-elimination follow-up moved matrix-heavy suites to GitHub-hosted to prevent self-hosted head-of-line blocking on `main`:
   - `test-js`, `coverage-js`, `mutation-js`, `e2e-smoke`, `e2e-a11y`, `e2e-interaction-sweep`, `e2e-key-journeys`, `e2e-functional-regression`, `visual-regression`.
 - Final queue-elimination step moved `pre-commit` to GitHub-hosted in `ci.yml` so no CI gate waits on `e2-core` runner availability.
+- Workload-priority follow-up moved heavy execution paths back to `e2-core` to align with self-hosted compute strategy:
+  - `pre-commit`, `lint-backend`, `test-js`, `coverage-js`, `mutation-js`
+  - `e2e-smoke`, `e2e-a11y`, `e2e-interaction-sweep`, `e2e-key-journeys`, `e2e-functional-regression`
+  - `security-scans`, `visual-regression`
+- Lightweight governance paths remain on GitHub-hosted (`changes`, `node-deps-preheat`, `workflow-hygiene`, `commitlint`, `docs-drift`, `env-governance`, `env-var-audit`, `required-gate`).
 - Evidence code paths: `.github/workflows/ci.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
 
 ## Self-Hosted Runner Split Update (2026-02-28)
