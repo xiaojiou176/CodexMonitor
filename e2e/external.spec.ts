@@ -166,21 +166,28 @@ test.describe("external integration (optional)", () => {
         .poll(() => capturedResponses.filter((item) => item.status() < 500).length)
         .toBeGreaterThan(0);
 
-      const interactiveLocator = page
-        .locator(
-          "button:visible, a[href]:visible, input:visible, textarea:visible, select:visible, [role='button']:visible, [tabindex]:visible",
-        )
-        .first();
+      const interactiveLocator = page.locator(
+        "button:visible, a[href]:visible, input:visible, textarea:visible, select:visible, [role='button']:visible, [tabindex]:visible",
+      );
       const interactiveCount = await interactiveLocator.count();
       expect(interactiveCount).toBeGreaterThan(0);
+      const maxProbe = Math.min(interactiveCount, 10);
       await expect
         .poll(async () => {
-          try {
-            await interactiveLocator.click({ trial: true, timeout: 5000 });
-            return true;
-          } catch {
-            return false;
+          for (let i = 0; i < maxProbe; i += 1) {
+            const candidate = interactiveLocator.nth(i);
+            try {
+              await candidate.click({ trial: true, timeout: 1500 });
+              return true;
+            } catch (error) {
+              const message = toErrorMessage(error);
+              console.warn(
+                `[external-e2e][interactive-probe] traceId=n/a requestId=n/a status=probe-failed code=trial-click-failed candidate=${i} reason=${message}`,
+              );
+              // Continue probing until one element is actually actionable.
+            }
           }
+          return false;
         })
         .toBeTruthy();
       expect(mutatingRequests).toEqual([]);

@@ -11,6 +11,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Hardened `e2e/external.spec.ts` actionable-element validation by probing multiple visible interactive candidates instead of only the first match, preventing false negatives on pages where the first control is non-actionable while keeping idempotency/no-mutation guarantees strict.
+- Updated CI live external probe target secret (`REAL_EXTERNAL_URL`) to a consistently reachable URL for strict dual-chain preflight validation on `main`.
 - Added CI Linux runner auto-routing with hosted-quota fallback in `.github/workflows/ci.yml`:
   - New `runner-router` job (runs on `e2-core`) decides Linux runner target for lightweight governance jobs.
   - Default route remains `ubuntu-latest`; when billing threshold is reached, route flips to `e2-core`.
