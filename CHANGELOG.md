@@ -11,6 +11,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Applied queue-elimination routing for CI matrix-heavy jobs by moving high fan-out suites to GitHub-hosted runners (`test-js`, `coverage-js`, `mutation-js`, `e2e-smoke`, `e2e-a11y`, `e2e-interaction-sweep`, `e2e-key-journeys`, `e2e-functional-regression`, `visual-regression`) to remove `e2-core` saturation on mainline runs.
 - Further reduced `e2-core` queue contention by pinning additional medium CI jobs to GitHub-hosted runners (`lint-frontend`, `lint-backend`, `typecheck`, `security-scans`), leaving self-hosted capacity for heavier execution paths.
 - Reduced self-hosted queue pressure in CI by pinning lightweight governance jobs to GitHub-hosted runners on all events (`changes`, `node-deps-preheat`, `workflow-hygiene`, `commitlint`, `docs-drift`, `env-governance`, `env-var-audit`, `required-gate`), while keeping heavy execution jobs on `e2-core` for non-PR events.
 - Increased self-hosted concurrency for fork `xiaojiou176/CodexMonitor` by adding a second runner service on the existing VM (`codexmonitor-e2-core-02`) with labels `e2-core, ssd-fast`.

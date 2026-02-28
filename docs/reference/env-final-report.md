@@ -12,6 +12,8 @@ Date: 2026-02-26
 - Preserved non-PR self-hosted execution for heavy workloads by leaving execution-intensive jobs on `e2-core`.
 - Follow-up queue optimization moved additional medium jobs to GitHub-hosted to avoid starving heavy self-hosted jobs:
   - `lint-frontend`, `lint-backend`, `typecheck`, `security-scans`.
+- Queue-elimination follow-up moved matrix-heavy suites to GitHub-hosted to prevent self-hosted head-of-line blocking on `main`:
+  - `test-js`, `coverage-js`, `mutation-js`, `e2e-smoke`, `e2e-a11y`, `e2e-interaction-sweep`, `e2e-key-journeys`, `e2e-functional-regression`, `visual-regression`.
 - Evidence code paths: `.github/workflows/ci.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
 
 ## Self-Hosted Runner Split Update (2026-02-28)
