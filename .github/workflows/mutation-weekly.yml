@@ -13,7 +13,7 @@ permissions: {}
 
 jobs:
   mutation-python:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 90
     permissions:
       contents: read
@@ -64,7 +64,7 @@ jobs:
           mutmut run
 
   mutation-js:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 120
     permissions:
       contents: read
@@ -123,7 +123,7 @@ jobs:
           if-no-files-found: warn
 
   mutation-rust:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 120
     permissions:
       contents: read

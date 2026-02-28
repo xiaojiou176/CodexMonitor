@@ -2,6 +2,15 @@
 
 Date: 2026-02-26
 
+## Self-Hosted Runner Split Update (2026-02-28)
+
+- Applied trust-boundary runner split for Linux GitHub Actions jobs:
+  - `pull_request` keeps `ubuntu-latest` (GitHub-hosted).
+  - non-PR events (`push/main`, `workflow_dispatch`, `schedule`) route to self-hosted `e2-core`.
+- Updated workflows: `.github/workflows/ci.yml`, `.github/workflows/real-integration.yml`, `.github/workflows/release.yml`, `.github/workflows/chromatic.yml`, `.github/workflows/mutation-weekly.yml`, `.github/workflows/upstream-sync-weekly.yml`.
+- Provisioned and validated repository runner for this fork: `codexmonitor-e2-core-01` (`online`, labels: `self-hosted`, `Linux`, `X64`, `e2-core`, `ssd-fast`).
+- Evidence code paths: `.github/workflows/*.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
+
 ## CI Runtime Optimization Update (2026-02-27)
 
 - Added cache-aware `node_modules` restore/install flow to workflow jobs that previously did cold `npm ci` every run (`pre-commit`, `lint-frontend`, `typecheck`, `docs-drift`, `env-governance`, `security-scans`).

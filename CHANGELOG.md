@@ -11,6 +11,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - TBD
 
 ### Changed
+- Routed GitHub Actions Linux jobs to dynamic runner selection: `pull_request` uses `ubuntu-latest`, while `push/main`, `workflow_dispatch`, and `schedule` use self-hosted `e2-core` to enforce trust-boundary split and use dedicated runner capacity.
+- Applied the same runner split across `ci.yml`, `real-integration.yml`, `release.yml`, `chromatic.yml`, `mutation-weekly.yml`, and `upstream-sync-weekly.yml`.
 - Optimized GitHub Actions CI runtime without weakening protected-branch strictness:
   - Added cache-aware `node_modules` restore/install flow to previously uncached jobs (`pre-commit`, `lint-frontend`, `typecheck`, `docs-drift`, `env-governance`, `security-scans`) to reduce repeated `npm ci` cold paths.
   - Shifted `e2e-functional-regression` to main-branch full-chain execution (`github.ref == 'refs/heads/main'`) so PRs keep strict core E2E gates while avoiding redundant heavy-suite duplication.
