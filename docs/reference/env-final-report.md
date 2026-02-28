@@ -4,6 +4,10 @@ Date: 2026-02-26
 
 ## Queue Pressure Reduction + Dual Runner Update (2026-02-28)
 
+- Mainline CI failure follow-up:
+  - Added `clang` and `libclang-dev` to `lint-backend` Linux dependency install so `whisper-rs-sys` bindgen no longer fails on missing `libclang` during clippy.
+  - Added per-suite/browser `PLAYWRIGHT_WEB_PORT` routing in `.github/workflows/ci.yml` (`17473-17482`) to remove cross-job localhost port contention on shared `e2-core` runners.
+
 - CI/release reliability follow-up for shared self-hosted runners:
   - Replaced `gitleaks/gitleaks-action` with runner-local binary install + explicit `gitleaks git` execution in both `.github/workflows/ci.yml` and `.github/workflows/release.yml`.
   - Added pre-commit cache self-heal logic in CI/release gates: on `InvalidManifestError`, clear cache and retry once to avoid stale-cache false reds.
