@@ -15,7 +15,7 @@ permissions: {}
 
 jobs:
   pre_commit_gate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 45
     permissions:
       contents: read
@@ -40,7 +40,7 @@ jobs:
         run: pre-commit run --all-files --show-diff-on-failure
 
   quality_lint_assert:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 45
     permissions:
       contents: read
@@ -73,7 +73,7 @@ jobs:
         run: npm run test:assertions:guard
 
   quality_reuse_guard:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 35
     permissions:
       contents: read
@@ -100,7 +100,7 @@ jobs:
         run: npm run guard:reuse-search
 
   quality_docs_guard:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 35
     permissions:
       contents: read
@@ -127,7 +127,7 @@ jobs:
         run: npm run docs:check:app-server-events
 
   quality_typecheck:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 40
     permissions:
       contents: read
@@ -154,7 +154,7 @@ jobs:
         run: npm run typecheck
 
   quality_js_test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 55
     permissions:
       contents: read
@@ -181,7 +181,7 @@ jobs:
         run: npm run test
 
   quality_coverage:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 55
     permissions:
       contents: read
@@ -209,7 +209,7 @@ jobs:
 
   quality_e2e_smoke:
     name: quality_e2e_smoke (${{ matrix.browser }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 70
     permissions:
       contents: read
@@ -258,7 +258,7 @@ jobs:
           if-no-files-found: ignore
 
   quality_a11y:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 45
     permissions:
       contents: read
@@ -303,7 +303,7 @@ jobs:
           if-no-files-found: ignore
 
   quality_interaction_sweep:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 45
     permissions:
       contents: read
@@ -348,7 +348,7 @@ jobs:
           if-no-files-found: ignore
 
   quality_rust_tests:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 45
     permissions:
       contents: read
@@ -364,7 +364,7 @@ jobs:
         working-directory: src-tauri
 
   security_gate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 35
     permissions:
       contents: read
@@ -792,7 +792,7 @@ jobs:
             src-tauri/target/release/bundle/msi/*.msi*
 
   release:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 45
     environment: release
     needs:

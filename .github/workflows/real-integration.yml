@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   preflight:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 35
     outputs:
       run_any: ${{ steps.preflight.outputs.run_any }}
@@ -185,7 +185,7 @@ jobs:
           if-no-files-found: ignore
 
   external-e2e:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 45
     needs: preflight
     env:
@@ -258,7 +258,7 @@ jobs:
           npm run test:e2e:external
 
   real-llm:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     timeout-minutes: 45
     needs: preflight
     env:
@@ -319,7 +319,7 @@ jobs:
           if-no-files-found: ignore
 
   required-main-dual-gate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
     if: >-
       always() &&
       github.ref == 'refs/heads/main' &&
