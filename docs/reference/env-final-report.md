@@ -4,6 +4,11 @@ Date: 2026-02-26
 
 ## Queue Pressure Reduction + Dual Runner Update (2026-02-28)
 
+- CI/release reliability follow-up for shared self-hosted runners:
+  - Replaced `gitleaks/gitleaks-action` with runner-local binary install + explicit `gitleaks git` execution in both `.github/workflows/ci.yml` and `.github/workflows/release.yml`.
+  - Added pre-commit cache self-heal logic in CI/release gates: on `InvalidManifestError`, clear cache and retry once to avoid stale-cache false reds.
+  - Goal: keep strict gates unchanged while eliminating `/tmp` and cache-manifest collisions seen under dual-runner concurrency.
+
 - Added a second self-hosted runner service for fork `xiaojiou176/CodexMonitor` on existing VM `github-runner-core-01`:
   - `codexmonitor-e2-core-01`
   - `codexmonitor-e2-core-02`

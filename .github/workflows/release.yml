@@ -37,7 +37,21 @@ jobs:
       - name: Install pre-commit
         run: python -m pip install --upgrade pip pre-commit
       - name: Run pre-commit hooks (server gate)
-        run: pre-commit run --all-files --show-diff-on-failure
+        run: |
+          set -euo pipefail
+          if pre-commit run --all-files --show-diff-on-failure; then
+            exit 0
+          fi
+
+          PRECOMMIT_LOG="${HOME}/.cache/pre-commit/pre-commit.log"
+          if [ -f "${PRECOMMIT_LOG}" ] && grep -q "InvalidManifestError" "${PRECOMMIT_LOG}"; then
+            echo "Detected corrupted pre-commit cache. Cleaning cache and retrying once."
+            pre-commit clean || true
+            rm -rf "${HOME}/.cache/pre-commit"
+            pre-commit run --all-files --show-diff-on-failure
+          else
+            exit 1
+          fi
 
   quality_lint_assert:
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
@@ -413,10 +427,20 @@ jobs:
           fi
       - name: cargo audit
         run: cargo audit --manifest-path src-tauri/Cargo.toml
+      - name: Install gitleaks (runner-local)
+        run: |
+          set -euo pipefail
+          VERSION="8.24.3"
+          BIN_DIR="${RUNNER_TEMP}/gitleaks-${VERSION}"
+          mkdir -p "${BIN_DIR}"
+          curl -sSL \
+            -o "${BIN_DIR}/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"
+          tar -xzf "${BIN_DIR}/gitleaks.tar.gz" -C "${BIN_DIR}"
+          chmod +x "${BIN_DIR}/gitleaks"
+          echo "${BIN_DIR}" >> "${GITHUB_PATH}"
       - name: Secret scan (gitleaks)
-        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gitleaks git --redact --verbose --exit-code 1 --config .gitleaks.toml
 
   build_macos:
     runs-on: macos-latest
