@@ -8,7 +8,7 @@ Date: 2026-02-26
   - Introduced `runner-router` (self-hosted `e2-core`) to decide Linux governance runner target.
   - Governance jobs now consume `needs.runner-router.outputs.linux_runner` and automatically flip from `ubuntu-latest` to `e2-core` when configured billing threshold is reached.
   - Added controls:
-    - Secret: `GH_BILLING_TOKEN` (optional; used to read org Actions billing usage).
+    - Credential variable: `GH_BILLING_TOKEN` (optional; used to read org Actions billing usage).
     - Repo vars: `CI_BILLING_FALLBACK_PCT` (default `98`), `CI_FORCE_E2_CORE`, `CI_FORCE_GH_HOSTED`.
   - Kept strict gates unchanged (`required-gate` still enforces the same job outcomes).
 

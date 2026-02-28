@@ -16,7 +16,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   - Default route remains `ubuntu-latest`; when billing threshold is reached, route flips to `e2-core`.
   - Added manual overrides via repo variables: `CI_FORCE_E2_CORE`, `CI_FORCE_GH_HOSTED`.
   - Added configurable threshold variable: `CI_BILLING_FALLBACK_PCT` (default `98`).
-  - Added optional org billing token secret: `GH_BILLING_TOKEN` for quota-aware routing.
+  - Added optional org billing token credential: `GH_BILLING_TOKEN` for quota-aware routing.
 - Fixed CI reliability regressions after self-hosted heavy-routing by:
   - installing `clang` + `libclang-dev` in `lint-backend` Linux dependencies so `whisper-rs-sys` bindgen can resolve `libclang` during clippy builds.
   - assigning distinct `PLAYWRIGHT_WEB_PORT` ranges per E2E suite/browser matrix to prevent cross-job localhost port collisions on shared `e2-core` hosts.
