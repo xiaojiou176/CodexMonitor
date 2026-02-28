@@ -53,10 +53,8 @@ async function sendPrompt(page: Page, prompt: string) {
 
 test("approval flow shows request and updates after decision", async ({ page }) => {
   const workspace = await ensureLiveWorkspace(page);
-  if (!workspace.live) {
-    await expect(page.getByRole("combobox", { name: "选择工作区" })).toBeVisible();
-    return;
-  }
+  expect(workspace.live).toBe(true);
+
   await startDraftThread(page);
 
   await sendPrompt(
@@ -65,15 +63,15 @@ test("approval flow shows request and updates after decision", async ({ page }) 
   );
 
   const approvalToast = page.locator(".approval-toast").first();
-  const approvalVisible = await approvalToast
-    .waitFor({ state: "visible", timeout: APPROVAL_TIMEOUT_MS })
-    .then(() => true)
-    .catch(() => false);
-  if (!approvalVisible) {
-    await expect(page.locator(".thread-row-draft").first()).toBeVisible();
-    await expect(page.locator(".composer-input textarea")).toBeVisible();
-    return;
-  }
+  await expect
+    .poll(
+      async () => approvalToast.isVisible(),
+      {
+        timeout: APPROVAL_TIMEOUT_MS,
+        message: "Approval toast should appear for approval-required command flow.",
+      },
+    )
+    .toBe(true);
 
   await expect(approvalToast.getByText("需要审批")).toBeVisible();
   const approveButton = approvalToast.getByRole("button", { name: "批准 (Enter)" });
@@ -90,28 +88,25 @@ test(
   "interruption flow exposes stop action and falls back with feedback",
   async ({ page }) => {
     const workspace = await ensureLiveWorkspace(page);
-    if (!workspace.live) {
-      await expect(page.getByRole("combobox", { name: "选择工作区" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "停止" })).toHaveCount(0);
-      return;
-    }
-  await startDraftThread(page);
+    expect(workspace.live).toBe(true);
 
-  await sendPrompt(
-    page,
-    "请执行较慢的多步任务：先列出当前目录文件，再逐个解释用途，最后给出总结。",
-  );
+    await startDraftThread(page);
 
-  const stopButton = page.getByRole("button", { name: "停止" });
-  const stopVisible = await stopButton
-    .waitFor({ state: "visible", timeout: INTERRUPT_TIMEOUT_MS })
-    .then(() => true)
-    .catch(() => false);
-    if (!stopVisible) {
-      await expect(page.locator(".composer-input textarea")).toBeVisible();
-      await expect(page.getByRole("button", { name: "停止" })).toHaveCount(0);
-      return;
-    }
+    await sendPrompt(
+      page,
+      "请执行较慢的多步任务：先列出当前目录文件，再逐个解释用途，最后给出总结。",
+    );
+
+    const stopButton = page.getByRole("button", { name: "停止" });
+    await expect
+      .poll(
+        async () => stopButton.isVisible(),
+        {
+          timeout: INTERRUPT_TIMEOUT_MS,
+          message: "Stop button should become visible during long-running task.",
+        },
+      )
+      .toBe(true);
 
     await expect(stopButton).toBeEnabled();
     await stopButton.click();

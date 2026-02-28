@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Search from "lucide-react/dist/esm/icons/search";
 
@@ -39,6 +39,7 @@ export function CommandPalette({
   open,
   onClose,
 }: CommandPaletteProps & { open: boolean; onClose: () => void }) {
+  const titleId = useId();
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -140,8 +141,12 @@ export function CommandPalette({
         className="command-palette"
         onMouseDown={(event) => event.stopPropagation()}
         role="dialog"
-        aria-label="命令菜单"
+        aria-modal="true"
+        aria-labelledby={titleId}
       >
+        <h2 id={titleId} className="sr-only">
+          命令菜单
+        </h2>
         <div className="command-palette-search">
           <Search size={14} className="command-palette-search-icon" aria-hidden />
           <input

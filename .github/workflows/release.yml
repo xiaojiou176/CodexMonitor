@@ -221,6 +221,53 @@ jobs:
       - name: Coverage gate
         run: npm run test:coverage:gate
 
+  quality_mutation_gate:
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      MUTATION_MIN_SCORE: "90"
+      MUTATION_REQUIRE_EXECUTION: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Restore node_modules cache
+        id: node_modules_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node20-node-modules-
+      - name: Install frontend dependencies
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Mutation gate (release)
+        run: |
+          set -euo pipefail
+          while true; do
+            echo "[heartbeat][release-mutation] $(date -u +'%Y-%m-%dT%H:%M:%SZ') mutation gate running..."
+            sleep 20
+          done &
+          HEARTBEAT_PID=$!
+          trap 'kill $HEARTBEAT_PID >/dev/null 2>&1 || true' EXIT
+          npm run test:mutation:gate
+      - name: Upload mutation latest report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutation-gate-latest-release
+          path: .runtime-cache/test_output/mutation-gate/latest.json
+          if-no-files-found: warn
+
   quality_e2e_smoke:
     name: quality_e2e_smoke (${{ matrix.browser }})
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
@@ -455,6 +502,7 @@ jobs:
       - quality_typecheck
       - quality_js_test
       - quality_coverage
+      - quality_mutation_gate
       - quality_e2e_smoke
       - quality_a11y
       - quality_interaction_sweep
@@ -634,6 +682,7 @@ jobs:
       - quality_typecheck
       - quality_js_test
       - quality_coverage
+      - quality_mutation_gate
       - quality_e2e_smoke
       - quality_a11y
       - quality_interaction_sweep
@@ -735,6 +784,7 @@ jobs:
       - quality_typecheck
       - quality_js_test
       - quality_coverage
+      - quality_mutation_gate
       - quality_e2e_smoke
       - quality_a11y
       - quality_interaction_sweep

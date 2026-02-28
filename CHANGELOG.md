@@ -8,9 +8,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ## [Unreleased]
 
 ### Added
-- TBD
+- Added deep quality audit report `docs/reference/ci-quality-deep-audit-2026-02-28.md` to consolidate CI strictness upgrades, false-green defenses, UI/a11y semantic hardening, and current gate outcomes.
 
 ### Changed
+- Consolidated CI/mutation strictness posture in audit output with current hard facts: coverage gate target remains `85%` for global metrics, mutation gate keeps protected-flow enforcement semantics, and CI quality chains continue to publish machine-readable artifacts.
+- Documented current false-green defense baseline as active controls in audit output: assertion guard, mutation-gate anti-skip policy on protected flows, and skipped-test report auditing for E2E evidence continuity.
+- Captured UI/a11y semantic hardening outcomes in audit output, including keyboard/role semantics and contrast remediations that align with strict accessibility gate expectations.
 - Hardened `e2e/external.spec.ts` actionable-element validation by probing multiple visible interactive candidates instead of only the first match, preventing false negatives on pages where the first control is non-actionable while keeping idempotency/no-mutation guarantees strict.
 - Updated CI live external probe target secret (`REAL_EXTERNAL_URL`) to a consistently reachable URL for strict dual-chain preflight validation on `main`.
 - Added CI Linux runner auto-routing with hosted-quota fallback in `.github/workflows/ci.yml`:

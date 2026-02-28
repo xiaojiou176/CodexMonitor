@@ -19,36 +19,12 @@ export function WorkspaceGroup({
   return (
     <div className="workspace-group">
       {showHeader && (
-        <div
-          className={`workspace-group-header${isToggleable ? " is-toggleable" : ""}`}
-          onClick={
-            toggleId
-              ? () => {
-                  onToggleCollapse(toggleId);
-                }
-              : undefined
-          }
-          onKeyDown={
-            toggleId
-              ? (event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onToggleCollapse(toggleId);
-                  }
-                }
-              : undefined
-          }
-          role={isToggleable ? "button" : undefined}
-          aria-label={isToggleable ? `${isCollapsed ? "展开" : "折叠"}分组` : undefined}
-          aria-expanded={isToggleable ? !isCollapsed : undefined}
-          tabIndex={isToggleable ? 0 : undefined}
-        >
-          <div className="workspace-group-label">{name}</div>
-          {isToggleable && (
+        <>
+          {isToggleable ? (
             <button
-              className={`group-toggle ${isCollapsed ? "" : "expanded"}`}
-              onClick={(event) => {
-                event.stopPropagation();
+              type="button"
+              className="workspace-group-header is-toggleable"
+              onClick={() => {
                 if (!toggleId) {
                   return;
                 }
@@ -56,12 +32,18 @@ export function WorkspaceGroup({
               }}
               aria-label={isCollapsed ? "展开分组" : "折叠分组"}
               aria-expanded={!isCollapsed}
-              type="button"
             >
-              <span className="group-toggle-icon">›</span>
+              <span className="workspace-group-label">{name}</span>
+              <span className={`group-toggle ${isCollapsed ? "" : "expanded"}`} aria-hidden>
+                <span className="group-toggle-icon">›</span>
+              </span>
             </button>
+          ) : (
+            <div className="workspace-group-header">
+              <div className="workspace-group-label">{name}</div>
+            </div>
           )}
-        </div>
+        </>
       )}
       <div className={`workspace-group-list ${isCollapsed ? "collapsed" : ""}`}>
         <div className="workspace-group-content">{children}</div>

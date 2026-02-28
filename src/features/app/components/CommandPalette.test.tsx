@@ -93,7 +93,10 @@ describe("CommandPalette", () => {
 
     rerender(<CommandPalette commands={commands} open onClose={onClose} />);
 
-    expect(screen.getByRole("dialog", { name: "命令菜单" })).toBeTruthy();
+    const dialog = screen.getByRole("dialog", { name: "命令菜单" });
+    expect(dialog).toBeTruthy();
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.getAttribute("aria-labelledby")).toBeTruthy();
     expect(screen.getByRole("textbox", { name: "搜索命令" })).toBeTruthy();
   });
 
