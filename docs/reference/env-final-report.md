@@ -10,6 +10,8 @@ Date: 2026-02-26
 - Kept trust-boundary split while reducing queue pressure by moving lightweight governance jobs in CI to GitHub-hosted on all events:
   - `changes`, `node-deps-preheat`, `workflow-hygiene`, `commitlint`, `docs-drift`, `env-governance`, `env-var-audit`, `required-gate`.
 - Preserved non-PR self-hosted execution for heavy workloads by leaving execution-intensive jobs on `e2-core`.
+- Follow-up queue optimization moved additional medium jobs to GitHub-hosted to avoid starving heavy self-hosted jobs:
+  - `lint-frontend`, `lint-backend`, `typecheck`, `security-scans`.
 - Evidence code paths: `.github/workflows/ci.yml`, `CHANGELOG.md`, `docs/reference/env-final-report.md`.
 
 ## Self-Hosted Runner Split Update (2026-02-28)

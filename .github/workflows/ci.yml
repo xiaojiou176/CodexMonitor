@@ -228,7 +228,7 @@ jobs:
         run: pre-commit run --all-files --show-diff-on-failure
 
   lint-frontend:
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
+    runs-on: ubuntu-latest
     needs: [changes]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -256,7 +256,7 @@ jobs:
       - name: Test assertion guard
         run: npm run test:assertions:guard
   lint-backend:
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
+    runs-on: ubuntu-latest
     needs: [changes]
     if: needs.changes.outputs.rust_tauri_changed == 'true'
     steps:
@@ -282,7 +282,7 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D clippy::dbg_macro -D clippy::todo
         working-directory: src-tauri
   typecheck:
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
+    runs-on: ubuntu-latest
     needs: [changes]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -940,7 +940,7 @@ jobs:
           if-no-files-found: warn
 
   security-scans:
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'e2-core' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 35
     needs: [changes]
     steps:
